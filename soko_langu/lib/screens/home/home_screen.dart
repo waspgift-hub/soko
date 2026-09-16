@@ -26,7 +26,6 @@ import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
 import '../../utils/network_error.dart';
 import '../../app/routes.dart';
-import '../../services/cart_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 
@@ -408,44 +407,6 @@ class _HomeScreenState extends State<HomeScreen>
             icon: Icon(Icons.monetization_on_outlined, color: cs.primary),
             onPressed: () => _showCurrencyPicker(context),
           ),
-          StreamBuilder<int>(
-            stream: CartService().watch().map((items) => items.length),
-            initialData: CartService().count,
-            builder: (context, snap) {
-              final count = snap.data ?? CartService().count;
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.shopping_cart_outlined, color: cs.primary),
-                    onPressed: () => context.push(AppRoutes.cart),
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: Container(
-                        padding: EdgeInsets.all(count > 9 ? 4 : 6),
-                        decoration: BoxDecoration(
-                          color: cs.error,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                            minWidth: 18, minHeight: 18),
-                        child: Text(
-                          '$count',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: cs.surface,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
           Stack(
             children: [
               IconButton(
@@ -572,17 +533,6 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.add_circle_outline_rounded,
                   context.tr('post_request'),
                   () => context.push(AppRoutes.postBuyerRequest),
-                ),
-              ),
-              const SizedBox(height: AppInsets.sm),
-              // Local media player quick action — device music & video
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                child: _quickActionChip(
-                  cs,
-                  Icons.music_note_rounded,
-                  context.tr('media'),
-                  () => context.push(AppRoutes.mediaLibrary),
                 ),
               ),
               const SizedBox(height: AppInsets.sm),

@@ -54,7 +54,6 @@ dependencies:
   flutter_cache_manager: ^3.4.1
   google_mobile_ads: ^8.0.0
   url_launcher: ^6.3.2
-  file_picker: 11.0.2
   connectivity_plus: ^7.1.1
   flutter_secure_storage: ^10.3.1
   device_info_plus: ^11.3.0
@@ -87,11 +86,6 @@ dependencies:
   speech_to_text: ^7.0.0
   mobile_scanner: ^6.0.0
   safe_text: ^2.1.7
-  # Local storage media player: just_audio + background/service notification,
-  # on_audio_query scans the device MediaStore for songs/videos.
-  just_audio: ^0.10.6
-  just_audio_background: ^0.0.1-beta.17
-  on_audio_query: ^2.9.0
 
 
 

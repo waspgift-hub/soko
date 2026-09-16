@@ -21,8 +21,7 @@ class DsStockIndicator extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.remove_shopping_cart_outlined,
-              size: 14, color: cs.error),
+          Icon(Icons.block_outlined, size: 14, color: cs.error),
           const SizedBox(width: 4),
           Text(context.tr('out_of_stock', 'Out of stock'),
               style: TextStyle(

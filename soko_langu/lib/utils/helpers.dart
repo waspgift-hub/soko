@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:file_picker/file_picker.dart';
 import '../extensions/context_tr.dart';
 import '../services/cloudinary_service.dart';
 import '../widgets/soko_vibe_loading.dart';
@@ -44,54 +42,6 @@ Future<bool> requestPermissionWithDialog(
   }
 
   return false;
-}
-
-Future<bool> _requestMediaPermissions(BuildContext context) async {
-  if (!Platform.isAndroid) {
-    return requestPermissionWithDialog(
-      context,
-      Permission.photos,
-      'permission_photos',
-    );
-  }
-
-  final androidVersion =
-      int.tryParse(
-        Platform.operatingSystemVersion.split('(').last.split('.').first,
-      ) ??
-      0;
-
-  if (androidVersion >= 33) {
-    for (final p in [Permission.photos, Permission.videos, Permission.audio]) {
-      final granted = await requestPermissionWithDialog(
-        context,
-        p,
-        p.toString(),
-      );
-      if (!granted) return false;
-    }
-    return true;
-  }
-
-  return requestPermissionWithDialog(
-    context,
-    Permission.storage,
-    'permission_storage',
-  );
-}
-
-Future<List<PlatformFile>?> pickMedia(BuildContext context) async {
-  final granted = await _requestMediaPermissions(context);
-  if (!granted) return null;
-
-  if (!context.mounted) return null;
-
-  final result = await FilePicker.pickFiles(
-    type: FileType.media,
-    allowMultiple: true,
-  );
-
-  return result?.files;
 }
 
 Future<String?> pickAndUploadImage(BuildContext context) async {

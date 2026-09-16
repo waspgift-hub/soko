@@ -16,12 +16,10 @@ import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
-import '../../widgets/soko_widgets.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
-import '../../services/cart_service.dart';
 import '../../services/deep_link_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
@@ -63,7 +61,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
-  DateTime? _lastCartTapAt;
 
   UserProfile? _sellerProfile;
   bool _processing = false;
@@ -722,44 +719,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Row(
           children: [
-            Expanded(
-              child: AddToCartButton(
-                onPressed: () async {
-                  final product = widget.product;
-                  if (currentUser == null) {
-                    context.push(AppRoutes.login);
-                    return;
-                  }
-                  // Swallow double-taps: each quick re-tap would stack a
-                  // quantity bump plus a snackbar while Hive is mid-write
-                  final now = DateTime.now();
-                  if (_lastCartTapAt != null &&
-                      now.difference(_lastCartTapAt!).inMilliseconds < 600) {
-                    return;
-                  }
-                  _lastCartTapAt = now;
-                  await CartService().add(
-                    product: product,
-                    quantity: _quantity,
-                    variantId: _selectedVariantId,
-                    unitPrice: _unitPrice,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content:
-                            Text(context.tr('added_to_cart', 'Added to cart')),
-                        action: SnackBarAction(
-                          label: context.tr('view_cart', 'View Cart'),
-                          onPressed: () => context.push(AppRoutes.cart),
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: Container(
                 height: 52,

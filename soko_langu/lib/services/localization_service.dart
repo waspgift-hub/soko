@@ -508,8 +508,6 @@ class LocalizationService {
       'ai_seller_tip':
           'Bidhaa zako {0} hazijapata wateja. Jaribu kupunguza bei au kuboresha maelezo!',
       'contact_seller': 'Wasiliana na Muuzaji',
-      'audio_permission_denied':
-          'Ruhusa ya sauti haijatolewa. Inaonyesha nyimbo za sampuli.',
       'now': 'Sasa',
       'ai_mic_permission_denied':
           'Samahani, hakuna ruhusa ya kutumia maikrofoni.',
@@ -1950,7 +1948,6 @@ class LocalizationService {
           'Habari! Mimi ni msaidizi wa Soko Vibe. Niulize jambo lolote kuhusu soko letu.',
       'already_featured': 'Tayari imeangaziwa',
       'app_lock': 'Funga App kwa PIN',
-      'audio_music': 'Sauti & Muziki',
       'bidhaa_ina_flash_sale': 'Bidhaa hii tayari ina flash sale inayoendelea',
       'boosting': 'Kukuza Bidhaa',
       'broadcast_confirm_body':
@@ -2030,8 +2027,6 @@ class LocalizationService {
           '✓ Flash Sales - Punguzo la muda maalum\n'
           '✓ Kukuza Bidhaa - Angazia bidhaa zako\n'
           '✓ Msaidizi wa AI Dalali - Pata msaada wa haraka\n'
-          '✓ Sauti & Muziki - Sikiliza na cheza nyimbo\n'
-          '✓ YouTube Music - Tafuta na cheza YouTube\n'
           '✓ Uthibitishaji wa KYC - Beji ya muuzaji aliyehakikiwa\n'
           '✓ Funga App kwa PIN - Usalama wa akaunti\n'
           '✓ Lugha: Kiswahili / Kiingereza\n'
@@ -2055,8 +2050,6 @@ class LocalizationService {
           'Unaweza kuwa Mnunuzi (ununue bidhaa), Muuzaji (uuze bidhaa), au wote wawili. Unaweza kubadilisha wakati wowote.',
       'help_app_lock':
           'Weka PIN ya usalama ili kuzuia watu wengine kufungua app yako. PIN inahifadhiwa kwa usalama na inahitajika kila unaporudi kwenye app.',
-      'help_audio':
-          'Sikiliza sauti na muziki kutoka kwenye maktaba ya Soko Vibe au pakia nyimbo zako mwenyewe. Tumia foleni kucheza nyimbo kwa mpangilio.',
       'help_boosting':
           'Unaweza kulipa kukuza bidhaa yako ili iwafikie wateja zaidi. Bidhaa zilizokuzwa zinaonekana juu ya matokeo ya utafutaji.',
       'help_browsing':
@@ -2077,8 +2070,6 @@ class LocalizationService {
           'Fungua app na uunde akaunti kwa kutumia barua pepe, namba ya simu, au akaunti ya Google. Ukishasajiliwa, unaweza kuanza kununua na kuuza mara moja.',
       'help_seller_dashboard':
           'Dashibodi inaonyesha mauzo yako, mapato, na takwimu za bidhaa. Pata muhtasari wa biashara yako kwa mtazamo mmoja.',
-      'help_youtube':
-          'Tafuta na cheza muziki kutoka YouTube moja kwa moja kwenye app. Ongeza nyimbo kwenye foleni yako ya kucheza.',
       'home': 'Nyumbani',
       'invalid_email': 'Barua pepe batili',
       'kyc': 'Uthibitishaji wa KYC',
@@ -2231,18 +2222,6 @@ class LocalizationService {
       'withdrawal_processing': 'Inashughulikiwa...',
       'wrong_pin': 'PIN si sahihi',
       'yes_delete': 'Ndiyo, Futa',
-      'youtube_music': 'YouTube Music',
-      // Local media player
-      'media': 'Muziki & Video',
-      'media_library': 'Muziki na Video',
-      'now_playing': 'Inacheza Sasa',
-      'music': 'Muziki',
-      'videos': 'Video',
-      'import_files': 'Ingiza Faili',
-      'no_media': 'Hakuna wimbo',
-      'permission_media_desc':
-          'Soko Vibe inahitaji ruhusa ya kusoma muziki na video kwenye kifaa chako.',
-      'allow_access': 'Ruhusu Upatikanaji',
     },
     'en': {
       'you_save': 'You save',
@@ -2550,12 +2529,6 @@ class LocalizationService {
       'chat_feature': 'Real-time Chat',
       'help_chat':
           'Use chat to communicate with sellers or buyers. You can send messages, photos, and arrange product delivery directly.',
-      'audio_music': 'Audio & Music',
-      'help_audio':
-          'Listen to audio and music from the Soko Vibe library or upload your own tracks. Use the queue to play songs in order.',
-      'youtube_music': 'YouTube Music',
-      'help_youtube':
-          'Search and play music from YouTube directly in the app. Add songs to your play queue.',
       'account_verification': 'Account Verification',
       'verification_sub': 'Verify your account for more security',
       'kyc': 'KYC Verification',
@@ -2581,8 +2554,6 @@ class LocalizationService {
           '✓ Flash Sales - Time-limited discounts\n'
           '✓ Product Boost - Feature your products\n'
           '✓ AI Dalali Assistant - Get instant help\n'
-          '✓ Audio & Music - Listen and play tracks\n'
-          '✓ YouTube Music - Search and play YouTube\n'
           '✓ KYC Verification - Verified seller badge\n'
           '✓ App Lock with PIN - Account security\n'
           '✓ Languages: Swahili / English\n'
@@ -2954,8 +2925,6 @@ class LocalizationService {
       'ai_seller_tip':
           'Your products {0} are not getting customers. Try reducing price or improving descriptions!',
       'contact_seller': 'Contact Seller',
-      'audio_permission_denied':
-          'Audio permission not granted. Showing sample songs.',
       'now': 'Now',
       'ai_mic_permission_denied': 'Sorry, no microphone permission.',
       'ai_recording_hint': 'Recording... Tap mic again to stop.',
@@ -3056,13 +3025,6 @@ class LocalizationService {
       'earnings': 'Earnings',
       'requesting': 'Requesting...',
       'ends': 'Ends',
-      'error_loading_audio': 'Error loading audio',
-      'online_music': 'Online Music',
-      'search_online_songs': 'Search online songs...',
-      'search_music_hint': 'Search for music online',
-      'view_queue': 'View Queue',
-      'device_tab': 'My Device',
-      'online_tab': 'Online',
       'no_internet_connection': 'No Internet Connection',
       'no_internet_connection_lower': 'No internet connection',
       'check_connection_try_again':
@@ -4502,17 +4464,6 @@ class LocalizationService {
       'withdraw_phone_hint': 'M-Pesa phone number',
       'withdrawal_processing': 'Processing...',
       'yes_delete': 'Yes, Delete',
-      // Local media player
-      'media': 'Music & Video',
-      'media_library': 'Music & Video',
-      'now_playing': 'Now Playing',
-      'music': 'Music',
-      'videos': 'Videos',
-      'import_files': 'Import Files',
-      'no_media': 'No track',
-      'permission_media_desc':
-          'Soko Vibe needs permission to read music and videos on your device.',
-      'allow_access': 'Allow Access',
     },
     ...zhTranslations,
   };

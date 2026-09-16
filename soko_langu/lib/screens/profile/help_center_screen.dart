@@ -89,14 +89,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     title: context.tr('chat_feature'),
                     content: context.tr('help_chat'),
                   ),
-                  _helpTile(
-                    title: context.tr('audio_music'),
-                    content: context.tr('help_audio'),
-                  ),
-                  _helpTile(
-                    title: context.tr('youtube_music'),
-                    content: context.tr('help_youtube'),
-                  ),
                 ],
               ),
               const SizedBox(height: 8),

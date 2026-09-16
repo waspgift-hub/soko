@@ -1,0 +1,609 @@
+================================================================================
+ SOKO VIBE — ARCHITECTURE KAMILI (Frontend + Backend + Infra, E2E)
+================================================================================
+Toleo la ufafanuzi: v2.0 "Trust-Commerce" (server src/) + v1 legacy-compat
+Tarehe: Septemba 2026
+Maandishi haya yanatokana na uchunguzi wa code halisi (sio mawazo).
+
+================================================================================
+1. MUHTASARI WA JUU (HIGH-LEVEL)
+================================================================================
+
+Soko Vibe ni marketplace ya Tanzania: Flutter app (mobile/web) + Node/Express
+server + Firebase + PostgreSQL + Redis + ClickPesa + OneSignal + Cloudflare.
+
+Trafiki hupitia mlango mmoja wa umma:
+
+  Mtumiaji (Flutter app / simu)
+        |
+        v
+  api.sokovibe.co.tz  (Cloudflare Worker = edge cache + reverse proxy)
+        |
+        v
+  soko-langu-server.onrender.com  (Render: API + Worker processes)
+        |                  |
+        |                  v
+        |            PostgreSQL (Prisma)  <-- database kuu ya v2
+        |            Redis (cache + queues BullMQ)
+        v
+  Sevices za nje (external services):
+    - Firebase Auth / Firestore / App Check / Crashlytics / Performance
+    - ClickPesa (malipo mobile money)
+    - OneSignal (push notifications)
+    - Meseji / Notify Africa (SMS)
+    - Groq (AI assistant)
+    - Cloudinary (legacy images) + Cloudflare R2 (media mpya)
+    - Google AdMob (ad revenue)
+
+MUHIMU: App ni HYBRID. Ipo katika mchakato wa migration kutoka v1 (Firestore
+as source of truth) hadi v2 (PostgreSQL as source of truth). Kwa sasa zote
+mbili zinaishi pamoja kwa make sure app yote inaendelea kufanya kazi:
+
+  - v1 paths za app (orders, transactions, escrow, payouts, search,
+    notifications, marketplace payment link) zinatumia FIRESTORE kupitia
+    "legacy-compat" mounts kwenye server mpya.
+  - v2 endpoints (/api/v1/*) zinatumia POSTGRESQL (Prisma) + Redis.
+  - Maagizo mapya ya v2 yanajulikana Postgres na kisha "mirrored" kwenye
+    Firestore ili Flutter app ya sasa isione tofauti.
+
+Hii ina maana client haibadilishwi kabisa kwa sasa — mabadiliko ya migration
+yanaishia server (+ cloudflare) tu.
+
+================================================================================
+2. TOPOLOGY KAMILI (NANI ANATUMIA NINI)
+================================================================================
+
+| Kipande            | Wapi | Kazi                                                      |
+|--------------------|------|-----------------------------------------------------------|
+| Flutter app        | client | UI, state, offline cache, local security, AI UI      |
+| GoRouter           | client | Routing + auth guards (26 auth routes, 5 admin routes)  |
+| Provider           | client | State management (auth, feed, theme, balance privacy)   |
+| Hive               | client | Offline cache (products, chat rooms, messages)           |
+| SharedPreferences  | client | Language, currency, wishlist IDs, rate-limits, tier      |
+| Firestore          | Firebase | v1 katika app: products, orders, transactions, chat, users, notifications |
+| Firebase Auth      | Firebase | Identity: phone OTP, email/OTP, Google, custom tokens   |
+| Firebase App Check | Firebase | App attestation (Android Play Integrity / DeviceCheck)  |
+| Crashlytics        | Firebase | Crashes native                                          |
+| Performance        | Firebase | Metrics native                                          |
+| PostgreSQL         | Render   | v2 core: users, orders, wallet/ledger, payouts, disputes, refunds, referrals, trust, handover |
+| Redis (BullMQ)     | Render/Upstash | Cache, rate-limit, idempotency locks, job queues (media, finance) |
+| ClickPesa          | External | Mobile money: USSD push, BillPay, payouts                |
+| OneSignal          | External | Push notifications                                      |
+| Meseji/Notify      | External | SMS OTP + transaction SMS                               |
+| Groq               | External | AI assistant + search summaries (server-side proxy)     |
+| Cloudflare Waf?    | Edge     | Worker: cache public reads, region routing, origin proxy|
+| Cloudflare R2      | Edge     | Media storage mpya (images/videos/backups)              |
+| Cloudinary         | External | Legacy image/video hosting (client bado inatumia)       |
+| AdMob              | Google    | Interstitial + rewarded ads                             |
+| Render             | Host     | API (autoscale 1-6) + background worker                 |
+
+================================================================================
+3. FRONTEND (FLUTTER) — INAFANYAKAZI VIPI
+================================================================================
+
+3.1 Boot sequence (lib/main.dart)
+  - PaintingBinding image cache capped @200MB (low RAM devices).
+  - themeManager.load()  -> loads saved theme (dark/light).
+  - SafeTextFilter.init(sw) -> profanity filter (Tanzania).
+  - Firebase.initializeApp(options) -> uses DefaultFirebaseOptions
+    (firebase_options.dart, project sokonimoko-8c171-a8d14).
+  - Firestore.persistenceEnabled = true (non-web).
+  - LocalCacheService.init() -> Hive boxes.
+  - Crashlytics set as global handler (recordFatal).
+  - GoogleSignIn.initialize (native only).
+  - LocalNotificationService.initialize (heads-up).
+  - runApp(SokoVibeApp).
+
+  Wire ya root:
+    MultiProvider
+      (ProductFeedProvider, ThemeManager, BalancePrivacyService,
+       AuthRepository, OnboardingService, AuthNotifier)
+    -> MaterialApp.router(routerConfig: appRouter, theme, locale)
+    -> _appBuilder:
+         Responsive.init
+         web desktop constraint (maxWidth 1200)
+         PremiumBackground
+         ConnectivityWrapper      (offline banner + recovery)
+         MaintenanceGate          (app_settings/maintenance)
+         AppLockOverlay           (PIN lock overlay)
+         TransactionStatusWatcher (extension point)
+         AgeGateOverlay
+         AppConfig (InheritedWidget: langCode, currencyCode, smsLangCode)
+
+3.2 Routing & guards (lib/app/router.dart)
+  - GoRouter with refreshListenable = AppStateNotifier.
+  - Redirect:
+      * !appInitialized -> null (wait)
+      * authed on /login|/register -> /
+      * admin-only routes: not authed -> /login; not admin -> /
+      * _authRequiredRoutes (26): not authed -> /login
+  - _authRequiredRoutes: /checkout /kyc /add-product /profile /settings
+    /edit-profile /shop-customize /wishlist /my-ads /seller /seller-earnings
+    /seller-dispatch /seller-quote /seller-orders /my-purchases /product-boost
+    /notifications /chats /chat /create-group /group-chat /create-flash-sale
+    /receipt /order-detail /report /buyer-requests /post-buyer-request
+  - _adminOnlyRoutes (5): /admin /admin/user/:uid /admin/reports /admin/kyc
+    /admin/broadcast
+  - Kila page imefungwa kwa _premiumPage() (transitions).
+  - Deep links: DeepLinkService + MethodChannel soko_lang/navigate.
+
+3.3 State management
+  - AuthNotifier (lib/notifiers): state AuthStatus{loading, unauthenticated,
+    authenticated}; husimamia login/register/OTP; initialize() inarestore
+    current user na kusoma Firestore users/{uid} kwa isAdmin.
+  - ProductFeedProvider (ChangeNotifier): product feed, pagination (15/page),
+    realtime subscription, fromCache flag, connectivity recovery.
+  - AppConfig InheritedWidget: language/currency propagation (context.tr()).
+
+3.4 Design system (lib/widgets/ds/)
+  25 components: DsButton, DsCard, DsTextField, DsChip, DsBadge, DsSheet,
+  DsConfetti, DsCelebrationRain, DsMicroburst, DsPrice, DsQuantitySelector,
+  DsRatingStars, DsVerifiedCheck, DsEscrowShield, DsPaymentStatusTimeline,
+  DsLikeButton, DsBoostBadge, DsSkeleton, DsEmptyState, DsStockIndicator,
+  DsChatBubble, DsDivider, DsAvatar, DsLoadingDots, DsReportDialog.
+  Tokens: theme/app_colors.dart (AppInsets, AppFontSize, AppRadius),
+  theme/app_dimens.dart (AppSpacing). Commerce green = buy/sell/pay CTAs.
+
+3.5 Localization
+  - supportedLanguages: sw (Kiswahili), en (English), zh (中文).
+  - supportedCurrencies (9): TZS, USD, EUR, GBP, KES, UGX, NGN, ZAR, CNY.
+  - Hifadhi: SharedPreferences 'language_code', 'currency', 'sms_language'.
+  - translations ni in-memory map kubwa (context.tr(key)).
+  - server hu-localize notifications kulingana na langCode (UserService sync).
+
+3.6 Offline & performance
+  - Hive: cached_products, cached_rooms, cached_messages_<roomId>.
+  - Firestore persistence enabled.
+  - ProductFeedProvider huonyesha cache mara moja kisha live update.
+  - ServerKeepAlive: kila dakika 10 introduces GET /health (Render free-tier
+    hulala baada ya ~15min; hii inaweka warm).
+
+================================================================================
+4. BACKEND (NODE/EXPRESS) — INAFANYAKAZI VIPI
+================================================================================
+
+4.1 Miundo miwili (muhimu sana kufahamu)
+
+  A) LEGACY v1 (server root): index.js (374KB!), orders.js, search.js,
+     notification.js, cache.js, clickpesa.js, money.js, notif_lang.js,
+     routes/, middlewares/, helpers/.
+     -> Inatumia FIRESTORE (firebase-admin) kama database.
+     -> Hii ndiyo FLOW YA APP YA SASA (legacy-compat mounts).
+
+  B) NEW v2.0 (server/src): src/index.js (main), app.js, config/, middleware/,
+     modules/* (20 modules), services/, utils/, workers/, seo/.
+     -> Inatumia POSTGRESQL (Prisma), Redis (BullMQ), R2 media.
+     -> package.json "main": "src/index.js"; Render start:
+        node --optimize-for-size --expose-gc src/index.js
+     -> Ina mount legacy-compat ili v1 paths ziendelee kufanya kazi.
+
+  package.json: name soko-langu-server, version 2.0.0.
+  scripts: start, dev, worker, migrate, migrate:dev, generate, postinstall,
+  test (node --test test/*.test.js = 202 tests), test:e2e, lint.
+
+4.2 Middleware stack (src/app.js)
+  1) loadShedder  (503 + Retry-After ikiwa event loop >1500ms au heap >512MB)
+  2) compression
+  3) Security headers (HSTS, CSP, nosniff, X-Frame-Options, Permissions-Policy)
+  4) recordApiHit (usage analytics, best-effort, Redis)
+  5) Canonical host folding (www.sokovibe.co.tz; admin/api subdomain handling)
+  6) HTTP->HTTPS redirect (domain hosts only)
+  7) Trailing-slash collapse (public pages)
+  8) CORS (ALLOWED_ORIGINS whitelist)
+  9) express.json limit 10mb
+  10) 20s request timeout (504)
+  11) Static/SEO: .well-known, robots, sitemap, public HTML pages, /admin
+      (browser admin dashboard), /shop (web shop SPA), landing site root.
+  12) Routes (v2) + legacyShopRouter + legacy-compat mounts
+  13) 404 handler (JSON for /api, HTML otherwise)
+  14) Error handler (details only in development)
+
+4.3 v2 route map (PostgreSQL via Prisma) — mounted in src/app.js
+  /health                                   health
+  /api/v1/auth                              auth (OTP, custom tokens)
+  /api/v1/users/settings                    user language/region settings
+  /api/v1/sellers                           sellers (controller + state machine)
+  /api/v1/orders                            orders (order-service, state machine)
+  /api/v1/payments                          payments (ClickPesa provider factory)
+  /api/v1/shipping                          shipping (quote + validation)
+  /api/v1/handover                          handover (delivery OTP)
+  /api/v1/wallet                            wallet (ledger + wallet services)
+  /api/v1/disputes                          disputes (evidence, auto-release SLA)
+  /api/v1/refunds                           refunds (refund-service)
+  /api/v1/media                             media (R2 pre-signed uploads, CDN)
+  /api/v1/feed                              feed (feed-ranking)
+  /api/v1/search                            search (search-service)
+  /api/v1/share                             sharing (OG generator)
+  /api/v1/trust                             trust (seller/buyer reliability, passport)
+  /api/v1/admin                             admin (admin-service, settings)
+  /api/v1/products                          products (product-service, Prisma)
+  /api/v1/referrals                         referrals
+  /api/v1/moderation                        moderation
+  /api/v1/reconciliation                    reconciliation
+  /api (generalLimiter + legacyShopRouter)  web shop (v2-backed checkout/status,
+                                            original /api paths, POSTGRES)
+  /api (legacy-compat mounts, FIRESTORE)    yaani:
+     /api/payouts, /api/orders, /api/search, /api/notification(s),
+     /api (feature-compat: cloudinary, etc.), /api/escrow, /api
+     (orders-compat: create-marketplace-payment-link, transactions/create),
+     /api (trust-compat), /api (moderation-compat), /api/admin (admin-compat)
+
+4.4 Worker (src/workers/index.js, BullMQ)
+  - Start: npm run worker.
+  - connectDatabase (Prisma) + connectRedis.
+  - mediaWorker (queue 'media', concurrency 1): job 'image' (sharp) na
+    'video' (ffmpeg) — sasa ni stubs/skip kama sharp au ffmpeg hazipo.
+  - finance jobs kupitia services/finance-runner:
+      * scheduleFinanceJobs() — register repeating jobs.
+      * startFinanceWorker() — in-process worker (FINANCE_WORKER_IN_PROCESS
+        default true). Ikiwa dedicated worker imewekwa, set =false.
+  - Idempotent jobs (state-machine guards + unique keys) — overlapping
+    instances ziko safe.
+
+4.5 Finance safety-net (src/services/finance-runner.js)
+  - Auto-releases escrow baada ya ESCROW_AUTO_RELEASE_DAYS (default 14).
+  - Withdrawal auto-process (FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN 15).
+  - Withdrawal stuck detection (FINANCE_WITHDRAWAL_STUCK_HOURS 48).
+  - Reconciliation window (FINANCE_RECONCILIATION_WINDOW_HOURS 24).
+  - Dispute SLA (FINANCE_DISPUTE_SLA_HOURS 72).
+
+4.6 Database config (src/config/database.js)
+  - PrismaClient bound kwa DATABASE_URL; pool limit DATABASE_POOL_LIMIT (10)
+    (Prisma default ni cpu*2+1, na max_connections=100 kwa Postgres).
+  - getReadPrisma(): ikibidi DATABASE_URL_REPLICA, hot catalog reads (products/
+    categories) kwenda read-replica; writes hubaki primary.
+  - DATABASE_URL default: postgresql://sokovibe:password@localhost:5432/sokovibe
+
+4.7 Authority stamps (client vs server)
+  Client haipaswi kuandika isAdmin/isSuspended/walletBalance/sellerBalance/
+  pendingEscrow/totalSales/grossSalesVolume/totalWithdrawn/isBoosted/
+  boostedUntil/boostTier/kyc — Firestore rules zinakataa (noSensitiveFieldChanges).
+  Server ndiyo mwenye mamlaka kwa financial/trust/kyc/boost fields
+  (Admin SDK + Prisma). Hii ni defense against client-side tampering.
+
+================================================================================
+5. FIRESTORE — KWA KAZI GANI (v1, inatumika na app ya sasa)
+================================================================================
+
+Firebase project: sokonimoko-8c171-a8d14
+
+Collections ambapo APP INASOMA/KUANDIKA FIRESTORE MOJA KWA MOJA:
+
+  products                -> public read; create/update na seller (client!)
+                             (boost fields server-own; rating/delete server-own)
+  users                   -> profile ya mtumiaji (owner write)
+  orders                  -> lifecycle ya order (server legacy-compat)
+  transactions            -> malipo/transactions (server)
+  chat_rooms + messages   -> chat realtime (client + server /api/chat/send)
+  notifications           -> in-app notification list (client marks read)
+  ad_views                -> ad views (client write, server-ad owned)
+  product_analytics, boost_analytics -> analytics (client increments)
+  user_sessions           -> presence heartbeat (admin panel)
+  reviews                 -> product reviews (client)
+  reports                 -> reports (client)
+  price_drops             -> price drop requests
+  groups + messages       -> group chat
+  statuses                -> statuses (msalaa)
+  wishlist                -> (hai — wishlist iko device-local SharedPreferences)
+
+firestore.rules (rules_version 2):
+  - helpers: isSignedIn, isOwner, isAdmin (users/{uid}.isAdmin==true),
+    notSuspended.
+  - noSensitiveFieldChanges / noSensitiveCreateFields: kukataa client kuandika
+    walletBalance, sellerBalance, pendingEscrow, totalSales, grossSalesVolume,
+    totalWithdrawn, isAdmin, isSuspended, kyc, isBoosted, boostedUntil,
+    boostTier, createdAt, lastSaleAt, lastLoginAt.
+  - products: create seller (no boost/feature/soldCount seeds; rating/
+    reviewCount lazima 0; admin anaveza); update seller au bump viewCount/
+    likedBy/rating/reviewCount/soldCount (admin).
+  - orders: participant bado hana uwezo wa kubadilisha status kupitia
+    Firestore inline — updates zinapiganwa na status state machine; update
+    hurejeshwa kwa soft-delete/shippingCost/totalAmount au admin.
+  - Catch-all deny: /{document=**} -> allow read, write false.
+
+firestore.indexes.json: 43 composite indexes (conversations, transactions,
+  flash_sales, notifications, products, orders, chat_rooms, reviews, statuses,
+  fraud_alerts, payouts, withdrawals, price_drops).
+
+Firebase Auth: phone OTP (+255), email+password, email OTP, Google Sign-In.
+  Server hu-toa custom token baada ya verify OTP (v2 /api/v1/auth/*).
+  App Check: PlayIntegrity (prod Android), DeviceCheck (iOS). Debug token
+  huprint console kwenye debug.
+
+Crashlytics: error reporting (native tu). Performance: metrics (native tu).
+
+================================================================================
+6. POSTGRESQL (PRISMA) — KWA KAZI GANI (v2 core engine)
+================================================================================
+
+prisma/schema.prisma:
+  - provider postgresql, url env("DATABASE_URL").
+  - Core tables: User (firebaseUid unique, phone unique, role, accountStatus,
+    emailVerified, phoneVerified, onboardingComplete, preferredLanguage/Currency,
+    timezone), SellerProfile, Product, ProductMedia, Order, OrderTimeline,
+    Transaction, Wallet, LedgerAccount/LedgerEntry, Payout, Withdrawal, Dispute,
+    DisputeEvidence, Refund, Referral, TrustPassport..., HandoverOTP, etc.
+
+Matumizi halisi (src/modules/products/product-service.js):
+  - prisma.sellerProfile.findUnique / prisma.product.create / findFirst /
+    update / count / findMany / productMedia.create — v2 product CRUD iko kwenye
+    POSTGRES.
+  - v2 orders: new shop -> Postgres -> mirrored kwenye Firestore orders
+    (legacy-shop comment: "each new Postgres order is mirrored into Firestore").
+
+Mkakati wa data (migration):
+  - Hot catalog reads (products/categories): Postgres, possible read replica.
+  - Financial records: Postgres ledger (single source of truth).
+  - Firestore stays kama app-facing mirror kwa Flutter v1 flows.
+
+================================================================================
+7. REDIS — KWA KAZI GANI
+================================================================================
+  - Cache ya 2-tier: memory + Redis (src/cache.js legacy; config/redis.js v2).
+  - Rate limiting (server-side sliding window): OTP send 3/15min, search
+    20/min/IP, payouts 10/min/IP, payment initiation 10/min/IP, general
+    RATE_LIMIT_WINDOW_MS/RATE_LIMIT_MAX.
+  - Idempotency locks: ClickPesa webhook REDIS SETNX (double-spend prevention)
+    + BullMQ job-ID dedup (payment:{txn_id}) + DB unique transactionId +
+    worker status-priority guard.
+  - BullMQ queues: 'media' (image/video jobs) na finance jobs.
+  - Caching search results (search.js uses cache.setRedisClient).
+  - If Redis unreachable, everything degrades gracefully (skip).
+
+================================================================================
+8. CLOUDFLARE — KWA KAZI GANI (EDGE)
+================================================================================
+
+8.1 Worker soko-api-edge (cf-worker/worker.js + wrangler.toml)
+  - Route: api.sokovibe.co.tz/* (zone sokovibe.co.tz).
+  - Anasimama MBELE ya Render origin. Origin default ORIGIN_URL:
+    https://soko-langu-server.onrender.com.
+  - CACHE RULES (first match wins; vše else passthrough):
+
+    GET  /api/trust/passport/:sellerId        TTL 300s, key=path
+    GET  /api/v1/trust/sellers/:id/passport    TTL 300s, key=path
+    GET  /api/transaction-status/:id           TTL 15s,  key=path+auth-hash
+    GET  /api/v1/products/categories           TTL 3600s,key=path
+    GET  /api/v1/products                      TTL 30s,  key=path+query
+    GET  /api/v1/products/:idOrSlug            TTL 30s,  key=path
+    POST /api/search/global-search             TTL 60s,  key=path+body-hash
+    POST /api/search/autocomplete              TTL 90s,  key=path+body-hash
+    POST /api/search/trending                  TTL 300s, key=path+body-hash
+    POST /api/search/most-rated                TTL 600s, key=path+body-hash
+    kila kitu kingine -> passthrough (kamwe cache)
+
+  - Stale-while-revalidate: expired entry hutumiwa mara moja (instant) na
+    jinsi ctx.waitUntil(revalidateAndStore) inafanya refresh background —
+    thundering herd haifikii Render.
+  - Regional routing (10M tier): REGION_ORIGIN_AF/EU/AS/NA env; tu GET
+    /api/v1/products + POST /api/search/trending + most-rated ni region-routable
+    (stateful/auth paths daima primary ORIGIN).
+  - Cache keys zinajumuisha origin (regions hazichanganyiki).
+  - Custom headers: x-soko-edge:1, x-edge-fetch-at (stamp), x-soko-origin,
+    x-forwarded-proto/host.
+  - Deploy: wrangler deploy; DNS CNAME api -> soko-api-edge.<sub>.workers.dev
+    (Proxy ON).
+
+8.2 Cloudflare R2 (media storage mpya, server v2)
+  - Buckets: soko-vibe-images, soko-vibe-videos, soko-vibe-thumbnails,
+    soko-vibe-backups.
+  - Pre-signed PUT URLs (upload-service.js) kwa client ku-upload moja kwa
+    moja (image max 50MB, video max 500MB).
+  - Public URL: media.soko-vibe.co.tz (CNAME kwa R2 custom domain).
+  - CDN: media.soko-vibe.co.tz kwenye edge.
+
+8.3 Cloudinary (LEGACY — client bado inatumia)
+  - lib/services/cloudinary_service.dart: upwa upload images/video to
+    api.cloudinary.com/v1_1/dgbsohnl4 (folder soko_langu), signature kupitia
+    server (POST /api/cloudinary/sign).
+  - Server ina destroyUrl (CLOUDINARY_DESTROY_URL) kwa legacy cleanup.
+  - getThumbnailUrl() inarewrite res.cloudinary.com URLs (+w_300,c_fill).
+
+  MUHIMU: Flutter app leo bado inatumia Cloudinary kwa media; R2 ni njia
+  mpya ya server v2. Firebase Storage iko kwenye pubspec lakini HAIJATUMIKA.
+
+================================================================================
+9. RENDER — KWA KAZI GANI
+================================================================================
+render.yaml (rootDir: server):
+  Service 1: soko-langu-api (web, starter)
+    build: npm ci && npx prisma generate
+    start: node --optimize-for-size --expose-gc src/index.js
+    healthCheckPath: /health
+    numInstances: 1, autoscale min 1 max 6 (targetMemory 75%, targetCPU 70%)
+    env: NODE_ENV=production, FINANCE_WORKER_IN_PROCESS=false (sasa kuna
+         dedicated worker), DATABASE_POOL_LIMIT=10, PORT=10000, SHED_LOAD=true,
+         UV_THREADPOOL_SIZE=10, NODE_OPTIONS=--max-old-space-size=1024
+    disk: tmp (1GB @ /tmp)
+  Service 2: soko-langu-worker (worker, starter)
+    start: npm run worker (src/workers/index.js) — autorelease, image
+    numInstances: 1
+    env: NODE_ENV=production, FINANCE_WORKER_IN_PROCESS=false
+
+  Render free tier hulala baada ya idle; ServerKeepAlive (client) hu-weka warm.
+
+  Dockerfile: node:20-slim, npm ci --omit=dev, node index.js. NOTE: Dockerfile
+  bado ina node index.js (legacy) — Render blueprint inatumia `src/index.js`
+  directly. Ikiwa deployment inatumia Dockerfile, itabidi update. (tazama
+  "mambo ya kuangalia" mwishoni)
+
+================================================================================
+10. E2E FLOWS ZA MSINGI (DATA INAENDA WAPI HASWA)
+================================================================================
+
+10.1 Usajili / Kuingia (E2E)
+  1. User anaingiza namba ya simu (+255).
+  2. Client inahesabia E164 (PhoneUtils), POST /api/v1/auth/send-otp
+     (v2, Postgres + Firebase custom token).
+  3. Server hutuma SMS kupitia Meseji (has) / Notify Africa (fallback).
+  4. User anaandika OTP; client POST /api/v1/auth/phone-login {phone, otp}.
+  5. Server anathibitisha OTP, atoa CUSTOM TOKEN ya Firebase.
+  6. Client signInWithCustomToken -> Firebase Auth session.
+  7. AuthNotifier anasoma Firestore users/{uid} (isAdmin, suspension) na
+     profile completeness; ana-set AppStateNotifier.
+  8. Router redirect: authed -> /.  (Email/OTP na Google sawa sawa.)
+
+10.2 Kutazama bidhaa (Browse) — FIRESTORE direct
+  1. ProductFeedProvider.loadInitial() -> ProductRepository ->
+     product_service.fetchProducts(): FirebaseFirestore .collection('products')
+     (boosted-first sorting, pagination).
+  2. Client ana Hive cache: anapakia cache kwanza, kisha live stream
+     (watchProductsRealtime) inasasisha.
+  3. Njia mbadala ya v2 (future): /api/v1/products/* (Postgres) kupitia edge.
+
+10.3 Kuweka Oda (Order) — LEGACY FIRESTORE PATH
+  1. CheckoutScreen._submitOrder: POST /api/orders/create (orders-compat,
+     FIRESTORE orders state machine) — payload: buyer/seller/product/quantity/
+     variantId/unitPrice/address/lat/lng/deliveryType.
+  2. Server anaunda Firestore orders/{orderId} (hali: pending).
+  3. Client ina-push /order-detail/<orderId> (extra orderData).
+  4. v2 shop (legacy-shop /api) inaweza kuunda Postgres order na kui-mirror
+     kwa Firestore ili app isone tena.
+
+10.4 Kulipia (Payment) — ClickPesa E2E
+  1. User anabofya "Pay" kwenye OrderDetail / MyPurchases.
+  2. Client ClickPesaService.initiateMarketplacePayment:
+     POST /api/create-marketplace-payment-link
+       (body: productPrice, productName, productId, sellerId, sellerName,
+        email, phone, buyerId, buyerName, deliveryType=local,
+        paymentMethod=ussd_push, shippingCost, existingTransactionId).
+     Response inatarajiwa order_id. Timeout escalation [10s,25s,60s] +
+     3s delay (Render cold-start).
+  3. Server (orders-compat, FIRESTORE + ClickPesa):
+     - USSD Push: server anaomba ClickPesa ku-ku-tuma USSD kwa simu yako.
+     - BillPay (alternative): order control number.
+  4. User anaweka PIN kwenye simu (M-Pesa).
+  5. ClickPesa webhook (/api/clickpesa/webhook) ikifika:
+     - verify IP (CLICKPESA_ALLOWED_IPS) + checksum (checksum key).
+     - Redis SETNX lock (double-spend prevention).
+     - update Firestore orders/transaction + transactions doc.
+  6. Client RealtimePaymentBanner:
+     - Firestore snapshot transactions/{orderId} (StreamBuilder) ANA
+       HTTP poll GET /api/transaction-status/{orderId} kila 3s.
+     - status kwenye successStatuses -> success banner + confetti;
+       failed|cancelled -> error banner.
+  7. Escrow: pesa inahifadhiwa kwenye escrow (state paid/escrow_hold).
+  8. Ni baada ya buyer kuthibitisha upokeaji (delivery OTP / escrow release)
+     ndio server anamfanyia seller PAYOUT.
+
+10.5 EsCrowe na delivery (v1 FIRESTORE state machine) — orders-compat
+  States: pending -> paid/escrow_hold -> dispatched -> delivered ->
+  delivery_confirmed -> completed  (mengine: refunded, disputed, cancelled,
+  failed, wal: walletCredited, payoutPending, payoutComplete).
+  Endpoints (client): /api/escrow/release, /api/escrow/cancel,
+  /api/escrow/dispatch, /api/orders/verify-delivery,
+  /api/orders/delivery-arrival, /api/orders/set-shipping-cost.
+  - Delivery OTP: /api/orders/... hutolewa OTP ya handover (routes/
+    delivery_otp.js legacy) — buyer anakabidhi OTP kwa muuzaji ndio usafirishaji
+    unathibitishwa.
+  - v2: modules/disputes + finance-runner (auto-release after 14d; SLA 72h).
+
+10.6 Withdrawal / Payout (seller) — v1 Firestore + ClickPesa payout
+  1. Seller withdraw: POST /api/payouts/seller/withdraw (legacy payouts router
+     ya route mount /api/payouts) gia /api/seller/withdraw.
+  2. Server: requireUser, checkSuspended, kima (payoutFee=2000),
+     ClickPesa payout API, PAYOUT_STATUSES, auditLog.
+  3. Inakiweka payout doc Firestore; status ya escrow inabadilika
+     walletCredited -> payoutPending -> payoutComplete.
+  4. v2: modules/wallet (ledger) + payouts routes.
+
+10.7 Chat (E2E, FIRESTORE realtime + server moderation)
+  1. roomIdFor(uid1,uid2) = sorted uids joined '_' -> chat_rooms/{roomId}.
+  2. getOrCreateRoom: umis.
+  3. KUTUMA: POST {baseUrl}/api/chat/send (server persist + moderation,
+     returns messageId). Client huandika optimistically kwenye Hive cache.
+  4. KUSOMA: Firestore live stream chat_rooms/{roomId}/messages (limit 100)
+     + Hive cache; loadOlderMessages paginates backwards.
+  5. Reactions/delete: Firestore transactions na per-message fields.
+  6. Push: chat message hu-push OneSignal wire (server) + heads-up local.
+
+10.8 Notifications (E2E)
+  - Push: OneSignal (OneSignal.login(user.uid)), channels chat/payments/
+    general/system; FCM app config ipo lakini OneSignal ndio active.
+  - Heads-up local: flutter_local_notifications (foreground).
+  - In-app: Firestore notifications collection (userId field), markAllAsRead
+    batched (500/batch), markRelatedAsRead inasubiri id keys.
+  - Server localization: server ina-language yako (UserService.setLanguage)
+    ndio push/email/SMS zisikwe za Kiswahili au Kiingereza (notif_lang.js).
+  - Fallback:wakati push denied -> Firestore fallback hu-heads-up rows (<2min
+    old).  Server endpoint: POST /api/send-notification.
+
+10.9 Ads (AdMob — platform revenue)
+  - InterstitialAdService: tryShow na 20-min cooldown, preload+show, timer
+    dakika 1. (Guest wall: Sell/Chat/Profile tabs zinahitaji login.)
+  - RewardedAdService + AdGateService (one-time per action): watching an ad
+    kunafungua kitu (e.g. post buyer request, create flash sale).
+  - On user earned: writes Firestore ad_views {buyerId, timestamp,
+    processed:false}. (adRevenuePerView=15, sellerAdShare=0, platformAdShare=1.)
+  - kAdsTestMode = true sasa — test IDs zinatumika.
+
+10.10 AI Dalali (Groq — server-side proxy, hakuna key kwenye app)
+  1. Client AiService.sendMessage -> POST {baseUrl}/api/ai/chat (Bearer).
+  2. Server (groq module) anaita Groq API (openai/gpt-oss-120b, fallback
+     openai/gpt-oss-20b; vision llama-3.2-90b — sasa dead).
+  3. Rate limit: 30 req/60min (client rate_limiter), summary budget
+     ai_search_summary 60/60min.
+  4. YOTEA inajitokeza kwa Swahili/English prompts za "Soko Vibe AI Dalali".
+
+10.11 KYC (seller verification)
+  1. Client KycService.submitKyc: POST /api/kyc/submit (Firestore legacy)
+     {userId, fullName, idType, idNumber, idImageUrl, selfieUrl}.
+  2. Admin anachunguza (admin panel /api/admin/kyc/*).
+  3. Status: GET /api/kyc/status/{userId}. KYC field ni server-owned (rules).
+
+10.12 Boost (seller)
+  1. GET /api/gateway-fee -> BoostService.initiateBoostPayment:
+     POST /api/boost-product (tier.priceTzs, durationDays, paymentMethod
+     ussd_push).
+  2. Client anafuatilia Firestore products/{id} isBoosted==true (poll 10x/500ms)
+     — boost field ni server-owned (webhook anaandika atomically).
+  3. Mahitaji kidogo: notifyBoost POST /api/boost/notify.
+
+================================================================================
+11. MIGRATION — V1 -> V2 (kwa nini zote zipo)
+================================================================================
+  - server/MIGRATION.md: goal ni "any host swappable <15min, zero disruption".
+  - URL ya umma haibadiliki: Cloudflare edge -> ORIGIN_URL ndio pekee
+    inayobadilika unapohamisha host.
+  - Postgres ndio "primary DB"; Redis ni cache/queue (haijamigrate — re-warm);
+    R2 ikibaki (same bucket keys); Firebase haihamishiki (already cloud).
+  - Firestore ni "source of truth v1"; v2 inaweka Postgres + mirroring.
+  - Free->paid: config tu, hakuna code rewrite.
+
+================================================================================
+12. MAJUKUMU YA KILA "SHUFFLE" MUHIMU (WATU HUKOSEA HAPA)
+================================================================================
+  - Firestore <> Postgres: SI duplicate moja bulksaree. Firestore = v1 app
+    lifecycle; Postgres = v2 financial/trust core. Orders zinaweza kuwa zote
+    mbili (mirror) wakati wa transition.
+  - server/ root index.js (legacy 374KB) SI inayoendesha sasa: package.json
+    main/src na Render blueprint zote zinatumia src/index.js. Kuna Dockerfile
+    ambayo bado ina `node index.js` — HII INA-BREAK Rendering kama Dockerfile
+    inatumika. (Tazama "mambo ya kuangalia".)
+
+================================================================================
+13. LOGS / HEALTH / OBSERVABILITY
+================================================================================
+  - /health: returns version 2.0.0, database ok, redis ok.
+  - Activity: recordApiHit (per min/hour/day/month/year, Redis).
+  - Load shedder: 503 + Retry-After kwenye overload.
+  - Crashlytics (client), logs server.log/server.err.
+  - x-soko-edge:1 kwenye edge hits.
+
+================================================================================
+14. MAMBO YA KUANGALIA (AINA ZA RISK ZILIZOPATIKANA)
+================================================================================
+  a) Dockerfile inatumia `node index.js` (legacy) — Render blueprint inatumia
+     `src/index.js`. Ikiwa mtu atadeploy kupitia Dockerfile, v2 haitakimbia.
+  b) firebase_storage kwenye pubspec haitumiki — inaweza kuondolewa (IMEONA tu,
+     si kazi ya sasa).
+  c) legacy index.js (374KB) bado iko kwenye repo — dead code kubwa; inaweza
+     kufutwa baada ya compat stable (si sasa).
+  d) kAdsTestMode=true — test AdMob IDs ziko active kwa prod build sasa.
+  e) Cloudinary vs R2: app bado inatumia Cloudinary; R2 ni siku za usoni.
+  f) Vision AI (llama-3.2-90b) imekufa — code inarudisha ''.
+
+================================================================================
+MWISHO — Hii ni architecture KWELI ya sasa (iliyothibitishwa kwa code).
+Kwa maswali yoyote: angalia files zilizotajwa kwenye kila section.
+================================================================================

@@ -15,7 +15,6 @@ import '../extensions/context_tr.dart';
 import '../main.dart';
 import '../utils/responsive.dart';
 import 'auth_wall.dart';
-import 'media/mini_player_bar.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -143,9 +142,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ? null
           : Column(
               mainAxisSize: MainAxisSize.min,
-              // Mini player floats above the glass nav bar (only rendered
-              // when a track is active; otherwise it collapses to zero height).
-              children: [MiniPlayerBar(), _buildGlassNavBar(cs)],
+              children: [_buildGlassNavBar(cs)],
             ),
     );
   }

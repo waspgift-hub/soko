@@ -21,7 +21,7 @@ class ProductVariant {
       name: map['name'] ?? '',
       value: map['value'] ?? '',
       priceAdjustment: map['priceAdjustment']?.toDouble(),
-      stock: map['stock'] ?? 0,
+stock: map['stock'] ?? 0,
     );
   }
 
@@ -142,6 +142,102 @@ final String unit;
       isBoosted &&
       boostedUntil != null &&
       DateTime.now().isBefore(boostedUntil!);
+
+  static const String _r2PublicBase = 'https://media.soko-vibe.co.tz';
+
+  /// Builds a [Product] from the v2 server DTO served by `/api/v1/products`.
+  ///
+  /// Server shape (PUBLIC_SELECT): `id, title, slug, description, price,
+  /// originalPrice, currency, stock, status, condition, createdAt`,
+  /// `seller{id,storeName,storeSlug}`, `media[{type, r2Key, ...}]`, and on
+  /// detail an extra `category{name}` plus a `snapshot` carrying the legacy
+  /// Firestore fields preserved by the migration mapper. `price` travels as a
+  /// JSON number (BigInt→Number serialization on the server).
+  factory Product.fromApi(Map<String, dynamic> json) {
+    final seller = json['seller'];
+    final sellerMap = seller is Map<String, dynamic>
+        ? seller
+        : (seller is List && seller.isNotEmpty ? seller[0] : null);
+    final media = (json['media'] as List?) ?? const [];
+    final snapshot = json['snapshot'] is Map<String, dynamic>
+        ? json['snapshot'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    final category = json['category'] is Map<String, dynamic>
+        ? json['category'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    List<String> images = [];
+    for (final m in media) {
+      if (m is Map<String, dynamic>) {
+        final type = m['type'] ?? 'image';
+        final key = m['r2Key'] ?? m['thumbnailR2Key'];
+        if (key is String && key.isNotEmpty) {
+          images.add(type == 'image'
+              ? '$_r2PublicBase/$key'
+              : (m['thumbnailR2Key'] is String &&
+                      (m['thumbnailR2Key'] as String).isNotEmpty
+                  ? '$_r2PublicBase/${m['thumbnailR2Key']}'
+                  : '$_r2PublicBase/$key'));
+        }
+      }
+    }
+    if (images.isEmpty && snapshot['images'] is List) {
+      images = List<String>.from(snapshot['images'] as List);
+    }
+
+    final createdAtRaw = json['createdAt'];
+    DateTime createdAt;
+    try {
+      createdAt = DateTime.parse(createdAtRaw.toString()).toLocal();
+    } catch (_) {
+      createdAt = DateTime.now();
+    }
+
+    return Product(
+      id: json['id']?.toString() ?? '',
+      name: json['title']?.toString() ?? json['name']?.toString() ?? '',
+      description: json['description']?.toString() ??
+          snapshot['description']?.toString() ??
+          '',
+      price: (json['price'] ?? json['priceTzs'] ?? 0).toDouble(),
+      currency: json['currency']?.toString() ?? 'TZS',
+      images: images,
+      videoUrl: json['videoUrl']?.toString() ?? snapshot['videoUrl']?.toString(),
+      sellerId: json['sellerId']?.toString() ??
+          sellerMap?['sellerId']?.toString() ??
+          snapshot['sellerId']?.toString() ??
+          '',
+      sellerName: sellerMap?['storeName']?.toString() ??
+          snapshot['sellerName']?.toString() ??
+          '',
+      sellerPhone: sellerMap?['sellerPhone']?.toString() ??
+          snapshot['sellerPhone']?.toString(),
+      category: category['name']?.toString() ??
+          snapshot['category']?.toString() ??
+          'General',
+      subcategory: snapshot['subcategory']?.toString() ?? '',
+      location: snapshot['location']?.toString() ?? '',
+      district: snapshot['district']?.toString() ?? '',
+      createdAt: createdAt,
+      stock: (json['stock'] ?? 0) as int,
+      rating: (json['rating'] ?? snapshot['rating'] ?? 0).toDouble(),
+      reviewCount: json['reviewCount'] ?? snapshot['reviewCount'] ?? 0,
+      soldCount: json['soldCount'] ?? snapshot['soldCount'] ?? 0,
+      viewCount: json['viewCount'] ?? snapshot['viewCount'] ?? 0,
+      isBoosted: json['isBoosted'] ?? snapshot['isBoosted'] ?? false,
+      boostedUntil: json['boostedUntil'] != null
+          ? DateTime.tryParse(json['boostedUntil'].toString())?.toLocal()
+          : null,
+      boostTier: json['boostTier']?.toString() ??
+          snapshot['boostTier']?.toString() ??
+          '',
+      brand: snapshot['brand']?.toString(),
+      condition: json['condition']?.toString() ??
+          snapshot['condition']?.toString() ??
+          'new',
+      sellerKycApproved: snapshot['sellerKycApproved'] ?? false,
+    );
+  }
 
   factory Product.fromFirestore(DocumentSnapshot doc) {
     final dataRaw = doc.data();

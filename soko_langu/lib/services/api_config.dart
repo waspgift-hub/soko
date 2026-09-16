@@ -7,6 +7,11 @@ class ApiConfig {
   /// Use v1('/auth/send-otp') instead of '$baseUrl/api/auth/send-otp'.
   static String v1(String path) => '$baseUrl/api/v1$path';
 
+  /// Phase C bridge switch: when true, the catalog feed reads from the v2 API
+  /// (/api/v1/products, Postgres) before falling back to Firestore. Keep false
+  /// until the Firestore→Postgres product backfill has run in production.
+  static const bool kUseProductsApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

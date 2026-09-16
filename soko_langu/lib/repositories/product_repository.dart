@@ -3,25 +3,36 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/product_model.dart';
 import '../models/cached_product.dart';
 import '../services/product_service.dart';
+import '../services/product_api.dart';
+import '../services/api_config.dart';
 import '../services/local_cache_service.dart';
 
-/// Repository that coordinates remote (Firestore) and local (Hive) data sources.
+/// Repository that coordinates remote (API/Postgres + Firestore) and local
+/// (Hive) data sources.
 ///
-/// **Online** → fetches from Firestore, silently updates the Hive cache.
+/// **Online** → fetches from the v2 products API when [ApiConfig.kUseProductsApi]
+/// is enabled (Phase C bridge), otherwise Firestore, silently updating the Hive
+/// cache. The API path falls back to Firestore on failure so the feed never
+/// disappears during the migration window.
 /// **Offline** → falls back to the Hive cache immediately.
 ///
 /// All public methods return a [ProductResult] so callers always know whether
 /// the data came from the network or the cache.
 class ProductRepository {
   final ProductService _remote;
+  final ProductApiClient _api;
   StreamSubscription<List<ConnectivityResult>>? _connectSub;
   bool _wasOffline = false;
   dynamic _lastDoc; // Cursor for main feed
   dynamic _brandLastDoc; // Cursor for brand filter
   dynamic _categoryLastDoc; // Cursor for category filter
+  int _page = 1;
+  int _brandPage = 1;
+  int _categoryPage = 1;
 
-  ProductRepository({ProductService? remote})
-      : _remote = remote ?? ProductService();
+  ProductRepository({ProductService? remote, ProductApiClient? api})
+      : _remote = remote ?? ProductService(),
+        _api = api ?? ProductApiClient();
 
   /// Whether the device currently has internet.
   static Future<bool> get isOnline async {
@@ -42,9 +53,24 @@ class ProductRepository {
     bool startOver = false,
   }) async {
     final online = await isOnline;
-    if (startOver) _lastDoc = null;
+    if (startOver) {
+      _lastDoc = null;
+      _page = 1;
+    }
 
     if (online) {
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          final res = await _api.fetchProducts(page: _page, limit: limit);
+          if (res.items.isNotEmpty) {
+            _page++;
+            await _updateCache(res.items);
+            return ProductResult.data(res.items, source: DataSource.network);
+          }
+          // API returned nothing (e.g. Postgres not yet backfilled) — fall
+          // through to the Firestore source below.
+        } catch (_) {}
+      }
       try {
         final result = await _remote.fetchProducts(limit: limit, startAfter: _lastDoc);
         _lastDoc = result.$2;
@@ -66,9 +92,22 @@ class ProductRepository {
     int limit = 30,
     bool startOver = false,
   }) async {
-    if (startOver) _brandLastDoc = null;
+    if (startOver) {
+      _brandLastDoc = null;
+      _brandPage = 1;
+    }
     final online = await isOnline;
     if (online) {
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          final res = await _api.fetchProducts(page: _brandPage, limit: limit, query: brand);
+          if (res.items.isNotEmpty) {
+            _brandPage++;
+            await _updateCache(res.items);
+            return ProductResult.data(res.items, source: DataSource.network);
+          }
+        } catch (_) {}
+      }
       try {
         final result = await _remote.fetchProductsByBrand(
           brand,
@@ -91,10 +130,23 @@ class ProductRepository {
     int limit = 30,
     bool startOver = false,
   }) async {
-    if (startOver) _categoryLastDoc = null;
+    if (startOver) {
+      _categoryLastDoc = null;
+      _categoryPage = 1;
+    }
     final online = await isOnline;
 
     if (online) {
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          final res = await _api.fetchProducts(page: _categoryPage, limit: limit, query: category);
+          if (res.items.isNotEmpty) {
+            _categoryPage++;
+            await _updateCache(res.items);
+            return ProductResult.data(res.items, source: DataSource.network);
+          }
+        } catch (_) {}
+      }
       try {
         final result = await _remote.fetchProductsByCategory(
           category,
@@ -120,6 +172,17 @@ class ProductRepository {
     final online = await isOnline;
 
     if (online) {
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          final product = await _api.fetchProduct(id);
+          if (product != null) {
+            await LocalCacheService.cacheProduct(
+              CachedProduct.fromProduct(product),
+            );
+            return ProductResult.data(product, source: DataSource.network);
+          }
+        } catch (_) {}
+      }
       try {
         final product = await _remote.fetchProduct(id);
         if (product != null) {

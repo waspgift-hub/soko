@@ -470,7 +470,7 @@ class _FlowNode {
 }
 
 final flowNodes = [
-  _FlowNode(icon: Icons.shopping_cart_outlined, titleKey: 'flow_place_order'),
+  _FlowNode(icon: Icons.shopping_bag_outlined, titleKey: 'flow_place_order'),
   _FlowNode(icon: Icons.receipt_long_outlined, titleKey: 'flow_shipping_quote'),
   _FlowNode(icon: Icons.phone_android_outlined, titleKey: 'flow_payment'),
   _FlowNode(icon: Icons.verified_user_outlined, titleKey: 'flow_escrow'),

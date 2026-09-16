@@ -32,7 +32,6 @@ class AppRoutes {
 
   static const String sellerEarnings = '/seller-earnings';
   static const String checkout = '/checkout';
-static const String cart = '/cart';
   static const String discovery = '/discovery';
   static const String productBoost = '/product-boost';
   static const String myPurchases = '/my-purchases';
@@ -59,9 +58,4 @@ static const String cart = '/cart';
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';
-
-  // Local media player — not auth-gated; guests may browse their device too.
-  static const String mediaLibrary = '/media';
-  static const String nowPlaying = '/media/now-playing';
-  static const String videoPlayer = '/media/video';
 }

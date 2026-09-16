@@ -15,7 +15,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:safe_text/safe_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,7 +27,6 @@ import 'notifiers/auth_notifier.dart';
 import 'providers/product_feed_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'services/ai/ai_service.dart';
-import 'services/cart_service.dart';
 import 'services/app_lock_service.dart';
 import 'services/auth_service.dart';
 import 'services/exchange_rate_service.dart';
@@ -83,20 +81,6 @@ void main() async {
 
   await SafeTextFilter.init(language: Language.swahili);
 
-  // Background audio: registering the service before any AudioPlayer exists
-  // makes notification + lock-screen controls work from the first playback.
-  if (!kIsWeb) {
-    try {
-      await JustAudioBackground.init(
-        androidNotificationChannelId: 'com.soko_vibe.media.playback',
-        androidNotificationChannelName: 'Soko Vibe muziki',
-        androidNotificationOngoing: true,
-      );
-    } catch (e) {
-      debugPrint('JustAudioBackground: init failed — $e');
-    }
-  }
-
   // --- Firebase initialization (blocking — required before any Firestore call) ---
   try {
     await Firebase.initializeApp(
@@ -112,11 +96,10 @@ void main() async {
   }
 
   // --- Local cache (Hive) — must be ready before any repository reads ---
-  // Hive runs on web too (IndexedDB), so the cart and offline product cache
-  // keep working for browser users.
+  // Hive runs on web too (IndexedDB), so the offline product cache
+  // keeps working for browser users.
   try {
     await LocalCacheService.init();
-    await CartService.init();
   } catch (e) {
     debugPrint('LocalCacheService: init failed — $e');
   }

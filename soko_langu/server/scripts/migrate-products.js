@@ -1,0 +1,139 @@
+// Phase B: idempotent backfill of Firestore `products` → Postgres products table.
+// Dry-run by default; pass --commit to write. Idempotent: skips products where
+// title + sellerProfileId already exist (upsert on seller+title unique pair
+// would require a composite index, so we simply skip).
+//
+// Usage:
+//   node scripts/migrate-products.js              # dry-run
+//   node scripts/migrate-products.js --commit     # write to Postgres
+//   node scripts/migrate-products.js --limit 50   # cap batch size
+
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
+const admin = require('firebase-admin');
+const { PrismaClient } = require('@prisma/client');
+const { mapFirestoreProductToPrisma } = require('../src/modules/products/legacy-mapper');
+
+if (!process.env.DATABASE_URL) {
+  console.error('FATAL: DATABASE_URL not set');
+  process.exit(1);
+}
+if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  console.error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON not set');
+  process.exit(1);
+}
+
+const COMMIT = process.argv.includes('--commit');
+const LIMIT = (() => {
+  const idx = process.argv.indexOf('--limit');
+  if (idx !== -1) {
+    const v = parseInt(process.argv[idx + 1], 10);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+  return Infinity;
+})();
+
+const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+admin.initializeApp({
+  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)),
+});
+const firestore = admin.firestore();
+
+// ── UID → SellerProfile resolution cache ─────────────────────────────────────
+const profileCache = new Map();
+async function resolveSellerProfile(firebaseUid) {
+  if (profileCache.has(firebaseUid)) return profileCache.get(firebaseUid);
+  const user = await prisma.user.findUnique({
+    where: { firebaseUid },
+    select: {
+      id: true,
+      sellerProfile: { select: { id: true, storeName: true } },
+    },
+  });
+  const result = user?.sellerProfile?.id || null;
+  profileCache.set(firebaseUid, result);
+  return result;
+}
+
+// ── Category name → id resolution cache ──────────────────────────────────────
+const categoryCache = new Map();
+async function resolveCategoryId(name) {
+  if (!name) return null;
+  const key = name.trim().toLowerCase();
+  if (categoryCache.has(key)) return categoryCache.get(key);
+  const cat = await prisma.category.findFirst({
+    where: { name: { equals: name, mode: 'insensitive' } },
+    select: { id: true },
+  });
+  const result = cat?.id || null;
+  categoryCache.set(key, result);
+  return result;
+}
+
+async function main() {
+  console.log(`[migrate-products] mode=${COMMIT ? 'COMMIT' : 'DRY-RUN'} limit=${LIMIT === Infinity ? 'none' : LIMIT}`);
+
+  // Existing Postgres product titles (seller+title) — used for idempotent skip.
+  const existing = await prisma.product.findMany({
+    select: { sellerId: true, title: true },
+  });
+  const existingSet = new Set(existing.map(p => `${p.sellerId}|||${p.title}`));
+  console.log(`[migrate-products] Postgres products already present: ${existingSet.size}`);
+
+  // Read Firestore products
+  let count = 0;
+  let skipped = 0;
+  let errored = 0;
+  const batch = firestore.collection('products');
+
+  // Firestore may not have compound indexes for filtered queries, so paginate
+  // the whole collection and filter in-memory (active products only).
+  const snapshot = await batch.limit(10000).get();
+  console.log(`[migrate-products] Firestore docs fetched: ${snapshot.size}`);
+
+  for (const doc of snapshot.docs) {
+    if (count + skipped >= LIMIT) break;
+
+    const data = doc.data();
+    if (!data || !data.name) { skipped++; continue; }
+
+    // Resolve SellerProfile (Firestore UID → Postgres profile id)
+    const sellerProfileId = await resolveSellerProfile(data.sellerId);
+    if (!sellerProfileId) { skipped++; continue; }
+
+    // Skip if already present
+    const pgTitle = String(data.name || '').trim();
+    const dedupKey = `${sellerProfileId}|||${pgTitle}`;
+    if (existingSet.has(dedupKey)) { skipped++; continue; }
+
+    // Resolve Category
+    const categoryId = await resolveCategoryId(data.category);
+
+    try {
+      const payload = mapFirestoreProductToPrisma(data, { sellerProfileId, categoryId });
+      if (COMMIT) {
+        await prisma.product.create({
+          data: {
+            ...payload,
+            price: Number(payload.price),
+            snapshot: payload.snapshot,
+            media: { create: [] },
+          },
+        });
+      }
+      count++;
+    } catch (e) {
+      errored++;
+      console.error(`[migrate-products] SKIP ${doc.id}: ${e.message}`);
+    }
+  }
+
+  console.log(`[migrate-products] done. created=${count} skipped=${skipped} errors=${errored}`);
+  await prisma.$disconnect();
+}
+
+main().catch(async (e) => {
+  console.error('[migrate-products] fatal:', e);
+  await prisma.$disconnect();
+  process.exit(1);
+});
