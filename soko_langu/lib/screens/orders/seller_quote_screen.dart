@@ -7,6 +7,7 @@ import '../../widgets/product_cached_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_config.dart';
+import '../../services/order_api.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds.dart';
@@ -46,6 +47,19 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     HapticFeedback.lightImpact();
 
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Quote runs the Postgres state machine (→ SHIPPING_FEE_SUBMITTED);
+        // the server's presentation mirror advances the Firestore doc.
+        await OrderApiClient().submitShippingQuote(
+          txId,
+          amount: cost.round(),
+        );
+        _showSuccess(context.tr('shipping_cost_submitted'));
+        ctrl.clear();
+        if (mounted) setState(() => _submitting[txId] = false);
+        return;
+      }
+
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (token == null) {
         _showError(context.tr('login_required'));

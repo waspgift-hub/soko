@@ -57,6 +57,19 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     setState(() => _settingCostTxId = txId);
     HapticFeedback.lightImpact();
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Quote runs the Postgres state machine (→ SHIPPING_FEE_SUBMITTED);
+        // the server presentation mirror updates the Firestore doc.
+        await OrderApiClient().submitShippingQuote(
+          txId,
+          amount: cost.round(),
+          estimatedDays: 1,
+        );
+        _shipCtrl(txId).clear();
+        if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
+        return;
+      }
+
       // Try server endpoint first (updates totalAmount + notifies buyer)
       final token = await user.getIdToken();
       final resp = await http.post(

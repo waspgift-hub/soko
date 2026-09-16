@@ -2722,6 +2722,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (user == null) return;
     setState(() => _releasingTxId = txId);
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1: release is OTP-gated — the buyer issues the handover credential
+        // and the seller/recipient completes with it (completeOrder). Direct
+        // escrow release has no v1 equivalent, so surface the OTP instead.
+        final pair = await OrderApiClient().issueHandoverOtp(txId);
+        if (mounted) setState(() => _buyerOtp = pair.otp);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('otp_ready_msg', 'Nambari ya uthibitisho ipo tayari — mpa muuzaji kuikamilisha utoaji.')),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        if (mounted) setState(() => _releasingTxId = null);
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/release'),
         headers: {
@@ -2811,6 +2826,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1: cancel runs the Postgres state machine — refunds released escrow
+        // server-side; mirror advances anyway.
+        await OrderApiClient().cancelOrder(
+          txId,
+          reason: 'User requested cancellation',
+        );
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('order_cancelled_refunded')),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
         headers: {
@@ -2862,6 +2893,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }
     setState(() => _sellerShipBusy = true);
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Quote runs the Postgres state machine (→ SHIPPING_FEE_SUBMITTED);
+        // the server presentation mirror updates the Firestore doc.
+        await OrderApiClient().submitShippingQuote(
+          widget.docId,
+          amount: cost.round(),
+        );
+        _shipCostCtrl.clear();
+        if (mounted) _showSellerSnack(context.tr('shipping_cost_submitted'));
+        if (mounted) setState(() => _sellerShipBusy = false);
+        return;
+      }
       final token = await user.getIdToken();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/set-shipping-cost'),
@@ -2907,6 +2950,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }
     setState(() => _sellerDispatchBusy = true);
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Dispatch runs the Postgres state machine (IN_ESCROW/READY_TO_DISPATCH
+        // → OTP_PENDING); the server presentation mirror moves the Firestore
+        // doc so the derived sections below catch up.
+        await OrderApiClient().dispatchOrder(
+          widget.docId,
+          courierName: courier,
+          trackingNumber: tracking,
+        );
+        for (final c in [_courierCtrl, _trackCtrl, _driverCtrl, _notesCtrl]) c.clear();
+        if (mounted) _showSellerSnack(context.tr('product_dispatched_msg'));
+        if (mounted) setState(() => _sellerDispatchBusy = false);
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
         headers: {

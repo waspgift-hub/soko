@@ -165,6 +165,20 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
     Payout pipeline verified: `finance.withdrawalProcess` (every 30 min) moves
     PENDING → `processWithdrawal`; admin finalizes via `confirmPayout`
     (`/api/v1/admin/...` route); stuck processing rows alert admins.
+16. Order lifecycle wired client-side (quote/dispatch/cancel + buyer release)
+    behind `kUseOrdersApi`. Quote call-sites (`seller_quote_screen`,
+    `seller_dispatch_screen._setShippingCost`,
+    `order_detail_screen._submitSellerShippingCost`) route to v1
+    `submitShippingQuote(orderId, amount)` (→ SHIPPING_FEE_SUBMITTED); seller
+    dispatch on `order_detail_screen` routes to `dispatchOrder` like the
+    existing quote-carousel wiring; buyer/seller cancel routes to
+    `cancelOrder(orderId, reason)` (v1 refunds released escrow server-side);
+    buyer "Nimepokea"/confirm-receipt routes to `issueHandoverOtp` because v1
+    escrow release is OTP-gated — the seller/recipient completes with
+    `completeOrder(otp)`, which is what settles the Postgres wallet. Legacy
+    `/api/orders/transition`, `/api/orders/set-shipping-cost`, `/api/escrow/
+    dispatch`, `/api/escrow/cancel`, `/api/escrow/release` remain the default
+    while the flag is off. Dispute stays deferred (§5 item 12).
 
 ## 6. Next (Phase B) candidates, in dependency order
 
@@ -172,9 +186,10 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
-   so app streams follow v2 status. Dispatch wired (client) behind
-   `kUseOrdersApi`; next after wallet/payout converge: quote, complete/cancel/
-   dispute off legacy-compat onto `/api/v1/orders`.
+   so app streams follow v2 status. Client lifecycle wiring done behind
+   `kUseOrdersApi` (§5 item 16): quote, dispatch, cancel, OTP handover +
+   release; only disputes remain on legacy (§5 item 12) pending the R2
+   evidence path. All that remains is the coordinated flip (§5 items 15–16).
 3. Payouts → Postgres with idempotency + audit. Server core already existed
    (`wallet-service` + `/api/v1/wallet`); this session: `ensureWallet` money-safety
    fix on both settle paths, OTP-issue authorization, destination-phone

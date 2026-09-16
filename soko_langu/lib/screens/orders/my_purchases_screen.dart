@@ -9,6 +9,7 @@ import '../../models/transaction_model.dart';
 import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
 import '../../services/clickpesa_service.dart';
+import '../../services/order_api.dart';
 import '../../services/rating_service.dart';
 import '../../services/profanity_filter.dart';
 import '../../extensions/context_tr.dart';
@@ -225,6 +226,24 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     if (user == null) return;
     setState(() => _releasingTxId = txId);
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1: release is OTP-gated — the buyer issues the handover credential
+        // and the seller completes the order with it (completeOrder). The
+        // rating prompt follows on the detail screen once the flow completes.
+        final pair = await OrderApiClient().issueHandoverOtp(txId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${context.tr('otp_ready_msg', 'Nambari ya uthibitisho ipo tayari — mpa muuzaji kuikamilisha utoaji.')} ${pair.otp}',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (mounted) setState(() => _releasingTxId = null);
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/release'),
         headers: {
@@ -392,6 +411,17 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     if (user == null) return;
     setState(() => _cancellingTxId = txId);
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1: cancel runs the Postgres state machine — refunds released escrow
+        // server-side; mirror advances anyway.
+        await OrderApiClient().cancelOrder(
+          txId,
+          reason: 'User requested cancellation',
+        );
+        _showSuccess(context.tr('order_cancelled_refunded'));
+        if (mounted) setState(() => _cancellingTxId = null);
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
         headers: {
