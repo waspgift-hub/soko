@@ -266,4 +266,8 @@ product backfill has run (reviews reference product ids that only exist in
    `prisma db push` has created `kyc_applications` in production, otherwise
    status reads would return 'none' while Firestore still holds the existing
    application; the Flutter admin panel is NOT wired here yet (it stays on
-   legacy `/api/admin/kyc/*` until it adopts x-admin-secret auth).
+   legacy `/api/admin/kyc/*` until it adopts x-admin-secret auth). The legacy
+   panel's delete button previously 404'd (no `/api/admin/kyc/delete` existed);
+   a compat handler now resets `users/{uid}.kyc` to `status: 'none'`, re-syncs
+   `sellerKycApproved: false`, audits `kyc_deleted` and notifies the user —
+   mirroring the v1 `DELETE /admin/:userId` semantics.

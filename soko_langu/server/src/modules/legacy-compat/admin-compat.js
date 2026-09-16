@@ -1002,6 +1002,52 @@ router.post('/kyc/revoke', async (req, res) => {
   }
 });
 
+// ---- KYC delete (admin) ----
+// Resets the user's KYC to 'none' so they can re-submit. Mirrors the v1
+// admin router's DELETE semantics; the Flutter admin panel calls this as
+// POST /api/admin/kyc/delete (admin_kyc_screen.dart).
+router.post('/kyc/delete', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    await db.collection('users').doc(userId).set({
+      kyc: {
+        status: 'none',
+        approved: false,
+        reviewNotes: '',
+        reviewedAt: null,
+        revokedAt: null,
+      },
+    }, { merge: true });
+
+    await updateSellerKycOnProducts(userId, false);
+
+    await auditLog({
+      userId,
+      type: 'kyc_deleted',
+      amount: 0,
+      reason: 'KYC deleted by admin.',
+    });
+
+    await db.collection('notifications').add({
+      userId,
+      title: 'KYC Imefutwa',
+      body: 'KYC yako imefutwa na admin. Tuma tena KYC yako inapohitajika.',
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    clearAdminCache();
+    res.json({ success: true, message: 'KYC deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ---- Audit log ----
 router.get('/audit-log', async (req, res) => {
   try {
