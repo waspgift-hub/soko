@@ -83,13 +83,37 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 5. Removal of any legacy path requires: tests + production verification +
    rollback plan (blueprint §30-G).
 
+5. Lifecycle wiring caveat (B/C finding): buyer cancel/release are NOT safe to
+   flip to /api/v1/orders yet — v1 cancel rejects funds-held orders outright
+   (no ClickPesa refund yet) and v1 complete settles to the Postgres wallet
+   ledger instead of the legacy sellerBalance/ClickPesa payout. Lifecycle
+   wiring therefore depends on the wallet/payout converge (candidate 3).
+   Dispatch + dispute are flag-safe (state-compatible from IN_ESCROW).
+6. User-provisioning enabler: `auth.js` `authenticate` now auto-provisions a
+   Postgres `users` row from the Firebase record when missing (mirrors
+   legacy-shop `resolveShopBuyer`), so every /api/v1/* call works for an app
+   user who never hit the legacy buyer sync. Without this, v1 returned
+   401 USER_NOT_FOUND for those sellers and could never be wired client-side.
+7. Dispatch wiring done (client): `seller_dispatch_screen.dart` dispatch calls
+   `OrderApiClient().dispatchOrder` when `kUseOrdersApi` is on (default off);
+   legacy `/api/escrow/dispatch` remains the default. driverPhone/notes have no
+   v1 fields yet — revisited at flag flip.
+8. Wallet/payout sequencing (B/C finding): the Postgres withdrawal core already
+   exists (`wallet-service` `requestWithdrawal`/`processWithdrawal`/
+   `confirmPayout` + `/api/v1/wallet/withdrawals`). BUT app sellers' money still
+   lives in Firestore `sellerBalance` (release pays it via legacy escrow), and
+   the Postgres wallet ledger only accrues from v2 `complete`. Flipping
+   withdrawals to the v1 wallet before converging the RELEASE path would expose
+   an empty wallet — withdrawal converge must come AFTER release converge.
+
 ## 6. Next (Phase B) candidates, in dependency order
 
 1. Products catalog bridge: Firestore → Postgres backfill + client switch.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
-   so app streams follow v2 status. Next: move app lifecycle calls (quote,
-   dispatch, complete/cancel/dispute) off legacy-compat onto `/api/v1/orders`.
+   so app streams follow v2 status. Dispatch wired (client) behind
+   `kUseOrdersApi`; next after wallet/payout converge: quote, complete/cancel/
+   dispute off legacy-compat onto `/api/v1/orders`.
 3. Payouts → Postgres with idempotency + audit.
 4. Notifications → Postgres app-facing rows.

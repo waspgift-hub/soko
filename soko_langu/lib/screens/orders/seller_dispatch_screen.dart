@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
+import '../../services/order_api.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
@@ -110,6 +111,21 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     }
     setState(() => _dispatchingTxId = txId);
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Phase B/C: dispatch runs the Postgres state machine (IN_ESCROW →
+        // OTP_PENDING). The server's presentation mirror advances the Firestore
+        // doc, so the stream below hides the card on success. driverPhone/notes
+        // are not yet v1 fields — they keep working once the flag flips.
+        await OrderApiClient().dispatchOrder(
+          txId,
+          courierName: courier,
+          trackingNumber: tracking,
+        );
+        _clearDispatchFields(txId);
+        if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
+        return;
+      }
+
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ${await user.getIdToken()}'},
@@ -124,7 +140,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
-        for (final c in [_courierCtrl(txId), _trackCtrl(txId), _phoneCtrl(txId), _notesCtrl(txId)]) c.clear();
+        _clearDispatchFields(txId);
         if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
       } else {
         if (mounted) _showError(result['error'] ?? context.tr('dispatch_failed'));
@@ -133,6 +149,10 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
       if (mounted) _showError(context.trError(e));
     }
     if (mounted) setState(() => _dispatchingTxId = null);
+  }
+
+  void _clearDispatchFields(String txId) {
+    for (final c in [_courierCtrl(txId), _trackCtrl(txId), _phoneCtrl(txId), _notesCtrl(txId)]) c.clear();
   }
 
   @override

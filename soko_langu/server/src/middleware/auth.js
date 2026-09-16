@@ -22,9 +22,13 @@ async function authenticate(req, res, next) {
     const decoded = await auth.verifyIdToken(token);
     req.firebaseUid = decoded.uid;
     
-    // Load user from database
+    // Load user from database. Phase B/C convergence enabler: an app user may
+    // have a Firebase identity but no Postgres `users` row yet (they never hit
+    // the legacy-shop buyer sync), so v1 endpoints must provision the row the
+    // same way legacy-shop's resolveShopBuyer does — otherwise every /api/v1/*
+    // call returns 401 USER_NOT_FOUND for that seller.
     const prisma = getPrisma();
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { firebaseUid: decoded.uid },
       select: {
         id: true,
@@ -36,7 +40,24 @@ async function authenticate(req, res, next) {
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'USER_NOT_FOUND' });
+      const rec = await getFirebaseAuth().getUser(decoded.uid);
+      user = await prisma.user.create({
+        data: {
+          firebaseUid: decoded.uid,
+          email: rec.email || null,
+          phone: rec.phoneNumber || null,
+          displayName: rec.displayName || null,
+          accountStatus: 'active',
+          phoneVerified: Boolean(rec.phoneNumber),
+        },
+        select: {
+          id: true,
+          firebaseUid: true,
+          email: true,
+          role: true,
+          accountStatus: true,
+        },
+      });
     }
 
     if (user.accountStatus === 'deleted') {
