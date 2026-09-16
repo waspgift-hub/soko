@@ -411,17 +411,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     if (user == null) return;
     setState(() => _cancellingTxId = txId);
     try {
-      if (ApiConfig.kUseOrdersApi) {
-        // v1: cancel runs the Postgres state machine — refunds released escrow
-        // server-side; mirror advances anyway.
-        await OrderApiClient().cancelOrder(
-          txId,
-          reason: 'User requested cancellation',
-        );
-        _showSuccess(context.tr('order_cancelled_refunded'));
-        if (mounted) setState(() => _cancellingTxId = null);
-        return;
-      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
         headers: {

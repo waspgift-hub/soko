@@ -2826,22 +2826,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      if (ApiConfig.kUseOrdersApi) {
-        // v1: cancel runs the Postgres state machine — refunds released escrow
-        // server-side; mirror advances anyway.
-        await OrderApiClient().cancelOrder(
-          txId,
-          reason: 'User requested cancellation',
-        );
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.tr('order_cancelled_refunded')),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        return;
-      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
         headers: {
