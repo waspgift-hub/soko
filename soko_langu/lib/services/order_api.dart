@@ -143,6 +143,31 @@ class OrderApiClient {
     return _actionResult(res, 'complete');
   }
 
+  /// Buyer-issued handover credential (`/api/v1/handover/:id/otp/issue`). The
+  /// server returns the 6-digit plaintext once; it replaces the legacy
+  /// Firestore `delivery_otp` read when [ApiConfig.kUseOrdersApi] is on. Only
+  /// the order buyer (or an admin) may issue — see `assertCanIssueOtp`.
+  Future<({String otp, DateTime? expiresAt})> issueHandoverOtp(
+    String orderId,
+  ) async {
+    final uri = Uri.parse(ApiConfig.v1('/handover/$orderId/otp/issue'));
+    final res = await _http
+        .post(uri, headers: await _headers())
+        .timeout(const Duration(seconds: 15));
+    final data = _actionResult(res, 'otp issue');
+    final otp = data['otp']?.toString() ?? '';
+    if (otp.isEmpty) {
+      throw NetworkError(
+        message: 'Handover OTP issue returned no otp',
+        userMessage: ErrorKeys.generic,
+      );
+    }
+    DateTime? expiresAt;
+    final raw = data['expiresAt']?.toString();
+    if (raw != null) expiresAt = DateTime.tryParse(raw);
+    return (otp: otp, expiresAt: expiresAt);
+  }
+
   /// Buyer or seller cancels a cancellable order.
   Future<Map<String, dynamic>> cancelOrder(
     String orderId, {

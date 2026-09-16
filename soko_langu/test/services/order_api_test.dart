@@ -192,6 +192,41 @@ void main() {
       expect(auth, 'Bearer firebase-id-token');
     });
 
+    test('issueHandoverOtp posts to /api/v1/handover and parses otp + expiry', () async {
+      http.Request? captured;
+      final client = OrderApiClient(
+        tokenProvider: () async => _token,
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            _envelope({
+              'otp': '483920',
+              'expiresAt': '2026-09-16T12:00:00Z',
+              'credentialId': 'oc-1',
+              'qrPayload': 'sv://...',
+            }),
+            201,
+          );
+        }),
+      );
+      final pair = await client.issueHandoverOtp('or-1');
+      expect(captured!.method, 'POST');
+      expect(captured!.url.path, '/api/v1/handover/or-1/otp/issue');
+      expect(pair.otp, '483920');
+      expect(pair.expiresAt, DateTime.parse('2026-09-16T12:00:00Z'));
+    });
+
+    test('issueHandoverOtp surfaces FORBIDDEN (403) as noPermission', () async {
+      final client = OrderApiClient(
+        tokenProvider: () async => _token,
+        httpClient: MockClient((request) async => http.Response('{"error":"FORBIDDEN"}', 403)),
+      );
+      await expectLater(
+        client.issueHandoverOtp('or-1'),
+        throwsA(isA<NetworkError>().having((e) => e.userMessage, 'userMessage', ErrorKeys.noPermission)),
+      );
+    });
+
     test('throws sessionExpired when no Firebase token is available', () async {
       final client = OrderApiClient(
         tokenProvider: () async => null,

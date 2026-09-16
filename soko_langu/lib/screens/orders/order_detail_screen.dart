@@ -12,6 +12,7 @@ import '../../extensions/context_tr.dart';
 import '../../models/transaction_model.dart';
 import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
+import '../../services/order_api.dart';
 import '../../services/clickpesa_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
@@ -72,6 +73,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   bool _verifyingOtp = false;
   String? _otpError;
   int _otpAttemptsRemaining = 3;
+
+  /// OTP length differs between the legacy engine (4) and v1 handover (6).
+  int get _sellerOtpLength => ApiConfig.kUseOrdersApi ? 6 : 4;
 
   // Seller dispatch state (escrow -> ship). Kept local so the seller can
   // send the product straight from the order detail instead of the tab.
@@ -144,6 +148,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   void _maybeSubscribeToOtp() {
+    if (ApiConfig.kUseOrdersApi) return; // v1 issues the OTP via handover API instead
     if (_otpSub != null) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -2423,12 +2428,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           TextFormField(
             controller: _sellerOtpController,
             keyboardType: TextInputType.number,
-            maxLength: 4,
+            maxLength: _sellerOtpLength,
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 8, color: cs.onSurface),
             textAlign: TextAlign.center,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
-              hintText: '0000',
+              hintText: ApiConfig.kUseOrdersApi ? '000000' : '0000',
               hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), letterSpacing: 8),
               counterText: '',
               errorText: _otpError,
@@ -2458,7 +2463,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
-              onPressed: _verifyingOtp || _sellerOtpController.text.length != 4
+              onPressed: _verifyingOtp || _sellerOtpController.text.length != _sellerOtpLength
                   ? null
                   : _verifyDeliveryOtp,
               icon: _verifyingOtp
@@ -2486,9 +2491,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final otp = _sellerOtpController.text.trim();
-    if (otp.length != 4) return;
+    if (otp.length != _sellerOtpLength) return;
     setState(() { _verifyingOtp = true; _otpError = null; });
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1: OTP-gated completion — atomic verify + escrow release + wallet
+        // settlement server-side; the presentation mirror advances Firestore.
+        await OrderApiClient().completeOrder(widget.docId, otp: otp);
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('otp_verified_success')), behavior: SnackBarBehavior.floating),
+          );
+          _sellerOtpController.clear();
+        }
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/verify-delivery'),
         headers: {
@@ -2653,6 +2671,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     setState(() => _arriving = true);
     HapticFeedback.lightImpact();
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1: the buyer's "goods arrived" issues the handover OTP directly
+        // (Postgres credential, delivered inline to the buyer). The seller then
+        // completes with it via completeOrder.
+        final pair = await OrderApiClient().issueHandoverOtp(widget.docId);
+        if (mounted) setState(() => _buyerOtp = pair.otp);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('otp_ready_msg', 'Nambari ya uthibitisho ipo tayari — mpa muuzaji kuikamilisha utoaji.')),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/delivery-arrival'),
         headers: {

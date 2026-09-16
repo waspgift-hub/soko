@@ -125,11 +125,20 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
     record is in Firestore and `DisputeEvidence` is R2-first (blueprint media
     rule). Wiring app dispute to v1 today would drop evidence — leave on legacy
     until the R2 evidence upload path lands (Phase F), then wire and retire.
-13. Release-path wire (buyer OTP display) is now UNBLOCKED server-side:
-    `POST /api/v1/handover/:orderId/otp/issue` (buyer/admin-gated) + verify via
-    `POST /api/v1/orders/:orderId/complete { otp }`, and `completeOrder` credits
-    the wallet via `ensureWallet`. Client wiring of the buyer OTP display + the
-    money flip is a deliberate follow-up; sequencing per §5 item 8 still holds.
+13. Release-path wire is now UNBLOCKED server-side AND client-side:
+    Server: `POST /api/v1/handover/:orderId/otp/issue` (buyer/admin-gated) +
+    `POST /api/v1/orders/:orderId/complete { otp }` (atomic settlement via
+    `verifyOtpAndComplete`); `ensureWallet` guarantees seller always receives the
+    ledger credit; `confirmCollection` already creates the `escrowHold` row for
+    app orders at payment time so the wallet settlement never silently skips.
+    Client (behind `kUseOrdersApi`): buyer's "Nimepokea" arrival action calls
+    `issueHandoverOtp` (returns 6-digit + expiry); seller's OTP form length
+    adapts to 6; seller verify posts to `completeOrder(txId, otp)`. When the
+    flag flips, legacy Firestore `delivery_otp` + `/api/orders/verify-delivery` +
+    Firestore `sellerBalance` payout stop being used for flag-on orders; money
+    flows into the Postgres wallet instead. The release flip must ship together
+    with (or immediately before) the wallet UI flip (§5 items 8, 11, §6.3) so
+    sellers can see and withdraw their earnings.
 
 ## 6. Next (Phase B) candidates, in dependency order
 
