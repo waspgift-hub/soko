@@ -31,7 +31,57 @@ const PUBLIC_SELECT = {
   createdAt: true,
   seller: { select: { id: true, storeName: true, storeSlug: true } },
   media: { orderBy: { sortOrder: 'asc' }, take: 4 },
+  // List cards need the legacy-only metadata (boost/feature flags, category,
+  // location, ratings) that has no Postgres column. A lean projection keeps the
+  // payload small vs. dumping the whole snapshot — the client's Product.fromApi
+  // already reads every key here.
+  snapshot: {
+    select: {
+      category: true,
+      subcategory: true,
+      location: true,
+      district: true,
+      brand: true,
+      isBoosted: true,
+      boostedUntil: true,
+      boostTier: true,
+      isFeatured: true,
+      featuredUntil: true,
+      rating: true,
+      reviewCount: true,
+      soldCount: true,
+      viewCount: true,
+      sellerName: true,
+      sellerPhone: true,
+      sellerKycApproved: true,
+    },
+  },
 };
+
+function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory }) {
+  const where = { status: 'published', deletedAt: null };
+  if (categoryId) where.categoryId = categoryId;
+  if (minPrice != null || maxPrice != null) {
+    where.price = {};
+    if (minPrice != null) where.price.gte = BigInt(minPrice);
+    if (maxPrice != null) where.price.lte = BigInt(maxPrice);
+  }
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: 'insensitive' } },
+      { description: { contains: q, mode: 'insensitive' } },
+    ];
+  }
+  // The legacy boost/feature/subcategory signals live in snapshot JSON during
+  // the migration window; filter them with JSON path probes so the featured
+  // carousel and category pages read from Postgres with Firestore semantics.
+  const snapshotFilters = [];
+  if (boosted) snapshotFilters.push({ snapshot: { path: ['isBoosted'], equals: true } });
+  if (featured) snapshotFilters.push({ snapshot: { path: ['isFeatured'], equals: true } });
+  if (subcategory) snapshotFilters.push({ snapshot: { path: ['subcategory'], equals: subcategory } });
+  if (snapshotFilters.length) where.AND = snapshotFilters;
+  return where;
+}
 
 async function requireSellerProfile(userId) {
   const prisma = getPrisma();
@@ -121,23 +171,11 @@ async function softDelete({ id, sellerProfileId }) {
   return prisma.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
-async function listProducts({ q, categoryId, minPrice, maxPrice, page = 1, limit = 20 }) {
+async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, page = 1, limit = 20 }) {
   // Catalog reads go through the read replica when one is configured: public
   // browsing tolerates lag and must never compete for primary connections.
   const prisma = getReadPrisma();
-  const where = { status: 'published', deletedAt: null };
-  if (categoryId) where.categoryId = categoryId;
-  if (minPrice != null || maxPrice != null) {
-    where.price = {};
-    if (minPrice != null) where.price.gte = BigInt(minPrice);
-    if (maxPrice != null) where.price.lte = BigInt(maxPrice);
-  }
-  if (q) {
-    where.OR = [
-      { title: { contains: q, mode: 'insensitive' } },
-      { description: { contains: q, mode: 'insensitive' } },
-    ];
-  }
+  const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory });
   const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,
@@ -223,6 +261,7 @@ module.exports = {
   updateProduct,
   setStatus,
   softDelete,
+  buildListWhere,
   listProducts,
   listSellerProducts,
   getProduct,

@@ -49,6 +49,14 @@ class ApiConfig {
   /// Flipped true after the product backfill ran (Postgres catalog is live).
   static const bool kUseSearchApi = true;
 
+  /// Phase D categories bridge switch: when true, the home category grid and
+  /// category pages resolve categories from /api/v1/products/categories
+  /// (Postgres, UUID ids) instead of the Firestore `categories` collection.
+  /// Flipped true after the 12-category seed landed — `kUseProductsApi` already
+  /// routes the category product lists through the catalog list API, which
+  /// resolves legacy category names to the Postgres uuid server-side.
+  static const bool kUseCategoriesApi = true;
+
   /// Phase D reviews bridge switch: when true, review reads/writes go through
   /// /api/v1/reviews (Postgres) instead of the Firestore `reviews` collection.
   /// List reads become one-shot fetches (the v1 API is HTTP, not a stream);

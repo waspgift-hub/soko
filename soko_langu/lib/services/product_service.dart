@@ -8,6 +8,7 @@ import '../models/product_model.dart';
 import 'cloudinary_service.dart';
 import 'fraud_prevention_service.dart';
 import 'api_config.dart';
+import 'product_api.dart';
 import 'localization_service.dart';
 import '../utils/network_error.dart';
 
@@ -67,6 +68,7 @@ void _sortByBoost(List<Product> products) {
 class ProductService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ProductApiClient _api = ProductApiClient();
 
   Future<String> uploadImage(XFile xfile) async {
     return CloudinaryService.uploadImage(xfile, folder: 'products');
@@ -403,6 +405,12 @@ class ProductService {
 
   /// Real-time stream wrapper — used by [ProductRepository].
   Stream<List<Product>> watchProductsRealtime({int limit = 50}) {
+    if (ApiConfig.kUseProductsApi) {
+      // The Postgres catalog is HTTP-only: live upserts would leak Firestore
+      // rows back into the feed. The provider already paginates from the API
+      // and merges on pull-to-refresh, so no stream means a pure Postgres feed.
+      return const Stream.empty();
+    }
     return _db
         .collection("products")
         .where('isActive', isEqualTo: true)
@@ -436,6 +444,11 @@ class ProductService {
   }
 
   Stream<List<Product>> getProductsByCategory(String category) {
+    if (ApiConfig.kUseProductsApi) {
+      // Legacy products tag categories by NAME; the API resolves the name to a
+      // Postgres uuid and filters server-side, keeping parity with Firestore.
+      return Stream.fromFuture(_api.fetchProductsByCategoryName(category));
+    }
     return _db
         .collection("products")
         .where("category", isEqualTo: category)
@@ -456,6 +469,11 @@ class ProductService {
     String category,
     String subcategory,
   ) {
+    if (ApiConfig.kUseProductsApi) {
+      return Stream.fromFuture(
+        _api.fetchProductsByCategoryName(category, subcategory: subcategory),
+      );
+    }
     return _db
         .collection("products")
         .where("category", isEqualTo: category)
@@ -784,6 +802,21 @@ class ProductService {
   }
 
   Stream<List<Product>> getFeaturedProducts() {
+    if (ApiConfig.kUseProductsApi) {
+      // v1 is HTTP, not a stream: fetch once and keep the legacy post-filter
+      // (expired boost windows dropped, gold tiers first) so the carousel
+      // renders exactly like it did from Firestore.
+      return Stream.fromFuture(() async {
+        final items = await _api.fetchFeatured(limit: 40);
+        final products = items.where((p) => p.isBoostedValid).toList();
+        products.sort((a, b) {
+          final tierOrder = (b.boostTier).compareTo(a.boostTier);
+          if (tierOrder != 0) return tierOrder;
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        return products;
+      }());
+    }
     return _db
         .collection("products")
         .where("isBoosted", isEqualTo: true)

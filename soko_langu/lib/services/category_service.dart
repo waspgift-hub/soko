@@ -4,10 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/category_model.dart';
 import 'api_config.dart';
+import 'product_api.dart';
 
 class CategoryService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ProductApiClient _api = ProductApiClient();
   List<Category>? _cached;
   Stream<List<Category>>? _cachedStream;
 
@@ -15,6 +17,16 @@ class CategoryService {
   // 📡 GET ALL CATEGORIES
   // =========================
   Stream<List<Category>> getCategories() {
+    if (ApiConfig.kUseCategoriesApi) {
+      // v1 is HTTP, not a stream: resolve once from Postgres and replay the
+      // cached tree; ProductApiClient keeps its own copy so the category pages
+      // and the home grid never hit Firestore during the migration window.
+      return Stream.fromFuture(() async {
+        final cats = await _api.fetchCategories();
+        _cached = cats.where((c) => c.isActive).toList();
+        return _cached!;
+      }());
+    }
     if (_cachedStream != null) return _cachedStream!;
     _cachedStream = _db.collection("categories").snapshots().map((snapshot) {
       if (snapshot.docs.isEmpty) {
@@ -36,6 +48,16 @@ class CategoryService {
   // 📦 GET CATEGORY BY ID
   // =========================
   Future<Category?> getCategoryById(String categoryId) async {
+    if (ApiConfig.kUseCategoriesApi) {
+      final cats = await _api.fetchCategories();
+      for (final c in cats) {
+        if (c.id == categoryId) return c;
+        // Subcategory (child category) ids are slugs; the parent category owns
+        // the products page, so resolve to the root.
+        if (c.subcategories.any((s) => s.id == categoryId)) return c;
+      }
+      return null;
+    }
     try {
       final doc = await _db.collection("categories").doc(categoryId).get();
       if (doc.exists) {
