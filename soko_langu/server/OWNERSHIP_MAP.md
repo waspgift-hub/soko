@@ -185,6 +185,18 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 ## 6. Next (Phase B) candidates, in dependency order
 
 1. Products catalog bridge: Firestore → Postgres backfill + client switch.
+   DONE (backfill + media). `scripts/migrate-products.js` idempotently mirrors
+   Firestore `products` (7/7 mirrored in prod) and backfills legacy Cloudinary
+   media into `ProductMedia` (21 rows created in prod) — the client renders
+   absolute legacy URLs as-is, so the flag-on feed shows images; R2 re-hosting
+   stays Phase F. Client bridge (`ProductApiClient` + `ProductRepository` +
+   `kUseProductsApi`) serves the home feed from `/api/v1/products`;
+   `Product.fromApi` handles absolute media URLs + Firestore-timestamp
+   snapshots. Remaining client reads still Firestore (unbridged): discovery
+   stream, category products, seller products, my-ads, featured carousels,
+   wishlist rehydrate, product-search assistant; categories have no API flag
+   yet (Postgres categories seeded 12/12). Route these through the repo before
+   or during the release/wallet flip.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
