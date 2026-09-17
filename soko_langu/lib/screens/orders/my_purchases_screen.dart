@@ -411,19 +411,26 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     if (user == null) return;
     setState(() => _cancellingTxId = txId);
     try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await user.getIdToken()}',
-        },
-        body: jsonEncode({'orderId': txId, 'userId': user.uid}),
-      );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && result['success'] == true) {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1 cancel-with-refund: escrow-held orders refund the buyer the full
+        // totalAmount via ClickPesa (REFUNDED on payout success).
+        await OrderApiClient().cancelOrder(txId, reason: 'Buyer cancelled order');
         _showSuccess(context.tr('order_cancelled_refunded'));
       } else {
-        _showError(result['error'] ?? context.tr('cancel_order_failed'));
+        final resp = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${await user.getIdToken()}',
+          },
+          body: jsonEncode({'orderId': txId, 'userId': user.uid}),
+        );
+        final result = jsonDecode(resp.body);
+        if (resp.statusCode == 200 && result['success'] == true) {
+          _showSuccess(context.tr('order_cancelled_refunded'));
+        } else {
+          _showError(result['error'] ?? context.tr('cancel_order_failed'));
+        }
       }
     } catch (e) {
       _showError(context.trError(e));

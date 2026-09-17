@@ -4,6 +4,7 @@ const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { ensureWallet } = require('../wallet/wallet-service');
+const { refundOnCancel } = require('../refunds/refund-service');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -634,9 +635,61 @@ async function completeOrder({ orderId, actorId, method }) {
   return updated;
 }
 
-// Cancel order
+// Cancel order. Escrow-held orders (IN_ESCROW / READY_TO_DISPATCH with a
+// holding hold) cancel by refunding the buyer the full totalAmount via ClickPesa
+// (see refundOnCancel); pre-escrow orders cancel through the state machine with
+// no money movement. Only the buyer or an admin may trigger the refund path — a
+// seller cannot cancel an escrow-held order (its money returns to the buyer).
 async function cancelOrder({ orderId, actorId, reason }) {
   const prisma = getPrisma();
+
+  // The state machine's CANCELLED actor set is buyer/seller/admin; the user id
+  // hitting this route only tells us who acts, so derive the actor role from the
+  // order's ownership before transitioning.
+  const actorUser = await prisma.user.findUnique({ where: { id: actorId }, select: { id: true, role: true } });
+  if (!actorUser) {
+    const err = new Error('FORBIDDEN');
+    err.status = 403;
+    throw err;
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) {
+    const err = new Error('ORDER_NOT_FOUND');
+    err.status = 404;
+    throw err;
+  }
+
+  let actorRole = null;
+  if (order.buyerId === actorId) {
+    actorRole = 'buyer';
+  } else if (actorUser.role === 'admin') {
+    actorRole = 'admin';
+  } else {
+    const sellerProfile = await prisma.sellerProfile.findUnique({ where: { userId: actorId }, select: { id: true } });
+    if (sellerProfile && sellerProfile.id === order.sellerId) actorRole = 'seller';
+  }
+  if (!actorRole) {
+    const err = new Error('FORBIDDEN');
+    err.status = 403;
+    throw err;
+  }
+
+  // Escrow-held: route through the refund machinery (money first, REFUNDED after
+  // the payout lands; REFUND_PENDING is the retryable failure state).
+  if ([ORDER_STATES.IN_ESCROW, ORDER_STATES.READY_TO_DISPATCH].includes(order.status)) {
+    const escrowHold = await prisma.escrowHold.findFirst({
+      where: { orderId, status: { in: ['holding'] } },
+    });
+    if (escrowHold) {
+      if (actorRole !== 'buyer' && actorRole !== 'admin') {
+        const err = new Error('FORBIDDEN');
+        err.status = 403;
+        throw err;
+      }
+      return refundOnCancel({ orderId, actorId, role: actorRole, reason });
+    }
+  }
 
   let updated;
   await prisma.$transaction(async (tx) => {
@@ -648,33 +701,8 @@ async function cancelOrder({ orderId, actorId, reason }) {
       throw err;
     }
 
-    // The state machine's CANCELLED actor set is buyer/seller/admin; the user
-    // id hitting this route only tells us who acts, so derive the actor role
-    // from the order's ownership before transitioning.
-    const actorUser = await tx.user.findUnique({ where: { id: actorId }, select: { id: true, role: true } });
-    if (!actorUser) {
-      const err = new Error('FORBIDDEN');
-      err.status = 403;
-      throw err;
-    }
-
-    let actorRole = null;
-    if (order.buyerId === actorId) {
-      actorRole = 'buyer';
-    } else if (actorUser.role === 'admin') {
-      actorRole = 'admin';
-    } else {
-      const sellerProfile = await tx.sellerProfile.findUnique({ where: { userId: actorId }, select: { id: true } });
-      if (sellerProfile && sellerProfile.id === order.sellerId) actorRole = 'seller';
-    }
-    if (!actorRole) {
-      const err = new Error('FORBIDDEN');
-      err.status = 403;
-      throw err;
-    }
-
-    // Cannot cancel if funds are held and not yet refunded
-    if ([ORDER_STATES.IN_ESCROW, ORDER_STATES.DISPATCHED, ORDER_STATES.IN_TRANSIT,
+    // Cannot cancel once funds have moved or dispatch is underway
+    if ([ORDER_STATES.DISPATCHED, ORDER_STATES.IN_TRANSIT,
          ORDER_STATES.OUT_FOR_DELIVERY, ORDER_STATES.DELIVERED, ORDER_STATES.COMPLETED].includes(order.status)) {
       const err = new Error('CANNOT_CANCEL_IN_CURRENT_STATE');
       err.status = 400;

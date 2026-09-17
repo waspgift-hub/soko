@@ -2231,7 +2231,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   Widget _buildBuyerOtpCard(ColorScheme cs) {
     final otp = _buyerOtp;
-    final productName = d['productName'] as String? ?? 'Bidhaa';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -2826,6 +2825,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
+      if (ApiConfig.kUseOrdersApi) {
+        // v1 cancel-with-refund: escrow-held orders refund the buyer the full
+        // totalAmount via ClickPesa (REFUNDED on payout success).
+        await OrderApiClient().cancelOrder(txId, reason: 'Buyer cancelled order');
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('order_cancelled_refunded')),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
         headers: {

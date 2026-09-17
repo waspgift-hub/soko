@@ -40,13 +40,13 @@ test('zero or negative partial amounts are rejected', () => {
 // ---------------------------------------------------------------------------
 
 test('escrow-funded states are refundable', () => {
-  for (const s of ['in_escrow', 'dispatched', 'delivered', 'inspection_period', 'otp_pending', 'refund_pending']) {
+  for (const s of ['in_escrow', 'ready_to_dispatch', 'dispatched', 'delivered', 'inspection_period', 'otp_pending', 'refund_pending']) {
     assert.equal(isRefundableEscrowState(s), true);
   }
 });
 
 test('transit/resolution states are not directly refundable', () => {
-  for (const s of ['ready_to_dispatch', 'in_transit', 'out_for_delivery', 'delivery_attempted', 'disputed', 'completed', 'wallet_credited']) {
+  for (const s of ['in_transit', 'out_for_delivery', 'delivery_attempted', 'disputed', 'completed', 'wallet_credited']) {
     assert.equal(isRefundableEscrowState(s), false);
   }
 });

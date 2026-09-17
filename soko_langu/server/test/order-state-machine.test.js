@@ -14,6 +14,12 @@ test('valid transitions follow the state machine', () => {
   assert.ok(STATE_TRANSITIONS[ORDER_STATES.ADDRESS_REQUIRED].includes(ORDER_STATES.PENDING_SHIPPING_FEE));
 });
 
+test('escrow-held orders can move to REFUND_PENDING', () => {
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.IN_ESCROW].includes(ORDER_STATES.REFUND_PENDING));
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.READY_TO_DISPATCH].includes(ORDER_STATES.REFUND_PENDING));
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.REFUND_PENDING].includes(ORDER_STATES.REFUNDED));
+});
+
 test('transition records history with financial rule', () => {
   const m = new OrderStateMachine(ORDER_STATES.DRAFT);
   const t = m.transition(ORDER_STATES.PUBLISHED, { actor: 'buyer', actorId: 'u1', reason: 'publish' });
