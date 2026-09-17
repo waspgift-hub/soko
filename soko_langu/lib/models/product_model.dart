@@ -147,6 +147,28 @@ final String unit;
 
   /// Builds a [Product] from the v2 server DTO served by `/api/v1/products`.
   ///
+  /// Detail/list media URL: absolute URLs (legacy Cloudinary or R2 public CNAME)
+  /// pass through untouched; bare object keys are prefixed with the R2 base.
+  static String _mediaUrl(Object? key) {
+    final s = key?.toString().trim() ?? '';
+    if (s.isEmpty) return '';
+    if (s.startsWith('http://') || s.startsWith('https://')) return s;
+    return '$_r2PublicBase/$s';
+  }
+
+  /// Firestore timestamps serialized as `{_seconds, _nanoseconds}` plus plain
+  /// ISO strings; anything unparsable yields null.
+  static DateTime? _legacyTimestamp(Object? raw) {
+    if (raw == null) return null;
+    if (raw is Map && raw['_seconds'] is num) {
+      return DateTime.fromMillisecondsSinceEpoch(((raw['_seconds'] as num) * 1000).toInt()).toLocal();
+    }
+    if (raw is num) {
+      return DateTime.fromMillisecondsSinceEpoch((raw * 1000).toInt()).toLocal();
+    }
+    return DateTime.tryParse(raw.toString())?.toLocal();
+  }
+
   /// Server shape (PUBLIC_SELECT): `id, title, slug, description, price,
   /// originalPrice, currency, stock, status, condition, createdAt`,
   /// `seller{id,storeName,storeSlug}`, `media[{type, r2Key, ...}]`, and on
@@ -173,11 +195,11 @@ final String unit;
         final key = m['r2Key'] ?? m['thumbnailR2Key'];
         if (key is String && key.isNotEmpty) {
           images.add(type == 'image'
-              ? '$_r2PublicBase/$key'
-              : (m['thumbnailR2Key'] is String &&
-                      (m['thumbnailR2Key'] as String).isNotEmpty
-                  ? '$_r2PublicBase/${m['thumbnailR2Key']}'
-                  : '$_r2PublicBase/$key'));
+              ? _mediaUrl(key)
+              : _mediaUrl((m['thumbnailR2Key'] is String &&
+                          (m['thumbnailR2Key'] as String).isNotEmpty)
+                      ? m['thumbnailR2Key']
+                      : key));
         }
       }
     }
@@ -225,9 +247,9 @@ final String unit;
       soldCount: json['soldCount'] ?? snapshot['soldCount'] ?? 0,
       viewCount: json['viewCount'] ?? snapshot['viewCount'] ?? 0,
       isBoosted: json['isBoosted'] ?? snapshot['isBoosted'] ?? false,
-      boostedUntil: json['boostedUntil'] != null
-          ? DateTime.tryParse(json['boostedUntil'].toString())?.toLocal()
-          : null,
+      isFeatured: json['isFeatured'] ?? snapshot['isFeatured'] ?? false,
+      boostedUntil: _legacyTimestamp(json['boostedUntil'] ?? snapshot['boostedUntil']),
+      featuredUntil: _legacyTimestamp(json['featuredUntil'] ?? snapshot['featuredUntil']),
       boostTier: json['boostTier']?.toString() ??
           snapshot['boostTier']?.toString() ??
           '',

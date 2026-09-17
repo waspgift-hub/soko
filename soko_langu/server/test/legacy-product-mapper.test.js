@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { mapFirestoreProductToPrisma, buildSlug, normaliseCondition, toCreatedAt } = require('../src/modules/products/legacy-mapper');
+const { mapFirestoreProductToPrisma, mapFirestoreMediaToProductRows, buildSlug, normaliseCondition, toCreatedAt } = require('../src/modules/products/legacy-mapper');
 
 const SELLER_ID = '11111111-1111-1111-1111-111111111111';
 const CATEGORY_ID = '22222222-2222-2222-2222-222222222222';
@@ -129,5 +129,35 @@ describe('mapFirestoreProductToPrisma', () => {
   it('excludes fields not in LEGACY_KEYS from snapshot', () => {
     const result = mapFirestoreProductToPrisma(firestoreDoc({ randomField: 'nope' }), { sellerProfileId: SELLER_ID, categoryId: CATEGORY_ID });
     assert.equal(result.snapshot.randomField, undefined);
+  });
+});
+
+describe('mapFirestoreMediaToProductRows', () => {
+  it('maps Cloudinary images into ordered image rows', () => {
+    const rows = mapFirestoreMediaToProductRows({
+      images: ['https://res.cloudinary.com/a/img1.jpg', 'https://res.cloudinary.com/a/img2.jpg'],
+    });
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].type, 'image');
+    assert.equal(rows[0].r2Key, 'https://res.cloudinary.com/a/img1.jpg');
+    assert.equal(rows[0].sortOrder, 0);
+    assert.equal(rows[1].sortOrder, 1);
+  });
+
+  it('appends a video row after the images', () => {
+    const rows = mapFirestoreMediaToProductRows({
+      images: ['https://res.cloudinary.com/a/img1.jpg'],
+      videoUrl: 'https://res.cloudinary.com/a/clip.mp4',
+    });
+    assert.equal(rows.length, 2);
+    assert.equal(rows[1].type, 'video');
+    assert.equal(rows[1].r2Key, 'https://res.cloudinary.com/a/clip.mp4');
+    assert.equal(rows[1].sortOrder, 1);
+  });
+
+  it('skips non-http image entries and returns empty for no media', () => {
+    assert.deepEqual(mapFirestoreMediaToProductRows({ images: ['relative.png', 42] }), []);
+    assert.deepEqual(mapFirestoreMediaToProductRows({}), []);
+    assert.deepEqual(mapFirestoreMediaToProductRows(null), []);
   });
 });

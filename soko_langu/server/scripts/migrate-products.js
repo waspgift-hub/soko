@@ -12,7 +12,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const admin = require('firebase-admin');
 const { PrismaClient } = require('@prisma/client');
-const { mapFirestoreProductToPrisma } = require('../src/modules/products/legacy-mapper');
+const { mapFirestoreProductToPrisma, mapFirestoreMediaToProductRows } = require('../src/modules/products/legacy-mapper');
 
 if (!process.env.DATABASE_URL) {
   console.error('FATAL: DATABASE_URL not set');
@@ -132,6 +132,32 @@ async function main() {
   }
 
   console.log(`[migrate-products] done. created=${count} skipped=${skipped} errors=${errored}`);
+
+  // Phase 2: mirror legacy media URLs (Cloudinary) into ProductMedia so
+  // Postgres-served catalogs keep displaying images. Idempotent — products with
+  // any media row are skipped; R2 re-hosting stays a Phase F migration.
+  const needMedia = await prisma.product.findMany({
+    where: { deletedAt: null, media: { none: {} } },
+    select: { id: true, snapshot: true },
+    ...(Number.isFinite(LIMIT) ? { take: LIMIT } : {}),
+  });
+  let mediaRows = 0;
+  let mediaSkipped = 0;
+  for (const p of needMedia) {
+    const rows = mapFirestoreMediaToProductRows(p.snapshot || {});
+    if (!rows.length) {
+      mediaSkipped++;
+      continue;
+    }
+    if (COMMIT) {
+      await prisma.productMedia.createMany({
+        data: rows.map(r => ({ ...r, productId: p.id })),
+      });
+    }
+    mediaRows += rows.length;
+  }
+  console.log(`[migrate-products] media done. rows=${mediaRows} productsWithoutMedia=${mediaSkipped}`);
+
   await prisma.$disconnect();
 }
 

@@ -69,6 +69,27 @@ function toCreatedAt(raw) {
 }
 
 /**
+ * ProductMedia rows from a Firestore product doc or a stored snapshot (both
+ * carry `images[]` + `videoUrl`). Legacy media lives on Cloudinary as absolute
+ * URLs; r2Key keeps the URL so the client renders it as-is while the R2
+ * re-hosting stays a Phase F migration. No rows when there is no media.
+ */
+function mapFirestoreMediaToProductRows(doc) {
+  const rows = [];
+  if (!doc || typeof doc !== 'object') return rows;
+  const images = Array.isArray(doc.images) ? doc.images : [];
+  for (const [i, url] of images.entries()) {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+      rows.push({ type: 'image', r2Key: url, sortOrder: i });
+    }
+  }
+  if (typeof doc.videoUrl === 'string' && doc.videoUrl) {
+    rows.push({ type: 'video', r2Key: doc.videoUrl, sortOrder: rows.length });
+  }
+  return rows;
+}
+
+/**
  * Snapshot carries legacy-only fields that have no direct Postgres column.
  * This preserves every original Firestore property so nothing is lost during
  * the migration window.
@@ -91,4 +112,4 @@ function buildSnapshot(doc) {
   return out;
 }
 
-module.exports = { mapFirestoreProductToPrisma, buildSlug, normaliseCondition, toCreatedAt };
+module.exports = { mapFirestoreProductToPrisma, mapFirestoreMediaToProductRows, buildSlug, normaliseCondition, toCreatedAt };

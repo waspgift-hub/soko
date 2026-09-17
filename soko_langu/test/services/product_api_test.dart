@@ -86,6 +86,55 @@ void main() {
       expect(p.boostTier, 'gold');
     });
 
+    test('passes absolute media URLs through untouched (migrated catalog)', () {
+      final p = Product.fromApi({
+        'id': 'mig-1',
+        'title': 'Migrated',
+        'price': 5000,
+        'createdAt': '2026-07-30T19:33:13Z',
+        'media': [
+          {
+            'type': 'image',
+            'r2Key': 'https://res.cloudinary.com/dgbsohnl4/image/upload/v1/p.jpg',
+            'sortOrder': 0,
+          },
+          {
+            'type': 'video',
+            'r2Key': 'https://res.cloudinary.com/dgbsohnl4/video/upload/v1/c.mp4',
+            'sortOrder': 1,
+          },
+        ],
+      });
+      expect(p.images, [
+        'https://res.cloudinary.com/dgbsohnl4/image/upload/v1/p.jpg',
+        'https://res.cloudinary.com/dgbsohnl4/video/upload/v1/c.mp4',
+      ]);
+    });
+
+    test('parses legacy Firestore timestamps and snapshot isFeatured', () {
+      final p = Product.fromApi({
+        'id': 'mig-2',
+        'title': 'Boosted',
+        'price': 2000,
+        'createdAt': '2026-07-30T19:33:13Z',
+        'media': [],
+        'snapshot': {
+          'images': ['https://res.cloudinary.com/dgbsohnl4/image/upload/v1/b.jpg'],
+          'isFeatured': true,
+          'isBoosted': true,
+          'boostTier': 'gold',
+          'boostedUntil': {'_seconds': 1787307973, '_nanoseconds': 21294000},
+          'featuredUntil': {'_seconds': 1787307973, '_nanoseconds': 0},
+        },
+      });
+      expect(p.isFeatured, true);
+      expect(p.isBoosted, true);
+      expect(p.boostTier, 'gold');
+      expect(p.boostedUntil!.millisecondsSinceEpoch, 1787307973 * 1000);
+      expect(p.featuredUntil!.millisecondsSinceEpoch, 1787307973 * 1000);
+      expect(p.images, ['https://res.cloudinary.com/dgbsohnl4/image/upload/v1/b.jpg']);
+    });
+
     test('handles empty payload with defaults', () {
       final p = Product.fromApi(const {});
       expect(p.name, '');
