@@ -2,8 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/withdrawal_model.dart';
 import '../models/transaction_model.dart';
-import 'api_config.dart';
-import 'clickpesa_service.dart';
 import 'wallet_api.dart';
 
 class SellerEarningsData {
@@ -31,38 +29,15 @@ class SellerEarningsService {
   Stream<SellerEarningsData> streamEarnings() {
     final uid = _uid;
     if (uid == null) return Stream.value(const SellerEarningsData());
-    if (ApiConfig.kUseWalletApi) {
-      // Wallet mode: money lives in the Postgres wallet; Firestore only
-      // contributes the sales counters, never balances.
-      return Stream.fromFuture(_walletEarnings(uid));
-    }
-    return _db.collection('users').doc(uid).snapshots().map((snap) {
-      if (!snap.exists) return const SellerEarningsData();
-      final d = snap.data()!;
-      return SellerEarningsData(
-        balance: (d['sellerBalance'] as num? ?? 0).toDouble(),
-        totalSales: (d['totalSales'] as num? ?? 0).toInt(),
-        grossSalesVolume: (d['grossSalesVolume'] as num? ?? 0).toDouble(),
-        totalWithdrawn: (d['totalWithdrawn'] as num? ?? 0).toDouble(),
-        pendingEscrow: (d['pendingEscrow'] as num? ?? 0).toDouble(),
-      );
-    });
+    // Wallet mode: money lives in the Postgres wallet; Firestore only
+    // contributes the sales counters, never balances.
+    return Stream.fromFuture(_walletEarnings(uid));
   }
 
   Future<SellerEarningsData> getEarnings() async {
     final uid = _uid;
     if (uid == null) return const SellerEarningsData();
-    if (ApiConfig.kUseWalletApi) return _walletEarnings(uid);
-    final doc = await _db.collection('users').doc(uid).get();
-    if (!doc.exists) return const SellerEarningsData();
-    final d = doc.data()!;
-    return SellerEarningsData(
-      balance: (d['sellerBalance'] as num? ?? 0).toDouble(),
-      totalSales: (d['totalSales'] as num? ?? 0).toInt(),
-      grossSalesVolume: (d['grossSalesVolume'] as num? ?? 0).toDouble(),
-      totalWithdrawn: (d['totalWithdrawn'] as num? ?? 0).toDouble(),
-      pendingEscrow: (d['pendingEscrow'] as num? ?? 0).toDouble(),
-    );
+    return _walletEarnings(uid);
   }
 
   Stream<List<MarketplaceTransaction>> streamTransactions() {
@@ -83,32 +58,7 @@ class SellerEarningsService {
   Stream<List<WithdrawalRequest>> streamWithdrawals() {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
-    if (ApiConfig.kUseWalletApi) return Stream.fromFuture(_walletWithdrawals(uid));
-    // Server writes seller withdrawals to the `payouts` collection (compat
-    // engine); the legacy `withdrawals` collection is no longer written.
-    return _db
-        .collection('payouts')
-        .where('userId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(100)
-        .snapshots()
-        .map((snap) => snap.docs
-            .where((doc) => doc.data()['type'] == 'seller_withdrawal')
-            .map((doc) => WithdrawalRequest.fromMap(doc.id, doc.data()))
-            .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
-  }
-
-  Stream<List<Map<String, dynamic>>> streamPayouts() {
-    final uid = _uid;
-    if (uid == null) return Stream.value([]);
-    return _db
-        .collection('payouts')
-        .where('userId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(100)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => ({'id': d.id, ...d.data()})).toList());
+    return Stream.fromFuture(_walletWithdrawals(uid));
   }
 
   Future<String?> requestWithdrawal({
@@ -117,27 +67,7 @@ class SellerEarningsService {
   }) async {
     final uid = _uid;
     if (uid == null) return 'Not logged in';
-
-    if (ApiConfig.kUseWalletApi) {
-      return _walletRequestWithdrawal(phone);
-    }
-
-    final earnings = await getEarnings();
-    if (earnings.balance <= 0) {
-      return 'No balance to withdraw';
-    }
-
-    try {
-      await ClickPesaService.sellerWithdraw(
-        userId: uid,
-        amount: earnings.balance.round(),
-        phone: phone,
-      );
-
-      return null;
-    } catch (e) {
-      return 'Withdrawal failed: $e';
-    }
+    return _walletRequestWithdrawal(phone);
   }
 
   Future<SellerEarningsData> _walletEarnings(String uid) async {

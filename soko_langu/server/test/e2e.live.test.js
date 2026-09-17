@@ -195,15 +195,23 @@ const PROTECTED_ENDPOINTS = [
   ['POST', '/api/escrow/admin-release', {}],
   ['POST', '/api/escrow/admin-resolve-dispute', {}],
   ['POST', '/api/orders/cron/auto-release', {}],
-  ['POST', '/api/payouts/seller/withdraw', { userId: 'x', amount: 100, phone: '0712345678' }],
+  // Legacy seller-withdraw is RETIRED (OWNERSHIP_MAP §6 item 3): both the app
+  // and the shop SPA withdraw via POST /api/v1/wallet/withdrawals. A retired
+  // mutation must answer 410 regardless of auth — the auth gate is gone.
+  ['POST', '/api/payouts/seller/withdraw', { userId: 'x', amount: 100, phone: '0712345678' }, 410],
   ['POST', '/api/moderation/check-text', { text: 'test' }],
 ];
 
-for (const [method, path, body] of PROTECTED_ENDPOINTS) {
+for (const [method, path, body, expectedStatus] of PROTECTED_ENDPOINTS) {
   test(`SECURITY ${method} ${path} → rejects unauthenticated`, async () => {
     const r = await req(method, path, body);
     assert.notEqual(r.status, 200,
       `${method} ${path} should NOT be reachable without auth (got 200)`);
+    if (expectedStatus) {
+      assert.equal(r.status, expectedStatus,
+        `${method} ${path} expected 410 (retired) but got ${r.status}`);
+      return;
+    }
     assert.ok(isRejected(r.status),
       `${method} ${path} expected 401/403/429 but got ${r.status}`);
   });

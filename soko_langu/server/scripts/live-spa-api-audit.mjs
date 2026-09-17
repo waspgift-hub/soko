@@ -30,7 +30,9 @@ const probes = [
   ['POST', '/api/notifications/preferences/get'],
   ['POST', '/api/notifications/preferences/set'],
   ['POST', '/api/orders/create'],
-  ['POST', '/api/payouts/seller/withdraw'],
+  // Legacy /api/payouts/seller/withdraw was retired with the wallet cutover;
+  // the SPA now withdraws via POST /api/v1/wallet/withdrawals.
+  ['POST', '/api/v1/wallet/withdrawals'],
   ['POST', '/api/v1/auth/phone-login'],
   ['POST', '/api/v1/auth/send-otp'],
 ];

@@ -82,27 +82,8 @@ class ClickPesaService {
   }
 
   // ─── Payout (Withdrawal) ───
-
-  static Future<Map<String, dynamic>> sellerWithdraw({
-    required String userId,
-    required int amount,
-    required String phone,
-  }) async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-    final resp = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/payouts/seller/withdraw'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'userId': userId, 'amount': amount, 'phone': phone}),
-    );
-    final body = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      throw Exception(body['error'] ?? 'Withdrawal failed');
-    }
-    return body;
-  }
+  // Seller withdrawals migrated to the Postgres wallet (WalletApiClient /
+  // /api/v1/wallet); the legacy /api/payouts/seller/withdraw was retired.
 
   static Future<Map<String, dynamic>> adminWithdraw({
     required String userId,
@@ -125,89 +106,6 @@ class ClickPesaService {
     return body;
   }
 
-  static Future<Map<String, dynamic>> createPayout({
-    required String userId,
-    required int amount,
-    required String phone,
-    String? type,
-    String? source,
-  }) async {
-    final resp = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/create-payout'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'userId': userId,
-        'amount': amount,
-        'phone': phone,
-        'type': type ?? 'manual',
-        'source': source,
-      }),
-    );
-    final body = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(body['error'] ?? 'Payout failed');
-    }
-    return body;
-  }
-
-  static Future<Map<String, dynamic>?> getPayoutStatus(String payoutId) async {
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/payout-status/$payoutId'),
-        headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      );
-      if (resp.statusCode != 200) return null;
-      return jsonDecode(resp.body) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('getPayoutStatus: $e');
-      return null;
-    }
-  }
-
-  static Future<List<Map<String, dynamic>>> getPayouts({
-    String? userId,
-    int limit = 50,
-  }) async {
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final params = <String, String>{'limit': limit.toString()};
-      if (userId != null) params['userId'] = userId;
-      final uri = Uri.parse('${ApiConfig.baseUrl}/api/payouts')
-          .replace(queryParameters: params);
-      final resp = await http.get(uri, headers: {
-        if (token != null) 'Authorization': 'Bearer $token',
-      });
-      if (resp.statusCode != 200) return [];
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      return (data['payouts'] as List?)
-              ?.cast<Map<String, dynamic>>() ??
-          [];
-    } catch (e) {
-      debugPrint('getPayouts: $e');
-      return [];
-    }
-  }
-
-  static Future<Map<String, dynamic>> retryPayout(String payoutId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final token = await user?.getIdToken();
-    final resp = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/payout/retry/$payoutId'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-    );
-    final body = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(body['error'] ?? 'Retry failed');
-    }
-    return body;
-  }
-
   static Future<Map<String, dynamic>?> getFinanceSummary() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -223,44 +121,6 @@ class ClickPesaService {
       return jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('ClickPesaService getFinanceSummary: $e');
-      return null;
-    }
-  }
-
-  // ─── Balance & Preview ───
-
-  static Future<int> getBalance() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return 0;
-      final token = await user.getIdToken();
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/clickpesa/balance'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (resp.statusCode != 200) return 0;
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      return (data['balance'] as num).toInt();
-    } catch (e) {
-      debugPrint('getBalance: $e');
-      return 0;
-    }
-  }
-
-  static Future<Map<String, dynamic>?> payoutPreview({
-    required int amount,
-    required String phone,
-  }) async {
-    try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/clickpesa/payout-preview'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'amount': amount, 'phone': phone}),
-      );
-      if (resp.statusCode != 200) return null;
-      return jsonDecode(resp.body) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('payoutPreview: $e');
       return null;
     }
   }

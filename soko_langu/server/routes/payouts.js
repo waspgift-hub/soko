@@ -6,108 +6,16 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
   const router = express.Router();
   const { generatePayoutReference, PAYOUT_STATUSES, processPayout, retryFailedPayout, updatePayoutStatus, auditLog } = payoutHelpers({ admin, db });
 
+  // RETIRED on wallet cutover (OWNERSHIP_MAP §6 item 3): seller money now lives
+  // in the Postgres wallet and withdrawals go through POST /api/v1/wallet/
+  // withdrawals. Both the Flutter app (kUseWalletApi) and the shop SPA read the
+  // Postgres wallet. The legacy Firestore sellerBalance had 0 eligible TZS at
+  // cutover, so this mutation can no longer be routed to Firestore money.
   router.post('/seller/withdraw', async (req, res) => {
-    try {
-      const auth = await requireUser(req, res);
-      if (!auth.ok) return;
-      const { userId, amount, phone } = req.body;
-      if (!userId || !amount || !phone) {
-        return res.status(400).json({ error: 'Missing userId, amount, or phone' });
-      }
-      if (auth.uid !== userId) {
-        return res.status(403).json({ error: 'Forbidden: cannot withdraw from another account' });
-      }
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-      const withdrawAmount = Math.round(amount);
-      if (withdrawAmount <= 0) {
-        return res.status(400).json({ error: 'Withdrawal amount must be greater than zero' });
-      }
-
-      const payoutFee = getPayoutFee(withdrawAmount);
-      const totalCost = withdrawAmount + payoutFee;
-
-      let sellerName = '';
-      let balanceSnapshot = 0;
-      try {
-        await db.runTransaction(async (tx) => {
-          const userRef = db.collection('users').doc(userId);
-          const userSnap = await tx.get(userRef);
-          if (!userSnap.exists) throw new Error('User not found');
-
-          const userData = userSnap.data();
-          if (userData.isSuspended) throw new Error('Account suspended');
-
-          sellerName = userData.name || userData.displayName || '';
-          const currentBalance = userData.sellerBalance || 0;
-          balanceSnapshot = currentBalance;
-
-          if (currentBalance < totalCost) {
-            throw new Error(`Insufficient balance. You need TZS ${totalCost.toLocaleString()} (${withdrawAmount.toLocaleString()} withdrawal + ${payoutFee.toLocaleString()} fee). Available: TZS ${currentBalance.toLocaleString()}`);
-          }
-
-          tx.update(userRef, {
-            sellerBalance: admin.firestore.FieldValue.increment(-totalCost),
-          });
-        });
-      } catch (txErr) {
-        return res.status(400).json({ error: txErr.message });
-      }
-
-      const netAmount = withdrawAmount;
-      let payoutResult;
-      try {
-        payoutResult = await processPayout({
-          userId,
-          phone,
-          amount: totalCost,
-          fee: payoutFee,
-          netAmount,
-          source: `seller_withdraw_${Date.now()}`,
-          type: 'seller_withdrawal',
-          metadata: { sellerName, balanceBefore: balanceSnapshot },
-        });
-      } catch (payoutErr) {
-        try {
-          await db.collection('users').doc(userId).update({
-            sellerBalance: admin.firestore.FieldValue.increment(totalCost),
-          });
-        } catch (reverseErr) {
-          console.error(`CRITICAL: Failed to reverse seller balance for ${userId} after failed payout:`, reverseErr);
-        }
-        return res.status(502).json({ error: `Payout failed: ${payoutErr.message}` });
-      }
-
-      await auditLog({
-        userId, type: 'seller_withdraw', amount: -totalCost,
-        balanceBefore: balanceSnapshot, balanceAfter: balanceSnapshot - totalCost,
-        reason: `Seller withdrawal: TZS ${netAmount.toLocaleString()} to ${phone} (fee: TZS ${payoutFee.toLocaleString()})`,
-        relatedId: payoutResult.payoutId,
-        metadata: { phone, netAmount, fee: payoutFee, payoutId: payoutResult.payoutId },
-      });
-
-      try {
-        await db.collection('notifications').add({
-          userId,
-          title: '💰 Utoaji wa Pesa Umeanzishwa',
-          body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
-        });
-        await sendOneSignalNotification(userId, '💰 Utoaji wa Pesa Umeanzishwa', `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`, { type: 'withdrawal', payoutId: payoutResult.payoutId });
-      } catch (_) {}
-
-      res.json({
-        success: true,
-        netAmount,
-        fee: payoutFee,
-        payoutId: payoutResult.payoutId,
-        message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
-      });
-    } catch (e) {
-      res.status(500).json({ error: 'Internal server error' });
-    }
+    res.status(410).json({
+      error: 'GONE',
+      message: 'Legacy /api/payouts/seller/withdraw is retired. Use POST /api/v1/wallet/withdrawals.',
+    });
   });
 
   router.post('/admin/withdraw', async (req, res) => {

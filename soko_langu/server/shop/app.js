@@ -1635,7 +1635,12 @@ async function renderSellerPage(tab) {
     if (snap.exists) u = snap.data();
   } catch (_) {}
   const isSeller = !!u.isSeller;
-  const bal = Number(u.sellerBalance) || 0;
+  let bal = Number(u.sellerBalance) || 0;
+  try {
+    const w = await apiGet('/api/v1/wallet');
+    const wb = w && w.data && w.data.balances;
+    if (wb) bal = Number(wb.available) || 0;
+  } catch (_) { /* v1 wallet unreachable — keep the Firestore figure */ }
   const name = u.sellerName || u.name || user.displayName || 'Soko Vibe';
   const tabs = ['overview', 'products', 'orders', 'analytics', 'flash', 'kyc', 'boost', 'wallet'].map((k) =>
     '<button class="tab' + (k === tab ? ' active' : '') + '" data-act="sbtab" data-tab="' + k + '">' + esc(t('seller_' + k)) + '</button>').join('');
@@ -1781,7 +1786,7 @@ function sellerWalletBody(body, user, u, bal) {
     if (amount > bal) { toast('Kiasi kikubwa kuliko salio.'); return; }
     if (!phone) { toast('Andika namba ya simu ya ClickPesa.'); return; }
     try {
-      const data = await apiPost('/api/payouts/seller/withdraw', { userId: user.uid, amount: amount, phone: phone });
+      const data = await apiPost('/api/v1/wallet/withdrawals', { amount: amount, phoneNumber: phone });
       toast('✔ ' + t('withdraw_ok'));
       renderSellerPage('wallet');
     } catch (err) { toast(errMsg(err)); }
