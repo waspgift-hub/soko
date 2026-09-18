@@ -56,13 +56,24 @@ async function resolveSellerProfile(firebaseUid) {
 }
 
 // ── Category name → id resolution cache ──────────────────────────────────────
+// Legacy Firestore products tag categories with their old display names
+// ('Automotive', 'Home & Garden') that differ from the Postgres seed names
+// ('Vehicles', 'Home'); aliases bridge the rename so categoryId links survive.
+const CATEGORY_ALIASES = {
+  'automotive': 'vehicles',
+  'home & garden': 'home',
+  'health & beauty': 'beauty',
+  'sports & entertainment': 'other',
+  'others': 'other',
+};
 const categoryCache = new Map();
 async function resolveCategoryId(name) {
   if (!name) return null;
   const key = name.trim().toLowerCase();
   if (categoryCache.has(key)) return categoryCache.get(key);
+  const target = CATEGORY_ALIASES[key] || name;
   const cat = await prisma.category.findFirst({
-    where: { name: { equals: name, mode: 'insensitive' } },
+    where: { name: { equals: target, mode: 'insensitive' } },
     select: { id: true },
   });
   const result = cat?.id || null;
@@ -159,8 +170,10 @@ async function main() {
   console.log(`[migrate-products] media done. rows=${mediaRows} productsWithoutMedia=${mediaSkipped}`);
 
   // Phase 3: enrich snapshots created before `category`/`subcategory` were part
-  // of LEGACY_KEYS — the server subcategory filter and list-card category both
-  // read them from snapshot. Idempotent: only missing keys are merged.
+  // of LEGACY_KEYS and link products whose categoryId was never resolved (legacy
+  // names like 'Automotive' have no Postgres row). The server subcategory
+  // filter, list-card category, and category page all read these. Idempotent:
+  // only missing keys are merged.
   const enrichKeys = ['category', 'subcategory'];
   let enriched = 0;
   for (const doc of snapshot.docs) {
@@ -171,7 +184,7 @@ async function main() {
     if (!sellerProfileId) continue;
     const product = await prisma.product.findFirst({
       where: { sellerId: sellerProfileId, title: String(data.name).trim(), deletedAt: null },
-      select: { id: true, snapshot: true },
+      select: { id: true, snapshot: true, categoryId: true },
     });
     if (!product) continue;
     const current = product.snapshot || {};
@@ -179,17 +192,26 @@ async function main() {
     for (const k of enrichKeys) {
       if (data[k] !== undefined && data[k] !== null && current[k] === undefined) patch[k] = data[k];
     }
-    if (Object.keys(patch).length) {
+    if (product.categoryId == null) {
+      const linked = await resolveCategoryId(data.category);
+      if (linked && linked !== product.categoryId) patch.categoryId_ = linked;
+    }
+    const hasMeta = Object.keys(patch).some((k) => k !== 'categoryId_');
+    const updateId = patch.categoryId_ || undefined;
+    if (hasMeta || updateId) {
       if (COMMIT) {
-        await prisma.product.update({
-          where: { id: product.id },
-          data: { snapshot: { ...current, ...patch } },
-        });
+        const update = {};
+        if (hasMeta) {
+          const meta = { category: patch.category, subcategory: patch.subcategory };
+          update.snapshot = { ...current, ...meta };
+        }
+        if (updateId) update.categoryId = updateId;
+        await prisma.product.update({ where: { id: product.id }, data: update });
       }
       enriched++;
     }
   }
-  console.log(`[migrate-products] snapshot enriched=${enriched}`);
+  console.log(`[migrate-products] snapshot enriched + category linked=${enriched}`);
 
   await prisma.$disconnect();
 }
