@@ -185,18 +185,19 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 ## 6. Next (Phase B) candidates, in dependency order
 
 1. Products catalog bridge: Firestore → Postgres backfill + client switch.
-   DONE (backfill + media). `scripts/migrate-products.js` idempotently mirrors
-   Firestore `products` (7/7 mirrored in prod) and backfills legacy Cloudinary
-   media into `ProductMedia` (21 rows created in prod) — the client renders
-   absolute legacy URLs as-is, so the flag-on feed shows images; R2 re-hosting
-   stays Phase F. Client bridge (`ProductApiClient` + `ProductRepository` +
-   `kUseProductsApi`) serves the home feed from `/api/v1/products`;
-   `Product.fromApi` handles absolute media URLs + Firestore-timestamp
-   snapshots. Remaining client reads still Firestore (unbridged): discovery
-   stream, category products, seller products, my-ads, featured carousels,
-   wishlist rehydrate, product-search assistant; categories have no API flag
-   yet (Postgres categories seeded 12/12). Route these through the repo before
-   or during the release/wallet flip.
+   DONE (catalog + discovery + media + featured + categories). `scripts/
+   migrate-products.js` idempotently mirrors Firestore `products` (7/7 in prod),
+   backfills Cloudinary media into `ProductMedia` (21 rows), enriches snapshots
+   with `category`/`subcategory`, and links orphaned categories via legacy name
+   aliases (Automotive→Vehicles, etc.). Client bridge (`ProductApiClient` +
+   `ProductRepository` + `kUseProductsApi`) serves the home feed, discovery
+   (realtime stream off in API mode), category pages, and the featured carousel
+   (`getFeaturedProducts`) from `/api/v1/products`; `kUseCategoriesApi` serves
+   the category grid from `/api/v1/products/categories`. `Product.fromApi`
+   handles absolute media URLs + Firestore-timestamp snapshots; list items carry
+   the full snapshot for legacy metadata. R2 re-hosting stays Phase F. Remaining
+   Firestore reads (unbridged, non-path surfaces): my-ads, seller products,
+   wishlist rehydrate, product-search assistant.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
