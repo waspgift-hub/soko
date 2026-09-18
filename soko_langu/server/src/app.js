@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const path = require('path');
 const compression = require('compression');
 const cors = require('cors');
@@ -28,6 +28,7 @@ const referralRouter = require('./modules/referrals/routes');
 const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
 const notificationRouter = require('./modules/notifications/routes');
+const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
@@ -35,7 +36,7 @@ const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 
 // BigInt is used for TZS money in DB rows (Prisma Decimal->string->BigInt).
-// Express res.json() cannot serialize BigInt — TZS fits a JS safe integer
+// Express res.json() cannot serialize BigInt â€” TZS fits a JS safe integer
 // (max ~9e15), so serialize to Number before responding.
 BigInt.prototype.toJSON = function toJSON() {
   return Number(this);
@@ -63,7 +64,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   // Sparse CSP: the API (JSON) is locked down, but the marketing pages, legal
   // pages and the browser admin dashboard pull Firebase/Google, Tailwind,
-  // chart.js, lucide, and Google Fonts from CDNs — those hosts are
+  // chart.js, lucide, and Google Fonts from CDNs â€” those hosts are
   // allow-listed instead of falling back to unsafe-inline-everything.
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.gstatic.com https://www.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: https:; worker-src 'self' blob:");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -71,7 +72,7 @@ app.use((req, res, next) => {
 });
 
 // Usage analytics: count every /api hit for request-rate stats (per min /
-// hour / day / month / year). Fire-and-forget inside the service — it never
+// hour / day / month / year). Fire-and-forget inside the service â€” it never
 // blocks or fails requests, and skips silently when Redis is unreachable.
 const { recordApiHit } = require('./services/activity');
 app.use((req, res, next) => {
@@ -82,7 +83,7 @@ app.use((req, res, next) => {
 // Canonical domain: www.sokovibe.co.tz is the official host. Render redirects
 // the apex (sokovibe.co.tz) to www at the edge before the app; if a request
 // ever reaches the app on the apex (e.g. the edge redirect is removed) we
-// still fold it onto www ourselves — unless SERVE_APEX=1, in which case the
+// still fold it onto www ourselves â€” unless SERVE_APEX=1, in which case the
 // apex serves the SAME landing site directly (canonical/og tags stay www).
 // Other sokovibe.co.tz subdomains are folded onto www too (path + query
 // preserved). The admin subdomain serves the browser panel directly at its
@@ -110,7 +111,7 @@ app.use((req, res, next) => {
     req.url = `${p.startsWith('/admin') ? '' : '/admin'}${p === '/' ? '/' : p}${q}`;
     return next();
   }
-  // api host is dedicated to the API edge worker — never fold onto www.
+  // api host is dedicated to the API edge worker â€” never fold onto www.
   if (host === `api.${DOMAIN}` || host === `www.api.${DOMAIN}`) return next();
   if (host === DOMAIN) {
     if (SERVE_APEX) return next();
@@ -233,7 +234,7 @@ app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: '
   // Old panel URLs redirect to the real panel so nobody lands on a stale page.
   app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
 
-// The buyer web shop (marketplace) — monochrome design mirroring the Flutter app.
+// The buyer web shop (marketplace) â€” monochrome design mirroring the Flutter app.
 app.use('/shop', express.static(path.join(__dirname, '..', 'shop'), { index: 'index.html' }));
 
 // The landing page owns the root. HTML is never cached so edits go live
@@ -259,7 +260,7 @@ app.use(express.static(landingDir, {
 }));
 
 // Browsers/bots often request /favicon.ico directly regardless of the <link>
-// tags — map the root one to the brand favicon instead of serving a 404.
+// tags â€” map the root one to the brand favicon instead of serving a 404.
 app.get('/favicon.ico', (req, res) => res.redirect('/assets/favicon.ico'));
 
 // Routes
@@ -286,6 +287,7 @@ app.use('/api/v1/referrals', referralRouter);
 app.use('/api/v1/moderation', moderationRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
 app.use('/api/v1/notifications', notificationRouter);
+app.use('/api/v1', sellerAnalyticsRouter);
 app.use('/api/v1/reviews', reviewRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);

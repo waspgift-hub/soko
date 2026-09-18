@@ -369,3 +369,27 @@ product backfill has run (reviews reference product ids that only exist in
    a compat handler now resets `users/{uid}.kyc` to `status: 'none'`, re-syncs
    `sellerKycApproved: false`, audits `kyc_deleted` and notifies the user —
    mirroring the v1 `DELETE /admin/:userId` semantics.
+9. Phase F — Seller analytics + boost bridge (server): DONE (bridge schema
+   only; client flags stay OFF). New `seller-analytics` module behind
+   `/api/v1` (own `seller-analytics/routes.js` + `controller.js`, mounted at
+   line 290 of app.js as `app.use('/api/v1', sellerAnalyticsRouter)`): `GET
+   /sellers/:sellerId/analytics/overview` returns the Flutter
+   `SellerAnalytics.fromApi` DTO from Postgres-only aggregates (products,
+   `Product.snapshot` views, `Order` status/total split into successful/failed
+   + monthly sales/earnings buckets, `Review` rating → average/positive/
+   negative), while gender/location/age/boost-location breakdowns come back
+   empty `{}` because those were Firestore-only in the legacy fan-out �?" the
+   client keeps its Firestore fallback arm for those detail containers until
+   R2 evidence/media (Phase F R2-only) lands; `POST /boosts/:boostId/
+   impressions` and `/clicks` increment `Boost.impressions`/`Boost.clicks`
+   atomically via Prisma (2026 dynamic-counter bridge replacing the old
+   Firestore fan-out counter). Seller resolution accepts either the Postgres
+   uuid or the legacy Firestore opaque id via `Product.snapshot.legacyId`
+   fallback; boost resolution mirrors the same uuid + snapshot.legacyId arm.
+   3 server unit tests pass (routes linearize to the three Phase F paths +
+   controller exports the three handlers). Phase F client bridge
+   (`kUseSellerAnalyticsApi` / `kUseBoostsApi` in api_config.dart) is NOT
+   wired/scoped (dashboard detail containers stay Firestore-backed) so the
+   demographics regression window preferred by the roll gate stays closed;
+   schema/flag bridge lands only when the R2 evidence/media path provides the
+   remaining demographic maps.
