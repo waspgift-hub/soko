@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const userSettingsRouter = express.Router();
 const { authenticate, requireActive } = require('../../middleware/auth');
 const { 
   getSettings, 
@@ -11,7 +12,9 @@ const {
   getPublicProfile 
 } = require('./controller');
 
-// Get the current user's profile (Firestore users/{uid} shape)
+// Profile bridge (Phase D): mounted at /api/v1/users. These must not live under
+// /api/v1/users/settings (where the settings router is mounted) because the
+// settings domain routes (PUT /:domain) would swallow /me.
 router.get('/me', authenticate, getMe);
 
 // Update the current user's profile (whitelisted storefront fields)
@@ -22,15 +25,16 @@ router.put('/me', authenticate, updateMe);
 router.get('/public/:identifier', getPublicProfile);
 
 // Get all settings for current user
-router.get('/', authenticate, requireActive, getSettings);
+userSettingsRouter.get('/', authenticate, requireActive, getSettings);
 
 // Update settings for a specific domain
-router.put('/:domain', authenticate, requireActive, updateSettings);
+userSettingsRouter.put('/:domain', authenticate, requireActive, updateSettings);
 
 // Request account deletion
-router.post('/request-deletion', authenticate, requireActive, requestDeletion);
+userSettingsRouter.post('/request-deletion', authenticate, requireActive, requestDeletion);
 
 // Export user data
-router.post('/export', authenticate, exportData);
+userSettingsRouter.post('/export', authenticate, exportData);
 
-module.exports = router;
+module.exports = userSettingsRouter;
+module.exports.profileRouter = router;
