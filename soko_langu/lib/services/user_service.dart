@@ -373,6 +373,29 @@ class UserService {
 
   Future<bool> isUsernameTaken(String username, String currentUid) async {
     if (username.trim().isEmpty) return false;
+    if (ApiConfig.kUseUsersApi) {
+      final token = await _currentToken();
+      if (token != null) {
+        try {
+          final q = Uri.encodeQueryComponent(username.trim().toLowerCase());
+          final res = await http.get(
+            Uri.parse(
+              ApiConfig.v1(
+                '/users/check-username?username=$q&excludeUid=$currentUid',
+              ),
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (res.statusCode == 200) {
+            final decoded = jsonDecode(res.body);
+            final data = decoded['data'];
+            if (data is Map<String, dynamic>) {
+              return data['available'] == false;
+            }
+          }
+        } catch (_) {}
+      }
+    }
     final snap = await _db
         .collection('users')
         .where('username', isEqualTo: username.trim().toLowerCase())

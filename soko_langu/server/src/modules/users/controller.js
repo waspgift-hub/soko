@@ -386,6 +386,36 @@ async function getPublicProfile(req, res) {
   }
 }
 
+// GET /api/v1/users/check-username?username=X&excludeUid=Y — username
+// uniqueness check behind the profile edit flow (replaces a Firestore
+// collection query). excludeUid may be a Firebase UID or Postgres uuid; the
+// profile owner's own username never counts as taken.
+async function checkUsername(req, res) {
+  try {
+    const q = String(req.query.username || '').trim();
+    if (!q) return res.status(400).json({ error: 'MISSING_USERNAME' });
+    const excludeUid = String(req.query.excludeUid || '');
+
+    const prisma = getPrisma();
+    const found = await prisma.user.findFirst({
+      where: { username: String(q && q.toLowerCase()) },
+      select: { id: true, firebaseUid: true },
+    });
+
+    let available = !found;
+    if (found && excludeUid) {
+      if (found.id === excludeUid || found.firebaseUid === excludeUid) {
+        available = true;
+      }
+    }
+
+    res.json({ success: true, data: { available, username: found ? found.username : q } });
+  } catch (error) {
+    console.error('[USERS] check-username error:', error.message);
+    res.status(500).json({ error: 'Failed to check username' });
+  }
+}
+
 module.exports = {
   getSettings,
   updateSettings,
@@ -396,4 +426,5 @@ module.exports = {
   getMe,
   updateMe,
   getPublicProfile,
+  checkUsername,
 };
