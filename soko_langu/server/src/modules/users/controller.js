@@ -340,14 +340,15 @@ async function getPublicProfile(req, res) {
     const { identifier } = req.params;
     if (!identifier) return res.status(400).json({ error: 'MISSING_IDENTIFIER' });
 
+    // uuid columns reject non-uuid comparison values, so only add the id arm
+    // when the identifier actually looks like a Postgres uuid (Firebase UIDs,
+    // opaque ids will throw a cast error otherwise).
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
     const prisma = getPrisma();
     const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { firebaseUid: identifier },
-          { id: identifier },
-        ],
-      },
+      where: isUuid
+        ? { OR: [{ firebaseUid: identifier }, { id: identifier }] }
+        : { firebaseUid: identifier },
       include: { sellerProfile: true },
     });
     if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
