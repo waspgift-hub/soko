@@ -184,6 +184,25 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 
 ## 6. Next (Phase B) candidates, in dependency order
 
+0. Comments bridge (Phase E) — DONE, live in prod. Postgres is truth for
+   comments; Firestore mirrors for read continuity & offline fallback.
+   Server: `GET/POST /products/:id/comments`, `GET/POST /comments/:id/replies`,
+   `DELETE /comments/:id` + `/comments/:id/replies/:replyId` (author or
+   product-owner gate, soft delete, `replyCount` maintained). `Comment.targetId`
+   is now VarChar(128) (uuid columns reject opaque legacy Firestore ids) with
+   an index; `prisma db push` applied to prod. `resolveProduct` looks up by
+   Postgres uuid OR legacy Firestore doc id (legacyId arm). Replies list returns
+   a bare `data` array (client `_fetchRepliesApi` expects that); comments list
+   returns `{items,page,limit}` (client `_fetchCommentsApi` expects that).
+   `serializeComment` emits userId/userName/userImage/text/createdAt/replyCount.
+   Client (`ApiConfig.kUseCommentsApi = true`): `getComments`/`getReplies` poll
+   the API every `_pollInterval` via a type-correct `_pollStream<T>` (fetch
+   closure returns `Future<List<T>?>`, null-guard stops double-add), with
+   Firestore stream fallback when the flag is off. `addComment`/`addReply`
+   write API-first (Firestore mirror + `_notifySeller`); `deleteComment`/
+   `deleteReply` API-first with mirror cleanup + `replyCount`/`replyCount`-
+   decrement. `flutter analyze` clean. Unit tests 10/10 (comments).
+
 1. Products catalog bridge: Firestore → Postgres backfill + client switch.
    DONE (full read-path bridge). `scripts/migrate-products.js` idempotently
    mirrors Firestore `products` (7/7 in prod), backfills Cloudinary media into
