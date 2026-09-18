@@ -236,9 +236,17 @@ soft delete) with a Firestore rescue fallback and an API-aware duplicate
    and detail DTOs (was missing — broke store links + review gating for
    v1-created listings). Spec: `server/shop/spec/adapter-smoke.js` (extracts +
    exercises the adapter block: seller flattening, R2 prefixing, legacy timestamps,
-   reviews-by-legacyId). Remaining shop Firestore (Phase C2+): seller hub CRUD
-   (parity.js product add/edit/publish/delete), orders checks, flash-sale create,
-   chat, notifications prefs — post-milestone candidates.
+reviews-by-legacyId). Seller hub writes bridged: add/edit save via
+    `POST /api/v1/products` (draft) → `POST /:id/publish`, `PUT /:id`, and
+    publish/unpublish (`POST /:id/publish|unpublish`) + delete (`DELETE /:id`,
+    soft delete) with a Firestore rescue on API failure; the seller product list
+    and overview stats read `GET /products/seller` (drafts included, svProduct
+    mapped); `becomeseller` also `POST /api/v1/seller/profile` so a shop-only
+    seller gets a Postgres SellerProfile (product writes require one). Live probe
+    8/8 (draft → seller list → publish → public detail/feed → soft delete → gone).
+    Checkout already routes to v2 orders (§6 money). Remaining shop Firestore
+    (Phase C2+): seller analytics/flash/boost product reads, chat, notifications
+    prefs, comments — post-milestone candidates.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
