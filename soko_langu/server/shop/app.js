@@ -292,6 +292,120 @@ function boosted(p) {
   return null;
 }
 
+/* ---------- API adapter (Postgres truth -> the shop's flat product shape) ----------
+   The catalog is now served by /api/v1/products (Postgres). svProduct maps the
+   API DTO into the exact shape the feed/detail/store code already renders, so
+   the Firestore `norm()` above stays only as the degraded fallback. Mirrors the
+   app's Product.fromApi mapping (media -> images, snapshot legacy fields). */
+
+const SV_MEDIA_BASE = 'https://media.soko-vibe.co.tz';
+
+function shopMediaUrl(key) {
+  const s = String(key == null ? '' : key).trim();
+  if (!s) return '';
+  if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+  return SV_MEDIA_BASE + '/' + s;
+}
+
+function shopTs(v) {
+  if (!v) return null;
+  if (v.toDate) return v.toDate();
+  if (typeof v === 'object' && typeof v._seconds === 'number') return new Date(v._seconds * 1000);
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
+}
+
+function svProduct(d) {
+  if (!d) return null;
+  const snap = (d.snapshot && typeof d.snapshot === 'object') ? d.snapshot : {};
+  const seller = (d.seller && typeof d.seller === 'object') ? d.seller : {};
+  const media = Array.isArray(d.media) ? d.media : [];
+  const setFromMedia = [];
+  for (const m of media) {
+    if (!m || !m.r2Key) continue;
+    if (m.type && m.type !== 'image') continue;
+    const u = shopMediaUrl(m.r2Key);
+    if (u) setFromMedia.push(u);
+  }
+  const images = setFromMedia.length
+    ? setFromMedia
+    : (Array.isArray(snap.images) ? snap.images.map(shopMediaUrl).filter(Boolean) : []);
+  const np = (v) => Number(v) || 0;
+  const status = String(d.status || '');
+  return {
+    id: String(d.id || ''),
+    name: String(d.title || snap.title || ''),
+    price: np(d.price != null ? d.price : snap.price),
+    currency: String(d.currency || snap.currency || 'TZS'),
+    images: images,
+    videoUrl: String(d.videoUrl || snap.videoUrl || ''),
+    category: String(snap.category || (d.category && d.category.name) || 'Vingine'),
+    subcategory: String(snap.subcategory || ''),
+    description: String(d.description || snap.description || ''),
+    sellerId: String(seller.sellerId || snap.sellerId || ''), // Firebase UID, resolves #/store
+    sellerProfileId: String(seller.id || ''), // Postgres SellerProfile uuid for trust/passport
+    sellerName: String(seller.storeName || snap.sellerName || 'Muuzaji'),
+    sellerPhone: String(seller.sellerPhone || snap.sellerPhone || ''),
+    location: String(snap.location || ''),
+    district: String(snap.district || ''),
+    condition: String(d.condition || snap.condition || 'new'),
+    stock: np(d.stock),
+    unit: String(snap.unit || 'kipande'),
+    minOrder: np(snap.minOrder) || 1,
+    maxOrder: snap.maxOrder != null ? np(snap.maxOrder) : null,
+    brand: String(snap.brand || ''),
+    isWholesale: !!snap.isWholesale,
+    wholesaleTiers: Array.isArray(snap.wholesaleTiers) ? snap.wholesaleTiers : [],
+    variants: Array.isArray(snap.variants) ? snap.variants : [],
+    attributes: snap.attributes && typeof snap.attributes === 'object' ? snap.attributes : {},
+    isActive: !(status === 'draft' || status === 'suspended' || status === 'rejected' || status === 'deleted'),
+    isFeatured: !!snap.isFeatured,
+    featuredUntil: shopTs(snap.featuredUntil),
+    isBoosted: !!snap.isBoosted,
+    boostedUntil: shopTs(snap.boostedUntil),
+    boostTier: String(snap.boostTier || ''),
+    rating: np(d.rating != null ? d.rating : snap.rating),
+    reviewCount: np(d.reviewCount != null ? d.reviewCount : snap.reviewCount),
+    soldCount: np(d.soldCount != null ? d.soldCount : snap.soldCount),
+    sellerKycApproved: !!snap.sellerKycApproved,
+    createdAt: d.createdAt || null, // ISO string; ts2date/tsMillis accept it
+    _legacyId: String(snap.legacyId || '') || null, // opaque Firestore doc id for review reads
+  };
+}
+
+/* API-first reads with Firestore fallback: a slow or unreachable edge must not
+   blank the shop, but the authoritative copy now lives in Postgres. */
+async function apiGetProduct(id) {
+  try {
+    const d = await apiGet('/api/v1/products/' + encodeURIComponent(id));
+    return d && d.data ? svProduct(d.data) : null;
+  } catch (_) { return null; }
+}
+
+async function apiFeedPage(page) {
+  try {
+    const d = await apiGet('/api/v1/products?page=' + (Number(page) || 1) + '&limit=' + PAGE);
+    const items = (d && d.data && d.data.items) || [];
+    return { items: items.map(svProduct).filter(Boolean), done: items.length < PAGE };
+  } catch (_) { return null; }
+}
+
+async function apiStoreProducts(uid) {
+  try {
+    const d = await apiGet('/api/v1/products?sellerId=' + encodeURIComponent(uid) + '&limit=100');
+    return ((d && d.data && d.data.items) || []).map(svProduct).filter(Boolean);
+  } catch (_) { return null; }
+}
+
+async function apiReviewsFor(product, limit) {
+  const key = (product && (product._legacyId || product.id)) || '';
+  if (!key) return null;
+  try {
+    const d = await apiGet('/api/v1/reviews/product/' + encodeURIComponent(key) + '?limit=' + (limit || 12));
+    return (d && d.data && Array.isArray(d.data.reviews)) ? d.data.reviews : [];
+  } catch (_) { return null; }
+}
+
 function featured(p) {
   if (!p.isFeatured) return false;
   const until = p.featuredUntil && p.featuredUntil.toDate ? p.featuredUntil.toDate() : (p.featuredUntil ? new Date(p.featuredUntil) : null);
@@ -323,6 +437,8 @@ const productCache = {};
 async function getProduct(id) {
   if (!id) return null;
   if (productCache[id]) return productCache[id];
+  const fromApi = await apiGetProduct(id);
+  if (fromApi) { productCache[id] = fromApi; return fromApi; }
   try {
     const snap = await DB.collection('products').doc(id).get();
     if (!snap.exists) return null;
@@ -574,11 +690,23 @@ function chipsFor(active) {
     + '</div>';
 }
 
-const Feed = { list: [], cursor: null, done: false, loading: false, mode: { kind: 'all' }, sort: 'new' };
+const Feed = { list: [], cursor: null, done: false, loading: false, page: 1, apiDead: false, mode: { kind: 'all' }, sort: 'new' };
 
 async function loadPageInto() {
   if (Feed.loading || Feed.done) return;
   Feed.loading = true;
+  if (!Feed.apiDead) {
+    const pg = await apiFeedPage(Feed.page);
+    if (pg) {
+      Feed.page += 1;
+      Feed.done = pg.done;
+      Feed.list = Feed.list.concat(pg.items);
+      renderFeed();
+      Feed.loading = false;
+      return;
+    }
+    Feed.apiDead = true; // API unreachable — lock the Firestore fallback for this session
+  }
   try {
     let q = DB.collection('products').orderBy('createdAt', 'desc').limit(PAGE);
     if (Feed.cursor) q = DB.collection('products').orderBy('createdAt', 'desc').startAfter(Feed.cursor).limit(PAGE);
@@ -918,10 +1046,18 @@ async function loadReviews(productId, sellerId) {
   const host = document.getElementById('revHost');
   if (!host) return;
   let list = [];
-  try {
-    const snap = await DB.collection('reviews').where('productId', '==', productId).orderBy('createdAt', 'desc').limit(12).get();
-    list = snap.docs.map((d) => d.data());
-  } catch (_) { /* rules or transient — show empty block */ }
+  const prod = productCache[productId] || await getProduct(productId);
+  const rkey = (prod && (prod._legacyId || prod.id)) || null;
+  if (rkey) {
+    const fromApi = await apiReviewsFor(prod, 12);
+    if (fromApi) list = fromApi;
+  }
+  if (!list.length) {
+    try {
+      const snap = await DB.collection('reviews').where('productId', '==', productId).orderBy('createdAt', 'desc').limit(12).get();
+      list = snap.docs.map((d) => d.data());
+    } catch (_) { /* rules or transient — show empty block */ }
+  }
   const avg = list.length ? Math.round((list.reduce((s, r) => s + (Number(r.rating) || 0), 0) / list.length) * 10) / 10 : 0;
   const user = AUTH.currentUser;
   const canReview = user && user.uid !== sellerId;
@@ -2045,24 +2181,39 @@ const ACTIONS = {
     const commentEl = document.getElementById('revComment');
     const comment = commentEl ? commentEl.value.trim() : '';
     if (!comment) { toast('Andika maoni.'); return; }
+    const prod = productCache[pid] || await getProduct(pid);
+    const rkey = (prod && (prod._legacyId || prod.id)) || pid;
     try {
-      await DB.collection('reviews').add({
-        productId: pid,
-        sellerId,
-        userId: user.uid,
-        userName: user.displayName || user.email || 'Mteja',
-        userImage: '',
+      // Postgres keeps the review; the server recomputes the product rating.
+      const out = await apiPost('/api/v1/reviews', {
+        productId: rkey,
+        sellerId: sellerId,
         rating: rating,
         comment: comment,
-        images: [],
-        helpfulCount: 0,
-        isVerifiedPurchase: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
-      await recomputeProductRating(pid);
+      if (prod && out && out.data) { prod.rating = Number(out.data.rating) || prod.rating; }
       toast('✔ ' + t('review_ok'));
       loadReviews(pid, sellerId);
-    } catch (err) { toast(errMsg(err)); }
+    } catch (err) {
+      try {
+        await DB.collection('reviews').add({
+          productId: pid,
+          sellerId,
+          userId: user.uid,
+          userName: user.displayName || user.email || 'Mteja',
+          userImage: '',
+          rating: rating,
+          comment: comment,
+          images: [],
+          helpfulCount: 0,
+          isVerifiedPurchase: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        await recomputeProductRating(pid);
+        toast('✔ ' + t('review_ok'));
+        loadReviews(pid, sellerId);
+      } catch (e2) { toast(errMsg(e2)); }
+    }
   },
   loadmore: () => loadPageInto(),
   sort: (el) => sortFeedView(el.value),

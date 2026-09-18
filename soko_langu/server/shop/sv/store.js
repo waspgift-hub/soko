@@ -26,9 +26,15 @@
     view.innerHTML = '<section class="sv-store">' + skel(6) + '</section>';
 
     let list = [];
-    const snap = await reqTimeout(DB.collection('products').where('sellerId', '==', uid).limit(100).get(), 12000);
-    if (snap && snap.docs) {
-      list = snap.docs.map((d) => { try { return norm(d); } catch (_) { return null; } }).filter(Boolean);
+    if (typeof apiStoreProducts === 'function') {
+      const fromApi = await reqTimeout(apiStoreProducts(uid), 12000);
+      if (fromApi) list = fromApi;
+    }
+    if (!list.length) {
+      const snap = await reqTimeout(DB.collection('products').where('sellerId', '==', uid).limit(100).get(), 12000);
+      if (snap && snap.docs) {
+        list = snap.docs.map((d) => { try { return norm(d); } catch (_) { return null; } }).filter(Boolean);
+      }
     }
     if (!list.length) list = Feed.list.filter((p) => p.sellerId === uid);
     list = list.slice().sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
@@ -48,13 +54,14 @@
     const avg = rc ? rs / rc : 0;
 
     let since = '';
-    const u = await reqTimeout(DB.collection('users').doc(uid).get(), 8000);
+    const oldest = list.reduce((m, p) => {
+      const c = p.createdAt;
+      const d = c && c.toDate ? c.toDate() : (c ? new Date(c) : null);
+      if (d && !isNaN(d.getTime()) && (!m || d < m)) return d;
+      return m;
+    }, null);
+    if (oldest) since = oldest.getFullYear();
     if (document.body.dataset.route !== 'store') return;
-    try {
-      const c = u && u.exists && (u.data().createdAt || u.data().sellerSince);
-      const d = c ? (c.toDate ? c.toDate() : new Date(c)) : null;
-      if (d && !isNaN(d.getTime())) since = d.getFullYear();
-    } catch (_) {}
 
     /* Server-authoritative trust passport (public endpoint). Uses the
        seller's own profile link when present; levels only — the numeric
@@ -62,8 +69,7 @@
        product-derived metrics below when unavailable. */
     let dots = '';
     try {
-      const ud = u && u.exists ? u.data() : null;
-      const pid = ud && (ud.sellerProfileId || ud.sellerProfileID || ud.sellerId || ud.storeSlug);
+      const pid = list[0] && (list[0].sellerProfileId || '');
       if (pid && typeof apiGet === 'function') {
         const r = await reqTimeout(apiGet('/api/v1/trust/sellers/' + encodeURIComponent(pid) + '/passport'), 8000);
         if (document.body.dataset.route !== 'store') return;

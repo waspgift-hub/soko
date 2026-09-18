@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { applySnapshotPatch } = require('../src/modules/products/product-service');
+const { applySnapshotPatch, serializeProduct } = require('../src/modules/products/product-service');
 
 describe('applySnapshotPatch', () => {
   it('starts from the existing snapshot when present', () => {
@@ -46,5 +46,30 @@ describe('applySnapshotPatch', () => {
     const merged = applySnapshotPatch(base, { brand: 'B' });
     assert.equal(base.brand, 'A');
     assert.equal(merged.brand, 'B');
+  });
+});
+
+describe('serializeProduct', () => {
+  it('flattens sellerId (Firebase UID) and sellerPhone from the seller relation', () => {
+    const out = serializeProduct({
+      id: 'p1',
+      title: 'X',
+      price: 5n,
+      seller: {
+        id: 'prof-1',
+        storeName: 'Duka',
+        storeSlug: 'duka',
+        user: { firebaseUid: 'firebase-uid-9', phone: '+255700000000' },
+      },
+    });
+    assert.equal(out.seller.sellerId, 'firebase-uid-9');
+    assert.equal(out.seller.sellerPhone, '+255700000000');
+    assert.equal(out.seller.storeName, 'Duka');
+    assert.equal(out.price, 5n);
+  });
+
+  it('passes products without a seller relation through unchanged', () => {
+    const row = { id: 'p2', price: 5n, snapshot: {} };
+    assert.equal(serializeProduct(row), row);
   });
 });

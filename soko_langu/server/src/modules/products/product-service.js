@@ -31,7 +31,7 @@ const PUBLIC_SELECT = {
   status: true,
   condition: true,
   createdAt: true,
-  seller: { select: { id: true, storeName: true, storeSlug: true } },
+  seller: { select: { id: true, storeName: true, storeSlug: true, user: { select: { firebaseUid: true, phone: true } } } },
   media: { orderBy: { sortOrder: 'asc' }, take: 4 },
   // List cards need the legacy-only metadata (boost/feature flags, category,
   // location, ratings) that has no Postgres column. Prisma cannot project
@@ -265,6 +265,27 @@ async function softDelete({ id, sellerProfileId }) {
   return prisma.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
+// Flatten the seller relation into the client contract the legacy product doc
+// already carried (sellerId = the Firebase UID, sellerPhone = the account
+// phone). The app and web shop resolve store links, own-product checks and
+// review-gating from these, so they must not be lost per listing.
+function serializeProduct(product) {
+  const seller = product?.seller;
+  if (seller && typeof seller === 'object') {
+    return {
+      ...product,
+      seller: {
+        id: seller.id,
+        storeName: seller.storeName,
+        storeSlug: seller.storeSlug,
+        sellerId: seller.user?.firebaseUid || null,
+        sellerPhone: seller.user?.phone || null,
+      },
+    };
+  }
+  return product;
+}
+
 async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerId, ids, page = 1, limit = 20 }) {
   // Catalog reads go through the read replica when one is configured: public
   // browsing tolerates lag and must never compete for primary connections.
@@ -288,7 +309,7 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
     }),
     prisma.product.count({ where }),
   ]);
-  return { items, pagination: { page: Number(page), limit: Number(limit), total } };
+  return { items: items.map(serializeProduct), pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function listSellerProducts({ sellerProfileId, page = 1, limit = 20 }) {
@@ -323,7 +344,7 @@ async function getProduct(idOrSlug) {
     },
   });
   if (!product) throw httpError(404, 'PRODUCT_NOT_FOUND');
-  return product;
+  return serializeProduct(product);
 }
 
 async function attachMedia({ id, sellerProfileId, items }) {
@@ -371,4 +392,5 @@ module.exports = {
   getProduct,
   attachMedia,
   moderate,
+  serializeProduct,
 };
