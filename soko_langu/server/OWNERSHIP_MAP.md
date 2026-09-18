@@ -247,6 +247,23 @@ reviews-by-legacyId). Seller hub writes bridged: add/edit save via
     Checkout already routes to v2 orders (§6 money). Remaining shop Firestore
     (Phase C2+): seller analytics/flash/boost product reads, chat, notifications
     prefs, comments — post-milestone candidates.
+2. User profile bridge (Phase D1): DONE. App profile reads/writes go through
+   Postgres with Firestore degraded fallback behind `kUseUsersApi`:
+   `GET/PUT /api/v1/users/me` (mounted at /api/v1/users, NOT /users/settings)
+   returns the current profile in Firestore `users/{uid}` shape (displayName,
+   username, bio, phone, email, profileImage=avatar_url, location/mood/lat/lng/
+   paymentNumbers/shopBanner*/gender/dateOfBirth under `metadata.profile`,
+   `kyc.approved` from kyc_applications, langCode). Writes whitelist storefront
+   fields into columns + metadata.profile, dropping unknowns. Other users'
+   profiles read `GET /api/v1/users/public/:identifier` (Firebase UID or uuid;
+   uuid arm only when the id looks like a uuid — Postgres cast errors
+   otherwise; no email/phone/kyc leaked). Client `UserService` maps API DTOs
+   directly (`_fromApi`, ISO-8601 timestamps), falls back to Firestore, and
+   absorbs Firestore-seeded profiles (register/profile_setup write Firestore
+   directly) over blank API rows. Live probe 15/15 (me roundtrip, kyc flag,
+   public by uid, no private fields, 404 unknown). Still Firestore (Phase D2):
+   realtime presence (lastActive/activeChatRoom streams), username search,
+   batch getProfiles fallback, chat fcm tokens.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
