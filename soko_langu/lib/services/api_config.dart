@@ -72,6 +72,14 @@ class ApiConfig {
   /// backfilled; admin panel stays on legacy /api/admin/kyc/*.
   static const bool kUseKycApi = true;
 
+  /// Phase D user-profile bridge switch: when true, the current user's profile
+  /// read/write (/api/v1/users/me) and other users' public profiles
+  /// (/api/v1/users/public/:id) come from Postgres with Firestore as the
+  /// degraded fallback. Firestore stays the source for realtime presence
+  /// (lastActive/activeChatRoom streams), username search, and the direct
+  /// register/profile_setup doc writes until Phase D2.
+  static const bool kUseUsersApi = true;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

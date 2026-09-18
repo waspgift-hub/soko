@@ -197,9 +197,202 @@ function getDefaultSettings(domain) {
   return defaults[domain] || {};
 }
 
+// Extended profile fields the app stores in Firestore users/{uid} that have no
+// dedicated Postgres column. Kept under metadata.profile so reads are a single
+// document fetch and no schema migration is needed (Phase D bridge).
+const PROFILE_META_FIELDS = [
+  'location', 'mood', 'latitude', 'longitude', 'paymentNumbers',
+  'shopBanner', 'shopBannerColor', 'shopAccentColor', 'gender', 'dateOfBirth',
+];
+
+// Columns that map 1:1 from the client profile payload.
+const PROFILE_COLUMN_FIELDS = {
+  displayName: 'displayName',
+  username: 'username',
+  bio: 'bio',
+  phone: 'phone',
+  email: 'email',
+  profileImage: 'avatarUrl',
+  langCode: 'preferredLanguage',
+};
+
+// Shape the app's UserProfile.fromMap reads from Firestore users/{uid}; key
+// names match so the Dart side can keep its existing model.
+function serializeSelfProfile(user, kycApproved, lastActive) {
+  const meta = user.metadata && typeof user.metadata === 'object' ? user.metadata : {};
+  const p = meta.profile || {};
+  return {
+    id: user.firebaseUid,
+    displayName: user.displayName || '',
+    username: user.username || '',
+    bio: user.bio || '',
+    phone: user.phone || '',
+    email: user.email || '',
+    location: p.location || '',
+    mood: p.mood || '',
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
+    profileImage: user.avatarUrl || '',
+    paymentNumbers: p.paymentNumbers || {},
+    shopBanner: p.shopBanner || '',
+    shopBannerColor: p.shopBannerColor || '',
+    shopAccentColor: p.shopAccentColor || '',
+    kyc: { approved: Boolean(kycApproved) },
+    gender: p.gender || '',
+    dateOfBirth: p.dateOfBirth || '',
+    lastActive: lastActive ? lastActive.toISOString() : null,
+    langCode: user.preferredLanguage || 'sw',
+    createdAt: user.createdAt ? user.createdAt.toISOString() : null,
+    updatedAt: user.updatedAt ? user.updatedAt.toISOString() : null,
+  };
+}
+
+// Splits a client profile payload into column data + metadata.profile fields.
+// Extra keys are dropped; the result is the safe whitelisted shape for PUT /me.
+function applyProfileUpdate(user, body) {
+  const data = body && typeof body === 'object' ? body : {};
+  const col = {};
+  const metaFields = {};
+  for (const [clientKey, dbKey] of Object.entries(PROFILE_COLUMN_FIELDS)) {
+    if (clientKey in data) {
+      const v = data[clientKey];
+      col[dbKey] = (typeof v === 'string' && v.trim() === '') ? null : v;
+    }
+  }
+  for (const f of PROFILE_META_FIELDS) {
+    if (f in data) metaFields[f] = data[f];
+  }
+  const currentMeta = user.metadata && typeof user.metadata === 'object' ? user.metadata : {};
+  const mergedProfile = { ...(currentMeta.profile || {}), ...metaFields };
+  const meta = { ...currentMeta, profile: mergedProfile };
+  return { col, meta };
+}
+
+// GET /api/v1/users/me — the current user's profile in Firestore users/{uid}
+// shape. Self profile + KYC flag; used as the primary read for the app profile.
+async function getMe(req, res) {
+  try {
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+    const kyc = await prisma.kycApplication.findUnique({
+      where: { userId: user.firebaseUid },
+      select: { status: true, approved: true },
+    });
+    const lastActiveRaw = user.metadata && user.metadata.lastActive
+      ? new Date(user.metadata.lastActive)
+      : null;
+
+    res.json({
+      success: true,
+      data: serializeSelfProfile(
+        user,
+        kyc && kyc.approved && kyc.status === 'approved',
+        lastActiveRaw,
+      ),
+    });
+  } catch (error) {
+    console.error('[USERS] Get /me error:', error.message);
+    res.status(500).json({ error: 'Failed to load profile' });
+  }
+}
+
+// PUT /api/v1/users/me — storefront/profile edits. Whitelisted fields are
+// persisted to Postgres columns or metadata.profile; unknown fields are ignored.
+async function updateMe(req, res) {
+  try {
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+    const { col, meta } = applyProfileUpdate(user, req.body);
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { ...col, metadata: meta },
+    });
+
+    const kyc = await prisma.kycApplication.findUnique({
+      where: { userId: user.firebaseUid },
+      select: { status: true, approved: true },
+    });
+
+    res.json({
+      success: true,
+      data: serializeSelfProfile(
+        updated,
+        kyc && kyc.approved && kyc.status === 'approved',
+        meta.lastActive ? new Date(meta.lastActive) : null,
+      ),
+    });
+  } catch (error) {
+    console.error('[USERS] PUT /me error:', error.message);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+}
+
+// GET /api/v1/users/public/:identifier — a public profile for another user
+// (buyer or seller) by Firebase UID or Postgres uuid. No private fields; used
+// by chat and review flows that previously read Firestore users/{uid}.
+async function getPublicProfile(req, res) {
+  try {
+    const { identifier } = req.params;
+    if (!identifier) return res.status(400).json({ error: 'MISSING_IDENTIFIER' });
+
+    const prisma = getPrisma();
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { firebaseUid: identifier },
+          { id: identifier },
+        ],
+      },
+      include: { sellerProfile: true },
+    });
+    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+    const meta = user.metadata && typeof user.metadata === 'object' ? user.metadata : {};
+    const p = meta.profile || {};
+
+    res.json({
+      success: true,
+      data: {
+        id: user.firebaseUid,
+        displayName: user.displayName || '',
+        username: user.username || '',
+        bio: user.bio || '',
+        location: p.location || '',
+        mood: p.mood || '',
+        profileImage: user.avatarUrl || '',
+        lastActive: meta.lastActive ? new Date(meta.lastActive).toISOString() : null,
+        role: user.role,
+        isSeller: Boolean(user.sellerProfile && user.sellerProfile.sellerStatus === 'seller'),
+        seller: user.sellerProfile
+          ? {
+              storeName: user.sellerProfile.storeName,
+              storeSlug: user.sellerProfile.storeSlug,
+              logoUrl: user.sellerProfile.logoUrl || '',
+              coverUrl: user.sellerProfile.coverUrl || '',
+              verificationStatus: user.sellerProfile.verificationStatus,
+            }
+          : null,
+      },
+    });
+  } catch (error) {
+    console.error('[USERS] public profile error:', error.message);
+    res.status(500).json({ error: 'Failed to load profile' });
+  }
+}
+
 module.exports = {
   getSettings,
   updateSettings,
   requestDeletion,
   exportData,
+  serializeSelfProfile,
+  applyProfileUpdate,
+  getMe,
+  updateMe,
+  getPublicProfile,
 };

@@ -92,6 +92,42 @@ class UserProfile {
     'gender': gender,
     'dateOfBirth': dateOfBirth,
   };
+
+  /// True when no profile content has ever been synced to Postgres (used to
+  /// absorb a Firestore-seeded profile over a blank API row).
+  bool isEmpty() =>
+      displayName.isEmpty &&
+      username.isEmpty &&
+      email.isEmpty &&
+      phone.isEmpty &&
+      profileImage.isEmpty;
+
+  /// Returns a profile preferring non-empty values from [other] over this one.
+  UserProfile absorb(UserProfile other) {
+    String pick(String a, String b) => a.isNotEmpty ? a : b;
+    return UserProfile(
+      uid: uid,
+      displayName: pick(displayName, other.displayName),
+      username: pick(username, other.username),
+      bio: pick(bio, other.bio),
+      phone: pick(phone, other.phone),
+      email: pick(email, other.email),
+      location: pick(location, other.location),
+      mood: pick(mood, other.mood),
+      latitude: latitude ?? other.latitude,
+      longitude: longitude ?? other.longitude,
+      profileImage: pick(profileImage, other.profileImage),
+      paymentNumbers:
+          paymentNumbers.isEmpty ? other.paymentNumbers : paymentNumbers,
+      shopBanner: pick(shopBanner, other.shopBanner),
+      shopBannerColor: pick(shopBannerColor, other.shopBannerColor),
+      shopAccentColor: pick(shopAccentColor, other.shopAccentColor),
+      kycApproved: kycApproved || other.kycApproved,
+      gender: pick(gender, other.gender),
+      dateOfBirth: pick(dateOfBirth, other.dateOfBirth),
+      lastActive: lastActive ?? other.lastActive,
+    );
+  }
 }
 
 class UserService {
@@ -102,6 +138,17 @@ class UserService {
       _db.collection('users').doc(_auth.currentUser!.uid);
 
   Future<UserProfile?> getProfile(String uid) async {
+    final self = uid == _auth.currentUser?.uid;
+    final api = await _apiProfile(uid, self, await _currentToken());
+    if (api != null) {
+      // profile_setup/register wrote Firestore directly before the first API
+      // save; a blank Postgres row must not blank out an existing profile.
+      if (self && api.isEmpty()) {
+        final fb = await _db.collection('users').doc(uid).get();
+        if (fb.exists) return api.absorb(UserProfile.fromMap(uid, fb.data()!));
+      }
+      return api;
+    }
     final doc = await _db.collection('users').doc(uid).get();
     if (!doc.exists) return null;
     return UserProfile.fromMap(uid, doc.data()!);
@@ -109,15 +156,121 @@ class UserService {
 
   Future<Map<String, UserProfile>> getProfiles(List<String> uids) async {
     if (uids.isEmpty) return {};
-    final refs = uids.map((id) => _db.collection('users').doc(id)).toList();
-    final docs = await Future.wait(refs.map((r) => r.get()));
     final result = <String, UserProfile>{};
+    final missing = <String>[];
+    if (ApiConfig.kUseUsersApi) {
+      final self = _auth.currentUser?.uid;
+      final token = await _currentToken();
+      for (final uid in uids) {
+        final p = await _apiProfile(uid, uid == self, token);
+        if (p != null) {
+          result[uid] = p;
+        } else {
+          missing.add(uid);
+        }
+      }
+    } else {
+      missing.addAll(uids);
+    }
+    final refs = missing.map((id) => _db.collection('users').doc(id)).toList();
+    final docs = await Future.wait(refs.map((r) => r.get()));
     for (final doc in docs) {
       if (doc.exists) {
         result[doc.id] = UserProfile.fromMap(doc.id, doc.data()!);
       }
     }
     return result;
+  }
+
+  Future<String?> _currentToken() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    try {
+      return await user.getIdToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<UserProfile?> _apiProfile(String uid, bool self, String? token) async {
+    if (!ApiConfig.kUseUsersApi || token == null) return null;
+    final path = self ? '/users/me' : '/users/public/$uid';
+    try {
+      final res = await http.get(
+        Uri.parse(ApiConfig.v1(path)),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode != 200) return null;
+      final decoded = jsonDecode(res.body);
+      final raw = decoded is Map<String, dynamic>
+          ? (decoded['data'] is Map<String, dynamic>
+              ? decoded['data'] as Map<String, dynamic>
+              : decoded)
+          : <String, dynamic>{};
+      if (raw.isEmpty) return null;
+      return _fromApi(uid, raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  UserProfile _fromApi(String uid, Map<String, dynamic> d) {
+    return UserProfile(
+      uid: uid,
+      displayName: d['displayName'] as String? ?? '',
+      username: d['username'] as String? ?? '',
+      bio: d['bio'] as String? ?? '',
+      phone: d['phone'] as String? ?? '',
+      email: d['email'] as String? ?? '',
+      location: d['location'] as String? ?? '',
+      mood: d['mood'] as String? ?? '',
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
+      profileImage: d['profileImage'] as String? ?? '',
+      paymentNumbers: Map<String, String>.from(
+        d['paymentNumbers'] is Map<String, dynamic>
+            ? d['paymentNumbers'] as Map<String, dynamic>
+            : <String, dynamic>{},
+      ),
+      shopBanner: d['shopBanner'] as String? ?? '',
+      shopBannerColor: d['shopBannerColor'] as String? ?? '',
+      shopAccentColor: d['shopAccentColor'] as String? ?? '',
+      kycApproved: d['kyc'] is Map<String, dynamic>
+          ? d['kyc']['approved'] == true
+          : false,
+      gender: d['gender'] as String? ?? '',
+      dateOfBirth: d['dateOfBirth'] as String? ?? '',
+      lastActive: _parseTs(d['lastActive']),
+    );
+  }
+
+  DateTime? _parseTs(dynamic v) {
+    if (v == null) return null;
+    if (v is String) return DateTime.tryParse(v);
+    if (v is num) return DateTime.fromMillisecondsSinceEpoch(
+      (v * 1000).round(),
+      isUtc: true,
+    );
+    return null;
+  }
+
+  Future<void> _updateSelf(Map<String, dynamic> data) async {
+    if (!ApiConfig.kUseUsersApi) return;
+    final token = await _currentToken();
+    if (token == null) return;
+    try {
+      await http.put(
+        Uri.parse(ApiConfig.v1('/users/me')),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(data),
+      );
+    } catch (_) {
+      // Firestore write below is the source of truth; a failed sync is
+      // non-fatal (mirror of the shop adapter rescue pattern).
+    }
   }
 
   Stream<UserProfile?> streamProfile(String uid) {
@@ -131,6 +284,9 @@ class UserService {
   }
 
   Future<void> saveProfile(UserProfile profile) async {
+    if (profile.uid == _auth.currentUser?.uid) {
+      await _updateSelf(profile.toMap());
+    }
     await _db.collection('users').doc(profile.uid).set(profile.toMap(), SetOptions(merge: true));
   }
 
@@ -191,6 +347,7 @@ class UserService {
   }
 
   Future<void> updateProfileImage(String url) async {
+    await _updateSelf({'profileImage': url});
     await _profileDoc().update({'profileImage': url});
   }
 
@@ -291,9 +448,11 @@ class UserService {
         update[entry.key] = entry.value;
       }
     }
-    if (update.isNotEmpty) {
-      await _db.collection('users').doc(uid).update(update);
+    if (update.isEmpty) return;
+    if (uid == _auth.currentUser?.uid) {
+      await _updateSelf(update);
     }
+    await _db.collection('users').doc(uid).update(update);
   }
 
   Future<void> deleteMyAccount() async {
