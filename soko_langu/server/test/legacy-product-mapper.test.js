@@ -139,6 +139,11 @@ describe('mapFirestoreProductToPrisma', () => {
     assert.equal(result.snapshot.category, 'Home & Garden');
     assert.equal(result.snapshot.subcategory, 'Furniture');
   });
+
+  it('keeps the legacy sellerId (Firebase UID) in the snapshot', () => {
+    const result = mapFirestoreProductToPrisma(firestoreDoc(), { sellerProfileId: SELLER_ID, categoryId: CATEGORY_ID });
+    assert.equal(result.snapshot.sellerId, 'uid-abc');
+  });
 });
 
 describe('mapFirestoreMediaToProductRows', () => {

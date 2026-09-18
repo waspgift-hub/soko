@@ -78,13 +78,15 @@ function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, 
   return where;
 }
 
-// Public seller lookup accepts either the Postgres SellerProfile id or the
-// legacy Firebase UID (Product.sellerId in the App still carries the UID via
-// snapshot) so the seller shop resolves both.
+// Public seller lookup accepts the Postgres SellerProfile id, the Postgres
+// User id, or the legacy Firebase UID (Product.sellerId in the App still
+// carries the UID via snapshot) so the seller shop resolves every form.
 async function resolveSellerProfile(idOrUid) {
   const prisma = getPrisma();
   return prisma.sellerProfile.findFirst({
-    where: { OR: [{ id: idOrUid }, { userId: idOrUid }] },
+    where: {
+      OR: [{ id: idOrUid }, { userId: idOrUid }, { user: { firebaseUid: idOrUid } }],
+    },
     select: { id: true },
   });
 }

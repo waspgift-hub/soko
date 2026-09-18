@@ -98,7 +98,7 @@ function buildSnapshot(doc) {
   const out = {};
   const LEGACY_KEYS = [
     'searchName', 'searchKeywords', 'brand', 'barcode', 'location',
-    'district', 'sellerName', 'sellerPhone', 'sellerKycApproved',
+    'district', 'sellerId', 'sellerName', 'sellerPhone', 'sellerKycApproved',
     'images', 'imageMetadata', 'videoUrl',
     'isWholesale', 'wholesaleTiers', 'variants', 'attributes',
     'rating', 'reviewCount', 'viewCount', 'soldCount',

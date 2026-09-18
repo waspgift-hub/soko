@@ -198,6 +198,9 @@ async function main() {
     // Existing rows were created before legacyId existed; backfill the opaque
     // Firestore doc id so legacy-read bridges keep resolving migrated products.
     if (current.legacyId === undefined && doc.id) patch.legacyId = doc.id;
+    // sellerId too: the app's public-profile navigation pushes the legacy
+    // Firebase UID from product.sellerId, which must survive the snapshot.
+    if (current.sellerId === undefined && data.sellerId) patch.sellerId = data.sellerId;
     if (product.categoryId == null) {
       const linked = await resolveCategoryId(data.category);
       if (linked && linked !== product.categoryId) patch.categoryId_ = linked;
