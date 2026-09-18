@@ -40,7 +40,7 @@ const PUBLIC_SELECT = {
   snapshot: true,
 };
 
-function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerProfileId, ids }) {
+function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerProfileId, ids }) {
   const where = { status: 'published', deletedAt: null };
   if (categoryId) where.categoryId = categoryId;
   if (sellerProfileId) where.sellerId = sellerProfileId;
@@ -80,6 +80,7 @@ function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, 
   if (boosted) filters.push({ snapshot: { path: ['isBoosted'], equals: true } });
   if (featured) filters.push({ snapshot: { path: ['isFeatured'], equals: true } });
   if (subcategory) filters.push({ snapshot: { path: ['subcategory'], equals: subcategory } });
+  if (brand) filters.push({ snapshot: { path: ['brand'], equals: brand } });
   if (filters.length) where.AND = filters;
   return where;
 }
@@ -189,7 +190,7 @@ async function softDelete({ id, sellerProfileId }) {
   return prisma.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
-async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerId, ids, page = 1, limit = 20 }) {
+async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerId, ids, page = 1, limit = 20 }) {
   // Catalog reads go through the read replica when one is configured: public
   // browsing tolerates lag and must never compete for primary connections.
   const prisma = getReadPrisma();
@@ -201,7 +202,7 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
     // uuid-shaped values or Postgres rejects the comparison).
     sellerProfileId = profile?.id || '00000000-0000-0000-0000-000000000000';
   }
-  const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerProfileId, ids });
+  const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerProfileId, ids });
   const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,

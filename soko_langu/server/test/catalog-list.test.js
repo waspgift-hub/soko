@@ -32,6 +32,13 @@ describe('buildListWhere', () => {
     ]);
   });
 
+  it('exact-matches brand inside snapshot', () => {
+    const where = buildListWhere({ brand: 'Apple' });
+    assert.deepEqual(where.AND, [
+      { snapshot: { path: ['brand'], equals: 'Apple' } },
+    ]);
+  });
+
   it('combines the full-text q into AND filters', () => {
     const where = buildListWhere({ q: 'simu' });
     assert.deepEqual(where.AND, [

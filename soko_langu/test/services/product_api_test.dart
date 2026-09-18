@@ -312,6 +312,58 @@ void main() {
       expect(captured!.queryParameters['ids'], 'uuid-1,bmw-m4-9249db,legacy-id');
     });
 
+    test('passes the brand filter for the brand page', () async {
+      Uri? captured;
+      final client = ProductApiClient(
+        httpClient: MockClient((request) async {
+          captured = request.url;
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {'items': []},
+          }), 200, headers: {'content-type': 'application/json'});
+        }),
+      );
+      await client.fetchProducts(brand: 'Apple');
+      expect(captured!.queryParameters['brand'], 'Apple');
+    });
+
+    test('fetchProductsByCategoryName forwards the page for pagination', () async {
+      Uri? productsUri;
+      final client = ProductApiClient(
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/products/categories') {
+            return http.Response(jsonEncode({
+              'success': true,
+              'data': [
+                {'id': 'cat-e', 'name': 'Electronics', 'slug': 'electronics', 'parentId': null, 'sortOrder': 1},
+              ],
+            }), 200, headers: {'content-type': 'application/json'});
+          }
+          productsUri = request.url;
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {
+              'items': [{
+                'id': 'p2', 'title': 'Page Two Phone', 'price': 100,
+                'createdAt': '2026-09-01T00:00:00Z',
+                'seller': {'storeName': 'X'}, 'media': [],
+              }],
+              'pagination': {'page': 2, 'limit': 30, 'total': 5},
+            },
+          }), 200, headers: {'content-type': 'application/json'});
+        }),
+      );
+      final items = await client.fetchProductsByCategoryName(
+        'Electronics',
+        page: 2,
+        limit: 30,
+      );
+      expect(items.single.name, 'Page Two Phone');
+      expect(productsUri!.queryParameters['categoryId'], 'cat-e');
+      expect(productsUri!.queryParameters['page'], '2');
+      expect(productsUri!.queryParameters['limit'], '30');
+    });
+
     test('fetchProductsByIds maps the batch envelope into products', () async {
       final client = ProductApiClient(
         httpClient: MockClient((request) async {

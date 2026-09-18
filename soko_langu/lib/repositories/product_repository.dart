@@ -100,7 +100,11 @@ class ProductRepository {
     if (online) {
       if (ApiConfig.kUseProductsApi) {
         try {
-          final res = await _api.fetchProducts(page: _brandPage, limit: limit, query: brand);
+          final res = await _api.fetchProducts(
+            page: _brandPage,
+            limit: limit,
+            brand: brand,
+          );
           if (res.items.isNotEmpty) {
             _brandPage++;
             await _updateCache(res.items);
@@ -139,11 +143,18 @@ class ProductRepository {
     if (online) {
       if (ApiConfig.kUseProductsApi) {
         try {
-          final res = await _api.fetchProducts(page: _categoryPage, limit: limit, query: category);
-          if (res.items.isNotEmpty) {
+          // Category name → Postgres uuid → server-side categoryId filter, so
+          // the page shows the actual category (not a text search for its name).
+          final items = await _api.fetchProductsByCategoryName(
+            category,
+            subcategory: subcategory,
+            page: _categoryPage,
+            limit: limit,
+          );
+          if (items.isNotEmpty) {
             _categoryPage++;
-            await _updateCache(res.items);
-            return ProductResult.data(res.items, source: DataSource.network);
+            await _updateCache(items);
+            return ProductResult.data(items, source: DataSource.network);
           }
         } catch (_) {}
       }

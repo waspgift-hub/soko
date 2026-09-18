@@ -31,6 +31,7 @@ class ProductApiClient {
     String? categoryId,
     String? subcategory,
     String? sellerId,
+    String? brand,
     List<String>? ids,
     bool boosted = false,
     bool featured = false,
@@ -47,6 +48,8 @@ class ProductApiClient {
           'subcategory': subcategory.trim(),
         if (sellerId != null && sellerId.trim().isNotEmpty)
           'sellerId': sellerId.trim(),
+        if (brand != null && brand.trim().isNotEmpty)
+          'brand': brand.trim(),
         if (ids != null && ids.isNotEmpty) 'ids': ids.take(50).join(','),
         if (boosted) 'boosted': 'true',
         if (featured) 'featured': 'true',
@@ -281,6 +284,7 @@ class ProductApiClient {
   Future<List<Product>> fetchProductsByCategoryName(
     String name, {
     String? subcategory,
+    int page = 1,
     int limit = 50,
   }) async {
     await fetchCategories();
@@ -289,6 +293,7 @@ class ProductApiClient {
     final res = await fetchProducts(
       categoryId: id,
       subcategory: subcategory,
+      page: page,
       limit: limit,
     );
     return res.items;

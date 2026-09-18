@@ -56,6 +56,7 @@ router.get(
       q: z.string().max(100).optional(),
       categoryId: z.string().uuid().optional(),
       sellerId: z.string().min(1).max(128).optional(),
+      brand: z.string().min(1).max(80).optional(),
       ids: z
         .preprocess(
           (v) => {
