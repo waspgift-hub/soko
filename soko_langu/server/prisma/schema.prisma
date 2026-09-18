@@ -593,7 +593,7 @@ model Like {
 model Comment {
   id         String    @id @default(uuid()) @db.Uuid
   userId     String    @map("user_id") @db.Uuid
-  targetId   String    @map("target_id") @db.Uuid
+  targetId   String    @map("target_id") @db.VarChar(128)
   targetType String    @map("target_type") @db.VarChar(20)
   content    String    @db.Text
   parentId   String?   @map("parent_id") @db.Uuid
@@ -604,6 +604,7 @@ model Comment {
   parent Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
   replies Comment[] @relation("CommentReplies")
 
+  @@index([targetId, targetType, createdAt(sort: Desc)])
   @@map("comments")
 }
 
