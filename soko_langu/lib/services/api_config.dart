@@ -80,6 +80,13 @@ class ApiConfig {
   /// register/profile_setup doc writes until Phase D2.
   static const bool kUseUsersApi = true;
 
+  /// Phase E comments bridge switch: when true, product comments (add/reply/
+  /// list/delete) go through /api/v1/products/:id/comments (Postgres,
+  /// Comment.targetId is VarChar so legacy opaque product ids resolve via
+  /// snapshot.legacyId) with Firestore as the degraded fallback. The live
+  /// stream becomes a short polling refresh so the widget API stays `Stream`.
+  static const bool kUseCommentsApi = true;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 
