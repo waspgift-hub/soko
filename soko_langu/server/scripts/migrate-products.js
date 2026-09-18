@@ -158,6 +158,39 @@ async function main() {
   }
   console.log(`[migrate-products] media done. rows=${mediaRows} productsWithoutMedia=${mediaSkipped}`);
 
+  // Phase 3: enrich snapshots created before `category`/`subcategory` were part
+  // of LEGACY_KEYS — the server subcategory filter and list-card category both
+  // read them from snapshot. Idempotent: only missing keys are merged.
+  const enrichKeys = ['category', 'subcategory'];
+  let enriched = 0;
+  for (const doc of snapshot.docs) {
+    if (enriched >= (Number.isFinite(LIMIT) ? LIMIT : Number.MAX_SAFE_INTEGER)) break;
+    const data = doc.data();
+    if (!data || !data.name) continue;
+    const sellerProfileId = await resolveSellerProfile(data.sellerId);
+    if (!sellerProfileId) continue;
+    const product = await prisma.product.findFirst({
+      where: { sellerId: sellerProfileId, title: String(data.name).trim(), deletedAt: null },
+      select: { id: true, snapshot: true },
+    });
+    if (!product) continue;
+    const current = product.snapshot || {};
+    const patch = {};
+    for (const k of enrichKeys) {
+      if (data[k] !== undefined && data[k] !== null && current[k] === undefined) patch[k] = data[k];
+    }
+    if (Object.keys(patch).length) {
+      if (COMMIT) {
+        await prisma.product.update({
+          where: { id: product.id },
+          data: { snapshot: { ...current, ...patch } },
+        });
+      }
+      enriched++;
+    }
+  }
+  console.log(`[migrate-products] snapshot enriched=${enriched}`);
+
   await prisma.$disconnect();
 }
 

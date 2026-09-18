@@ -32,30 +32,10 @@ const PUBLIC_SELECT = {
   seller: { select: { id: true, storeName: true, storeSlug: true } },
   media: { orderBy: { sortOrder: 'asc' }, take: 4 },
   // List cards need the legacy-only metadata (boost/feature flags, category,
-  // location, ratings) that has no Postgres column. A lean projection keeps the
-  // payload small vs. dumping the whole snapshot — the client's Product.fromApi
-  // already reads every key here.
-  snapshot: {
-    select: {
-      category: true,
-      subcategory: true,
-      location: true,
-      district: true,
-      brand: true,
-      isBoosted: true,
-      boostedUntil: true,
-      boostTier: true,
-      isFeatured: true,
-      featuredUntil: true,
-      rating: true,
-      reviewCount: true,
-      soldCount: true,
-      viewCount: true,
-      sellerName: true,
-      sellerPhone: true,
-      sellerKycApproved: true,
-    },
-  },
+  // location, ratings) that has no Postgres column. Prisma cannot project
+  // selected JSON keys (SelectionSetOnScalar is unimplemented for Postgres),
+  // so the whole snapshot is returned — same contract as the detail endpoint.
+  snapshot: true,
 };
 
 function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory }) {

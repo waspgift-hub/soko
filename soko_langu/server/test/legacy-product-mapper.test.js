@@ -130,6 +130,15 @@ describe('mapFirestoreProductToPrisma', () => {
     const result = mapFirestoreProductToPrisma(firestoreDoc({ randomField: 'nope' }), { sellerProfileId: SELLER_ID, categoryId: CATEGORY_ID });
     assert.equal(result.snapshot.randomField, undefined);
   });
+
+  it('keeps category and subcategory in the snapshot', () => {
+    const result = mapFirestoreProductToPrisma(
+      firestoreDoc({ title: 'Chair', category: 'Home & Garden', subcategory: 'Furniture' }),
+      { sellerProfileId: SELLER_ID, categoryId: CATEGORY_ID }
+    );
+    assert.equal(result.snapshot.category, 'Home & Garden');
+    assert.equal(result.snapshot.subcategory, 'Furniture');
+  });
 });
 
 describe('mapFirestoreMediaToProductRows', () => {

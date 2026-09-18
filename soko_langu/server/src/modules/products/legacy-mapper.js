@@ -104,6 +104,7 @@ function buildSnapshot(doc) {
     'rating', 'reviewCount', 'viewCount', 'soldCount',
     'isBoosted', 'boostedUntil', 'boostTier',
     'isFeatured', 'featuredUntil',
+    'category', 'subcategory',
     'isActive',
   ];
   for (const k of LEGACY_KEYS) {
