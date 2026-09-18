@@ -241,6 +241,58 @@ async function apiPost(path, body) {
   throw lastErr;
 }
 
+async function apiPut(path, body) {
+  const user = AUTH.currentUser;
+  const token = user ? await user.getIdToken() : null;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(path, { method: 'PUT', headers: apiHeaders(token), body: JSON.stringify(body || {}), signal: ctrl.signal });
+      clearTimeout(to);
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+      return data;
+    } catch (e) {
+      lastErr = e;
+      if (e.name === 'AbortError' || (e.message && e.message.indexOf('Failed to fetch') === 0) || e.message === 'Failed to fetch') {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
+async function apiDelete(path) {
+  const user = AUTH.currentUser;
+  const token = user ? await user.getIdToken() : null;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(path, { method: 'DELETE', headers: apiHeaders(token), signal: ctrl.signal });
+      clearTimeout(to);
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+      return data;
+    } catch (e) {
+      lastErr = e;
+      if (e.name === 'AbortError' || (e.message && e.message.indexOf('Failed to fetch') === 0) || e.message === 'Failed to fetch') {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 /* ---------- Product data ---------- */
 
 function norm(doc) {
@@ -393,6 +445,13 @@ async function apiFeedPage(page) {
 async function apiStoreProducts(uid) {
   try {
     const d = await apiGet('/api/v1/products?sellerId=' + encodeURIComponent(uid) + '&limit=100');
+    return ((d && d.data && d.data.items) || []).map(svProduct).filter(Boolean);
+  } catch (_) { return null; }
+}
+
+async function apiSellerProducts() {
+  try {
+    const d = await apiGet('/api/v1/products/seller?limit=100');
     return ((d && d.data && d.data.items) || []).map(svProduct).filter(Boolean);
   } catch (_) { return null; }
 }
@@ -1819,11 +1878,12 @@ async function sellerOverviewBody(body, user, u, bal) {
     + '<a class="btn-outline" href="#/seller?t=wallet">' + esc(t('seller_wallet')) + '</a>'
     + '</div>';
   try {
-    const [psnap, osnap] = await Promise.all([
-      DB.collection('products').where('sellerId', '==', user.uid).get(),
+    const [apiList, psnap, osnap] = await Promise.all([
+      apiSellerProducts(),
+      DB.collection('products').where('sellerId', '==', user.uid).get().catch(() => null),
       DB.collection('orders').where('sellerId', '==', user.uid).limit(50).get().catch(() => null),
     ]);
-    const plist = psnap.docs.map(norm);
+    const plist = apiList && apiList.length ? apiList : (psnap ? psnap.docs.map(norm) : []);
     const ords = osnap ? osnap.docs.map((d) => d.data()) : [];
     const pending = ords.filter((o) => !PAY_STATES.has(o.status || '') && !BAD_STATES.has(o.status || '')).length;
     const st = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
@@ -1841,10 +1901,15 @@ async function sellerProductsBody(body, user, name) {
   const host = document.getElementById('prodList');
   if (!host) return;
   let list = [];
-  try {
-    const snap = await DB.collection('products').where('sellerId', '==', user.uid).get();
-    list = snap.docs.map(norm).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
-  } catch (_) {}
+  const apiList = await apiSellerProducts();
+  if (apiList && apiList.length) {
+    list = apiList.sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+  } else {
+    try {
+      const snap = await DB.collection('products').where('sellerId', '==', user.uid).get();
+      list = snap.docs.map(norm).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+    } catch (_) {}
+  }
   if (!list.length) {
     host.innerHTML = emptyHtml(t('new_product'), '', t('home_browse'));
     return;
@@ -2015,31 +2080,69 @@ async function saveSellerProduct() {
     attributes: {},
     searchKeywords: keywords,
   };
+  // Postgres-first: create a draft then publish (mirror doc echoes the row).
+  const body = {
+    title: name,
+    description: description,
+    price: price,
+    stock: stock,
+    category: category,
+    subcategory: subcategory,
+    images: images,
+    imageMetadata: [],
+    videoUrl: '',
+    isWholesale: isWs,
+    wholesaleTiers: wholesaleTiers,
+    variants: [],
+    attributes: {},
+    brand: brand,
+    condition: condition,
+    location: location,
+    district: district,
+    barcode: null,
+    searchKeywords: keywords,
+  };
   try {
     if (id) {
-      await DB.collection('products').doc(id).update(base);
+      await apiPut('/api/v1/products/' + encodeURIComponent(id), body);
     } else {
-      let seller = {};
-      try { const snap = await DB.collection('users').doc(user.uid).get(); if (snap.exists) seller = snap.data(); } catch (_) {}
-      await DB.collection('products').add({
-        ...base,
-        sellerId: user.uid,
-        sellerName: seller.sellerName || user.displayName || 'Dukani',
-        sellerPhone: seller.phone || '',
-        rating: 0,
-        reviewCount: 0,
-        soldCount: 0,
-        isActive: true,
-        isFeatured: false,
-        featuredUntil: null,
-        sellerKycApproved: !!seller.kyc,
-        barcode: null,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      const created = await apiPost('/api/v1/products', body);
+      const pid = created && created.data && created.data.id;
+      if (!pid) throw new Error('Create product returned no id');
+      await apiPost('/api/v1/products/' + encodeURIComponent(pid) + '/publish');
     }
     toast('✔ ' + t('save_product'));
     renderSellerPage('products');
-  } catch (e) { toast(errMsg(e)); }
+    return;
+  } catch (apiErr) {
+    // Deeper problem — stay out of the buyer's way but survive: the API owns
+    // the listing; only fall back to a Firestore doc when the API is truly down.
+    try {
+      if (id) {
+        await DB.collection('products').doc(id).update(base);
+      } else {
+        let seller = {};
+        try { const snap = await DB.collection('users').doc(user.uid).get(); if (snap.exists) seller = snap.data(); } catch (_) {}
+        await DB.collection('products').add({
+          ...base,
+          sellerId: user.uid,
+          sellerName: seller.sellerName || user.displayName || 'Dukani',
+          sellerPhone: seller.phone || '',
+          rating: 0,
+          reviewCount: 0,
+          soldCount: 0,
+          isActive: true,
+          isFeatured: false,
+          featuredUntil: null,
+          sellerKycApproved: !!seller.kyc,
+          barcode: null,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e2) { toast(errMsg(apiErr)); return; }
+    toast('✔ ' + t('save_product'));
+    renderSellerPage('products');
+  }
 }
 
 /* ---------- Router + actions ---------- */
@@ -2138,10 +2241,16 @@ const ACTIONS = {
     if (!user) return;
     let seller = {};
     try { const snap = await DB.collection('users').doc(user.uid).get(); if (snap.exists) seller = snap.data(); } catch (_) {}
+    const storeName = seller.sellerName || user.displayName || 'Dukani';
+    try {
+      // Ensure a Postgres SellerProfile exists (product writes require one); the
+      // Firestore users doc stays as the legacy presentation flag.
+      await apiPost('/api/v1/seller/profile', { storeName: storeName });
+    } catch (_) { /* profile may already exist / API cold — Firestore flag below still records intent */ }
     try {
       await DB.collection('users').doc(user.uid).set({
         isSeller: true,
-        sellerName: seller.name || user.displayName || 'Dukani',
+        sellerName: storeName,
         phone: seller.phone || user.phoneNumber || '',
       }, { merge: true });
       toast('✔ ' + t('seller_you'));
@@ -2154,22 +2263,36 @@ const ACTIONS = {
   prodsave: () => saveSellerProduct(),
   prodpub: async (el) => {
     const id = decodeURIComponent(el.dataset.p || '');
+    const p = productCache[id] || await getProduct(id);
+    const isActive = p ? p.isActive !== false : true;
     try {
-      const soon = await DB.collection('products').doc(id).get().catch(() => null);
-      const isActive = soon ? soon.data().isActive !== false : true;
-      await DB.collection('products').doc(id).update({ isActive: !isActive });
+      await apiPost('/api/v1/products/' + encodeURIComponent(id) + '/' + (isActive ? 'unpublish' : 'publish'));
       toast('✔ ' + t(isActive ? 'unpublish' : 'publish'));
       renderSellerPage('products');
-    } catch (err) { toast(errMsg(err)); }
+    } catch (err) {
+      try {
+        const soon = await DB.collection('products').doc(id).get().catch(() => null);
+        const cur = soon ? soon.data().isActive !== false : true;
+        await DB.collection('products').doc(id).update({ isActive: !cur });
+        toast('✔ ' + t(cur ? 'unpublish' : 'publish'));
+        renderSellerPage('products');
+      } catch (e2) { toast(errMsg(err)); }
+    }
   },
   proddel: async (el) => {
     const id = decodeURIComponent(el.dataset.p || '');
     if (!window.confirm(t('del_confirm'))) return;
     try {
-      await DB.collection('products').doc(id).delete();
+      await apiDelete('/api/v1/products/' + encodeURIComponent(id));
       toast('✔ ' + t('delete_product'));
       renderSellerPage('products');
-    } catch (err) { toast(errMsg(err)); }
+    } catch (err) {
+      try {
+        await DB.collection('products').doc(id).delete();
+        toast('✔ ' + t('delete_product'));
+        renderSellerPage('products');
+      } catch (e2) { toast(errMsg(err)); }
+    }
   },
   postreview: async (el) => {
     const pid = decodeURIComponent(el.dataset.p || '');
