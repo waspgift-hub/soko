@@ -185,19 +185,21 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 ## 6. Next (Phase B) candidates, in dependency order
 
 1. Products catalog bridge: Firestore → Postgres backfill + client switch.
-   DONE (catalog + discovery + media + featured + categories). `scripts/
-   migrate-products.js` idempotently mirrors Firestore `products` (7/7 in prod),
-   backfills Cloudinary media into `ProductMedia` (21 rows), enriches snapshots
-   with `category`/`subcategory`, and links orphaned categories via legacy name
-   aliases (Automotive→Vehicles, etc.). Client bridge (`ProductApiClient` +
-   `ProductRepository` + `kUseProductsApi`) serves the home feed, discovery
-   (realtime stream off in API mode), category pages, and the featured carousel
-   (`getFeaturedProducts`) from `/api/v1/products`; `kUseCategoriesApi` serves
-   the category grid from `/api/v1/products/categories`. `Product.fromApi`
-   handles absolute media URLs + Firestore-timestamp snapshots; list items carry
-   the full snapshot for legacy metadata. R2 re-hosting stays Phase F. Remaining
-   Firestore reads (unbridged, non-path surfaces): my-ads, seller products,
-   wishlist rehydrate, product-search assistant.
+   DONE (full read-path bridge). `scripts/migrate-products.js` idempotently
+   mirrors Firestore `products` (7/7 in prod), backfills Cloudinary media into
+   `ProductMedia` (21 rows), enriches snapshots (category/subcategory, legacyId
+   = Firestore doc id, sellerId = legacy Firebase UID), and links orphaned
+   categories via legacy aliases. The v1 catalog `/api/v1/products` serves every
+   product surface behind `kUseProductsApi`/`kUseCategoriesApi`/`kUseSearchApi`:
+   home feed, discovery, featured carousel, category grid + pages, my-ads
+   (`/products/seller`, drafts included), public seller shop (`sellerId` =
+   profile id, Postgres user id, or Firebase UID), wishlist/recently-viewed
+   rehydrate (batch `ids` resolving uuid, slug, or legacyId), product detail,
+   global + AI-assistant search. `Product.fromApi` handles absolute media URLs,
+   Firestore-timestamp snapshots, and the full-snapshot list DTO. Remaining
+   Firestore reads (off-path): brand-filter page (`getProductsByBrand`),
+   flash-sale/combo discovery; writes, delete, and moderation stay legacy →
+   Postgres during the write-path milestone.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
