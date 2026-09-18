@@ -55,16 +55,30 @@ describe('buildListWhere', () => {
     assert.equal(where.sellerId, 'seller-1');
   });
 
-  it('matches a batch of ids by uuid, slug, and legacy Firestore id', () => {
-    const where = buildListWhere({ ids: ['uuid-1', 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] });
+  it('matches a batch of ids typed as uuid, slug, and legacy Firestore id', () => {
+    const uuid = '27087889-9319-4ddf-ae3a-32936d3e2595';
+    const where = buildListWhere({ ids: [uuid, 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] });
     assert.deepEqual(where.AND, [
       {
         OR: [
-          { id: { in: ['uuid-1', 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] } },
-          { slug: { in: ['uuid-1', 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] } },
-          { snapshot: { path: ['legacyId'], equals: 'uuid-1' } },
+          { id: { in: [uuid] } },
+          { slug: { in: ['bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] } },
+          { snapshot: { path: ['legacyId'], equals: uuid } },
           { snapshot: { path: ['legacyId'], equals: 'bmw-m4-9249db' } },
           { snapshot: { path: ['legacyId'], equals: 'QoiW3T1zhXS1HCsvHmYv' } },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps the slug/legacy branch even when every id is a uuid', () => {
+    const uuid = '27087889-9319-4ddf-ae3a-32936d3e2595';
+    const where = buildListWhere({ ids: [uuid] });
+    assert.deepEqual(where.AND, [
+      {
+        OR: [
+          { id: { in: [uuid] } },
+          { snapshot: { path: ['legacyId'], equals: uuid } },
         ],
       },
     ]);

@@ -17,6 +17,8 @@ function slugify(title) {
   return `${base}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const PUBLIC_SELECT = {
   id: true,
   title: true,
@@ -58,15 +60,19 @@ function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, 
   }
   // Batch by external id: the app hands back opaque legacy Firestore ids
   // (wishlist, recently-viewed) that map to neither the Postgres uuid nor the
-  // slug, so match both plus the snapshot legacyId captured at migration time.
+  // slug, so match each form. uuid-shaped ids go against the id column; the
+  // rest can only be slugs or legacy ids — Postgres rejects uuid-column
+  // comparisons with mixed-shaped strings, so the sets stay typed.
   if (ids && ids.length) {
-    filters.push({
-      OR: [
-        { id: { in: ids } },
-        { slug: { in: ids } },
-        ...ids.map((id) => ({ snapshot: { path: ['legacyId'], equals: id } })),
-      ],
-    });
+    const uuids = ids.filter((id) => UUID_RE.test(id));
+    const others = ids.filter((id) => !UUID_RE.test(id));
+    const orParts = [];
+    if (uuids.length) orParts.push({ id: { in: uuids } });
+    if (others.length) orParts.push({ slug: { in: others } });
+    for (const id of ids) {
+      orParts.push({ snapshot: { path: ['legacyId'], equals: id } });
+    }
+    filters.push({ OR: orParts });
   }
   // The legacy boost/feature/subcategory signals live in snapshot JSON during
   // the migration window; filter them with JSON path probes so the featured
@@ -80,13 +86,17 @@ function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, 
 
 // Public seller lookup accepts the Postgres SellerProfile id, the Postgres
 // User id, or the legacy Firebase UID (Product.sellerId in the App still
-// carries the UID via snapshot) so the seller shop resolves every form.
+// carries the UID via snapshot) so the seller shop resolves every form. The
+// uuid-backed branches are only attempted for uuid-shaped inputs — a Firebase
+// UID against a uuid column would fail Postgres' cast before any row matched.
 async function resolveSellerProfile(idOrUid) {
   const prisma = getPrisma();
+  const branches = [{ user: { firebaseUid: idOrUid } }];
+  if (UUID_RE.test(idOrUid)) {
+    branches.push({ id: idOrUid }, { userId: idOrUid });
+  }
   return prisma.sellerProfile.findFirst({
-    where: {
-      OR: [{ id: idOrUid }, { userId: idOrUid }, { user: { firebaseUid: idOrUid } }],
-    },
+    where: { OR: branches },
     select: { id: true },
   });
 }
@@ -186,9 +196,10 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
   let sellerProfileId;
   if (sellerId) {
     const profile = await resolveSellerProfile(sellerId);
-    // No seller row means no products: a sentinel id keeps the count at zero
-    // instead of widening the query to the whole catalog.
-    sellerProfileId = profile?.id || '__no_seller__';
+    // No seller row means no products: a sentinel uuid keeps the count at zero
+    // instead of widening the query to the whole catalog (and the column needs
+    // uuid-shaped values or Postgres rejects the comparison).
+    sellerProfileId = profile?.id || '00000000-0000-0000-0000-000000000000';
   }
   const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerProfileId, ids });
   const [items, total] = await Promise.all([
