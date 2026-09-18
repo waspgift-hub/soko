@@ -199,10 +199,18 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    Firestore-timestamp snapshots, and the full-snapshot list DTO. Brand pages
    (`brand=` snapshot path probe, same exact-match semantics as the legacy
    Firestore filter) and the category-page repository (name → categoryId, not
-   a text search) also read from Postgres. Remaining Firestore reads (off-path):
-   flash-sale/combo discovery (FlashSale objects are a client-owned collection;
-   their products resolve via the API detail path); writes, delete, and
-   moderation stay legacy → Postgres during the write-path milestone.
+   a text search) also read from Postgres. Seller writes are bridged too: the
+   add/edit/publish/unpublish/delete flows hit `/api/v1/products` first
+   (create persists the full Firestore-shape legacy metadata into snapshot —
+   images, video, wholesale tiers, variants, attributes, brand, condition,
+   location, barcode — then publish; edits merge into snapshot; delete is a
+   soft delete) with a Firestore rescue fallback and an API-aware duplicate
+   gate. `Product.fromApi` round-trips the seller-hub fields from snapshot.
+   Remaining Firestore (off-path): flash-sale/combo discovery (FlashSale
+   objects are a client-owned collection; their products resolve via the API
+   detail path) and the client-owned consumers that still key off a Firestore
+   products doc by opaque id for products created during the window
+   (reviews/comments/boosts/counters) — those mirror writes are future work.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
