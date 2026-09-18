@@ -217,6 +217,28 @@ soft delete) with a Firestore rescue fallback and an API-aware duplicate
     Remaining Firestore (off-path): flash-sale/combo discovery (FlashSale
     objects are a client-owned collection; their products resolve via the API
     detail path).
+2. Web Shop (`server/shop` SPA) public read path → `/api/v1` (Phase C1): DONE.
+   The shop browser surfaces now read Postgres first with Firestore degraded
+   fallback (no blank pages on API latency): home feed/pagination via
+   `GET /api/v1/products?page=&limit=24`, product detail + cache via
+   `GET /api/v1/products/:idOrSlug`, reviews via
+   `GET /api/v1/reviews/product/{snapshot.legacyId || id}` (opaque legacy
+   bucket for migrated products), public storefront (`#/store/:uid`) via
+   `GET /api/v1/products?sellerId=` with store age derived from the seller's
+   earliest product (no more `users/{uid}` read) and trust passport by the
+   seller profile id from the API `seller` block. `svProduct(raw)` in app.js
+   maps the API DTO to the flat shop shape (media r2Key → absolute URLs via
+   `https://media.soko-vibe.co.tz`, boostedUntil `_seconds` timestamps, seller
+   block → sellerId/sellerPhone/sellerProfileId). Review POSTs route through
+   `POST /api/v1/reviews` (server recomputes the product rating; Firestore
+   write retained as rescue fallback only). Server side: `serializeProduct`
+   exposes `seller.sellerId` (Firebase UID) + `seller.sellerPhone` in the list
+   and detail DTOs (was missing — broke store links + review gating for
+   v1-created listings). Spec: `server/shop/spec/adapter-smoke.js` (extracts +
+   exercises the adapter block: seller flattening, R2 prefixing, legacy timestamps,
+   reviews-by-legacyId). Remaining shop Firestore (Phase C2+): seller hub CRUD
+   (parity.js product add/edit/publish/delete), orders checks, flash-sale create,
+   chat, notifications prefs — post-milestone candidates.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
