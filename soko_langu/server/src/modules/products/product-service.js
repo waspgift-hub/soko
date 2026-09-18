@@ -104,7 +104,10 @@ async function resolveSellerProfile(idOrUid) {
 
 async function requireSellerProfile(userId) {
   const prisma = getPrisma();
-  const profile = await prisma.sellerProfile.findUnique({ where: { userId } });
+  const profile = await prisma.sellerProfile.findUnique({
+    where: { userId },
+    select: { id: true, storeName: true },
+  });
   if (!profile) throw httpError(404, 'SELLER_PROFILE_NOT_FOUND');
   return profile;
 }

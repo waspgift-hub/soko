@@ -3,6 +3,7 @@ const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require(
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./product-service');
+const { mirrorProduct, mirrorProductDelete } = require('./product-mirror');
 const { getReadPrisma } = require('../../config/database');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const cache = require('../../../cache');
@@ -77,6 +78,12 @@ const productPatch = z.object({
   shippingRequired: z.boolean().optional(),
   ...legacyFields,
 });
+
+// Every mutation echoes the Postgres row into the legacy Firestore products
+// doc so boosts/comments/deep-link reads keying off {uuid} keep working.
+function sellerContext(profile, req) {
+  return { sellerFirebaseUid: req.user?.firebaseUid || null, sellerName: profile?.storeName || null };
+}
 
 function serviceError(res, e) {
   return res.status(e.status || 500).json({ error: e.message || 'Product operation failed' });
@@ -194,6 +201,7 @@ router.post(
         data: req.body,
       });
       invalidateProductCache(product);
+      await mirrorProduct(product, sellerContext(profile, req));
       await writeAudit({
         ...auditFromReq(req),
         action: 'product.create',
@@ -222,6 +230,7 @@ router.put(
         data: req.body,
       });
       invalidateProductCache(product);
+      await mirrorProduct(product, sellerContext(profile, req));
       res.json({ success: true, data: product });
     } catch (e) {
       serviceError(res, e);
@@ -239,6 +248,7 @@ router.post('/:id/publish', authenticate, requireActive, async (req, res) => {
       status: 'published',
     });
     invalidateProductCache(product);
+    await mirrorProduct(product, sellerContext(profile, req));
     await writeAudit({
       ...auditFromReq(req),
       action: 'product.publish',
@@ -260,6 +270,7 @@ router.post('/:id/unpublish', authenticate, requireActive, async (req, res) => {
       status: 'draft',
     });
     invalidateProductCache(product);
+    await mirrorProduct(product, sellerContext(profile, req));
     res.json({ success: true, data: product });
   } catch (e) {
     serviceError(res, e);
@@ -313,6 +324,7 @@ router.delete('/:id', authenticate, requireActive, async (req, res) => {
     const profile = await service.requireSellerProfile(req.user.id);
     const product = await service.softDelete({ id: req.params.id, sellerProfileId: profile.id });
     invalidateProductCache(product);
+    await mirrorProductDelete(req.params.id);
     await writeAudit({
       ...auditFromReq(req),
       action: 'product.delete',
@@ -340,6 +352,9 @@ router.put(
     try {
       const product = await service.moderate({ id: req.params.id, status: req.body.status });
       invalidateProductCache(product);
+      // Admin moderation has no seller context; the mirror falls back to the
+      // snapshot's stored seller fields (buildMirrorDoc handles empty ctx).
+      await mirrorProduct(product, {});
       await writeAudit({
         ...auditFromReq(req),
         action: 'product.moderate',
