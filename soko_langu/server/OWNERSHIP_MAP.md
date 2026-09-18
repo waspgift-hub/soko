@@ -196,10 +196,13 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    profile id, Postgres user id, or Firebase UID), wishlist/recently-viewed
    rehydrate (batch `ids` resolving uuid, slug, or legacyId), product detail,
    global + AI-assistant search. `Product.fromApi` handles absolute media URLs,
-   Firestore-timestamp snapshots, and the full-snapshot list DTO. Remaining
-   Firestore reads (off-path): brand-filter page (`getProductsByBrand`),
-   flash-sale/combo discovery; writes, delete, and moderation stay legacy →
-   Postgres during the write-path milestone.
+   Firestore-timestamp snapshots, and the full-snapshot list DTO. Brand pages
+   (`brand=` snapshot path probe, same exact-match semantics as the legacy
+   Firestore filter) and the category-page repository (name → categoryId, not
+   a text search) also read from Postgres. Remaining Firestore reads (off-path):
+   flash-sale/combo discovery (FlashSale objects are a client-owned collection;
+   their products resolve via the API detail path); writes, delete, and
+   moderation stay legacy → Postgres during the write-path milestone.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
