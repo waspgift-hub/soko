@@ -18,9 +18,13 @@ import '../utils/network_error.dart';
 /// number (server serializes BigInt→Number).
 class ProductApiClient {
   final http.Client _http;
+  final Future<String> Function()? _authToken;
 
-  ProductApiClient({http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+  ProductApiClient({
+    http.Client? httpClient,
+    Future<String> Function()? authToken,
+  }) : _http = httpClient ?? http.Client(),
+       _authToken = authToken;
 
   /// {success, data, pagination}
   Future<({List<Product> items, int page, int limit, int total})>
@@ -297,5 +301,200 @@ class ProductApiClient {
       limit: limit,
     );
     return res.items;
+  }
+
+  /// Like [fetchProductsByCategoryName] but returns the resolved uuid, or null
+  /// when the name is unknown to the Postgres category tree.
+  Future<String?> resolveCategoryId(String categoryName) async {
+    await fetchCategories();
+    return _categoryIdByName?[categoryName.trim().toLowerCase()];
+  }
+
+  /// Forward the Firebase UID to the seller hub so fraud/analytics keep the
+  /// legacy consumer's identity. Injectable for tests that run without a real
+  /// Firebase app.
+  Future<String> _token() async {
+    final provider = _authToken;
+    if (provider != null) return provider();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw NetworkError(
+        message: 'Not authenticated',
+        userMessage: 'Please log in to continue.',
+      );
+    }
+    final token = await user.getIdToken();
+    if (token == null || token.isEmpty) {
+      throw NetworkError(
+        message: 'Not authenticated',
+        userMessage: 'Please log in to continue.',
+      );
+    }
+    return token;
+  }
+
+  Future<Map<String, dynamic>> _authorizedJson(
+    String method,
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final token = await _token();
+    final uri = Uri.parse(ApiConfig.v1(path));
+    try {
+      final request = http.Request(method, uri);
+      request.headers['Accept'] = 'application/json';
+      request.headers['Authorization'] = 'Bearer $token';
+      if (body.isNotEmpty) {
+        request.headers['Content-Type'] = 'application/json';
+        request.body = jsonEncode(body);
+      }
+      final res = await http.Response.fromStream(
+        await _http.send(request).timeout(const Duration(seconds: 25)),
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        String? serverMessage;
+        try {
+          final errBody = jsonDecode(utf8.decode(res.bodyBytes));
+          if (errBody is Map<String, dynamic>) {
+            serverMessage = errBody['error']?.toString();
+          }
+        } catch (_) {}
+        throw NetworkError(
+          message: '$path failed: ${res.statusCode} ${serverMessage ?? ''}',
+          userMessage: serverMessage ?? ErrorKeys.poorNetwork,
+          originalError: Exception('HTTP ${res.statusCode}'),
+        );
+      }
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      return decoded is Map<String, dynamic> ? decoded : const {};
+    } on NetworkError {
+      rethrow;
+    } catch (e) {
+      throw NetworkError(
+        message: '$path error: $e',
+        userMessage: ErrorKeys.poorNetwork,
+        originalError: e,
+      );
+    }
+  }
+
+  /// Creates a published-worthy draft (status `draft`) carrying the full
+  /// Firestore-shape legacy metadata in its snapshot, then returns the new
+  /// Postgres product id (uuid). Callers [publishProduct] after attaching
+  /// media-bearing fields, matching the legacy `isActive: true` write.
+  Future<String> createProduct({
+    required String name,
+    required String description,
+    required double price,
+    required int stock,
+    String? category,
+    String? categoryId,
+    required String subcategory,
+    List<String> images = const [],
+    List<Map<String, dynamic>>? imageMetadata,
+    String? videoUrl,
+    bool isWholesale = false,
+    List<Map<String, dynamic>>? wholesaleTiers,
+    List<Map<String, dynamic>>? variants,
+    Map<String, dynamic>? attributes,
+    String? brand,
+    String condition = 'new',
+    String location = 'Tanzania',
+    String district = '',
+    String? barcode,
+    List<String>? searchKeywords,
+  }) async {
+    final body = <String, dynamic>{
+      'title': name,
+      'description': description,
+      'price': price.round(),
+      'stock': stock,
+      'categoryId': ?categoryId,
+      'category': category,
+      'subcategory': subcategory,
+      'images': images,
+      'imageMetadata': imageMetadata ?? const [],
+      'videoUrl': videoUrl,
+      'isWholesale': isWholesale,
+      'wholesaleTiers': wholesaleTiers ?? const [],
+      'variants': variants ?? const [],
+      'attributes': attributes ?? const {},
+      'brand': brand,
+      'condition': condition,
+      'location': location,
+      'district': district,
+      'barcode': barcode,
+      'searchKeywords': searchKeywords ?? const [],
+    };
+    final response = await _authorizedJson('POST', '/products', body);
+    final data = response['data'] is Map<String, dynamic>
+        ? response['data'] as Map<String, dynamic>
+        : null;
+    final id = data?['id']?.toString() ?? '';
+    if (id.isEmpty) {
+      throw NetworkError(
+        message: 'Create product returned no id',
+        userMessage: ErrorKeys.poorNetwork,
+      );
+    }
+    return id;
+  }
+
+  /// Patches a listing the seller owns. Only the keys present are merged; the
+  /// server folds the legacy metadata into the snapshot JSON.
+  Future<void> updateProduct(
+    String id, {
+    String? name,
+    String? description,
+    double? price,
+    String? category,
+    String? categoryId,
+    String? subcategory,
+    int? stock,
+    bool? isWholesale,
+    List<Map<String, dynamic>>? wholesaleTiers,
+    List<Map<String, dynamic>>? variants,
+    String? brand,
+    String? condition,
+    List<String>? images,
+    List<Map<String, dynamic>>? imageMetadata,
+    String? videoUrl,
+    String? location,
+    String? district,
+    String? barcode,
+    List<String>? searchKeywords,
+  }) async {
+    final body = <String, dynamic>{
+      'title': ?name,
+      'description': ?description,
+      'price': ?(price?.round()),
+      'categoryId': ?categoryId,
+      'category': ?category,
+      'subcategory': ?subcategory,
+      'stock': ?stock,
+      'isWholesale': ?isWholesale,
+      'wholesaleTiers': ?wholesaleTiers,
+      'variants': ?variants,
+      'brand': ?brand,
+      'condition': ?condition,
+      'images': ?images,
+      'imageMetadata': ?imageMetadata,
+      'videoUrl': ?videoUrl,
+      'location': ?location,
+      'district': ?district,
+      'barcode': ?barcode,
+      'searchKeywords': ?searchKeywords,
+    };
+    await _authorizedJson('PUT', '/products/$id', body);
+  }
+
+  /// Publishes a draft so it appears in the public feed (legacy `isActive`).
+  Future<void> publishProduct(String id) async {
+    await _authorizedJson('POST', '/products/$id/publish', const {});
+  }
+
+  /// Soft-deletes a listing the seller owns (legacy delete semantics).
+  Future<void> deleteProduct(String id) async {
+    await _authorizedJson('DELETE', '/products/$id', const {});
   }
 }

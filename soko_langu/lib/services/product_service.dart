@@ -161,6 +161,38 @@ class ProductService {
         sellerPhone = phone is String ? phone : '';
       }
 
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          await _addProductViaApi(
+            uid: user.uid,
+            name: name,
+            description: description,
+            price: price,
+            imageUrls: imageUrls,
+            category: category,
+            subcategory: subcategory,
+            stock: stock,
+            sellerName: sellerName,
+            isWholesale: isWholesale,
+            wholesaleTiers: wholesaleTiers,
+            variants: variants,
+            attributes: attributes,
+            brand: brand,
+            condition: condition,
+            location: location,
+            district: district,
+            barcode: barcode,
+            imageMetadata: imageMetadata,
+            videoUrl: resolvedVideoUrl,
+          );
+          return;
+        } catch (apiError) {
+          // Rescue path: a broken/partial API write falls back to the legacy
+          // Firestore listing so sellers are never stuck mid-submission.
+          debugPrint('addProduct API path failed, falling back: $apiError');
+        }
+      }
+
       await _writeProduct(
         user.uid, name, description, price, currency, imageUrls,
         category, subcategory, stock, sellerName, sellerPhone,
@@ -308,6 +340,191 @@ class ProductService {
       sellerProductCount: productCount.count ?? 0,
     );
     return docRef.id;
+  }
+
+  /// Postgres-first listing submission. Mirrors the Firestore `_writeProduct`
+  /// contract (duplicate gate, publish-visible, fraud filing) but against the
+  /// v1 API, so the seller hub writes Postgres-authoritative product rows.
+  /// A category name that the Postgres tree cannot map still submits (the
+  /// listing lands on the feed); the Firestore fallback covers flag-off mode.
+  Future<void> _addProductViaApi({
+    required String uid,
+    required String name,
+    required String description,
+    required double price,
+    required List<String> imageUrls,
+    required String category,
+    required String subcategory,
+    required int stock,
+    required String sellerName,
+    required bool isWholesale,
+    required List<Map<String, dynamic>>? wholesaleTiers,
+    required List<Map<String, dynamic>>? variants,
+    required Map<String, dynamic>? attributes,
+    required String? brand,
+    required String condition,
+    required String location,
+    required String district,
+    required String? barcode,
+    required List<Map<String, dynamic>>? imageMetadata,
+    required String? videoUrl,
+  }) async {
+    final apiDuplicate = await _findDuplicateListingApi(name, price, imageUrls);
+    if (apiDuplicate != null) {
+      await FraudPreventionService().reportDuplicateListing(
+        sellerId: uid,
+        sellerName: sellerName,
+        productName: name,
+        price: price,
+        existingId: apiDuplicate,
+      );
+      final lang = await LocalizationService().getLanguage();
+      throw NetworkError(
+        message: "Duplicate listing blocked: $name",
+        userMessage: LocalizationService.translate('duplicate_listing', lang),
+        originalError: Exception("Duplicate listing blocked"),
+      );
+    }
+
+    final categoryId = await _api.resolveCategoryId(category);
+    final id = await _api.createProduct(
+      name: name,
+      description: description,
+      price: price,
+      stock: stock,
+      category: category,
+      categoryId: categoryId,
+      subcategory: subcategory,
+      images: imageUrls,
+      imageMetadata: imageMetadata,
+      videoUrl: videoUrl,
+      isWholesale: isWholesale,
+      wholesaleTiers: wholesaleTiers,
+      variants: variants,
+      attributes: attributes,
+      brand: brand,
+      condition: condition,
+      location: location,
+      district: district,
+      barcode: barcode,
+      searchKeywords: _generateSearchKeywords(
+        name, description, category, brand, barcode,
+      ),
+    );
+    // The legacy add wrote isActive:true, so publish the draft the API created.
+    await _api.publishProduct(id);
+
+    final fraud = FraudPreventionService();
+    await fraud.checkNewSeller(uid, sellerName);
+    final productCount = (await _api.fetchMyProducts(limit: 100)).length;
+    await fraud.checkSuspiciousListing(
+      sellerId: uid,
+      sellerName: sellerName,
+      productId: id,
+      productName: name,
+      price: price,
+      sellerProductCount: productCount,
+    );
+  }
+
+  /// PostgreSql-aware cousin of [_findDuplicateListing]: the legacy check only
+  /// sees Firestore docs, so new v1 listings would slip past the duplicate
+  /// gate. Compares normalized name + price + shared image over the seller's
+  /// own API-owned products, best-effort (a failed fetch skips the gate, same
+  /// as the Firestore version).
+  Future<String?> _findDuplicateListingApi(
+    String name,
+    double price,
+    List<String> imageUrls,
+  ) async {
+    try {
+      if (name.trim().isEmpty || imageUrls.isEmpty) return null;
+      final normalized = _normalizeName(name);
+      final mine = await _api.fetchMyProducts(limit: 100);
+      for (final p in mine) {
+        if (_normalizeName(p.name) != normalized) continue;
+        if (p.price != price) continue;
+        if (p.images.isEmpty) continue;
+        if (!p.images.any(imageUrls.contains)) continue;
+        return p.id;
+      }
+    } catch (e) {
+      debugPrint('API duplicate check skipped: $e');
+    }
+    return null;
+  }
+
+  /// Postgres-first edit. Rebuilds search keywords from the post-edit values
+  /// (mirroring the Firestore update), resolves the category name to a uuid,
+  /// and replaces the snapshot images with the seller's chosen set.
+  Future<void> _updateProductViaApi({
+    required String productId,
+    String? name,
+    String? description,
+    double? price,
+    String? category,
+    String? subcategory,
+    int? stock,
+    bool? isWholesale,
+    List<Map<String, dynamic>>? wholesaleTiers,
+    List<Map<String, dynamic>>? variants,
+    String? brand,
+    String? condition,
+    List<String>? images,
+    List<Map<String, dynamic>>? imageMetadata,
+    String? videoUrl,
+    String? location,
+    String? district,
+    String? barcode,
+  }) async {
+    String? currentName;
+    String? currentDescription;
+    String? currentCategory;
+    String? currentBrand;
+    String? currentBarcode;
+    try {
+      final current = await _api.fetchProduct(productId);
+      currentName = current?.name;
+      currentDescription = current?.description;
+      currentCategory = current?.category;
+      currentBrand = current?.brand;
+      currentBarcode = current?.barcode;
+    } catch (_) {
+      // fetchProduct can 404 for a deleted listing; keywords then rebuild from
+      // the new values alone.
+    }
+
+    final categoryId = category != null
+        ? await _api.resolveCategoryId(category)
+        : null;
+    await _api.updateProduct(
+      productId,
+      name: name,
+      description: description,
+      price: price,
+      category: category,
+      categoryId: categoryId,
+      subcategory: subcategory,
+      stock: stock,
+      isWholesale: isWholesale,
+      wholesaleTiers: wholesaleTiers,
+      variants: variants,
+      brand: brand,
+      condition: condition,
+      images: images,
+      imageMetadata: imageMetadata,
+      videoUrl: videoUrl,
+      location: location,
+      district: district,
+      barcode: barcode,
+      searchKeywords: _generateSearchKeywords(
+        name ?? currentName ?? '',
+        description ?? currentDescription ?? '',
+        category ?? currentCategory ?? '',
+        brand ?? currentBrand,
+        barcode ?? currentBarcode,
+      ),
+    );
   }
 
   /// Firestore paginated query — returns products and the last document cursor.
@@ -774,6 +991,36 @@ class ProductService {
         );
       }
 
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          await _updateProductViaApi(
+            productId: productId,
+            name: name,
+            description: description,
+            price: price,
+            category: category,
+            subcategory: subcategory,
+            stock: stock,
+            isWholesale: isWholesale,
+            wholesaleTiers: wholesaleTiers,
+            variants: variants,
+            brand: brand,
+            condition: condition,
+            images: data["images"] as List<String>?,
+            imageMetadata: data["imageMetadata"] as List<Map<String, dynamic>>?,
+            videoUrl: data["videoUrl"] as String?,
+            location: location,
+            district: district,
+            barcode: barcode,
+          );
+          return;
+        } catch (apiError) {
+          // Rescue path: fall back to the Firestore doc update the app has
+          // always used so an edit is never lost to an API hiccup.
+          debugPrint('updateProduct API path failed, falling back: $apiError');
+        }
+      }
+
       await _db.collection("products").doc(productId).update(data);
     } catch (e) {
       throw NetworkError(
@@ -788,6 +1035,16 @@ class ProductService {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not authenticated');
+
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          await _api.deleteProduct(productId);
+          return;
+        } catch (apiError) {
+          // Rescue path: fall back to the legacy v0 HTTP delete.
+          debugPrint('deleteProduct API path failed, falling back: $apiError');
+        }
+      }
 
       final token = await user.getIdToken();
       final response = await http.delete(

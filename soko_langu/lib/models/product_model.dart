@@ -258,6 +258,23 @@ final String unit;
           snapshot['condition']?.toString() ??
           'new',
       sellerKycApproved: snapshot['sellerKycApproved'] ?? false,
+      isWholesale: snapshot['isWholesale'] ?? false,
+      wholesaleTiers: [
+        for (final t in (snapshot['wholesaleTiers'] as List? ?? const []))
+          if (t is Map<String, dynamic>) WholesaleTier.fromMap(t),
+      ],
+      variants: [
+        for (final v in (snapshot['variants'] as List? ?? const []))
+          if (v is Map<String, dynamic>)
+            ProductVariant.fromMap(v, v['id']?.toString() ?? ''),
+      ],
+      attributes: snapshot['attributes'] is Map<String, dynamic>
+          ? snapshot['attributes'] as Map<String, dynamic>
+          : const {},
+      imageMetadata: (snapshot['imageMetadata'] as List?)
+          ?.map((e) => Map<String, dynamic>.from(e))
+          .toList(),
+      barcode: snapshot['barcode']?.toString(),
     );
   }
 

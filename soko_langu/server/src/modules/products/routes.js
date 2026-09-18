@@ -9,6 +9,49 @@ const cache = require('../../../cache');
 
 const router = Router();
 
+// Legacy catalog metadata the seller hub sends alongside every listing (the
+// add/edit screens store it on Firestore docs today). These live in snapshot
+// JSON until their Postgres columns land, so new v1 listings round-trip the
+// exact shape the app reads.
+const legacyFields = {
+  category: z.string().max(80).optional(),
+  subcategory: z.string().max(80).optional(),
+  brand: z.string().max(80).optional(),
+  location: z.string().max(120).optional(),
+  district: z.string().max(120).optional(),
+  barcode: z.string().max(100).nullable().optional(),
+  isWholesale: z.boolean().optional(),
+  wholesaleTiers: z
+    .array(
+      z.object({
+        minQuantity: z.coerce.number().int().min(1),
+        pricePerUnit: z.number().min(0),
+      })
+    )
+    .max(10)
+    .optional(),
+  variants: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(80),
+        value: z.string().min(1).max(80),
+        priceAdjustment: z.number().optional(),
+        stock: z.coerce.number().int().min(0),
+      })
+    )
+    .max(20)
+    .optional(),
+  attributes: z.record(z.any()).optional(),
+  images: z.array(z.string().min(1).max(500)).max(12).optional(),
+  imageMetadata: z.array(z.record(z.any())).max(12).optional(),
+  videoUrl: z.string().max(500).nullable().optional(),
+  searchKeywords: z.array(z.string().min(1).max(60)).max(60).optional(),
+};
+
+// Condition accepts the app's literal values ('used' included) plus the v1
+// vocabulary; the column is a free VarChar so nothing constrains it.
+const CONDITION_ENUM = ['new', 'used', 'refurbished', 'used_like_new', 'used_good', 'used_fair'];
+
 const productBody = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(5000).optional(),
@@ -16,21 +59,23 @@ const productBody = z.object({
   price: z.number().int().positive(),
   originalPrice: z.number().int().positive().optional(),
   stock: z.number().int().min(0).default(0),
-  condition: z.enum(['new', 'used_like_new', 'used_good', 'used_fair', 'refurbished']).default('new'),
+  condition: z.enum(CONDITION_ENUM).default('new'),
   weightGrams: z.number().int().positive().optional(),
   shippingRequired: z.boolean().default(true),
+  ...legacyFields,
 });
 
 const productPatch = z.object({
   title: z.string().min(3).max(200).optional(),
   description: z.string().max(5000).optional(),
-  categoryId: z.string().uuid().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
   price: z.number().int().positive().optional(),
   originalPrice: z.number().int().positive().nullable().optional(),
   stock: z.number().int().min(0).optional(),
-  condition: z.enum(['new', 'used_like_new', 'used_good', 'used_fair', 'refurbished']).optional(),
+  condition: z.enum(CONDITION_ENUM).optional(),
   weightGrams: z.number().int().positive().nullable().optional(),
   shippingRequired: z.boolean().optional(),
+  ...legacyFields,
 });
 
 function serviceError(res, e) {

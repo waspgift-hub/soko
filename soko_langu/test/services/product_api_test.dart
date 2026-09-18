@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:soko_vibe/models/product_model.dart';
 import 'package:soko_vibe/services/product_api.dart';
+import 'package:soko_vibe/utils/network_error.dart';
 
 void main() {
   group('Product.fromApi', () {
@@ -84,6 +85,38 @@ void main() {
       expect(p.viewCount, 50);
       expect(p.isBoosted, true);
       expect(p.boostTier, 'gold');
+    });
+
+    test('reads the seller-hub legacy metadata from snapshot', () {
+      final p = Product.fromApi({
+        'id': 'uuid-1',
+        'title': 'T-shirt',
+        'price': 15000,
+        'createdAt': '2026-09-01T00:00:00Z',
+        'media': [],
+        'snapshot': {
+          'isWholesale': true,
+          'wholesaleTiers': [
+            {'minQuantity': 10, 'pricePerUnit': 12000},
+          ],
+          'variants': [
+            {'id': 'v1', 'name': 'Color', 'value': 'Black', 'stock': 4},
+          ],
+          'attributes': {'material': 'cotton'},
+          'barcode': '699999222222',
+          'imageMetadata': [
+            {'url': 'https://res.cloudinary.com/x/a.jpg', 'width': 800},
+          ],
+        },
+      });
+      expect(p.isWholesale, true);
+      expect(p.wholesaleTiers.single.minQuantity, 10);
+      expect(p.wholesaleTiers.single.pricePerUnit, 12000);
+      expect(p.variants.single.name, 'Color');
+      expect(p.variants.single.stock, 4);
+      expect(p.attributes['material'], 'cotton');
+      expect(p.barcode, '699999222222');
+      expect(p.imageMetadata!.single['width'], 800);
     });
 
     test('passes absolute media URLs through untouched (migrated catalog)', () {
@@ -504,6 +537,127 @@ void main() {
       expect(p.rating, 4.8);
       expect(p.soldCount, 12);
       expect(p.viewCount, 300);
+    });
+
+    test('createProduct posts the full legacy body with a Bearer token', () async {
+      http.Request? capturedRequest;
+      Map<String, dynamic>? capturedBody;
+      final client = ProductApiClient(
+        authToken: () async => 'seller-token',
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {'id': 'new-uuid-1'},
+          }), 201, headers: {'content-type': 'application/json'});
+        }),
+      );
+      final id = await client.createProduct(
+        name: 'Wireless Speaker',
+        description: 'Bluetooth',
+        price: 45000,
+        stock: 3,
+        category: 'Electronics',
+        categoryId: 'cat-e',
+        subcategory: 'Audio',
+        images: ['https://res.cloudinary.com/x/spk.jpg'],
+        imageMetadata: [
+          {'url': 'https://res.cloudinary.com/x/spk.jpg'},
+        ],
+        videoUrl: 'https://res.cloudinary.com/x/v.mp4',
+        isWholesale: true,
+        wholesaleTiers: [
+          {'minQuantity': 5, 'pricePerUnit': 40000},
+        ],
+        variants: [
+          {'id': 'v1', 'name': 'Color', 'value': 'Black', 'stock': 1, 'priceAdjustment': 0},
+        ],
+        attributes: {'battery': '10h'},
+        brand: 'SoundPeats',
+        condition: 'new',
+        location: 'Tanzania',
+        district: 'Kinondoni',
+        barcode: '690-1010',
+        searchKeywords: ['wireless', 'speaker'],
+      );
+      expect(id, 'new-uuid-1');
+      expect(capturedRequest!.method, 'POST');
+      expect(capturedRequest!.url.path, '/api/v1/products');
+      expect(capturedRequest!.headers['Authorization'], 'Bearer seller-token');
+      expect(capturedBody!['title'], 'Wireless Speaker');
+      expect(capturedBody!['categoryId'], 'cat-e');
+      expect(capturedBody!['images'], hasLength(1));
+      expect(capturedBody!['wholesaleTiers'], hasLength(1));
+      expect(capturedBody!['variants'], hasLength(1));
+      expect(capturedBody!['isWholesale'], true);
+      expect(capturedBody!['searchKeywords'], hasLength(2));
+      expect(capturedBody!['condition'], 'new');
+    });
+
+    test('updateProduct PUTs only the patched keys with auth', () async {
+      http.Request? capturedRequest;
+      Map<String, dynamic>? capturedBody;
+      final client = ProductApiClient(
+        authToken: () async => 'seller-token',
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {'id': 'new-uuid-1'},
+          }), 200, headers: {'content-type': 'application/json'});
+        }),
+      );
+      await client.updateProduct(
+        'new-uuid-1',
+        price: 50000,
+        images: ['https://res.cloudinary.com/x/new.jpg'],
+        condition: 'used',
+      );
+      expect(capturedRequest!.method, 'PUT');
+      expect(capturedRequest!.url.path, '/api/v1/products/new-uuid-1');
+      expect(capturedRequest!.headers['Authorization'], 'Bearer seller-token');
+      expect(capturedBody!.keys.toSet(), {'price', 'images', 'condition'});
+      expect(capturedBody!['price'], 50000);
+      expect(capturedBody!['condition'], 'used');
+    });
+
+    test('publishProduct and deleteProduct hit the v1 endpoints', () async {
+      final calls = <String>[];
+      final client = ProductApiClient(
+        authToken: () async => 'seller-token',
+        httpClient: MockClient((request) async {
+          calls.add('${request.method} ${request.url.path}');
+          return http.Response(jsonEncode({'success': true, 'data': {}}), 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      await client.publishProduct('new-uuid-1');
+      expect(calls.last, 'POST /api/v1/products/new-uuid-1/publish');
+
+      await client.deleteProduct('new-uuid-1');
+      expect(calls.last, 'DELETE /api/v1/products/new-uuid-1');
+    });
+
+    test('write methods surface server errors as NetworkError', () async {
+      final client = ProductApiClient(
+        authToken: () async => 'seller-token',
+        httpClient: MockClient((request) async {
+          return http.Response(jsonEncode({'error': 'PUBLISH_REQUIRES_TITLE_AND_PRICE'}), 400,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      await expectLater(
+        client.publishProduct('empty-draft'),
+        throwsA(
+          isA<NetworkError>().having(
+            (e) => e.userMessage,
+            'userMessage',
+            'PUBLISH_REQUIRES_TITLE_AND_PRICE',
+          ),
+        ),
+      );
     });
   });
 }

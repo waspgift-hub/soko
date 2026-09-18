@@ -109,6 +109,46 @@ async function requireSellerProfile(userId) {
   return profile;
 }
 
+async function categoryName(id) {
+  if (!id) return null;
+  const category = await getReadPrisma().category.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+  return category?.name ?? null;
+}
+
+// Legacy-only product fields that live in the JSON snapshot during the
+// migration window (Firestore parity shape). The seller hub writes them for
+// every listing so the app round-trips wholesale, variants, media and the
+// other catalog metadata it reads today from Firestore docs.
+const LEGACY_SNAPSHOT_KEYS = [
+  'category',
+  'subcategory',
+  'brand',
+  'location',
+  'district',
+  'barcode',
+  'isWholesale',
+  'wholesaleTiers',
+  'variants',
+  'attributes',
+  'images',
+  'imageMetadata',
+  'videoUrl',
+  'searchKeywords',
+];
+
+// Merges the caller-supplied legacy fields into the stored snapshot. Pure so
+// the write tests can cover it without a database.
+function applySnapshotPatch(base, data) {
+  const snapshot = { ...(base || {}) };
+  for (const key of LEGACY_SNAPSHOT_KEYS) {
+    if (data[key] !== undefined) snapshot[key] = data[key];
+  }
+  return snapshot;
+}
+
 async function createProduct({ sellerProfileId, data }) {
   const prisma = getPrisma();
   const snapshot = {
@@ -120,8 +160,31 @@ async function createProduct({ sellerProfileId, data }) {
     stock: data.stock ?? 0,
     condition: data.condition || 'new',
     categoryId: data.categoryId || null,
+    category: (await categoryName(data.categoryId)) || data.category || null,
+    // Firestore-shape metadata for new v1 listings, so detail/edit and the
+    // seller hub render exactly like a legacy Firestore product.
+    ...applySnapshotPatch(
+      {
+        subcategory: null,
+        location: null,
+        district: null,
+        isWholesale: false,
+        wholesaleTiers: [],
+        variants: [],
+        attributes: {},
+        images: [],
+        imageMetadata: [],
+        videoUrl: null,
+        searchKeywords: [],
+      },
+      data
+    ),
     weightGrams: data.weightGrams || null,
     shippingRequired: data.shippingRequired !== false,
+    rating: 0,
+    reviewCount: 0,
+    viewCount: 0,
+    soldCount: 0,
   };
   try {
     return await prisma.product.create({
@@ -158,7 +221,7 @@ async function getOwnedProduct({ id, sellerProfileId }) {
 
 async function updateProduct({ id, sellerProfileId, data }) {
   const prisma = getPrisma();
-  await getOwnedProduct({ id, sellerProfileId });
+  const owned = await getOwnedProduct({ id, sellerProfileId });
   const allowed = ['title', 'description', 'categoryId', 'price', 'originalPrice', 'stock', 'condition', 'weightGrams', 'shippingRequired'];
   const patch = {};
   for (const key of allowed) {
@@ -170,6 +233,15 @@ async function updateProduct({ id, sellerProfileId, data }) {
       }
     }
   }
+  const snapshot = applySnapshotPatch(owned.snapshot, data);
+  if (data.categoryId !== undefined && data.categoryId !== null) {
+    patch.categoryId = data.categoryId;
+    snapshot.category = (await categoryName(data.categoryId)) ?? snapshot.category;
+  }
+  for (const key of ['title', 'description', 'price', 'stock', 'condition']) {
+    if (data[key] !== undefined) snapshot[key] = data[key];
+  }
+  patch.snapshot = snapshot;
   return prisma.product.update({ where: { id }, data: patch });
 }
 
@@ -290,6 +362,7 @@ module.exports = {
   setStatus,
   softDelete,
   buildListWhere,
+  applySnapshotPatch,
   listProducts,
   listSellerProducts,
   getProduct,
