@@ -204,13 +204,19 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    (create persists the full Firestore-shape legacy metadata into snapshot —
    images, video, wholesale tiers, variants, attributes, brand, condition,
    location, barcode — then publish; edits merge into snapshot; delete is a
-   soft delete) with a Firestore rescue fallback and an API-aware duplicate
-   gate. `Product.fromApi` round-trips the seller-hub fields from snapshot.
-   Remaining Firestore (off-path): flash-sale/combo discovery (FlashSale
-   objects are a client-owned collection; their products resolve via the API
-   detail path) and the client-owned consumers that still key off a Firestore
-   products doc by opaque id for products created during the window
-   (reviews/comments/boosts/counters) — those mirror writes are future work.
+soft delete) with a Firestore rescue fallback and an API-aware duplicate
+    gate. `Product.fromApi` round-trips the seller-hub fields from snapshot.
+    Done (B/C): every v1-created listing now gets a Firestore presentation
+    mirror at `products/{uuid}` (same pattern as the orders mirror) so the
+    client-owned consumers that key off a Firestore products doc by opaque id
+    — reviews/comments/boosts/counters, admin moderation, seller analytics,
+    deep-link reads — work for new products too. `product-mirror.js` writes
+    the legacy shape (isActive from status, sellerId = the seller's Firebase
+    UID, full snapshot metadata) on create/publish/unpublish/update/moderate
+    and removes the doc on soft delete; guarded so it no-ops without creds.
+    Remaining Firestore (off-path): flash-sale/combo discovery (FlashSale
+    objects are a client-owned collection; their products resolve via the API
+    detail path).
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
    Done (B/C): Postgres truth → Firestore presentation mirror after every
    money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
