@@ -55,6 +55,20 @@ router.get(
     query: z.object({
       q: z.string().max(100).optional(),
       categoryId: z.string().uuid().optional(),
+      sellerId: z.string().min(1).max(128).optional(),
+      ids: z
+        .preprocess(
+          (v) => {
+            if (typeof v !== 'string') return undefined;
+            return v
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .slice(0, 50);
+          },
+          z.array(z.string().min(1).max(200)).max(50).optional()
+        )
+        .optional(),
       minPrice: z.coerce.number().int().min(0).optional(),
       maxPrice: z.coerce.number().int().min(0).optional(),
       boosted: z.enum(['1', 'true', '0', 'false']).transform((v) => v === '1' || v === 'true').optional(),

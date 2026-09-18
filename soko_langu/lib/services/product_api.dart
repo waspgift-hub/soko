@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/product_model.dart';
 import '../models/category_model.dart';
@@ -29,6 +30,8 @@ class ProductApiClient {
     String? query,
     String? categoryId,
     String? subcategory,
+    String? sellerId,
+    List<String>? ids,
     bool boosted = false,
     bool featured = false,
     int? minPrice,
@@ -42,6 +45,9 @@ class ProductApiClient {
         'categoryId': ?categoryId,
         if (subcategory != null && subcategory.trim().isNotEmpty)
           'subcategory': subcategory.trim(),
+        if (sellerId != null && sellerId.trim().isNotEmpty)
+          'sellerId': sellerId.trim(),
+        if (ids != null && ids.isNotEmpty) 'ids': ids.take(50).join(','),
         if (boosted) 'boosted': 'true',
         if (featured) 'featured': 'true',
         if (minPrice != null) 'minPrice': '$minPrice',
@@ -123,6 +129,68 @@ class ProductApiClient {
   Future<List<Product>> fetchFeatured({int limit = 20}) async {
     final res = await fetchProducts(boosted: true, limit: limit);
     return res.items;
+  }
+
+  /// The signed-in seller's own listings (drafts included). The endpoint
+  /// authenticates via the Firebase ID token, same as the wallet/order bridges.
+  Future<List<Product>> fetchMyProducts({int page = 1, int limit = 50}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const [];
+    final token = await user.getIdToken();
+    final uri = Uri.parse(
+      ApiConfig.v1('/products/seller'),
+    ).replace(queryParameters: {'page': '$page', 'limit': '$limit'});
+    try {
+      final res = await _http
+          .get(uri, headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          })
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) {
+        throw NetworkError(
+          message: 'My products fetch failed: ${res.statusCode}',
+          userMessage: ErrorKeys.poorNetwork,
+        );
+      }
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      final data = body is Map<String, dynamic> ? body['data'] : null;
+      if (data is! Map<String, dynamic>) return const [];
+      return _itemsFrom(data);
+    } on NetworkError {
+      rethrow;
+    } catch (e) {
+      throw NetworkError(
+        message: 'My products fetch error: $e',
+        userMessage: ErrorKeys.poorNetwork,
+        originalError: e,
+      );
+    }
+  }
+
+  /// A seller's public shop products. [sellerId] is either the Postgres
+  /// SellerProfile id or the legacy Firebase UID; the server resolves both.
+  Future<List<Product>> fetchSellerProducts(
+    String sellerId, {
+    int limit = 50,
+  }) async {
+    final res = await fetchProducts(sellerId: sellerId, limit: limit);
+    return res.items;
+  }
+
+  /// Batch fetch by external ids (uuid, slug, or the legacy Firestore id
+  /// captured in the snapshot) for wishlist / recently-viewed rehydration.
+  Future<List<Product>> fetchProductsByIds(List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    final res = await fetchProducts(ids: ids, limit: ids.length);
+    return res.items;
+  }
+
+  List<Product> _itemsFrom(Map<String, dynamic> data) {
+    return (data['items'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Product.fromApi)
+        .toList();
   }
 
   List<Category>? _categories;

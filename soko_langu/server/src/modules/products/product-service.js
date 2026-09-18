@@ -38,29 +38,55 @@ const PUBLIC_SELECT = {
   snapshot: true,
 };
 
-function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory }) {
+function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerProfileId, ids }) {
   const where = { status: 'published', deletedAt: null };
   if (categoryId) where.categoryId = categoryId;
+  if (sellerProfileId) where.sellerId = sellerProfileId;
   if (minPrice != null || maxPrice != null) {
     where.price = {};
     if (minPrice != null) where.price.gte = BigInt(minPrice);
     if (maxPrice != null) where.price.lte = BigInt(maxPrice);
   }
+  const filters = [];
   if (q) {
-    where.OR = [
-      { title: { contains: q, mode: 'insensitive' } },
-      { description: { contains: q, mode: 'insensitive' } },
-    ];
+    filters.push({
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ],
+    });
+  }
+  // Batch by external id: the app hands back opaque legacy Firestore ids
+  // (wishlist, recently-viewed) that map to neither the Postgres uuid nor the
+  // slug, so match both plus the snapshot legacyId captured at migration time.
+  if (ids && ids.length) {
+    filters.push({
+      OR: [
+        { id: { in: ids } },
+        { slug: { in: ids } },
+        ...ids.map((id) => ({ snapshot: { path: ['legacyId'], equals: id } })),
+      ],
+    });
   }
   // The legacy boost/feature/subcategory signals live in snapshot JSON during
   // the migration window; filter them with JSON path probes so the featured
   // carousel and category pages read from Postgres with Firestore semantics.
-  const snapshotFilters = [];
-  if (boosted) snapshotFilters.push({ snapshot: { path: ['isBoosted'], equals: true } });
-  if (featured) snapshotFilters.push({ snapshot: { path: ['isFeatured'], equals: true } });
-  if (subcategory) snapshotFilters.push({ snapshot: { path: ['subcategory'], equals: subcategory } });
-  if (snapshotFilters.length) where.AND = snapshotFilters;
+  if (boosted) filters.push({ snapshot: { path: ['isBoosted'], equals: true } });
+  if (featured) filters.push({ snapshot: { path: ['isFeatured'], equals: true } });
+  if (subcategory) filters.push({ snapshot: { path: ['subcategory'], equals: subcategory } });
+  if (filters.length) where.AND = filters;
   return where;
+}
+
+// Public seller lookup accepts either the Postgres SellerProfile id or the
+// legacy Firebase UID (Product.sellerId in the App still carries the UID via
+// snapshot) so the seller shop resolves both.
+async function resolveSellerProfile(idOrUid) {
+  const prisma = getPrisma();
+  return prisma.sellerProfile.findFirst({
+    where: { OR: [{ id: idOrUid }, { userId: idOrUid }] },
+    select: { id: true },
+  });
 }
 
 async function requireSellerProfile(userId) {
@@ -151,11 +177,18 @@ async function softDelete({ id, sellerProfileId }) {
   return prisma.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
-async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, page = 1, limit = 20 }) {
+async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerId, ids, page = 1, limit = 20 }) {
   // Catalog reads go through the read replica when one is configured: public
   // browsing tolerates lag and must never compete for primary connections.
   const prisma = getReadPrisma();
-  const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory });
+  let sellerProfileId;
+  if (sellerId) {
+    const profile = await resolveSellerProfile(sellerId);
+    // No seller row means no products: a sentinel id keeps the count at zero
+    // instead of widening the query to the whole catalog.
+    sellerProfileId = profile?.id || '__no_seller__';
+  }
+  const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, sellerProfileId, ids });
   const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,
@@ -237,6 +270,7 @@ async function moderate({ id, status }) {
 
 module.exports = {
   requireSellerProfile,
+  resolveSellerProfile,
   createProduct,
   updateProduct,
   setStatus,

@@ -610,6 +610,18 @@ class ProductService {
   }
 
   Stream<List<Product>> getMyProducts() {
+    if (ApiConfig.kUseProductsApi) {
+      // v1 is HTTP, not a stream: the dashboard subscribes via StreamBuilder,
+      // so emit the fetched list once. Errors become an empty list — a broken
+      // seller hub should not throw during the migration window.
+      return Stream.fromFuture(() async {
+        try {
+          return await _api.fetchMyProducts();
+        } catch (_) {
+          return <Product>[];
+        }
+      }());
+    }
     final user = _auth.currentUser;
     if (user == null) return Stream.value([]);
 
@@ -633,6 +645,15 @@ class ProductService {
   }
 
   Stream<List<Product>> getProductsBySeller(String sellerId) {
+    if (ApiConfig.kUseProductsApi) {
+      return Stream.fromFuture(() async {
+        try {
+          return await _api.fetchSellerProducts(sellerId);
+        } catch (_) {
+          return <Product>[];
+        }
+      }());
+    }
     return _db
         .collection("products")
         .where("sellerId", isEqualTo: sellerId)
@@ -650,6 +671,14 @@ class ProductService {
   }
 
   Future<Product?> getProductById(String productId) async {
+    if (ApiConfig.kUseProductsApi) {
+      try {
+        final apiProduct = await _api.fetchProduct(productId);
+        if (apiProduct != null) return apiProduct;
+      } catch (_) {
+        // API unreachable or malformed: fall through to Firestore below.
+      }
+    }
     try {
       final doc = await _db.collection("products").doc(productId).get();
       if (doc.exists) {

@@ -32,12 +32,46 @@ describe('buildListWhere', () => {
     ]);
   });
 
-  it('omits AND when no snapshot filters are requested', () => {
+  it('combines the full-text q into AND filters', () => {
     const where = buildListWhere({ q: 'simu' });
-    assert.equal(where.AND, undefined);
-    assert.deepEqual(where.OR, [
-      { title: { contains: 'simu', mode: 'insensitive' } },
-      { description: { contains: 'simu', mode: 'insensitive' } },
+    assert.deepEqual(where.AND, [
+      {
+        OR: [
+          { title: { contains: 'simu', mode: 'insensitive' } },
+          { description: { contains: 'simu', mode: 'insensitive' } },
+        ],
+      },
     ]);
+  });
+
+  it('omits AND when nothing is being filtered', () => {
+    const where = buildListWhere({ q: undefined, ids: [] });
+    assert.equal(where.AND, undefined);
+    assert.equal(where.OR, undefined);
+  });
+
+  it('narrows to a seller profile once it is resolved', () => {
+    const where = buildListWhere({ sellerProfileId: 'seller-1' });
+    assert.equal(where.sellerId, 'seller-1');
+  });
+
+  it('matches a batch of ids by uuid, slug, and legacy Firestore id', () => {
+    const where = buildListWhere({ ids: ['uuid-1', 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] });
+    assert.deepEqual(where.AND, [
+      {
+        OR: [
+          { id: { in: ['uuid-1', 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] } },
+          { slug: { in: ['uuid-1', 'bmw-m4-9249db', 'QoiW3T1zhXS1HCsvHmYv'] } },
+          { snapshot: { path: ['legacyId'], equals: 'uuid-1' } },
+          { snapshot: { path: ['legacyId'], equals: 'bmw-m4-9249db' } },
+          { snapshot: { path: ['legacyId'], equals: 'QoiW3T1zhXS1HCsvHmYv' } },
+        ],
+      },
+    ]);
+  });
+
+  it('ignores id batch matching when no ids are given', () => {
+    const where = buildListWhere({ ids: [] });
+    assert.equal(where.AND, undefined);
   });
 });

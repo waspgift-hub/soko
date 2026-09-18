@@ -294,6 +294,58 @@ void main() {
       expect(q['subcategory'], 'Smartphones');
     });
 
+    test('passes sellerId and joins ids into a batch param', () async {
+      Uri? captured;
+      final client = ProductApiClient(
+        httpClient: MockClient((request) async {
+          captured = request.url;
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {'items': []},
+          }), 200, headers: {'content-type': 'application/json'});
+        }),
+      );
+      await client.fetchSellerProducts('seller-firebase-uid');
+      expect(captured!.queryParameters['sellerId'], 'seller-firebase-uid');
+
+      await client.fetchProductsByIds(['uuid-1', 'bmw-m4-9249db', 'legacy-id']);
+      expect(captured!.queryParameters['ids'], 'uuid-1,bmw-m4-9249db,legacy-id');
+    });
+
+    test('fetchProductsByIds maps the batch envelope into products', () async {
+      final client = ProductApiClient(
+        httpClient: MockClient((request) async {
+          expect(request.url.path, '/api/v1/products');
+          expect(request.url.queryParameters['ids'], 'legacy-a,legacy-b');
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {
+              'items': [
+                {
+                  'id': 'uuid-1',
+                  'title': 'Matched One',
+                  'price': 100,
+                  'createdAt': '2026-09-01T00:00:00Z',
+                  'seller': {'storeName': 'X'},
+                  'media': [],
+                },
+              ],
+              'pagination': {'page': 1, 'limit': 2, 'total': 1},
+            },
+          }), 200, headers: {'content-type': 'application/json'});
+        }),
+      );
+      final items = await client.fetchProductsByIds(['legacy-a', 'legacy-b']);
+      expect(items.single.name, 'Matched One');
+    });
+
+    test('returns empty during batch fetch when ids are empty', () async {
+      final client = ProductApiClient(httpClient: MockClient((_) async {
+        fail('no request expected for an empty id set');
+      }));
+      expect(await client.fetchProductsByIds([]), isEmpty);
+    });
+
     test('maps the flattened category tree into Category + SubCategory', () async {
       final client = ProductApiClient(
         httpClient: MockClient((request) async {

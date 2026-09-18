@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/product_model.dart';
 import '../models/product_search_result.dart';
+import 'api_config.dart';
+import 'search_api.dart';
 
 class ProductSearchService {
   static final ProductSearchService _instance = ProductSearchService._internal();
@@ -7,6 +10,29 @@ class ProductSearchService {
   ProductSearchService._internal();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final SearchApiClient _search = SearchApiClient();
+
+  ProductSearchResult _fromProduct(Product p) => ProductSearchResult(
+        productId: p.id,
+        productName: p.name,
+        description: p.description,
+        firstImage: p.images.isNotEmpty ? p.images.first : null,
+        price: p.price,
+        sellerId: p.sellerId,
+        sellerName: p.sellerName,
+        sellerPhone: p.sellerPhone ?? '',
+        location: p.location,
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+        category: p.category,
+        subcategory: p.subcategory,
+        brand: p.brand,
+        condition: p.condition,
+        stock: p.stock,
+        soldCount: p.soldCount,
+        viewCount: p.viewCount,
+        isWholesale: p.isWholesale,
+      );
 
   ProductSearchResult? _mapDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     try {
@@ -42,6 +68,15 @@ class ProductSearchService {
 
   Future<List<ProductSearchResult>> searchProducts(String query) async {
     if (query.trim().isEmpty) return [];
+
+    // Ranked Postgres search first; fall back to Firestore only when the API
+    // is down or the catalog misses — matches SearchService's migration rule.
+    if (ApiConfig.kUseSearchApi) {
+      final apiResults = await _search.fetchProducts(query: query, limit: 20);
+      if (apiResults != null && apiResults.items.isNotEmpty) {
+        return apiResults.items.take(10).map(_fromProduct).toList();
+      }
+    }
 
     final lower = query.toLowerCase().trim();
     final tokens = _tokens(query);

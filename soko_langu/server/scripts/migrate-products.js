@@ -128,7 +128,10 @@ async function main() {
           data: {
             ...rest,
             price: Number(rest.price),
-            snapshot: rest.snapshot,
+            // The opaque Firestore doc id becomes snapshot.legacyId so server
+            // id-based reads (wishlist, recently-viewed, deep links) can still
+            // resolve migrated products after Firestore is retired.
+            snapshot: { ...rest.snapshot, legacyId: doc.id },
             seller: { connect: { id: sellerProfileId } },
             category: catId ? { connect: { id: catId } } : undefined,
             media: { create: [] },
@@ -192,6 +195,9 @@ async function main() {
     for (const k of enrichKeys) {
       if (data[k] !== undefined && data[k] !== null && current[k] === undefined) patch[k] = data[k];
     }
+    // Existing rows were created before legacyId existed; backfill the opaque
+    // Firestore doc id so legacy-read bridges keep resolving migrated products.
+    if (current.legacyId === undefined && doc.id) patch.legacyId = doc.id;
     if (product.categoryId == null) {
       const linked = await resolveCategoryId(data.category);
       if (linked && linked !== product.categoryId) patch.categoryId_ = linked;
@@ -202,7 +208,10 @@ async function main() {
       if (COMMIT) {
         const update = {};
         if (hasMeta) {
-          const meta = { category: patch.category, subcategory: patch.subcategory };
+          const meta = {};
+          for (const k of Object.keys(patch)) {
+            if (k !== 'categoryId_') meta[k] = patch[k];
+          }
           update.snapshot = { ...current, ...meta };
         }
         if (updateId) update.categoryId = updateId;
