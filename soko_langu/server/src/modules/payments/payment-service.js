@@ -87,7 +87,7 @@ async function initiatePayment({
 }
 
 // Server-side verification of a collection status (called on webhook or poll).
-// On success, creates the escrow hold and moves order to IN_ESCROW.
+// On success, creates the escrow hold and moves order to ESCROW_HELD.
 async function confirmCollection({
   orderReference,
   providerPaymentId,
@@ -112,11 +112,11 @@ async function confirmCollection({
       if (!payment) throw httpError(404, 'PAYMENT_NOT_FOUND');
 
       // Layer 4: status priority check
-      if (order.status === ORDER_STATES.IN_ESCROW) {
+      if (order.status === ORDER_STATES.ESCROW_HELD) {
         result = { status: 'ALREADY_IN_ESCROW', order };
         return;
       }
-      if (![ORDER_STATES.PAYMENT_PENDING, ORDER_STATES.FAILED].includes(order.status) && !force) {
+      if (![ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
@@ -152,23 +152,31 @@ async function confirmCollection({
       });
 
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.IN_ESCROW, {
+      machine.transition(ORDER_STATES.ESCROW_HELD, {
         actor: 'system',
         reason: 'Collection verified server-side',
       });
 
       const updatedOrder = await tx.order.update({
         where: { id: order.id },
-        data: { status: ORDER_STATES.IN_ESCROW, paidAt: new Date() },
+        data: { status: ORDER_STATES.ESCROW_HELD, paidAt: new Date() },
       });
 
       // Ledger: buyer -> escrow
-      await tx.escrowTransaction.create({
+      const escrowAccount = await tx.ledgerAccount.findFirst({
+        where: { accountName: 'ESCROW_POOL' },
+      });
+
+      if (!escrowAccount) throw new Error('ESCROW_POOL_ACCOUNT_MISSING');
+
+      await tx.ledgerEntry.create({
         data: {
-          escrowHoldId: escrowHold.id,
-          type: 'FUNDS_HELD',
-          amount: order.totalAmount,
-          referenceId: payment.id,
+          accountId: escrowAccount.id,
+          transactionId: payment.id,
+          direction: 'CREDIT',
+          amount: payment.amount,
+          referenceType: 'ORDER_PAYMENT',
+          referenceId: payment.orderId,
         },
       });
 
@@ -178,8 +186,7 @@ async function confirmCollection({
     if (!lock.skipped) await releaseLock(`collection:${orderReference}`);
   }
 
-  // Presentation mirror AFTER commit so the app's Firestore stream follows the
-  // authoritative Postgres truth; best-effort and never fails the response.
+  // Presentation mirror AFTER commit
   if (result && result.status === 'VERIFIED') {
     await syncLegacyOrderStatus(result.order);
   }

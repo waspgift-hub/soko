@@ -226,7 +226,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       _QuickActionData(Icons.add_business_outlined, context.tr('sell_product'), () => context.push(AppRoutes.addProduct), cs.primary),
       _QuickActionData(Icons.price_check_outlined, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary),
       _QuickActionData(Icons.local_shipping_outlined, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange),
-      _QuickActionData(Icons.storefront_outlined, context.tr('customize_shop_action'), () => context.push(AppRoutes.shopCustomization), cs.primary),
+
       _QuickActionData(Icons.verified_outlined, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange),
       _QuickActionData(Icons.receipt_long_outlined, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary),
       _QuickActionData(Icons.flash_on_outlined, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange),

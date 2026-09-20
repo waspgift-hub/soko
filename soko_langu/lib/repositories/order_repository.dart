@@ -60,6 +60,12 @@ class OrderRepository {
     return result;
   }
 
+  /// Issues a handover OTP for the buyer.
+  Future<({String otp, DateTime? expiresAt})> issueHandoverOtp(String orderId) async {
+    final result = await _apiClient.issueHandoverOtp(orderId);
+    return result;
+  }
+
   /// Completes order via OTP handover.
   Future<Map<String, dynamic>> completeOrder(
     String orderId, {
@@ -72,6 +78,26 @@ class OrderRepository {
     await _cache.invalidateOrder(orderId);
     return result;
   }
+
+  /// Watches a single order for real-time updates (Cache-Aside).
+  Stream<OrderData> watchOrder(String orderId) async* {
+    // 1. Emit cached version
+    final cached = await _cache.getCachedOrder(orderId);
+    if (cached != null) yield cached;
+
+    // 2. Poll API for fresh state (since API is HTTP, not WebSocket)
+    while (true) {
+      try {
+        final fresh = await _apiClient.fetchOrder(orderId);
+        if (fresh != null) {
+          await _cache.saveOrder(fresh);
+          yield fresh;
+        }
+      } catch (_) {}
+      await Future.delayed(const Duration(seconds: 10));
+    }
+  }
+
 
   /// Dispatches order.
   Future<Map<String, dynamic>> dispatchOrder(

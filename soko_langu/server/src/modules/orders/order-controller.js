@@ -126,14 +126,26 @@ const orderController = {
 
   approveShippingQuote: asyncHandler(async (req, res) => {
     const { orderId } = req.params;
-    const approvedBy = req.user.id;
+    const userId = req.user.id;
 
-    const order = await orderService.approveShippingQuote({
+    const prisma = getPrisma();
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
+    }
+
+    // BOLA FIX: Only the buyer can approve the shipping quote.
+    if (order.buyerId !== userId) {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const updatedOrder = await orderService.approveShippingQuote({
       orderId,
-      approvedBy,
+      approvedBy: userId,
     });
 
-    res.json({ success: true, data: order });
+    res.json({ success: true, data: updatedOrder });
   }),
 
   initiatePayment: asyncHandler(async (req, res) => {
@@ -173,12 +185,29 @@ const orderController = {
     const { orderId } = req.params;
     const actorId = req.user.id;
 
-    const order = await orderService.markDelivered({
+    const prisma = getPrisma();
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
+    }
+
+    // BOLA FIX: Only the assigned courier, seller, or admin can mark as delivered.
+    // If there is a specific courier assignment, check that. Otherwise, check roles.
+    const isSeller = order.seller && order.seller.userId === actorId;
+    const isAdmin = req.user.role === 'super_admin' || req.user.role === 'admin';
+    const isCourier = req.user.role === 'courier';
+
+    if (!isSeller && !isAdmin && !isCourier) {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const updatedOrder = await orderService.markDelivered({
       orderId,
       actorId,
     });
 
-    res.json({ success: true, data: order });
+    res.json({ success: true, data: updatedOrder });
   }),
 
   // Complete the order ONLY through OTP verification (no bypass). This keeps

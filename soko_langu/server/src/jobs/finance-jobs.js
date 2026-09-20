@@ -77,7 +77,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
   const due = new Date(now.getTime() - config.finance.paymentExpireMs);
   const prismaOrders = await prisma.order.findMany({
     where: {
-      status: { in: [ORDER_STATES.AWAITING_ESCROW_PAYMENT, ORDER_STATES.PAYMENT_PENDING] },
+      status: { in: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING] },
       createdAt: { lte: due },
     },
     take: 100,
@@ -89,15 +89,12 @@ async function expireStalePayments({ now = new Date() } = {}) {
     const lock = await acquireLock(`expire:${order.id}`, 60);
     try {
       const fresh = await prisma.order.findUnique({ where: { id: order.id } });
-      if (![ORDER_STATES.AWAITING_ESCROW_PAYMENT, ORDER_STATES.PAYMENT_PENDING].includes(fresh.status)) {
+      if (![ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING].includes(fresh.status)) {
         summary.skipped += 1;
         continue;
       }
 
-      // Orders whose payment was actually initiated are re-verified against the
-      // provider before any expiry. Expiring a paid-but-lost-webhook order would
-      // trap buyer money — that must never happen.
-      if (fresh.status === ORDER_STATES.PAYMENT_PENDING) {
+      if (fresh.status === ORDER_STATES.PAYMENT_PROCESSING) {
         const payment = await prisma.payment.findFirst({
           where: { orderId: fresh.id, status: { in: PAYMENT_STATES_ACTIVE } },
           orderBy: { createdAt: 'desc' },
@@ -123,19 +120,17 @@ async function expireStalePayments({ now = new Date() } = {}) {
           if (providerStatus === 'failed') {
             try {
               await paymentService.markPaymentFailed(fresh.orderNumber);
-              summary.expired += 1; // reached a terminal, retryable state
+              summary.expired += 1; 
               continue;
             } catch (e) {
               console.warn('[FINANCE] mark-failed failed', fresh.orderNumber, e.message);
             }
           }
-          // pending or provider unreachable → leave for webhook/admin/reconciliation
           summary.skipped += 1;
           continue;
         }
       }
 
-      // No payment was ever initiated (or provider says it never landed): safe to expire.
       await prisma.$transaction(async (tx) => {
         const machine = new OrderStateMachine(fresh.status);
         machine.transition(ORDER_STATES.EXPIRED, { actor: 'system', reason: 'Payment window elapsed' });
@@ -173,11 +168,8 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
   const due = new Date(now.getTime() - config.finance.autoReleaseDays * 24 * 3600 * 1000);
   const orders = await prisma.order.findMany({
     where: {
-      // Legacy-migrated orders are still fulfilled + released by the legacy
-      // app until the Phase-6 cutover; a v2 auto-release here would double
-      // pay the seller for the same escrow.
       legacyFirestoreId: null,
-      status: { in: [ORDER_STATES.INSPECTION_PERIOD, ORDER_STATES.DELIVERED] },
+      status: { in: [ORDER_STATES.DELIVERED, ORDER_STATES.DELIVERY_CONFIRMED] },
       deliveredAt: { lte: due },
     },
     take: 50,
@@ -187,18 +179,17 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
   const summary = { released: 0, blocked: 0, skipped: 0, errored: 0 };
   for (const order of orders) {
     try {
-      const result = await autoRelease({ orderId: order.id });
-      if (result.status === 'AUTO_RELEASED') {
+      // V3 Alignment: Instead of a separate autoRelease service, we trigger
+      // the canonical completeOrder flow which handles the Ledger settlement.
+      const orderService = require('../modules/orders/order-service');
+      const result = await orderService.completeOrder({
+        orderId: order.id,
+        actorId: 'system',
+        method: 'AUTO_RELEASE',
+      });
+
+      if (result) {
         summary.released += 1;
-      } else if (result.status === 'BLOCKED') {
-        summary.blocked += 1;
-        await throttledNotify(`autorelease:${order.id}`, 24 * 3600, () =>
-          notifyAdmins(
-            'Auto-release blocked',
-            `Oda ${order.orderNumber}: ${(result.missingSafeguards || []).join(', ')}`,
-            { type: 'escrow_auto_release', orderId: order.id, blocked: true }
-          )
-        );
       } else {
         summary.skipped += 1;
       }

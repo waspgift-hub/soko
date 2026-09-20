@@ -137,8 +137,16 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
         data: { status: ORDER_STATES.COMPLETED, completedAt: new Date() },
       });
 
-      // Idempotent escrow release + settlement (guarded by escrow hold status).
-      await releaseEscrowAndSettle(tx, order);
+      // V3 Ledger Settlement: Escrow Pool -> Seller Wallet
+      const sellerEntitlement = Number(order.total) - Number(order.platformFee);
+      
+      // Use the V3 ledger-service for atomic, double-entry updates
+      const { entry } = await settleEscrowToSeller({
+        orderId: order.id,
+        sellerId: order.sellerId,
+        amount: sellerEntitlement,
+        idempotencyKey: `settle_${order.id}`,
+      });
 
       // Create receipt
       await tx.receipt.create({
@@ -146,12 +154,12 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
           orderId,
           purchaserId: order.buyerId,
           sellerId: order.sellerId,
-          amount: order.totalAmount,
-          currency: 'TZS',
+          amount: order.total,
+          currency: order.currency,
         },
       });
 
-      return { status: 'COMPLETED', order: updatedOrder };
+      return { status: 'COMPLETED', order: updatedOrder, ledgerEntry: entry };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`complete:${orderId}`);

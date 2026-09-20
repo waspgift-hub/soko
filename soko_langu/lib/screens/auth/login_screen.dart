@@ -52,7 +52,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        behavior: SnackBarBehavior.floating,
         backgroundColor: Theme.of(context).colorScheme.error,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
         content: Text(msg),
       ),
     );
@@ -130,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _otpSent = true);
       _startResendCountdown();
-      HapticFeedback.lightImpact();
+      HapticFeedback.mediumImpact();
     } catch (e) {
       if (mounted) _showError(context.trError(e));
     } finally {
@@ -177,14 +180,14 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(context.tr('no_account'), style: const TextStyle(fontSize: 13)),
+          Text(context.tr('no_account'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400)),
           TextButton(
             onPressed: _isLoading
                 ? null
                 : () => context.push(AppRoutes.register),
             child: Text(
               context.tr('create_account'),
-              style: const TextStyle(fontSize: 13),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -203,9 +206,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     _otpSent = false;
                     _otpController.clear();
                   });
+                  HapticFeedback.selectionClick();
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Form(
                 key: _formKey,
                 child: Column(
@@ -229,82 +233,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 12),
-                    if (_method == _LoginMethod.password) ...[
-                      AuthTextField(
-                        controller: _passwordController,
-                        label: context.tr('password'),
-                        prefixIcon: Icons.lock_outline_rounded,
-                        obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.password],
-                        validator: (v) => (v == null || v.isEmpty)
-                            ? context.tr('enter_password')
-                            : null,
-                        suffix: IconButton(
-                          onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 20,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        onFieldSubmitted: (_) => _onPasswordLogin(),
+                    const SizedBox(height: 16),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      transitionBuilder: (child, animation) => FadeScaleTransition(
+                        scale: animation,
+                        child: child,
                       ),
-                    ] else if (!_otpSent) ...[
-                      DsButton(
-                        label: context.tr('send_otp'),
-                        icon: Icons.sms_outlined,
-                        loading: _sendingOtp,
-                        onPressed: _onSendOtp,
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        context.tr('enter_otp_email_sent'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      AuthTextField(
-                        controller: _otpController,
-                        label: context.tr('otp_code_hint'),
-                        prefixIcon: Icons.verified_outlined,
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.oneTimeCode],
-                        validator: (v) => (v == null || v.length != 6)
-                            ? context.tr('enter_otp_6_digits')
-                            : null,
-                        onFieldSubmitted: (_) => _onOtpLogin(),
-                        suffix: _resendLeft > 0
-                            ? Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                child: Center(
-                                  child: Text(
-                                    '${_resendLeft}s',
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : TextButton(
-                                onPressed: _sendingOtp ? null : _onSendOtp,
-                                child: Text(context.tr('resend_code')),
-                              ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
+                      child: _buildMethodField(),
+                    ),
+                    const SizedBox(height: 24),
                     DsButton(
                       label: _method == _LoginMethod.password
                           ? context.tr('login')
@@ -315,7 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           : _onOtpLogin,
                     ),
                     if (_method == _LoginMethod.password) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Align(
                         child: TextButton(
                           onPressed: _isLoading
@@ -323,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               : () => context.push(AppRoutes.forgotPassword),
                           child: Text(
                             context.tr('forgot_password'),
-                            style: TextStyle(color: cs.primary, fontSize: 13),
+                            style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                         ),
                       ),
@@ -331,30 +269,121 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
               Row(
                 children: [
                   const Expanded(child: Divider()),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
                       context.tr('or'),
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
                   const Expanded(child: Divider()),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
               _GoogleButton(onPressed: _isLoading ? null : _onGoogleLogin),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildMethodField() {
+    final cs = Theme.of(context).colorScheme;
+    if (_method == _LoginMethod.password) {
+      return AuthTextField(
+        key: const ValueKey('password_field'),
+        controller: _passwordController,
+        label: context.tr('password'),
+        prefixIcon: Icons.lock_outline_rounded,
+        obscureText: _obscurePassword,
+        textInputAction: TextInputAction.done,
+        autofillHints: const [AutofillHints.password],
+        validator: (v) => (v == null || v.isEmpty)
+            ? context.tr('enter_password')
+            : null,
+        suffix: IconButton(
+          onPressed: () => setState(
+            () => _obscurePassword = !_obscurePassword,
+          ),
+          icon: Icon(
+            _obscurePassword
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined,
+            size: 20,
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+        onFieldSubmitted: (_) => _onPasswordLogin(),
+      );
+    } else if (!_otpSent) {
+      return DsButton(
+        key: const ValueKey('send_otp_button'),
+        label: context.tr('send_otp'),
+        icon: Icons.sms_outlined,
+        loading: _sendingOtp,
+        onPressed: _onSendOtp,
+      );
+    } else {
+      return Column(
+        key: const ValueKey('otp_field'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            context.tr('enter_otp_email_sent'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 12),
+          AuthTextField(
+            controller: _otpController,
+            label: context.tr('otp_code_hint'),
+            prefixIcon: Icons.verified_outlined,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.oneTimeCode],
+            validator: (v) => (v == null || v.length != 6)
+                ? context.tr('enter_otp_6_digits')
+                : null,
+            onFieldSubmitted: (_) => _onOtpLogin(),
+            suffix: _resendLeft > 0
+                ? Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12),
+                    child: Center(
+                      child: Text(
+                        '${_resendLeft}s',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                : TextButton(
+                    onPressed: _sendingOtp ? null : _onSendOtp,
+                    child: Text(
+                      context.tr('resend_code'),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+          ),
+        ],
+      );
+    }
   }
 
   Future<void> _onGoogleLogin() async {
@@ -387,14 +416,14 @@ class _MethodSwitcher extends StatelessWidget {
         child: GestureDetector(
           onTap: () => onChange(m),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             decoration: BoxDecoration(
               color: selected
-                  ? cs.primary.withValues(alpha: 0.14)
+                  ? cs.primary.withValues(alpha: 0.12)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selected ? cs.primary : cs.brandBorder,
                 width: selected ? 1.5 : 1,
@@ -406,17 +435,17 @@ class _MethodSwitcher extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  size: 16,
+                  size: 18,
                   color: selected ? cs.primary : cs.onSurfaceVariant,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Flexible(
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                       color: selected ? cs.primary : cs.onSurfaceVariant,
                     ),
                   ),
@@ -435,7 +464,7 @@ class _MethodSwitcher extends StatelessWidget {
           context.tr('login_with_email'),
           Icons.lock_outline_rounded,
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         option(
           _LoginMethod.otp,
           context.tr('login_with_otp'),
@@ -470,7 +499,7 @@ class _GoogleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 52,
+      height: 54,
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -488,8 +517,6 @@ class _GoogleButton extends StatelessWidget {
         icon: ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: Image.network(
-            // Official Google-hosted "G" — matches dark and light themes, so
-            // no app asset to keep in sync with Google's branding.
             'https://www.gstatic.com/images/branding/product/2x/googleg_32dp.png',
             width: 22,
             height: 22,
@@ -509,4 +536,26 @@ class _GoogleButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class FadeScaleTransition extends StatutoryAnimatedWidget {
+  final Widget child;
+  final Animation<double> scale;
+
+  const FadeScaleTransition({super.key, required this.child, required this.scale});
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: scale,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.95, end: 1.0).animate(scale),
+        child: child,
+      ),
+    );
+  }
+}
+
+abstract class StatutoryAnimatedWidget extends StatelessWidget {
+  const StatutoryAnimatedWidget({super.key});
 }

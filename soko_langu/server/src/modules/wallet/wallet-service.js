@@ -1,8 +1,7 @@
 const { getPrisma } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
-const { postWalletEntry } = require('./ledger-service');
-const config = require('../../config');
+const ledgerService = require('./ledger-service');
 
 function withLockTimeout(promise, ms = 5000) {
   return Promise.race([
@@ -12,12 +11,11 @@ function withLockTimeout(promise, ms = 5000) {
 }
 
 async function locked(key, ttl) {
-  const { acquireLock } = require('../../config/redis');
   return withLockTimeout(acquireLock(key, ttl));
 }
 
 /**
- * Get the seller's wallet (or retrieve by sellerId).
+ * Get the seller's wallet.
  */
 async function getWallet(sellerId) {
   const prisma = getPrisma();
@@ -28,12 +26,6 @@ async function getWallet(sellerId) {
   return wallet;
 }
 
-/**
- * Return the seller's wallet inside an open transaction, creating it on first
- * use. Order settlement must call this: a seller who never opened the wallet
- * page would otherwise be silently skipped (no ledger row, money effectively
- * lost) whenever the old `if (wallet)`-style guard was used.
- */
 async function ensureWallet(tx, sellerId) {
   let wallet = await tx.wallet.findUnique({ where: { sellerId } });
   if (!wallet) {
@@ -43,37 +35,31 @@ async function ensureWallet(tx, sellerId) {
 }
 
 /**
- * Get wallet balances plus a paginated ledger history.
+ * Get wallet balances plus a paginated ledger history from V3 Ledger.
  */
 async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
   const prisma = getPrisma();
   const wallet = await getWallet(sellerId);
 
-  const [ledger, total, ledgerBalance] = await Promise.all([
-    prisma.walletLedgerEntry.findMany({
-      where: { walletId: wallet.id },
+  const account = await prisma.ledgerAccount.findFirst({
+    where: { userId: sellerId, accountName: 'USER_WALLET' },
+  });
+
+  const [ledger, total] = await Promise.all([
+    prisma.ledgerEntry.findMany({
+      where: { accountId: account?.id },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.walletLedgerEntry.count({ where: { walletId: wallet.id } }),
-    prisma.walletLedgerEntry.findFirst({
-      where: { walletId: wallet.id },
-      orderBy: { createdAt: 'desc' },
-      select: { balanceAfter: true },
-    }),
+    prisma.ledgerEntry.count({ where: { accountId: account?.id } }),
   ]);
 
   return {
     wallet,
     balances: {
       available: wallet.availableBalance.toString(),
-      pending: wallet.pendingBalance.toString(),
-      frozen: wallet.frozenBalance.toString(),
-      totalEarned: wallet.totalEarned.toString(),
-      totalWithdrawn: wallet.totalWithdrawn.toString(),
     },
-    ledgerBalance: ledgerBalance ? ledgerBalance.balanceAfter.toString() : '0',
     ledger,
     pagination: { page: Number(page), limit: Number(limit), total },
   };
@@ -81,8 +67,7 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
 
 /**
  * Seller requests a withdrawal.
- * Validates: eligible available balance, min/max, risk checks, then creates a
- * Withdrawal + ledger entry. Notification to provider payout is optional.
+ * Uses ledgerService.updateWalletBalance for atomic debit.
  */
 async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
   const prisma = getPrisma();
@@ -98,13 +83,11 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
         throw httpError(400, 'INSUFFICIENT_BALANCE');
       }
 
-      // Product-owner rule: no withdrawal minimum (0 TZS). Overridable via env.
       const min = Number(process.env.WITHDRAWAL_MIN) || 0;
       const max = Number(process.env.WITHDRAWAL_MAX) || 5000000;
       if (amount < min) throw httpError(400, `BELOW_MINIMUM:${min}`);
       if (amount > max) throw httpError(400, `ABOVE_MAXIMUM:${max}`);
 
-      // Withdrawal risk check: max daily withdrawal guard
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayTotal = await tx.withdrawal.aggregate({
@@ -117,8 +100,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
       }
 
       const idempotencyKey = `withdrawal_${sellerId}_${Date.now()}`;
-      const balanceAfter = BigInt(wallet.availableBalance) - BigInt(amount);
-
+      
       const withdrawal = await tx.withdrawal.create({
         data: {
           walletId: wallet.id,
@@ -126,27 +108,24 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
           amount,
           provider: 'clickpesa',
           status: 'pending',
-          // Persist the destination phone at request time so the payout target
-          // is auditable and immune to later profile phone edits.
           phoneNumber: phoneNumber || null,
           idempotencyKey,
         },
       });
 
-      await postWalletEntryTx(tx, {
-        walletId: wallet.id,
-        type: 'WITHDRAWAL_DEBITED',
-        amount,
-        balanceAfter,
+      await ledgerService.updateWalletBalance({
+        userId: sellerId,
+        amount: -amount,
+        type: ledgerService.LEDGER_TYPES.WITHDRAWAL_DEBITED,
         referenceType: 'withdrawal',
         referenceId: withdrawal.id,
-        idempotencyKey: `ledger_${withdrawal.id}`,
+        idempotencyKey: `ledger_withdrawal_${withdrawal.id}`,
         description: 'Seller withdrawal',
       });
 
-      const updatedWallet = await tx.wallet.update({
+      // We must fetch the updated wallet state to return it
+      const updatedWallet = await tx.wallet.findUnique({
         where: { id: wallet.id },
-        data: { availableBalance: balanceAfter },
       });
 
       return { withdrawal, wallet: updatedWallet };
@@ -156,10 +135,6 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
   }
 }
 
-/**
- * Process a pending withdrawal by initiating the provider payout
- * and marking it processed on provider confirmation.
- */
 async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
   const prisma = getPrisma();
   const lock = await locked(`withdraw:${withdrawalId}`, 60);
@@ -205,10 +180,6 @@ async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
   }
 }
 
-/**
- * Confirm a payout success (provider callback/poll). Updates the withdrawal,
- * tallies total_withdrawn, and posts the final ledger confirmation.
- */
 async function confirmPayout({ withdrawalId, providerPayoutId }) {
   const prisma = getPrisma();
   const lock = await locked(`withdraw:${withdrawalId}`, 60);
@@ -248,16 +219,6 @@ async function confirmPayout({ withdrawalId, providerPayoutId }) {
   }
 }
 
-/**
- * Fold money the seller already earned under the legacy Firestore ledger into
- * their Postgres wallet (cutover migration). `amount` is the Firestore
- * sellerBalance (already released -> becomes spendable); `priorWithdrawn` is
- * the legacy totalWithdrawn stat so the wallet's cumulative earned/withdrawn
- * history stays consistent (totalEarned = available + totalWithdrawn). Safe to
- * re-run: a stable ledger key per seller makes the second run a no-op.
- * pendingEscrow must NOT be migrated this way — post-flip it settles through
- * the normal v1 escrow release, so migrating it would double-credit the order.
- */
 async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = getPrisma() }) {
   const amt = Math.round(Number(amount));
   const withdrawn = Math.round(Number(priorWithdrawn));
@@ -266,21 +227,15 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
 
   try {
     return await db.$transaction(async (tx) => {
-      const prior = await tx.walletLedgerEntry.findFirst({
-        where: { type: 'LEGACY_BALANCE', referenceId: sellerId },
-        select: { id: true },
+      const prior = await tx.ledgerEntry.findFirst({
+        where: { referenceType: 'legacy_balance', referenceId: sellerId },
       });
       if (prior) return { alreadyMigrated: true, sellerId };
 
-      const wallet = await ensureWallet(tx, sellerId);
-      const balanceAfter = wallet.availableBalance + BigInt(amt);
-      const earned = BigInt(amt + withdrawn);
-
-      await postWalletEntryTx(tx, {
-        walletId: wallet.id,
-        type: 'LEGACY_BALANCE',
+      await ledgerService.updateWalletBalance({
+        userId: sellerId,
         amount: amt,
-        balanceAfter,
+        type: 'LEGACY_BALANCE',
         referenceType: 'legacy_balance',
         referenceId: sellerId,
         idempotencyKey: `legacy_balance_${sellerId}`,
@@ -288,11 +243,10 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
       });
 
       await tx.wallet.update({
-        where: { id: wallet.id },
+        where: { sellerId },
         data: {
-          availableBalance: balanceAfter,
-          totalWithdrawn: wallet.totalWithdrawn + BigInt(withdrawn),
-          totalEarned: wallet.totalEarned + earned,
+          totalWithdrawn: { increment: withdrawn },
+          totalEarned: { increment: amt + withdrawn },
         },
       });
 
@@ -303,19 +257,6 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
   }
 }
 
-async function postWalletEntryTx(tx, data) {
-  const existing = await tx.walletLedgerEntry.findUnique({
-    where: { idempotencyKey: data.idempotencyKey },
-  });
-  if (existing) return existing;
-  return tx.walletLedgerEntry.create({ data });
-}
-
-/**
- * Payout destination phone for a withdrawal row. Prefer the phone captured at
- * request time; fall back to the seller's profile phone for rows created
- * before the phoneNumber column existed.
- */
 function withdrawalPayoutPhone(withdrawal) {
   return withdrawal.phoneNumber || withdrawal.seller?.user?.phone || null;
 }

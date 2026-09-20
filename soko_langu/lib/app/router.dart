@@ -24,7 +24,7 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/profile/public_profile_screen.dart';
 import '../screens/profile/settings_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
-import '../screens/profile/shop_customization_screen.dart';
+
 import '../screens/profile/wishlist_screen.dart';
 import '../screens/profile/my_ads_screen.dart';
 import '../screens/profile/seller_dashboard_screen.dart';
@@ -79,7 +79,6 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.profile,
   AppRoutes.settings,
   AppRoutes.editProfile,
-  AppRoutes.shopCustomization,
   AppRoutes.wishlist,
   AppRoutes.myAds,
   AppRoutes.sellerDashboard,
@@ -264,10 +263,7 @@ GoRouter buildRouter() {
         path: AppRoutes.editProfile,
         pageBuilder: (context, state) => _premiumPage(const EditProfileScreen()),
       ),
-      GoRoute(
-        path: AppRoutes.shopCustomization,
-        pageBuilder: (context, state) => _premiumPage(const ShopCustomizationScreen()),
-      ),
+
       GoRoute(
         path: AppRoutes.wishlist,
         pageBuilder: (context, state) => _premiumPage(const WishlistScreen()),

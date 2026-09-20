@@ -93,6 +93,12 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw new Error('ORDER_NOT_FOUND');
 
+    // V3 Guard: Enforce State Transition
+    const osm = new OrderStateMachine(order.status);
+    if (!osm.canTransition(ORDER_STATES.PENDING_PAYMENT)) {
+      throw new Error(`INVALID_STATE_TRANSITION: Cannot approve quote for order in state ${order.status}`);
+    }
+
     const shippingFee = order.shippingCost || 0;
     const subtotal = Number(order.subtotal);
     
@@ -121,15 +127,18 @@ async function initiatePayment({ orderId, buyerId, provider }) {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw new Error('ORDER_NOT_FOUND');
     if (order.buyerId !== buyerId) throw new Error('FORBIDDEN');
-    if (order.status !== ORDER_STATES.PENDING_PAYMENT) {
-      throw new Error(`INVALID_STATE: ${order.status}`);
+
+    // V3 Guard: Enforce State Transition
+    const osm = new OrderStateMachine(order.status);
+    if (!osm.canTransition(ORDER_STATES.PAYMENT_PROCESSING)) {
+      throw new Error(`INVALID_STATE_TRANSITION: Cannot pay for order in state ${order.status}`);
     }
 
     const payment = await tx.payment.create({
       data: {
         orderId,
         provider,
-        amount: order.total,
+        amount: order.total, // Strictly use server-calculated total
         currency: order.currency,
         status: 'pending',
         idempotencyKey: `pay_${orderId}_${Date.now()}`,

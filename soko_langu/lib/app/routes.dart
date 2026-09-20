@@ -22,7 +22,7 @@ class AppRoutes {
   static const String accountSelection = '/account-selection';
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
-  static const String shopCustomization = '/shop-customize';
+
   static const String editProfile = '/edit-profile';
   static const String addProduct = '/add-product';
   static const String help = '/help';
