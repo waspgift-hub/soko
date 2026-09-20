@@ -7,43 +7,305 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Tracks every payment transaction with full lifecycle state.
-/// The idempotency_key column ensures no duplicate processing across
-/// horizontally scaled server instances — enforced at the DB level
-/// with a unique constraint.
-model Payment {
-  id             String   @id @default(uuid())
-  transactionId  String   @unique
-  idempotencyKey String   @unique
-  status         String   @default("pending") // pending | processing | completed | failed | refunded
-  amount         Decimal  @db.Decimal(12, 2)
-  currency       String   @default("USD")
-  payerId        String
-  payerEmail     String?
-  gatewayRef     String?  // reference ID from payment gateway
-  metadata       Json?    // raw webhook payload for audit trail
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+// =============================================================================
+// IDENTITY & USERS
+// =============================================================================
 
-  @@index([payerId])
-  @@index([status])
-  @@index([createdAt])
+model User {
+  id                  String   @id @default(uuid())
+  firebaseUid         String   @unique
+  phone               String   @unique
+  email               String?  @unique
+  role                String   @default("BUYER") // BUYER | SELLER | ADMIN
+  accountStatus       String   @default("ACTIVE") // ACTIVE | SUSPENDED | PENDING_KYC
+  emailVerified       Boolean  @default(false)
+  phoneVerified       Boolean  @default(false)
+  onboardingComplete  Boolean  @default(false)
+  preferredLanguage   String   @default("sw")
+  preferredCurrency   String   @default("TZS")
+  region              String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sellerProfile       SellerProfile?
+  wallet              Wallet?
+  ordersAsBuyer       Order[]       @relation("BuyerOrders")
+  ordersAsSeller      Order[]       @relation("SellerOrders")
+  reviewsGiven        Review[]      @relation("BuyerReviews")
+  ledgerAccounts      LedgerAccount[]
 }
 
-/// Audit log for every state transition — append-only, never updated.
-/// This provides a complete traceability chain for compliance and debugging.
+model SellerProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id])
+  storeName          String
+  slug               String   @unique
+  description        String?
+  region             String?
+  district           String?
+  logoMediaId        String?
+  coverMediaId       String?
+  verificationStatus String   @default("UNVERIFIED") // UNVERIFIED | VERIFIED | PREMIUM
+  storeAge           Int      @default(0) // days
+  categories         String[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  products           Product[]
+  trustPassport      TrustPassport?
+}
+
+model TrustPassport {
+  id                 String   @id @default(uuid())
+  sellerId           String   @unique
+  seller             SellerProfile @relation(fields: [sellerId], references: [id])
+  verificationLevel Int      @default(0)
+  completedOrders   Int      @default(0)
+  successfulSales   Int      @default(0)
+  disputeRate       Decimal  @db.Decimal(5, 2) @default(0.00)
+  responseMetrics    Json?
+  badges             String[]
+  updatedAt          DateTime @updatedAt
+}
+
+// =============================================================================
+// CATALOG & PRODUCTS
+// =============================================================================
+
+model Product {
+  id           String   @id @default(uuid())
+  sellerId     String
+  seller       SellerProfile @relation(fields: [sellerId], references: [id])
+  categoryId   String
+  title        String
+  slug         String   @unique
+  description  String
+  price        Decimal  @db.Decimal(12, 2)
+  currency     String   @default("TZS")
+  stock        Int      @default(1)
+  status       String   @default("ACTIVE") // ACTIVE | OUT_OF_STOCK | ARCHIVED
+  condition    String   @default("NEW") // NEW | USED
+  location     String?
+  shippingMode String   @default("FIXED") // FIXED | QUOTED | PICKUP
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  media        ProductMedia[]
+  orderItems   OrderItem[]
+}
+
+model ProductMedia {
+  id           String   @id @default(uuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  type         String   // IMAGE | VIDEO
+  objectKey    String   // R2 Key
+  thumbnailKey String?  // R2 Key
+  width        Int?
+  height       Int?
+  duration     Int?     // seconds for video
+  sortOrder    Int      @default(0)
+}
+
+// =============================================================================
+// COMMERCE & ORDERS (State Machine)
+// =============================================================================
+
+model Order {
+  id                String   @id @default(uuid())
+  buyerId           String
+  buyer             User     @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId          String
+  seller            User     @relation("SellerOrders", fields: [sellerId], references: [id])
+  status            String   @default("DRAFT") 
+  // States: DRAFT | PENDING_PAYMENT | PAYMENT_PROCESSING | PAID | ESCROW_HELD 
+  //        | SELLER_ACCEPTED | DISPATCH_READY | DISPATCHED | IN_TRANSIT 
+  //        | ARRIVED | DELIVERED | DELIVERY_CONFIRMED | COMPLETED
+  //        | PAYMENT_FAILED | CANCELLED | REFUND_PENDING | REFUNDED | DISPUTED | EXPIRED
+  
+  currency          String   @default("TZS")
+  subtotal          Decimal  @db.Decimal(12, 2)
+  shippingCost      Decimal  @db.Decimal(12, 2) @default(0)
+  platformFee       Decimal  @db.Decimal(12, 2) @default(0)
+  discount          Decimal  @db.Decimal(12, 2) @default(0)
+  total             Decimal  @db.Decimal(12, 2)
+  escrowAmount      Decimal  @db.Decimal(12, 2)
+  deliveryType      String   @default("COURIER") // COURIER | PICKUP
+  shippingAddress   Json?    // Snapshot of address at time of order
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  items             OrderItem[]
+  timeline          OrderTimeline[]
+  payment           Payment?
+  dispute           Dispute?
+  refund            Refund?
+  handover          Handover?
+}
+
+model OrderItem {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  sellerId      String
+  titleSnapshot String
+  priceSnapshot Decimal  @db.Decimal(12, 2)
+  quantity      Int
+  variantSnapshot Json?
+}
+
+model OrderTimeline {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  event     String   // e.g., "PAYMENT_CONFIRMED", "DISPATCHED"
+  actorType String   // BUYER | SELLER | SYSTEM | ADMIN
+  actorId   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+// =============================================================================
+// PAYMENTS & FINANCIAL LEDGER (The Core Truth)
+// =============================================================================
+
+model Payment {
+  id             String   @id @default(uuid())
+  orderId        String   @unique
+  order          Order    @relation(fields: [orderId], references: [id])
+  provider       String   // CLICKPESA | MALIPAY
+  providerTransId String  @unique
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("TZS")
+  status         String   @default("pending") // pending | processing | completed | failed | refunded
+  idempotencyKey String   @unique
+  initiatedAt    DateTime @default(now())
+  confirmedAt    DateTime?
+  failedAt       DateTime?
+  metadata       Json?
+
+  auditLogs      PaymentAuditLog[]
+}
+
 model PaymentAuditLog {
   id              String   @id @default(uuid())
   paymentId       String
+  payment         Payment  @relation(fields: [paymentId], references: [id])
   transactionId   String
   previousStatus  String?
   newStatus       String
-  workerId        String?  // which worker instance processed this
-  processingMs    Int?     // how long the DB write took
+  workerId        String?
+  processingMs    Int?
   errorMessage    String?
   createdAt       DateTime @default(now())
+}
 
-  @@index([paymentId])
-  @@index([transactionId])
-  @@index([createdAt])
+model Wallet {
+  id               String   @id @default(uuid())
+  ownerId          String   @unique
+  owner            User     @relation(fields: [ownerId], references: [id])
+  currency         String   @default("TZS")
+  availableBalance Decimal  @db.Decimal(12, 2) @default(0)
+  pendingBalance   Decimal  @db.Decimal(12, 2) @default(0) // For Escrow
+  updatedAt        DateTime @updatedAt
+}
+
+model LedgerAccount {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  accountName String   // e.g., "USER_WALLET", "PLATFORM_REVENUE", "ESCROW_POOL"
+  type        String   // ASSET | LIABILITY
+  currency    String   @default("TZS")
+  entries     LedgerEntry[]
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid())
+  accountId       String
+  account         LedgerAccount @relation(fields: [accountId], references: [id])
+  transactionId   String   // Links to Payment or Payout or Dispute
+  direction       String   // DEBIT | CREDIT
+  amount          Decimal  @db.Decimal(12, 2)
+  currency        String   @default("TZS")
+  referenceType    String   // ORDER | PAYOUT | REFUND | FEE
+  referenceId     String
+  createdAt       DateTime @default(now())
+}
+
+// =============================================================================
+// POST-PAYMENT: DELIVERY, DISPUTES, REFUNDS
+// =============================================================================
+
+model Handover {
+  id          String   @id @default(uuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  otpHash     String
+  qrReference String?
+  status      String   @default("PENDING") // PENDING | VERIFIED | EXPIRED
+  verifiedAt  DateTime?
+}
+
+model Dispute {
+  id          String   @id @default(uuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  openedBy    String
+  reason      String
+  description String
+  status      String   @default("OPEN") // OPEN | RESOLVING | CLOSED
+  resolution  String?
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  evidence    DisputeEvidence[]
+}
+
+model DisputeEvidence {
+  id          String   @id @default(uuid())
+  disputeId   String
+  dispute     Dispute  @relation(fields: [disputeId], references: [id])
+  mediaId     String
+  description String?
+}
+
+model Refund {
+  id              String   @id @default(uuid())
+  orderId         String   @unique
+  order           Order    @relation(fields: [orderId], references: [id])
+  amount          Decimal  @db.Decimal(12, 2)
+  reason          String
+  status          String   @default("PENDING") // PENDING | PROCESSED | FAILED
+  providerRef     String?
+  createdAt       DateTime @default(now())
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id])
+  buyerId    String
+  buyer      User     @relation("BuyerReviews", fields: [buyerId], references: [id])
+  sellerId   String
+  productId  String
+  rating     Int
+  comment    String?
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now())
+}
+
+model Payout {
+  id               String   @id @default(uuid())
+  sellerId         String
+  orderId          String?
+  amount           Decimal  @db.Decimal(12, 2)
+  fee              Decimal  @db.Decimal(12, 2)
+  status           String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  providerReference String?
+  createdAt        DateTime @default(now())
 }

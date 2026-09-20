@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../extensions/context_tr.dart';
+import '../../services/deep_link_service.dart';
+import '../../services/localization_service.dart';
 import '../../theme/app_colors.dart';
 import '../../services/product_service.dart';
 import '../soko_vibe_watermark.dart';
@@ -21,6 +25,9 @@ class CompactProductCard extends StatelessWidget {
   final bool kycVerified;
   final VoidCallback onTap;
   final int discountPercent;
+  final String? productId;
+  final String? currency;
+  final VoidCallback? onShare;
 
   const CompactProductCard({
     super.key,
@@ -34,7 +41,26 @@ class CompactProductCard extends StatelessWidget {
     this.kycVerified = false,
     required this.onTap,
     this.discountPercent = 0,
+    this.productId,
+    this.currency,
+    this.onShare,
   });
+
+  void _shareProduct(BuildContext context) {
+    final shareAction = onShare ?? () {
+      final resolvedProductId = productId;
+      if (resolvedProductId == null || resolvedProductId.isEmpty) return;
+
+      final symbol = LocalizationService.supportedCurrencies[currency]?['symbol'] ?? 'TSh';
+      final shareText =
+          '$title\n'
+          '${context.trParams('share_price_line', {'price': '$symbol ${price.toStringAsFixed(0)}'})}\n'
+          '${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(resolvedProductId)}';
+
+      SharePlus.instance.share(ShareParams(text: shareText));
+    };
+    shareAction();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +108,22 @@ class CompactProductCard extends StatelessWidget {
                             color: cs.surfaceContainerLow,
                             child: Icon(Icons.image_outlined, size: 32, color: cs.onSurfaceVariant),
                           ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.30),
+                        borderRadius: BorderRadius.circular(999),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: () => _shareProduct(context),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(Icons.share_outlined, size: 14, color: cs.surface),
+                          ),
+                        ),
+                      ),
+                    ),
                     Positioned(
                       bottom: 4,
                       left: 4,

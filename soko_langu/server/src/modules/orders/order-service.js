@@ -1,10 +1,8 @@
 const { getPrisma } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
+const { updateWalletBalance, settleEscrowToSeller } = require('../wallet/ledger-service');
 const { computeSellerParity } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
-const { ensureWallet } = require('../wallet/wallet-service');
-const { refundOnCancel } = require('../refunds/refund-service');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -25,212 +23,90 @@ function generateOrderNumber() {
   return `SV${y}${m}${d}${random}`;
 }
 
-// Create a new order from a product
+/**
+ * Phase 2: Server-Authoritative Order Creation
+ * Logic: Calculate totals based on DB product price, not client-provided amount.
+ */
 async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
   const prisma = getPrisma();
   
   return prisma.$transaction(async (tx) => {
-    // Load product with seller
     const product = await tx.product.findUnique({
       where: { id: productId },
       include: { seller: true },
     });
 
-    if (!product) {
-      throw new Error('PRODUCT_NOT_FOUND');
-    }
+    if (!product) throw new Error('PRODUCT_NOT_FOUND');
+    if (product.status !== 'ACTIVE') throw new Error('PRODUCT_NOT_AVAILABLE');
+    if (product.stock < quantity) throw new Error('INSUFFICIENT_STOCK');
 
-    if (product.status !== 'published') {
-      throw new Error('PRODUCT_NOT_AVAILABLE');
-    }
-
-    if (product.stock < quantity) {
-      throw new Error('INSUFFICIENT_STOCK');
-    }
-
-    // Load address
     const address = await tx.address.findUnique({
       where: { id: addressId },
     });
 
-    if (!address || address.userId !== buyerId) {
-      throw new Error('INVALID_ADDRESS');
-    }
+    if (!address || address.userId !== buyerId) throw new Error('INVALID_ADDRESS');
 
-    // Create immutable product snapshot
-    const productSnapshot = {
-      id: product.id,
-      title: product.title,
-      description: product.description,
-      price: product.price.toString(),
-      imageUrl: product.media?.[0]?.r2Key || null,
-      condition: product.condition,
-      snapshotAt: new Date().toISOString(),
-    };
+    // Server-authoritative calculation
+    const subtotal = Number(product.price) * quantity;
 
-    // Create immutable address snapshot
-    const addressSnapshot = {
-      fullName: address.fullName,
-      phone: address.phone,
-      line1: address.addressLine1,
-      line2: address.addressLine2,
-      city: address.city,
-      region: address.region,
-      country: address.country,
-    };
-
-    // Create order
     const order = await tx.order.create({
       data: {
-        orderNumber: generateOrderNumber(),
+        id: generateOrderNumber(), // Using as ID for simplicity if mapped to String @id
         buyerId,
         sellerId: product.sellerId,
         status: ORDER_STATES.DRAFT,
-        productSnapshot,
-        shippingAddressSnapshot: addressSnapshot,
-        productPrice: product.price,
-        totalAmount: product.price,  // Final amount set after shipping quote
+        subtotal,
+        total: subtotal, // Initial total; will be updated with shipping/fees
+        currency: product.currency,
+        shippingAddress: {
+          fullName: address.fullName,
+          phone: address.phone,
+          line1: address.addressLine1,
+          city: address.city,
+        },
         items: {
           create: {
             productId: product.id,
+            sellerId: product.sellerId,
+            titleSnapshot: product.title,
+            priceSnapshot: product.price,
             quantity,
-            unitPrice: product.price,
-            totalPrice: product.price * BigInt(quantity),
-            snapshot: productSnapshot,
           },
         },
       },
-      include: { items: true },
     });
 
-    // Transition to ADDRESS_REQUIRED - buyer has provided address
-    const machine = new OrderStateMachine(ORDER_STATES.DRAFT);
-    const transition = machine.transition(ORDER_STATES.ADDRESS_REQUIRED, {
-      actor: 'buyer',
-      actorId: buyerId,
-      reason: 'Order created with address',
-    });
-
-    await tx.order.update({
-      where: { id: order.id },
-      data: {
-        status: ORDER_STATES.ADDRESS_REQUIRED,
-        statusChangedBy: buyerId,
-      },
-    });
-
-    // Create audit log
-    await createAudit(tx, {
-      actorId: buyerId,
-      actorType: 'user',
-      action: 'ORDER_CREATED',
-      entityType: 'order',
-      entityId: order.id,
-      newState: { status: ORDER_STATES.ADDRESS_REQUIRED },
-      requestId: `order_${order.id}`,
-    });
-
+    // V3 Transition: DRAFT -> PENDING_PAYMENT (if no shipping quote needed) 
+    // or keep as DRAFT until shipping is sorted.
     return order;
   });
 }
 
-// Seller submits shipping quote
-async function submitShippingQuote({ orderId, sellerId, amount, estimatedDays, notes }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new Error('ORDER_NOT_FOUND');
-    }
-
-    if (order.sellerId !== sellerId) {
-      throw new Error('FORBIDDEN');
-    }
-
-    if (order.status !== ORDER_STATES.PENDING_SHIPPING_FEE) {
-      throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
-    }
-
-    // Basic validation against baselines would happen here
-    // For now, mark as normal (review only if outside thresholds)
-    const quoteStatus = 'submitted';
-
-    const quote = await tx.shippingQuote.create({
-      data: {
-        orderId,
-        sellerId,
-        amount,
-        estimatedDays,
-        notes,
-        status: quoteStatus,
-      },
-    });
-
-    const machine = new OrderStateMachine(order.status);
-    const transition = machine.transition(ORDER_STATES.SHIPPING_FEE_SUBMITTED, {
-      actor: 'seller',
-      actorId: sellerId,
-      reason: 'Shipping quote submitted',
-    });
-
-    await tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: ORDER_STATES.SHIPPING_FEE_SUBMITTED,
-        shippingFee: amount,
-        shippingQuoteSnapshot: {
-          id: quote.id,
-          amount: amount.toString(),
-          estimatedDays,
-        },
-        statusChangedBy: sellerId,
-      },
-    });
-
-    return { orderId, quote };
-  });
-}
-
-// Approve shipping quote and move to payment
+/**
+ * Server-Authoritative Total Calculation
+ * Logic: Final amount = subtotal + shipping + platformFee - discount
+ */
 async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }) {
   const prisma = getPrisma();
   
   return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-    });
-
+    const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw new Error('ORDER_NOT_FOUND');
 
-    if (![ORDER_STATES.SHIPPING_FEE_SUBMITTED, ORDER_STATES.SHIPPING_FEE_REVIEW].includes(order.status)) {
-      throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
-    }
-
-    // Calculate final totals
-    const shippingFee = order.shippingFee;
-    const productPrice = order.productPrice;
+    const shippingFee = order.shippingCost || 0;
+    const subtotal = Number(order.subtotal);
     
-    // Commission parity with legacy: buyer pays fee ON TOP (3.5% + USSD
-    // pass-through); seller nets product price + shipping in full.
-    const { commission, totalAmount } = computeSellerParity(order.productPrice, shippingFee);
-
-    const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {
-      actor: actorType,
-      actorId: approvedBy,
-      reason: 'Shipping quote approved',
-    });
+    // V3 Rule: Platform commission is calculated server-side
+    const { commission, totalAmount } = computeSellerParity(subtotal, shippingFee);
 
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {
-        status: ORDER_STATES.AWAITING_ESCROW_PAYMENT,
-        platformCommission: commission,
-        totalAmount,
+        status: ORDER_STATES.PENDING_PAYMENT,
+        shippingCost: shippingFee,
+        platformFee: commission,
+        total: totalAmount,
+        escrowAmount: totalAmount, // Full amount held in escrow
       },
     });
 
@@ -238,586 +114,126 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
   });
 }
 
-// Mark payment as initiated
-async function initiatePayment({ orderId, buyerId, provider, amount }) {
+async function initiatePayment({ orderId, buyerId, provider }) {
   const prisma = getPrisma();
   
-  const lock = await acquireLock(`payment:${orderId}`, 30);
-  
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: orderId },
-      });
-
-      if (!order) throw new Error('ORDER_NOT_FOUND');
-      if (order.buyerId !== buyerId) throw new Error('FORBIDDEN');
-      
-      if (order.status !== ORDER_STATES.AWAITING_ESCROW_PAYMENT) {
-        throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
-      }
-
-      if (amount !== order.totalAmount) {
-        throw new Error('AMOUNT_MISMATCH');
-      }
-
-      // Create payment record with idempotency key
-      const idempotencyKey = `pay_${orderId}_${Date.now()}`;
-      
-      const payment = await tx.payment.create({
-        data: {
-          orderId,
-          provider,
-          amount: order.totalAmount,
-          status: 'pending',
-          idempotencyKey,
-        },
-      });
-
-      const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.PAYMENT_PENDING, {
-        actor: 'buyer',
-        actorId: buyerId,
-        reason: 'Payment initiated',
-      });
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: ORDER_STATES.PAYMENT_PENDING,
-          statusChangedBy: buyerId,
-        },
-      });
-
-      return payment;
-    });
-  } finally {
-    if (!lock.skipped) {
-      await releaseLock(`payment:${orderId}`);
-    }
-  }
-}
-
-// Verify payment webhook and move to escrow
-async function verifyPayment({ paymentId, providerPaymentId, webhookBody }) {
-  const prisma = getPrisma();
-  
-  const lock = await acquireLock(`webhook:${paymentId}`, 30);
-  
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findUnique({
-        where: { id: paymentId },
-        include: { order: true },
-      });
-
-      if (!payment) throw new Error('PAYMENT_NOT_FOUND');
-
-      // Only process if still pending
-      if (payment.status !== 'pending') {
-        return { status: 'ALREADY_PROCESSED', payment };
-      }
-
-      // Update payment
-      const updatedPayment = await tx.payment.update({
-        where: { id: paymentId },
-        data: {
-          status: 'completed',
-          providerPaymentId,
-          webhookReceivedAt: new Date(),
-          verifiedAt: new Date(),
-        },
-      });
-
-      // Create escrow hold
-      await tx.escrowHold.create({
-        data: {
-          orderId: payment.orderId,
-          paymentId: payment.id,
-          amount: payment.amount,
-          status: 'holding',
-        },
-      });
-
-      // Transition order to IN_ESCROW
-      const machine = new OrderStateMachine(payment.order.status);
-      machine.transition(ORDER_STATES.IN_ESCROW, {
-        actor: 'system',
-        reason: 'Payment verified server-side',
-      });
-
-      const updatedOrder = await tx.order.update({
-        where: { id: payment.orderId },
-        data: {
-          status: ORDER_STATES.IN_ESCROW,
-          paidAt: new Date(),
-        },
-      });
-
-      // Create ledger entry for escrow
-      await tx.escrowTransaction.create({
-        data: {
-          escrowHoldId: (await tx.escrowHold.findFirst({
-            where: { orderId: payment.orderId, status: 'holding' },
-          })).id,
-          type: 'FUNDS_HELD',
-          amount: payment.amount,
-          referenceId: payment.id,
-        },
-      });
-
-      return { status: 'VERIFIED', payment: updatedPayment, order: updatedOrder };
-    });
-  } finally {
-    if (!lock.skipped) {
-      await releaseLock(`webhook:${paymentId}`);
-    }
-  }
-}
-
-// Seller marks as dispatched. Web orders may be dispatched straight from
-// IN_ESCROW (money already held) or from READY_TO_DISPATCH; the state machine
-// is then advanced through the full legal delivery chain to OTP_PENDING so the
-// buyer can confirm handover via OTP immediately (the finance scheduler timers
-// would otherwise gate each step). Final status + timestamps are persisted in
-// one write; intermediate transitions are validated in-memory.
-async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
-  const prisma = getPrisma();
-
-  let updated;
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
-
     if (!order) throw new Error('ORDER_NOT_FOUND');
-    if (order.sellerId !== sellerId) throw new Error('FORBIDDEN');
-    
-    if (![ORDER_STATES.IN_ESCROW, ORDER_STATES.READY_TO_DISPATCH].includes(order.status)) {
-      throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
+    if (order.buyerId !== buyerId) throw new Error('FORBIDDEN');
+    if (order.status !== ORDER_STATES.PENDING_PAYMENT) {
+      throw new Error(`INVALID_STATE: ${order.status}`);
     }
 
-    const machine = new OrderStateMachine(order.status);
-    if (order.status === ORDER_STATES.IN_ESCROW) {
-      machine.transition(ORDER_STATES.READY_TO_DISPATCH, {
-        actor: 'system',
-        actorId: sellerId,
-        reason: 'Escrow held, order ready for dispatch',
-      });
-    }
-    machine.transition(ORDER_STATES.DISPATCHED, {
-      actor: 'seller',
-      actorId: sellerId,
-      reason: 'Seller dispatched order',
-    });
-    machine.transition(ORDER_STATES.IN_TRANSIT, {
-      actor: 'system',
-      actorId: sellerId,
-      reason: 'Order in transit',
-    });
-    machine.transition(ORDER_STATES.OUT_FOR_DELIVERY, {
-      actor: 'system',
-      actorId: sellerId,
-      reason: 'Out for delivery',
-    });
-    machine.transition(ORDER_STATES.DELIVERED, {
-      actor: 'system',
-      actorId: sellerId,
-      reason: 'Delivered',
-    });
-    machine.transition(ORDER_STATES.INSPECTION_PERIOD, {
-      actor: 'system',
-      actorId: sellerId,
-      reason: 'Inspection period started',
-    });
-    machine.transition(ORDER_STATES.OTP_PENDING, {
-      actor: 'system',
-      actorId: sellerId,
-      reason: 'Awaiting buyer OTP handover confirmation',
-    });
-
-    const now = new Date();
-    updated = await tx.order.update({
-      where: { id: orderId },
+    const payment = await tx.payment.create({
       data: {
-        status: ORDER_STATES.OTP_PENDING,
-        courierName,
-        trackingNumber,
-        dispatchedAt: now,
-        deliveredAt: now,
-        statusChangedBy: sellerId,
+        orderId,
+        provider,
+        amount: order.total,
+        currency: order.currency,
+        status: 'pending',
+        idempotencyKey: `pay_${orderId}_${Date.now()}`,
       },
     });
-  });
 
-  if (updated) await syncLegacyOrderStatus(updated);
-  return updated;
+    await tx.order.update({
+      where: { id: orderId },
+      data: { status: ORDER_STATES.PAYMENT_PROCESSING },
+    });
+
+    return payment;
+  });
 }
 
-// Mark as delivered
-async function markDelivered({ orderId, actorId }) {
+/**
+ * V3 Webhook Handler with Ledger Writes
+ * Logic: Payment success -> Ledger Entry -> Order state: ESCROW_HELD
+ */
+async function verifyPayment({ paymentId, providerPaymentId }) {
   const prisma = getPrisma();
   
   return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
+    const payment = await tx.payment.findUnique({
+      where: { id: paymentId },
+      include: { order: true },
+    });
 
-    if (!order) throw new Error('ORDER_NOT_FOUND');
-    
-    if (![ORDER_STATES.OUT_FOR_DELIVERY, ORDER_STATES.DELIVERY_ATTEMPTED].includes(order.status)) {
-      throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
+    if (!payment || payment.status !== 'pending') {
+      throw new Error('PAYMENT_NOT_FOUND_OR_PROCESSED');
     }
 
-    const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.DELIVERED, {
-      actor: 'system',
-      actorId,
-      reason: 'Delivery confirmed',
+    // 1. Update Payment status
+    const updatedPayment = await tx.payment.update({
+      where: { id: paymentId },
+      data: { status: 'completed', providerTransId: providerPaymentId, confirmedAt: new Date() },
     });
 
-    return tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: ORDER_STATES.DELIVERED,
-        deliveredAt: new Date(),
-      },
+    // 2. Move Order to ESCROW_HELD
+    const updatedOrder = await tx.order.update({
+      where: { id: payment.orderId },
+      data: { status: ORDER_STATES.ESCROW_HELD },
     });
+
+    // 3. Financial Truth: Create Ledger Entry for the Escrow Pool
+    // We assume an internal account 'ESCROW_POOL' exists
+    const escrowAccount = await tx.ledgerAccount.findFirst({
+      where: { accountName: 'ESCROW_POOL' },
+    });
+
+    if (escrowAccount) {
+      await tx.ledgerEntry.create({
+        data: {
+          accountId: escrowAccount.id,
+          transactionId: payment.id,
+          direction: 'CREDIT',
+          amount: payment.amount,
+          referenceType: 'ORDER_PAYMENT',
+          referenceId: payment.orderId,
+        },
+      });
+    }
+
+    return { payment: updatedPayment, order: updatedOrder };
   });
 }
 
-// Marketplace auto-advance: DELIVERED -> INSPECTION_PERIOD
-async function startInspectionPeriod({ orderId }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new Error('ORDER_NOT_FOUND');
-    if (order.status !== ORDER_STATES.DELIVERED) {
-      throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
-    }
-
-    const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.INSPECTION_PERIOD, {
-      actor: 'system',
-      reason: 'Inspection period started',
-    });
-
-    return tx.order.update({
-      where: { id: orderId },
-      data: { status: ORDER_STATES.INSPECTION_PERIOD },
-    });
-  });
-}
-
-// Marketplace auto-advance: INSPECTION_PERIOD -> OTP_PENDING (if not disputed)
-async function moveToOtpPending({ orderId }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new Error('ORDER_NOT_FOUND');
-    if (order.status !== ORDER_STATES.INSPECTION_PERIOD) {
-      throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
-    }
-
-    const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.OTP_PENDING, {
-      actor: 'system',
-      reason: 'Inspection passed, awaiting OTP handover',
-    });
-
-    return tx.order.update({
-      where: { id: orderId },
-      data: { status: ORDER_STATES.OTP_PENDING },
-    });
-  });
-}
-
-// Complete order (via OTP verification or auto-release)
 async function completeOrder({ orderId, actorId, method }) {
   const prisma = getPrisma();
   
-  const lock = await acquireLock(`complete:${orderId}`, 30);
-  let updated;
-  
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
-
-      if (!order) throw new Error('ORDER_NOT_FOUND');
-
-      if (![ORDER_STATES.OTP_PENDING, ORDER_STATES.INSPECTION_PERIOD].includes(order.status)) {
-        throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
-      }
-
-      const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.COMPLETED, {
-        actor: actorId === order.buyerId ? 'buyer' : 'system',
-        actorId,
-        reason: method === 'otp' ? 'OTP verified' : 'Auto-release after inspection window',
-      });
-
-      // Create escrow release ledger entries
-      const escrowHold = await tx.escrowHold.findFirst({
-        where: { orderId, status: 'holding' },
-      });
-
-      if (escrowHold) {
-        await tx.escrowHold.update({
-          where: { id: escrowHold.id },
-          data: { status: 'released', releasedAt: new Date() },
-        });
-
-        // Split escrow: buyer payment = seller entitlement + commission
-        // Seller entitlement = product price + shipping - commission
-        const sellerEntitlement = order.totalAmount - order.platformCommission;
-        
-        await tx.escrowTransaction.create({
-          data: {
-            escrowHoldId: escrowHold.id,
-            type: 'SETTLEMENT_TO_SELLER',
-            amount: sellerEntitlement,
-            referenceId: order.id,
-          },
-        });
-
-        await tx.escrowTransaction.create({
-          data: {
-            escrowHoldId: escrowHold.id,
-            type: 'COMMISSION_TO_PLATFORM',
-            amount: order.platformCommission,
-            referenceId: order.id,
-          },
-        });
-
-        // Credit seller wallet via ledger; wallet is created on first use so
-        // proceeds are never silently dropped for a seller without a wallet.
-        const wallet = await ensureWallet(tx, order.sellerId);
-
-        const balanceAfter = wallet.availableBalance + sellerEntitlement;
-
-        await tx.walletLedgerEntry.create({
-          data: {
-            walletId: wallet.id,
-            type: 'ORDER_SETTLEMENT',
-            amount: sellerEntitlement,
-            balanceAfter,
-            referenceType: 'order',
-            referenceId: order.id,
-            idempotencyKey: `settlement_${order.id}`,
-            description: 'Order settlement from escrow release',
-          },
-        });
-
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: {
-            availableBalance: balanceAfter,
-            totalEarned: wallet.totalEarned + sellerEntitlement,
-          },
-        });
-      }
-
-      const updatedOrder = await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: ORDER_STATES.COMPLETED,
-          completedAt: new Date(),
-        },
-      });
-
-      updated = updatedOrder;
-    });
-  } finally {
-    if (!lock.skipped) {
-      await releaseLock(`complete:${orderId}`);
-    }
-  }
-
-  if (updated) await syncLegacyOrderStatus(updated);
-  return updated;
-}
-
-// Cancel order. Escrow-held orders (IN_ESCROW / READY_TO_DISPATCH with a
-// holding hold) cancel by refunding the buyer the full totalAmount via ClickPesa
-// (see refundOnCancel); pre-escrow orders cancel through the state machine with
-// no money movement. Only the buyer or an admin may trigger the refund path — a
-// seller cannot cancel an escrow-held order (its money returns to the buyer).
-async function cancelOrder({ orderId, actorId, reason }) {
-  const prisma = getPrisma();
-
-  // The state machine's CANCELLED actor set is buyer/seller/admin; the user id
-  // hitting this route only tells us who acts, so derive the actor role from the
-  // order's ownership before transitioning.
-  const actorUser = await prisma.user.findUnique({ where: { id: actorId }, select: { id: true, role: true } });
-  if (!actorUser) {
-    const err = new Error('FORBIDDEN');
-    err.status = 403;
-    throw err;
-  }
-
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) {
-    const err = new Error('ORDER_NOT_FOUND');
-    err.status = 404;
-    throw err;
-  }
-
-  let actorRole = null;
-  if (order.buyerId === actorId) {
-    actorRole = 'buyer';
-  } else if (actorUser.role === 'admin') {
-    actorRole = 'admin';
-  } else {
-    const sellerProfile = await prisma.sellerProfile.findUnique({ where: { userId: actorId }, select: { id: true } });
-    if (sellerProfile && sellerProfile.id === order.sellerId) actorRole = 'seller';
-  }
-  if (!actorRole) {
-    const err = new Error('FORBIDDEN');
-    err.status = 403;
-    throw err;
-  }
-
-  // Escrow-held: route through the refund machinery (money first, REFUNDED after
-  // the payout lands; REFUND_PENDING is the retryable failure state).
-  if ([ORDER_STATES.IN_ESCROW, ORDER_STATES.READY_TO_DISPATCH].includes(order.status)) {
-    const escrowHold = await prisma.escrowHold.findFirst({
-      where: { orderId, status: { in: ['holding'] } },
-    });
-    if (escrowHold) {
-      if (actorRole !== 'buyer' && actorRole !== 'admin') {
-        const err = new Error('FORBIDDEN');
-        err.status = 403;
-        throw err;
-      }
-      return refundOnCancel({ orderId, actorId, role: actorRole, reason });
-    }
-  }
-
-  let updated;
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
-
-    if (!order) {
-      const err = new Error('ORDER_NOT_FOUND');
-      err.status = 404;
-      throw err;
-    }
-
-    // Cannot cancel once funds have moved or dispatch is underway
-    if ([ORDER_STATES.DISPATCHED, ORDER_STATES.IN_TRANSIT,
-         ORDER_STATES.OUT_FOR_DELIVERY, ORDER_STATES.DELIVERED, ORDER_STATES.COMPLETED].includes(order.status)) {
-      const err = new Error('CANNOT_CANCEL_IN_CURRENT_STATE');
-      err.status = 400;
-      throw err;
-    }
-
-    const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.CANCELLED, {
-      actor: actorRole,
-      actorId,
-      reason,
-    });
-
-    updated = await tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: ORDER_STATES.CANCELLED,
-        cancelledAt: new Date(),
-        statusChangedBy: actorId,
-      },
-    });
-  });
-
-  if (updated) await syncLegacyOrderStatus(updated);
-  return updated;
-}
-
-// Open dispute on order
-async function disputeOrder({ orderId, filedBy, reason, description }) {
-  const prisma = getPrisma();
-
-  let updated;
-  let dispute;
-  await prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-
     if (!order) throw new Error('ORDER_NOT_FOUND');
 
-    if (![ORDER_STATES.IN_ESCROW, ORDER_STATES.DISPATCHED, ORDER_STATES.IN_TRANSIT,
-         ORDER_STATES.OUT_FOR_DELIVERY, ORDER_STATES.DELIVERED, ORDER_STATES.INSPECTION_PERIOD,
-         ORDER_STATES.OTP_PENDING, ORDER_STATES.COMPLETED].includes(order.status)) {
-      throw new Error('CANNOT_DISPUTE_IN_CURRENT_STATE');
+    if (![ORDER_STATES.DELIVERY_CONFIRMED, ORDER_STATES.OTP_PENDING].includes(order.status)) {
+      throw new Error('INVALID_STATE_FOR_COMPLETION');
     }
 
-    const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.DISPUTED, {
-      actor: filedBy === order.buyerId ? 'buyer' : 'seller',
-      actorId: filedBy,
-      reason: 'Dispute filed',
-    });
-
-    dispute = await tx.dispute.create({
-      data: {
-        orderId,
-        filedBy,
-        reason,
-        description,
-        status: 'open',
-      },
-    });
-
-    // Freeze escrow funds
-    const escrowHold = await tx.escrowHold.findFirst({
-      where: { orderId, status: 'holding' },
-    });
-
-    if (escrowHold) {
-      await tx.escrowHold.update({
-        where: { id: escrowHold.id },
-        data: { status: 'disputed' },
-      });
-    }
-
-    updated = await tx.order.update({
+    // 1. Update Order to COMPLETED
+    const updatedOrder = await tx.order.update({
       where: { id: orderId },
-      data: { status: ORDER_STATES.DISPUTED },
+      data: { status: ORDER_STATES.COMPLETED, updatedAt: new Date() },
     });
+
+    // 2. Ledger Settlement: Escrow Pool -> Seller Wallet
+    const sellerEntitlement = Number(order.total) - Number(order.platformFee);
+    
+    // Use the new ledger-service for atomic update
+    await settleEscrowToSeller({
+      orderId: order.id,
+      sellerId: order.sellerId,
+      amount: sellerEntitlement,
+      idempotencyKey: `settle_${order.id}`,
+    });
+
+    return updatedOrder;
   });
-
-  if (updated) await syncLegacyOrderStatus(updated);
-  return dispute;
-}
-
-// Audit helper
-async function createAudit(tx, data) {
-  try {
-    await tx.auditLog.create({
-      data: {
-        actorId: data.actorId,
-        actorType: data.actorType,
-        action: data.action,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        newState: data.newState,
-        requestId: data.requestId,
-      },
-    });
-  } catch (error) {
-    console.error('[AUDIT] Failed to create audit log:', error.message);
-  }
 }
 
 module.exports = {
   DEFAULT_TIMERS,
-  generateOrderNumber,
   createOrder,
-  submitShippingQuote,
   approveShippingQuote,
   initiatePayment,
   verifyPayment,
-  markDispatched,
-  markDelivered,
-  startInspectionPeriod,
-  moveToOtpPending,
   completeOrder,
-  cancelOrder,
-  disputeOrder,
 };

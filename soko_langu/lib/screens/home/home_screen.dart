@@ -183,7 +183,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   List<Product> _getFilteredProducts(List<Product> products) {
-    var result = products.toList();
+    // grid + carousel (TrendingCarousel/RecentlyViewed) huchora kutoka streams tofauti,
+    // hivyo bidhaa ile ile (by id) inaweza kuvuja mara mbili kwenye merge ya realtime/cache.
+    // Dedup hapa (render boundary) inahakikisha kila bidhaa inaonekana mara moja kwenye grid.
+    final seen = <String>{};
+    var result = <Product>[];
+    for (final p in products) {
+      if (seen.add(p.id)) result.add(p);
+    }
     if (_minPrice != null) result = result.where((p) => p.price >= _minPrice!).toList();
     if (_maxPrice != null) result = result.where((p) => p.price <= _maxPrice!).toList();
     if (_condition != 'all') result = result.where((p) => p.condition == _condition).toList();

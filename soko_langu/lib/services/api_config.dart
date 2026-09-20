@@ -72,6 +72,22 @@ class ApiConfig {
   /// backfilled; admin panel stays on legacy /api/admin/kyc/*.
   static const bool kUseKycApi = true;
 
+  /// Phase F (R2/MEDIA) bridge switch: when true, product image/video uploads
+  /// go through `r2_media_service.dart` using the `/api/v1/media/upload-url`
+  /// presigned PUT flow (media bytes go straight to Cloudflare R2, no
+  /// Cloudinary credentials ever touch the client) with `r2PublicUrl` as the
+  /// public read base — mirroring the `CloudinaryService` API so callers swap
+  /// via one const. Flipped true only after the R2 evidence/media backfill
+  /// lands in production and the media queue (thumbnails/video-transcode) is
+  /// verified on live buckets. Until then uploads stay on Cloudinary.
+  static const bool kUseMediaApi = false;
+
+  /// Public read origin for R2 media (server: `R2_PUBLIC_URL`, served through
+  /// the media CDN edge). Objects live at `<r2PublicUrl>/<kind>/<key>`.
+  /// Since `kUseMediaApi` stays OFF until the R2 media backfill, this base is
+  /// unused by current production flows.
+  static const String r2PublicUrl = 'https://media.soko-vibe.co.tz';
+
   /// Phase D user-profile bridge switch: when true, the current user's profile
   /// read/write (/api/v1/users/me) and other users' public profiles
   /// (/api/v1/users/public/:id) come from Postgres with Firestore as the

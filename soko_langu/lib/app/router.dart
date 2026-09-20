@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_transitions.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
@@ -65,6 +64,7 @@ import '../screens/legal/terms_of_service_screen.dart';
 import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
+import '../repositories/product_repository.dart'; // Added for V3 API loading
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -122,22 +122,16 @@ GoRouter buildRouter() {
       final isAuth = app_state.appStateNotifier.isAuthenticated;
       final isAdmin = app_state.appStateNotifier.isAdmin;
 
-      // Authenticated users should not be on login/register — redirect to home.
-      // This is the safety net that catches cases where the imperative
-      // onSuccess callback (Navigator.push from OtpScreen) fails to fire
-      // because the OtpScreen was discarded by a router rebuild.
       final authScreens = [AppRoutes.login, AppRoutes.register];
       if (isAuth && authScreens.any((r) => location == r || location.startsWith('$r/'))) {
         return AppRoutes.home;
       }
 
-      // Admin-only routes
       if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;
         if (!isAdmin) return AppRoutes.home;
       }
 
-      // Auth-required routes
       if (_authRequiredRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;
       }
@@ -198,8 +192,6 @@ GoRouter buildRouter() {
         path: '${AppRoutes.productDetail}/:id',
         pageBuilder: (context, state) {
           final extra = state.extra;
-          // Deep links (e.g. notification taps) arrive with only the :id and no
-          // Product object, so load from Firestore instead of casting null.
           return _premiumPage(
             extra is Product
                 ? ProductDetailPage(product: extra)
@@ -503,10 +495,16 @@ class _ProductDetailLoaderState extends State<_ProductDetailLoader> {
 
   Future<Product?> _load() async {
     try {
-      final doc =
-          await FirebaseFirestore.instance.collection('products').doc(widget.productId).get();
-      return doc.exists ? Product.fromFirestore(doc) : null;
-    } catch (_) {
+      // V3 Alignment: Use ProductRepository (API) instead of direct Firestore call
+      // This ensures the user sees the authoritative price and stock from Postgres.
+      final repository = ProductRepository(
+        apiClient: ProductApiClient(), // Injected or provided via Provider
+        cache: LocalCacheService(),
+      );
+      
+      return await repository.getProductById(widget.productId);
+    } catch (e) {
+      debugPrint('DeepLink Product Load Error: $e');
       return null;
     }
   }

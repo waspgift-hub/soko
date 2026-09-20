@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../extensions/context_tr.dart';
 import '../services/api_config.dart';
+import '../widgets/soko_vibe_loading.dart';
+import '../extensions/context_tr.dart';
 
 class ConnectivityWrapper extends StatefulWidget {
   final Widget child;
@@ -16,6 +17,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   bool _offline = false;
   bool _initialized = false;
   Timer? _retryTimer;
+  int _retryCount = 0;
 
   @override
   void initState() {
@@ -26,43 +28,57 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   Future<void> _checkServer() async {
     final reachable = await _isServerReachable();
     if (!mounted) return;
-    if (reachable) {
-      setState(() {
-        _offline = false;
-        _initialized = true;
-      });
-      _retryTimer?.cancel();
-      return;
-    }
     setState(() {
-      _offline = true;
+      _offline = !reachable;
       _initialized = true;
     });
-    _startRetryTimer();
+    if (!reachable) {
+      _startRetryTimer();
+    } else {
+      _retryTimer?.cancel();
+      _retryCount = 0;
+    }
   }
 
   void _startRetryTimer() {
     _retryTimer?.cancel();
-    _retryTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    _//retryTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       final reachable = await _isServerReachable();
       if (!mounted) return;
       if (reachable) {
         _retryTimer?.cancel();
-        setState(() => _offline = false);
+        setState(() {
+          _offline = false;
+          _retryCount = 0;
+        });
+      } else {
+        setState(() {
+          _retryCount++;
+        });
       }
     });
   }
 
   Future<bool> _isServerReachable() async {
     try {
-      // Any HTTP response (even 503) proves network + server reachability.
-      // /health is the canonical endpoint (there is no /ping route).
       final resp = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/health'),
       ).timeout(const Duration(seconds: 5));
       return resp.statusCode < 600;
     } catch (_) {
       return false;
+    }
+  }
+
+  String _getDynamicMessage() {
+    if (_retryCount == 0) {
+      return context.tr('connection_lost', 'Connection lost. Reconnecting...');
+    } else if (_retryCount < 3) {
+      return context.tr('still_connecting', 'Still trying to connect...');
+    } else if (_//retryCount < 6) {
+      return context.tr('network_unstable', 'Network unstable. Please check your settings.');
+    } else {
+      return context.tr('connection_timeout', 'Connection timeout. We are still trying...');
     }
   }
 
@@ -78,63 +94,40 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
 
     return Stack(
       children: [
-        widget.child,
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: SafeArea(
-            bottom: false,
-            child: _OfflineBanner(
-              onRetry: () {
-                _retryTimer?.cancel();
-                _checkServer();
-              },
-            ),
+        AbsorbPointer(
+          child: Opacity(
+            opacity: 0.6, 
+            child: widget.child,
+          ),
+        ),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SokoVibeLoading(size: 60),
+              const SizedBox(height: 16),
+              Text(
+                _getDynamicMessage(),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('please_stay_on_screen', 'Please stay on this screen'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _OfflineBanner extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _OfflineBanner({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Material(
-        color: cs.errorContainer,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onRetry,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Row(
-              children: [
-                Icon(Icons.cloud_off_rounded, color: cs.onErrorContainer),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    context.tr('no_internet_connection'),
-                    style: TextStyle(
-                      color: cs.onErrorContainer,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Icon(Icons.refresh_rounded, color: cs.onErrorContainer, size: 20),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
