@@ -235,6 +235,12 @@ app.use('/marketing', (req, res) => {
   res.redirect(301, '/');
 });
 
+// /shop served the retired web-shop SPA; fold it onto the landing root so
+// old bookmarks and links land somewhere useful instead of a 404.
+app.use('/shop', (req, res) => {
+  res.redirect(301, '/');
+});
+
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
   // Old panel URLs redirect to the real panel so nobody lands on a stale page.
   app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
