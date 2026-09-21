@@ -180,14 +180,143 @@ h1, h2, h3, h4, p { margin: 0; }
   color: var(--white);
   text-align: center;
   padding: 96px 0 72px;
+  overflow: hidden;
+}
+
+/* Two-column hero on desktop; stacked copy-first on mobile so the CTA
+   stays in the first viewport. Note + pay strip always span full width. */
+.hero-grid {
+  display: grid;
+  gap: 56px;
+  align-items: center;
+  text-align: center;
+}
+
+.hero-grid > .note,
+.hero-grid > .pay-strip {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 960px) {
+  .hero-grid {
+    grid-template-columns: 1.05fr 0.95fr;
+    text-align: left;
+  }
+  .hero-copy .sub { margin-left: 0; margin-right: 0; }
+  .hero-copy .actions { justify-content: flex-start; }
 }
 
 .hero-mark {
-  width: 120px;
-  height: 120px;
+  width: 72px;
+  height: 72px;
   margin: 0 auto 28px;
-  border-radius: 28px;
+  border-radius: 18px;
   box-shadow: 0 0 0 1px #333333, 0 24px 60px rgba(255, 255, 255, 0.12);
+}
+
+@media (min-width: 960px) {
+  .hero-mark { margin-left: 0; margin-right: 0; }
+}
+
+/* ---------- CSS phone mockup (original artwork, no downloads) ---------- */
+
+.hero-visual {
+  display: flex;
+  justify-content: center;
+}
+
+.phone {
+  width: min(280px, 72vw);
+  border-radius: 44px;
+  border: 1px solid #3a3a3a;
+  background: #101010;
+  padding: 12px;
+  box-shadow: 0 0 0 8px #050505, 0 32px 80px rgba(255, 255, 255, 0.1);
+  animation: phone-float 6s ease-in-out infinite;
+}
+
+@keyframes phone-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.phone-notch {
+  width: 96px;
+  height: 22px;
+  margin: 2px auto 10px;
+  border-radius: 999px;
+  background: #050505;
+  border: 1px solid #2a2a2a;
+}
+
+.phone-screen {
+  border-radius: 32px;
+  background: var(--white);
+  color: var(--ink);
+  padding: 14px 12px 16px;
+  text-align: left;
+}
+
+.mock-search {
+  font-size: 0.8rem;
+  color: var(--faint);
+  background: #f1f1f1;
+  border-radius: 999px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+}
+
+.mock-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mock-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.mock-img {
+  height: 64px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.mock-img-a { background: #0a0a0a; }
+.mock-img-b { background: #3d3d3d; }
+
+.mock-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mock-price {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.mock-escrow {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #15803d;
+  background: rgba(22, 163, 74, 0.12);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.mock-chat {
+  font-size: 0.78rem;
+  background: #0a0a0a;
+  color: var(--white);
+  border-radius: 14px 14px 14px 4px;
+  padding: 8px 12px;
+  max-width: 85%;
 }
 
 .eyebrow {
@@ -253,6 +382,14 @@ h1, h2, h3, h4, p { margin: 0; }
   margin-top: 20px;
   font-size: 0.9rem;
   color: #9a9a9a;
+}
+
+.hero .proof {
+  margin-top: 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #c9c9c9;
 }
 
 .pay-strip {
