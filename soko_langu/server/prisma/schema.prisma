@@ -51,6 +51,7 @@ model User {
   auditLogs         AuditLog[]
   disputes          Dispute[]
   disputeEvidence   DisputeEvidence[]
+  campaignEvents    CampaignEvent[]
 
   @@map("users")
 }
@@ -141,6 +142,7 @@ model SellerProfile {
   shippingQuotes   ShippingQuote[]
   commissionTxs CommissionTransaction[]
   withdrawals   Withdrawal[]
+  sponsoredCampaigns SponsoredCampaign[]
 
   @@map("seller_profiles")
 }
@@ -191,6 +193,8 @@ model Product {
   feedPosts       FeedPost[]
   saves           Save[]
   boosts          Boost[]
+  campaignPlacements CampaignPlacement[]
+  campaignEvents  CampaignEvent[]
 
   @@map("products")
 }
