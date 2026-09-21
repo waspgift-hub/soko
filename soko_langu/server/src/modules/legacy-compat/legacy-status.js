@@ -5,7 +5,44 @@
 // REMOVAL PATH (Phase G): delete with the mirrored collections; the app will
 // read order status straight from /api/v1/orders.
 
-const LEGACY_STATUS = {
+// Canonical money-model spellings (ORDER_STATES) -> legacy display string.
+const CANONICAL_TO_LEGACY = {
+  DRAFT: 'pending',
+  PENDING_SHIPPING_FEE: 'pending',
+  SHIPPING_FEE_SUBMITTED: 'pending',
+  SHIPPING_FEE_REVIEW: 'pending',
+  AWAITING_ESCROW_PAYMENT: 'pending',
+  PENDING_PAYMENT: 'pending',
+  PAYMENT_PENDING: 'pending',
+  PAYMENT_PROCESSING: 'pending',
+  PAID: 'pending',
+  FAILED: 'failed',
+  PAYMENT_FAILED: 'failed',
+  ESCROW_HELD: 'escrow_hold',
+  IN_ESCROW: 'escrow_hold',
+  SELLER_ACCEPTED: 'escrow_hold',
+  DISPATCH_READY: 'escrow_hold',
+  READY_TO_DISPATCH: 'escrow_hold',
+  DISPATCHED: 'dispatched',
+  IN_TRANSIT: 'dispatched',
+  OUT_FOR_DELIVERY: 'dispatched',
+  DELIVERY_ATTEMPTED: 'delivered',
+  ARRIVED: 'delivered',
+  DELIVERED: 'delivered',
+  INSPECTION_PERIOD: 'delivered',
+  OTP_PENDING: 'delivered',
+  DELIVERY_CONFIRMED: 'delivered',
+  COMPLETED: 'completed',
+  WALLET_CREDITED: 'completed',
+  CANCELLED: 'cancelled',
+  REFUND_PENDING: 'refunded',
+  REFUNDED: 'refunded',
+  DISPUTED: 'disputed',
+  EXPIRED: 'failed',
+};
+
+// Pre-V3 Firestore / app vocabulary also seen in persisted rows.
+const LEGACY_SPELLINGS = {
   payment_pending: 'pending',
   pending_shipping_fee: 'pending',
   awaiting_escrow_payment: 'pending',
@@ -35,11 +72,18 @@ const LEGACY_STATUS = {
   shipping_fee_review: 'pending',
 };
 
+const LEGACY_STATUS = Object.assign(
+  {},
+  LEGACY_SPELLINGS,
+  CANONICAL_TO_LEGACY,
+);
+
 function legacyStatusOf(v2Status) {
   return LEGACY_STATUS[v2Status] || 'pending';
 }
 
 module.exports = {
   LEGACY_STATUS,
+  CANONICAL_TO_LEGACY,
   legacyStatusOf,
 };

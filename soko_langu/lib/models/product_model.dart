@@ -83,6 +83,8 @@ class Product {
   final bool isBoosted;
   final DateTime? boostedUntil;
   final String boostTier;
+  final bool isSponsored;
+  final String? sponsorshipCampaignId;
   final String? brand;
   final String? sellerPhone;
   final String condition;
@@ -123,6 +125,8 @@ final String unit;
     this.isBoosted = false,
     this.boostedUntil,
     this.boostTier = '',
+    this.isSponsored = false,
+    this.sponsorshipCampaignId,
     this.brand,
     this.sellerPhone,
     this.condition = 'new',
@@ -253,6 +257,10 @@ final String unit;
       boostTier: json['boostTier']?.toString() ??
           snapshot['boostTier']?.toString() ??
           '',
+      isSponsored: json['isSponsored'] ?? false,
+      sponsorshipCampaignId: json['sponsoredCampaign'] is Map
+          ? (json['sponsoredCampaign'] as Map<String, dynamic>)['id']?.toString()
+          : null,
       brand: snapshot['brand']?.toString(),
       condition: json['condition']?.toString() ??
           snapshot['condition']?.toString() ??
@@ -342,6 +350,8 @@ final String unit;
               ? (data['featuredUntil'] as Timestamp).toDate()
               : null),
       boostTier: data['boostTier'] as String? ?? '',
+      isSponsored: data['isSponsored'] ?? false,
+      sponsorshipCampaignId: data['sponsorshipCampaignId'] as String?,
       brand: data['brand'],
       sellerPhone: data['sellerPhone'] as String?,
       condition: data['condition'] ?? 'new',
@@ -387,6 +397,8 @@ Map<String, dynamic> toMap() => {
         ? Timestamp.fromDate(boostedUntil!)
         : null,
     'boostTier': boostTier,
+    'isSponsored': isSponsored,
+    'sponsorshipCampaignId': sponsorshipCampaignId,
     'brand': brand,
     'sellerPhone': sellerPhone,
     'condition': condition,

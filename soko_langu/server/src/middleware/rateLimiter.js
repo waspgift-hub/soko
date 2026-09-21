@@ -1,4 +1,5 @@
 const { getRedis } = require('../config/redis');
+const { jsonError } = require('../utils/http');
 
 // In-memory fallback when Redis is unavailable
 const memoryStore = new Map();
@@ -83,7 +84,7 @@ function rateLimit(options = {}) {
     res.setHeader('X-RateLimit-Reset', Math.ceil((Date.now() + ttl) / 1000));
 
     if (current > max) {
-      return res.status(429).json({ error: message });
+      return jsonError(res, { status: 429, code: 'RATE_LIMITED', message });
     }
 
     next();

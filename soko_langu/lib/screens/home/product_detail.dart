@@ -226,7 +226,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (product.images.isNotEmpty)
-                Container(
+                SizedBox(
                   width: double.infinity,
                   height: MediaQuery.of(context).size.width,
                   child: Stack(
@@ -951,7 +951,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${_quantity} × ${context.formatPrice(unit)}',
+                    '$_quantity × ${context.formatPrice(unit)}',
                     style: TextStyle(
                         fontSize: 13,
                         color: cs.onSurfaceVariant),

@@ -34,7 +34,13 @@ import 'services/onboarding_service.dart';
 import 'services/user_service.dart';
 import 'services/groq_service.dart';
 import 'services/localization_service.dart';
+import 'models/sync_operation.dart';
+import 'services/chat_service.dart';
 import 'services/local_cache_service.dart';
+import 'services/network_state_service.dart';
+import 'services/sync_engine.dart';
+import 'services/sync_queue_service.dart';
+import 'repositories/product_repository.dart';
 import 'services/notification_service.dart';
 import 'services/local_notification_service.dart';
 import 'services/balance_privacy_service.dart';
@@ -62,6 +68,10 @@ final SecurityService securityService = SecurityService();
 final InterstitialAdService interstitialAdService = InterstitialAdService();
 final ThemeManager themeManager = ThemeManager();
 final GoRouter appRouter = router_lib.buildRouter();
+
+/// Persistent mutation outbox. Nullable when Hive init fails — the app
+/// keeps working online, only offline queuing is disabled.
+SyncQueueService? syncQueueService;
 
 typedef LangCallback = void Function(String);
 typedef CurrencyCallback = void Function(String);
@@ -102,6 +112,13 @@ void main() async {
     await LocalCacheService.init();
   } catch (e) {
     debugPrint('LocalCacheService: init failed — $e');
+  }
+
+  // --- Sync outbox (Hive) — must be ready before the engine drains ---
+  try {
+    syncQueueService = await SyncQueueService.init();
+  } catch (e) {
+    debugPrint('SyncQueueService: init failed — $e');
   }
 
   // --- Global error handlers (must be set before runApp to catch startup crashes) ---
@@ -204,6 +221,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   late final AuthRepository _authRepository;
   late final OnboardingService _onboardingService;
   late final AuthNotifier _authNotifier;
+  late final NetworkStateService _networkState;
+  SyncEngine? _syncEngine;
   MethodChannel? _navigateChannel;
 
   // -----------------------------------------------------------------------
@@ -213,7 +232,24 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _productFeedProvider = ProductFeedProvider();
+    // Central connectivity truth; started before any repository reads and
+    // shared with the feed repository so probes aren't duplicated per call.
+    _networkState = NetworkStateService();
+    _networkState.start();
+    // Engine starts after the network service so the first drain sees a
+    // real status instead of racing the initial probe.
+    final queue = syncQueueService;
+    if (queue != null) {
+      _syncEngine = SyncEngine(queue: queue, networkState: _networkState);
+      _syncEngine!.registerHandler(
+        SyncOperationType.chatSend,
+        syncQueuedChatMessage,
+      );
+      _syncEngine!.start();
+    }
+    _productFeedProvider = ProductFeedProvider(
+      repo: ProductRepository(networkState: _networkState),
+    );
     _authRepository = AuthRepository();
     _onboardingService = OnboardingService();
     _authNotifier = AuthNotifier(
@@ -232,6 +268,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
     _productFeedProvider.dispose();
+    _syncEngine?.dispose();
+    _networkState.dispose();
     _navigateChannel?.setMethodCallHandler(null);
     super.dispose();
   }
@@ -610,6 +648,9 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _productFeedProvider),
+        ChangeNotifierProvider.value(value: _networkState),
+        if (_syncEngine != null)
+          ChangeNotifierProvider.value(value: _syncEngine!),
         ChangeNotifierProvider.value(value: themeManager),
         ChangeNotifierProvider(create: (_) => BalancePrivacyService()),
         Provider.value(value: _authRepository),

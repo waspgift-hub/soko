@@ -31,6 +31,7 @@ import '../screens/profile/seller_dashboard_screen.dart';
 import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
+import '../screens/profile/shop_customization_screen.dart';
 import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
@@ -58,6 +59,10 @@ import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
+import '../screens/sponsored/sponsored_dashboard_screen.dart';
+import '../screens/sponsored/sponsored_campaign_creation_screen.dart';
+import '../screens/sponsored/sponsored_campaign_detail_screen.dart';
+import '../screens/sponsored/sponsored_performance_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
@@ -99,6 +104,10 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.report,
   AppRoutes.buyerRequests,
   AppRoutes.postBuyerRequest,
+  AppRoutes.sponsoredDashboard,
+  AppRoutes.sponsoredCreate,
+  AppRoutes.sponsoredCampaign,
+  AppRoutes.sponsoredPerformance,
 ];
 
 final List<String> _adminOnlyRoutes = [
@@ -452,12 +461,50 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const PostBuyerRequestScreen()),
       ),
       GoRoute(
+        path: AppRoutes.sponsoredDashboard,
+        pageBuilder: (context, state) => _premiumPage(const SponsoredDashboardScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.sponsoredCreate,
+        pageBuilder: (context, state) {
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : const {};
+          return _premiumPage(SponsoredCampaignCreationScreen(
+            productId: extra['productId'] as String? ?? '',
+            product: extra['product'] as dynamic,
+          ));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.sponsoredCampaign}/:id',
+        pageBuilder: (context, state) {
+          final campaignId = state.pathParameters['id']!;
+          return _premiumPage(SponsoredCampaignDetailScreen(campaignId: campaignId));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.sponsoredPerformance,
+        pageBuilder: (context, state) {
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : const {};
+          return _premiumPage(SponsoredPerformanceScreen(
+            campaignId: extra['campaignId'] as String? ?? '',
+          ));
+        },
+      ),
+      GoRoute(
         path: AppRoutes.privacyPolicy,
         pageBuilder: (context, state) => _premiumPage(const PrivacyPolicyScreen()),
       ),
       GoRoute(
         path: AppRoutes.termsOfService,
         pageBuilder: (context, state) => _premiumPage(const TermsOfServiceScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.shopCustomization,
+        pageBuilder: (context, state) => _premiumPage(const ShopCustomizationScreen()),
       ),
     ],
   );
@@ -491,14 +538,10 @@ class _ProductDetailLoaderState extends State<_ProductDetailLoader> {
 
   Future<Product?> _load() async {
     try {
-      // V3 Alignment: Use ProductRepository (API) instead of direct Firestore call
-      // This ensures the user sees the authoritative price and stock from Postgres.
-      final repository = ProductRepository(
-        apiClient: ProductApiClient(), // Injected or provided via Provider
-        cache: LocalCacheService(),
-      );
-      
-      return await repository.getProductById(widget.productId);
+      // V3 Alignment: Use ProductRepository (API) instead of direct Firestore
+      // call — authoritative price and stock come from Postgres via the API.
+      final result = await ProductRepository().getProduct(widget.productId);
+      return result.data;
     } catch (e) {
       debugPrint('DeepLink Product Load Error: $e');
       return null;

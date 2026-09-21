@@ -6,6 +6,18 @@ const uploadService = require('./upload-service');
 
 const router = Router();
 
+// ownerType only namespaces the R2 object key (media/<kind>/<ownerType>/...),
+// so it is an allow-list — never free-form — to keep the namespace clean.
+const OWNER_TYPES = ['product', 'user', 'seller', 'feed', 'dispute', 'chat'];
+// ownerId is a namespace segment too: products upload media BEFORE the Product
+// row exists (seller picks images first, then submits the listing), so it must
+// accept a Firebase UID or a Postgres uuid — not just a uuid.
+const OWNER_ID = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, 'ownerId must be alphanumeric/-/_');
+
 // Request a signed upload URL (image or video)
 router.post(
   '/upload-url',
@@ -15,8 +27,8 @@ router.post(
     body: z.object({
       kind: z.enum(['image', 'video', 'thumbnail']),
       contentType: z.string().min(1).max(100),
-      ownerType: z.string().min(1).max(30),
-      ownerId: z.string().uuid(),
+      ownerType: z.enum(OWNER_TYPES),
+      ownerId: OWNER_ID,
     }),
   }),
   async (req, res) => {

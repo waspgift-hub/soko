@@ -17,9 +17,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/ds/ds.dart';
-import '../../widgets/product_cached_image.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -227,7 +225,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       _QuickActionData(Icons.price_check_outlined, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary),
       _QuickActionData(Icons.local_shipping_outlined, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange),
 
-      _QuickActionData(Icons.verified_outlined, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange),
+      _QuickActionData(Icons.verified_outlined, context.tr('sponsored_listing'), () => context.push(AppRoutes.sponsoredDashboard), cs.trendingOrange),
       _QuickActionData(Icons.receipt_long_outlined, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary),
       _QuickActionData(Icons.flash_on_outlined, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange),
       _QuickActionData(Icons.manage_search_outlined, context.tr('natufuta_bidhaa'), () => context.push(AppRoutes.buyerRequests), cs.secondary),
@@ -538,76 +536,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             const SizedBox(height: 4),
             Text(context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
               style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showBoostDialog(List<Product> products) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DsSheet(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.tr('boost_dialog_title'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              context.tr('choose_product_boost'),
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 280,
-              child: products.isEmpty
-                  ? SokoVibeEmptyState(
-                      icon: Icons.inventory_2_outlined,
-                      title: context.tr('no_products'),
-                    )
-                  : ListView.separated(
-                      itemCount: products.length,
-                      separatorBuilder: (_, _) => const Divider(),
-                      itemBuilder: (_, i) {
-                        final p = products[i];
-                        final alreadyBoosted = p.isBoostedValid;
-                        return ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              color: Theme.of(context).colorScheme.outlineVariant,
-                              child: p.images.isNotEmpty
-                                  ? ProductCachedImage(url: p.images.first, fit: BoxFit.cover)
-                                  : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                            ),
-                          ),
-                          title: Text(
-                            p.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text(
-                            alreadyBoosted ? context.tr('already_featured') : context.tr('tap_to_boost'),
-                          ),
-                          trailing: alreadyBoosted
-                              ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
-                              : const Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: alreadyBoosted
-                              ? null
-                              : () {
-                                  Navigator.pop(ctx);
-                                  context.push(AppRoutes.productBoost, extra: p);
-                                },
-                        );
-                      },
-                    ),
-            ),
           ],
         ),
       ),

@@ -1,9 +1,11 @@
 import 'dart:convert';
 import '../../widgets/product_cached_image.dart';
+import '../../widgets/product_video_player.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
@@ -128,6 +130,8 @@ class _AdminKycDocumentViewScreenState
                 const SizedBox(height: 16),
                 _buildInfoCard(cs),
                 const SizedBox(height: 16),
+                _buildShopVideoSection(cs),
+                const SizedBox(height: 16),
                 _buildDocumentsSection(cs),
               ],
             ),
@@ -172,11 +176,32 @@ class _AdminKycDocumentViewScreenState
   }
 
   Widget _buildInfoCard(ColorScheme cs) {
+    final rawIdType = _kyc['idType']?.toString() ?? '';
+    // The Flutter app stores the translation key (kyc_id_*) as the type.
+    final idType = rawIdType.startsWith('kyc_id_') ? context.tr(rawIdType) : rawIdType;
+    // KYC-submitted contact details win; the account profile is the fallback
+    // for legacy submissions that predate the new fields.
+    final kycEmail = _kyc['email']?.toString() ?? '';
+    final kycPhone = _kyc['phone']?.toString() ?? '';
+    final dob = _kyc['dateOfBirth']?.toString() ?? '';
+    final dobParsed = DateTime.tryParse(dob);
+    final address = _kyc['address']?.toString() ?? '';
+    final feeAmount = (_kyc['feeAmount'] as num?)?.toInt() ?? 0;
     final rows = <(IconData, String)>[
-      (Icons.badge_outlined,
-          '${_kyc['idType'] ?? '-'}: ${_kyc['idNumber'] ?? '-'}'),
-      (Icons.email_outlined, widget.user['email']?.toString() ?? '-'),
-      (Icons.phone_outlined, widget.user['phone']?.toString() ?? '-'),
+      (Icons.badge_outlined, '$idType: ${_kyc['idNumber'] ?? '-'}'),
+      if (dobParsed != null)
+        (Icons.cake_outlined,
+            '${context.tr('kyc_dob_label')}: ${DateFormat('dd/MM/yyyy').format(dobParsed)}'),
+      if (address.isNotEmpty)
+        (Icons.location_on_outlined,
+            '${context.tr('kyc_address_label')}: $address'),
+      (Icons.email_outlined,
+          kycEmail.isNotEmpty ? kycEmail : widget.user['email']?.toString() ?? '-'),
+      (Icons.phone_outlined,
+          kycPhone.isNotEmpty ? kycPhone : widget.user['phone']?.toString() ?? '-'),
+      if (feeAmount > 0)
+        (Icons.payments_outlined,
+            '${context.tr('kyc_fee_title')}: TZS ${NumberFormat('#,##0').format(feeAmount)} — ${context.tr('kyc_fee_paid')}'),
       if (_kyc['submittedAt'] != null &&
           (_kyc['submittedAt'] as String).isNotEmpty)
         (Icons.calendar_today,
@@ -329,6 +354,92 @@ class _AdminKycDocumentViewScreenState
               Icon(Icons.zoom_in, size: 20, color: cs.primary),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// The seller's shop video, reviewed fullscreen before approval. Absent
+  /// for legacy submissions — the section simply hides.
+  Widget _buildShopVideoSection(ColorScheme cs) {
+    final url = _kyc['shopVideoUrl'] as String? ?? '';
+    if (url.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.videocam, size: 18, color: cs.primary),
+            const SizedBox(width: 8),
+            Text(
+              context.tr('kyc_shop_video'),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Material(
+          color: cs.surfaceContainerLow.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _openVideoFullScreen(url),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.play_circle_fill, size: 36, color: cs.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('kyc_tap_to_watch'),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: cs.onSurface),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.open_in_full, size: 20, color: cs.primary),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openVideoFullScreen(String url) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (ctx) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Center(child: ProductVideoPlayer(url: url)),
+            Positioned(
+              top: MediaQuery.of(ctx).padding.top + 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
         ),
       ),
     );

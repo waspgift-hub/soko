@@ -51,7 +51,7 @@ class DsAvatar extends StatelessWidget {
           width: _dimension,
           height: _dimension,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _fallback(scheme),
+          errorBuilder: (_, _, _) => _fallback(scheme),
         ),
       );
     } else {

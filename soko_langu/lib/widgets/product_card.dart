@@ -18,7 +18,18 @@ class ProductCard extends StatelessWidget {
   final FlashSale? flashSale;
   final VoidCallback? onShare;
 
-  const ProductCard({super.key, required this.product, required this.onTap, this.flashSale, this.onShare});
+  final bool isSponsored;
+  final String? sponsorshipCampaignId;
+
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onTap,
+    this.flashSale,
+    this.onShare,
+    this.isSponsored = false,
+    this.sponsorshipCampaignId,
+  });
 
   void _shareProduct(BuildContext context) {
     final shareAction = onShare ?? () {
@@ -245,6 +256,21 @@ final semanticsLabel = [
                     style: TextStyle(color: cs.surface, fontSize: 9, fontWeight: FontWeight.bold),
                   ),
                 ],
+              ),
+            ),
+          ),
+        if (isSponsored || product.isSponsored)
+          Positioned(
+            top: product.isFeaturedValid ? 32 : 8, left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.3), width: 1),
+              ),
+              child: Text(context.tr('sponsored'),
+                style: TextStyle(color: cs.primary, fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),
           ),

@@ -3,6 +3,7 @@ const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
 const { updateWalletBalance, settleEscrowToSeller } = require('../wallet/ledger-service');
 const { computeSellerParity } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
+const { refundOnCancel, isRefundableEscrowState } = require('../refunds/refund-service');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -21,6 +22,12 @@ function generateOrderNumber() {
   const d = String(date.getDate()).padStart(2, '0');
   const random = Math.floor(1000 + Math.random() * 9000);
   return `SV${y}${m}${d}${random}`;
+}
+
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
 }
 
 /**
@@ -238,6 +245,48 @@ async function completeOrder({ orderId, actorId, method }) {
   });
 }
 
+// Buyer-initiated cancel. Escrow-funded orders route through the full refund
+// (money returns to the buyer); orders that never reached escrow simply move to
+// CANCELLED through the state machine, no money moves.
+async function cancelOrder({ orderId, actorId, reason }) {
+  const prisma = getPrisma();
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+  if (order.buyerId !== actorId) throw httpError(403, 'FORBIDDEN');
+
+  if (isRefundableEscrowState(order.status)) {
+    return refundOnCancel({
+      orderId,
+      actorId,
+      role: 'buyer',
+      reason: reason || 'Buyer cancelled order',
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const fresh = await tx.order.findUnique({ where: { id: orderId } });
+    const machine = new OrderStateMachine(fresh.status);
+    if (!machine.canTransition(ORDER_STATES.CANCELLED)) {
+      throw httpError(409, `INVALID_CANCEL_FROM_STATE:${fresh.status}`);
+    }
+
+    machine.transition(ORDER_STATES.CANCELLED, {
+      actor: 'buyer',
+      actorId,
+      reason: reason || 'Buyer cancelled order',
+    });
+
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: { status: ORDER_STATES.CANCELLED, statusChangedBy: actorId },
+    });
+
+    await syncLegacyOrderStatus(updated);
+    return updated;
+  });
+}
+
 module.exports = {
   DEFAULT_TIMERS,
   createOrder,
@@ -245,4 +294,5 @@ module.exports = {
   initiatePayment,
   verifyPayment,
   completeOrder,
+  cancelOrder,
 };

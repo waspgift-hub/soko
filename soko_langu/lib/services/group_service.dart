@@ -4,6 +4,10 @@ import '../models/group_model.dart';
 import '../utils/network_error.dart';
 import 'notification_service.dart';
 
+/// Firestore owner of group chat (`groups`, `groups/<id>/messages`).
+/// Repository boundary (§14): group collections are written ONLY here, mirroring
+/// the ChatService DM boundary. Phase E migrates both to an owned chat service;
+/// any new chat write must go through this class today.
 class GroupService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;

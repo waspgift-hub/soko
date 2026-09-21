@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/app_transitions.dart';
 import '../../services/api_config.dart';
@@ -167,10 +168,18 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
     final uid = user['uid'] as String? ?? '';
     final fullName = kyc['fullName'] ?? user['displayName'] ?? context.tr('unknown');
-    final email = user['email'] ?? '';
-    final phone = user['phone'] ?? '';
-    final idType = kyc['idType'] ?? '';
+    // KYC-submitted contact details win; the account profile is the fallback
+    // for legacy submissions that predate the new fields.
+    final kycEmail = kyc['email']?.toString() ?? '';
+    final kycPhone = kyc['phone']?.toString() ?? '';
+    final email = kycEmail.isNotEmpty ? kycEmail : (user['email'] ?? '');
+    final phone = kycPhone.isNotEmpty ? kycPhone : (user['phone'] ?? '');
+    final rawIdType = kyc['idType']?.toString() ?? '';
+    // The Flutter app stores the translation key (kyc_id_*) as the type.
+    final idType = rawIdType.startsWith('kyc_id_') ? context.tr(rawIdType) : rawIdType;
     final idNumber = kyc['idNumber'] ?? '';
+    final feeAmount = (kyc['feeAmount'] as num?)?.toInt() ?? 0;
+    final hasShopVideo = (kyc['shopVideoUrl'] as String?)?.isNotEmpty ?? false;
     final status = kyc['status'] as String? ?? 'none';
     final submittedAt = kyc['submittedAt'] as String? ?? '';
     final reviewedAt = kyc['reviewedAt'] as String? ?? '';
@@ -227,6 +236,14 @@ class _AdminKycScreenState extends State<AdminKycScreen>
             _infoRow(Icons.email_outlined, email, cs),
             _infoRow(Icons.phone_outlined, phone, cs),
             _infoRow(Icons.badge_outlined, '$idType: $idNumber', cs),
+            if (feeAmount > 0)
+              _infoRow(
+                Icons.payments_outlined,
+                '${context.tr('kyc_fee_title')}: TZS ${NumberFormat('#,##0').format(feeAmount)}',
+                cs,
+              ),
+            if (hasShopVideo)
+              _infoRow(Icons.videocam_outlined, context.tr('kyc_shop_video'), cs),
             if (submittedAt.isNotEmpty)
               _infoRow(Icons.calendar_today, context.trParams('submitted_at', {'date': submittedAt}), cs),
             if (reviewedAt.isNotEmpty)

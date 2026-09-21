@@ -5,10 +5,11 @@ import '../../models/category_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
+import '../../utils/category_icons.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/responsive.dart';
-import '../../widgets/soko_widgets.dart';
 
 class CategoryScreen extends StatelessWidget {
   const CategoryScreen({super.key});
@@ -69,8 +70,12 @@ class CategoryScreen extends StatelessWidget {
                       final config = AppConfig.of(context);
                       return _PremiumCategoryCard(
                         name: config.langCode == 'en' ? cat.name : cat.nameSw,
-                        icon: categoryIconFor(cat.icon),
-                        imageUrl: cat.image,
+                        icon: categoryIconFor(
+                          icon: cat.icon,
+                          slug: cat.id,
+                          name: cat.name,
+                        ),
+                        imageUrl: cat.image ?? _iconUrlIfRemote(cat.icon),
                         onTap: () => context.push(
                           '${AppRoutes.categoryProducts}/${cat.name}',
                           extra: cat,
@@ -122,7 +127,7 @@ class _PremiumCategoryCard extends StatelessWidget {
                   child: Image.network(
                     imageUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -213,30 +218,7 @@ class _EmptyCategoriesView extends StatelessWidget {
   }
 }
 
-IconData categoryIconFor(String glyph) {
-  switch (glyph) {
-    case '📦': return Icons.inventory_2_outlined;
-    case '📱': return Icons.smartphone;
-    case '👗':
-    case '👕': return Icons.checkroom_outlined;
-    case '👟': return Icons.ice_skating_outlined;
-    case '💄': return Icons.face_retouching_natural;
-    case '🛋️':
-    case '🪑': return Icons.chair_outlined;
-    case '⚽':
-    case '🏀': return Icons.sports_soccer;
-    case '📚': return Icons.menu_book_outlined;
-    case '🎁': return Icons.card_giftcard_outlined;
-    case '💎': return Icons.diamond_outlined;
-    case '🔧': return Icons.build_outlined;
-    case '🍎': return Icons.local_grocery_store_outlined;
-    case '🛒': return Icons.shopping_cart_outlined;
-    case '🚗': return Icons.directions_car_outlined;
-    case '🏭': return Icons.factory_outlined;
-    case '🍔':
-    case '🥦': return Icons.fastfood_outlined;
-    case '👶': return Icons.child_care_outlined;
-    case '🏠': return Icons.home_outlined;
-    default: return Icons.category_outlined;
-  }
-}
+/// Server `iconUrl` values arrive inside [Category.icon]; surface them as the
+/// card image so remote artwork keeps working without a schema change.
+String? _iconUrlIfRemote(String icon) =>
+    icon.startsWith('http') ? icon : null;

@@ -237,8 +237,8 @@ $richProductBlocks
       body: jsonEncode({
         'model': model,
         'messages': messages,
-        if (temperature != null) 'temperature': temperature,
-        if (maxTokens != null) 'max_tokens': maxTokens,
+        'temperature': ?temperature,
+        'max_tokens': ?maxTokens,
       }),
     );
     debugPrint('Groq proxy [$model] ${resp.statusCode}: ${resp.body}');

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../main.dart';
 import '../../services/chat_service.dart';
 import '../../services/chat_typing.dart';
 import '../../services/notification_service.dart';
@@ -61,6 +62,8 @@ class _ChatPageState extends State<ChatPage> {
   final Map<String, Message> _optimisticMsgs = {};
   final Set<String> _confirmedSends = {};
   final Set<String> _failedSends = {};
+  // Queued in the persistent outbox; auto-sent on reconnect (§15).
+  final Set<String> _queuedSends = {};
   final Map<String, String> _tempToRealId = {};
 
   // Presence
@@ -233,7 +236,7 @@ class _ChatPageState extends State<ChatPage> {
       replyTo: replyToId,
       replyToContent: replyToContent,
       replyToSender: replyToSender,
-    ).then((realId) {
+    ).then((realId) async {
       if (!mounted) return;
       if (realId != null && realId.isNotEmpty) {
         setState(() {
@@ -244,6 +247,28 @@ class _ChatPageState extends State<ChatPage> {
           );
         });
       } else {
+        // Offline or send failed: persist + queue for auto-delivery on
+        // reconnect instead of losing the message (§15). The outbox
+        // idempotency key dedupes any later manual retry.
+        final outbox = syncQueueService;
+        if (outbox != null) {
+          try {
+            await _chatService.queueMessage(
+              outbox: outbox,
+              receiverId: widget.receiverId,
+              content: text,
+              productId: widget.productId,
+              productName: widget.productName,
+              replyTo: replyToId,
+              replyToContent: replyToContent,
+              replyToSender: replyToSender,
+            );
+            if (!mounted) return;
+            setState(() => _queuedSends.add(tempId));
+            return;
+          } catch (_) {}
+        }
+        if (!mounted) return;
         setState(() => _failedSends.add(tempId));
       }
     });
@@ -271,6 +296,7 @@ class _ChatPageState extends State<ChatPage> {
 
     setState(() {
       _failedSends.remove(failedMsg.id);
+      _queuedSends.remove(failedMsg.id);
       _optimisticMsgs.remove(failedMsg.id);
       _optimisticMsgs[tempId] = optimistic;
     });
@@ -283,7 +309,7 @@ class _ChatPageState extends State<ChatPage> {
       replyTo: failedMsg.replyTo,
       replyToContent: failedMsg.replyToContent,
       replyToSender: failedMsg.replyToSender,
-    ).then((realId) {
+    ).then((realId) async {
       if (!mounted) return;
       if (realId != null && realId.isNotEmpty) {
         setState(() {
@@ -292,6 +318,25 @@ class _ChatPageState extends State<ChatPage> {
           _optimisticMsgs[tempId] = optimistic.copyWith(isDelivered: true);
         });
       } else {
+        final outbox = syncQueueService;
+        if (outbox != null) {
+          try {
+            await _chatService.queueMessage(
+              outbox: outbox,
+              receiverId: widget.receiverId,
+              content: text,
+              productId: failedMsg.productId,
+              productName: failedMsg.productName,
+              replyTo: failedMsg.replyTo,
+              replyToContent: failedMsg.replyToContent,
+              replyToSender: failedMsg.replyToSender,
+            );
+            if (!mounted) return;
+            setState(() => _queuedSends.add(tempId));
+            return;
+          } catch (_) {}
+        }
+        if (!mounted) return;
         setState(() => _failedSends.add(tempId));
       }
     });
@@ -327,6 +372,9 @@ class _ChatPageState extends State<ChatPage> {
       return msg != null &&
           DateTime.now().difference(msg.timestamp).inSeconds > 60;
     });
+    // Drop queued flags once the optimistic entry merged into the live
+    // stream (delivered) or vanished — the set is UI-only state.
+    _queuedSends.removeWhere((id) => !_optimisticMsgs.containsKey(id));
   }
 
   /// Merge Firestore messages with optimistic messages, sorted by timestamp.
@@ -649,6 +697,7 @@ class _ChatPageState extends State<ChatPage> {
                             isMe: msg.senderId == _uid,
                             showTime: showTime,
                             isFailed: _failedSends.contains(msg.id),
+                            isQueued: _queuedSends.contains(msg.id),
                             onReply: msg.content == 'deleted' || msg.isDeletedForEveryone
                                 ? null
                                 : () {
@@ -899,6 +948,7 @@ class _MessageBubble extends StatelessWidget {
   final bool isMe;
   final bool showTime;
   final bool isFailed;
+  final bool isQueued;
   final VoidCallback? onReply;
   final VoidCallback? onRetry;
   final void Function(String emoji) onReact;
@@ -909,6 +959,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isMe,
     required this.showTime,
     this.isFailed = false,
+    this.isQueued = false,
     this.onReply,
     this.onRetry,
     required this.onReact,
@@ -1076,7 +1127,19 @@ class _MessageBubble extends StatelessWidget {
                                 child: Icon(Icons.error_outline,
                                     size: 16, color: cs.error),
                               )
-                            : _StatusIcon(
+                            : isQueued
+                                ? Tooltip(
+                                    message: context.tr(
+                                        'msg_waiting_connection',
+                                        'Waiting for connection'),
+                                    child: Icon(Icons.schedule,
+                                        size: 16,
+                                        color: isMe
+                                            ? cs.onPrimary.withValues(
+                                                alpha: 0.7)
+                                            : cs.onSurfaceVariant),
+                                  )
+                                : _StatusIcon(
                                 isRead: message.isRead,
                                 isDelivered: message.isDelivered,
                                 color: cs.onPrimary.withValues(alpha: 0.7),

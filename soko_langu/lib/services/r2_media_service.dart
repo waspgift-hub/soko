@@ -124,7 +124,7 @@ class R2MediaService {
       contentType: contentType,
     );
 
-    return _publicUrl(session['key']! as Stringeli);
+    return _publicUrl(session['key']! as String);
   }
 
   /// Compresses and uploads a video to R2.
@@ -187,7 +187,7 @@ class R2MediaService {
   }
 
   static String _publicUrl(String key) =>
-      '${ApiConfig.r2PublicUrl}/${key}';
+      '${ApiConfig.r2PublicUrl}/$key';
 
   static String _ownerIdFor(String folder) {
     final user = FirebaseAuth.instance.currentUser;

@@ -98,17 +98,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     });
   }
 
-  void _selectAll(List<ChatRoom> rooms) {
-    setState(() {
-      if (_selectedIds.length == rooms.length) {
-        _selectedIds.clear();
-        _selectMode = false;
-      } else {
-        _selectedIds.addAll(rooms.map((r) => r.id));
-      }
-    });
-  }
-
   void _exitSelectMode() {
     setState(() {
       _selectMode = false;
@@ -164,7 +153,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -182,7 +170,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   icon: const Icon(Icons.select_all),
                   tooltip: context.tr('select_all'),
                   onPressed: () {
-                    final allRooms = (_chatService.getRooms()) as dynamic;
                     // We need the full list; use StreamBuilder's data
                     _selectAllFromStream();
                   },
@@ -503,7 +490,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   }
 
   void _handleMenuAction(String action, ChatRoom room, String otherId, String name) async {
-    final cs = Theme.of(context).colorScheme;
     final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     switch (action) {

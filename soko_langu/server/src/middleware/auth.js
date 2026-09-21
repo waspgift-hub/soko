@@ -2,13 +2,20 @@ const { getFirebaseAuth } = require('../config/firebase');
 const { getPrisma } = require('../config/database');
 const { recordUserActivity } = require('../services/activity');
 const config = require('../config');
+const { jsonError } = require('../utils/http');
+
+// Middleware errors keep `error` as the machine code (client parses it today)
+// while `jsonError` adds the §25 envelope fields.
+function apiError(res, status, code) {
+  return jsonError(res, { status, code });
+}
 
 // Verify Firebase ID token and attach user to request
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization || '';
   
   if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    return apiError(res, 401, 'AUTH_REQUIRED');
   }
 
   const token = authHeader.slice(7);
@@ -16,7 +23,7 @@ async function authenticate(req, res, next) {
   try {
     const auth = getFirebaseAuth();
     if (!auth) {
-      return res.status(503).json({ error: 'AUTH_SERVICE_UNAVAILABLE' });
+      return apiError(res, 503, 'AUTH_SERVICE_UNAVAILABLE');
     }
 
     const decoded = await auth.verifyIdToken(token);
@@ -61,11 +68,11 @@ async function authenticate(req, res, next) {
     }
 
     if (user.accountStatus === 'deleted') {
-      return res.status(403).json({ error: 'ACCOUNT_DELETED' });
+      return apiError(res, 403, 'ACCOUNT_DELETED');
     }
 
     if (user.accountStatus === 'suspended') {
-      return res.status(403).json({ error: 'ACCOUNT_SUSPENDED' });
+      return apiError(res, 403, 'ACCOUNT_SUSPENDED');
     }
 
     req.user = user;
@@ -73,12 +80,12 @@ async function authenticate(req, res, next) {
     next();
   } catch (error) {
     if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'TOKEN_EXPIRED' });
+      return apiError(res, 401, 'TOKEN_EXPIRED');
     }
     if (error.code === 'auth/id-token-revoked') {
-      return res.status(401).json({ error: 'TOKEN_REVOKED' });
+      return apiError(res, 401, 'TOKEN_REVOKED');
     }
-    return res.status(401).json({ error: 'INVALID_TOKEN' });
+    return apiError(res, 401, 'INVALID_TOKEN');
   }
 }
 
@@ -128,11 +135,11 @@ async function optionalAuth(req, res, next) {
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ error: 'AUTH_REQUIRED' });
+      return apiError(res, 401, 'AUTH_REQUIRED');
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'FORBIDDEN' });
+      return apiError(res, 403, 'FORBIDDEN');
     }
 
     next();
@@ -142,11 +149,11 @@ function requireRole(...roles) {
 // Require account to be active
 function requireActive(req, res, next) {
   if (!req.user) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    return apiError(res, 401, 'AUTH_REQUIRED');
   }
 
   if (req.user.accountStatus !== 'active') {
-    return res.status(403).json({ error: 'ACCOUNT_NOT_ACTIVE' });
+    return apiError(res, 403, 'ACCOUNT_NOT_ACTIVE');
   }
 
   next();
@@ -162,11 +169,11 @@ async function verifyAdmin(req, res, next) {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    return apiError(res, 401, 'AUTH_REQUIRED');
   }
 
   if (!['admin', 'super_admin'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'ADMIN_REQUIRED' });
+    return apiError(res, 403, 'ADMIN_REQUIRED');
   }
 
   req.isAdmin = true;
@@ -184,7 +191,7 @@ function authenticateAdmin(req, res, next) {
     return next();
   }
 
-  return res.status(401).json({ error: 'AUTH_REQUIRED' });
+  return apiError(res, 401, 'AUTH_REQUIRED');
 }
 
 // Active-account gate that also passes secret-authenticated admin calls,
@@ -192,11 +199,11 @@ function authenticateAdmin(req, res, next) {
 function requireActiveAdmin(req, res, next) {
   if (!req.user) {
     if (req.isAdmin) return next();
-    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    return apiError(res, 401, 'AUTH_REQUIRED');
   }
 
   if (req.user.accountStatus !== 'active') {
-    return res.status(403).json({ error: 'ACCOUNT_NOT_ACTIVE' });
+    return apiError(res, 403, 'ACCOUNT_NOT_ACTIVE');
   }
 
   next();

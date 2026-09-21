@@ -23,6 +23,8 @@ class SearchResult {
   final bool isBoosted;
   final bool kycApproved;
   final double? discount;
+  final bool isSponsored;
+  final String? sponsorshipCampaignId;
 
   SearchResult({
     required this.id,
@@ -41,6 +43,8 @@ class SearchResult {
     this.isBoosted = false,
     this.kycApproved = false,
     this.discount,
+    this.isSponsored = false,
+    this.sponsorshipCampaignId,
   });
 
   factory SearchResult.fromMap(Map<String, dynamic> map) {
@@ -61,6 +65,8 @@ class SearchResult {
       isBoosted: map['isBoosted'] as bool? ?? false,
       kycApproved: map['kycApproved'] as bool? ?? false,
       discount: (map['discount'] as num?)?.toDouble(),
+      isSponsored: map['isSponsored'] as bool? ?? false,
+      sponsorshipCampaignId: map['sponsorshipCampaignId'] as String?,
     );
   }
 
@@ -79,6 +85,8 @@ class SearchResult {
       location: p.location,
       isBoosted: p.isBoostedValid,
       kycApproved: p.sellerKycApproved,
+      isSponsored: p.isSponsored,
+      sponsorshipCampaignId: p.sponsorshipCampaignId,
     );
   }
 }
@@ -276,7 +284,7 @@ class SearchService {
         'type': type,
         'page': page,
         'pageSize': pageSize,
-        if (filters != null) 'filters': filters,
+        'filters': ?filters,
       });
       final serverResp = SearchResponse.fromMap(data as Map<String, dynamic>);
       // If server returned 0 results (search_index empty), use Firestore fallback
@@ -412,7 +420,7 @@ class SearchService {
       await _post('record-click', {
         'resultId': resultId,
         'resultType': resultType,
-        if (query != null) 'query': query,
+        'query': ?query,
       });
     } catch (e) {
       // non-critical, silently ignore

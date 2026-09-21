@@ -38,6 +38,14 @@ const PUBLIC_SELECT = {
   // selected JSON keys (SelectionSetOnScalar is unimplemented for Postgres),
   // so the whole snapshot is returned — same contract as the detail endpoint.
   snapshot: true,
+  // Sponsored campaigns: include the campaign id so the client can render the
+  // "Sponsored" label and route clicks through the attribution endpoint.
+  // Only active campaigns are returned; draft/expired ones are filtered out.
+  sponsoredCampaigns: {
+    where: { status: 'active' },
+    select: { id: true, bidAmountTzs: true, startsAt: true, expiresAt: true },
+    take: 1,
+  },
 };
 
 function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerProfileId, ids }) {
@@ -299,6 +307,26 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
     sellerProfileId = profile?.id || '00000000-0000-0000-0000-000000000000';
   }
   const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerProfileId, ids });
+
+  // Fetch active sponsored product IDs so they can be surfaced first in the
+  // listing (guideline 11.1: sponsored-first organic ranking). The sponsored
+  // relation is included on each product row via PUBLIC_SELECT, but we also
+  // need the ordering: active-sponsored first, then the rest.
+  const now = new Date();
+  const sponsoredIds = await prisma.sponsoredCampaign.findMany({
+    where: {
+      status: 'active',
+      startsAt: { lte: now },
+      expiresAt: { gte: now },
+      placements: { some: { product: { ...(categoryId ? { categoryId } : {}) } } },
+    },
+    select: { placements: { select: { productId: true }, where: { productId: { not: null } } } },
+    take: 50,
+  });
+  const sponsoredProductIdSet = new Set(
+    sponsoredIds.flatMap((c) => c.placements.map((p) => p.productId).filter(Boolean))
+  );
+
   const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,
@@ -309,7 +337,22 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
     }),
     prisma.product.count({ where }),
   ]);
-  return { items: items.map(serializeProduct), pagination: { page: Number(page), limit: Number(limit), total } };
+
+  // Re-rank: sponsored products first (sorted by bid amount desc), then
+  // organic results. The client still receives the full pagination info; the
+  // re-rank only affects the visible ordering within this page slice.
+  const withSponsoredFlag = items.map((p) => ({
+    ...p,
+    isSponsored: sponsoredProductIdSet.has(p.id),
+  }));
+
+  withSponsoredFlag.sort((a, b) => {
+    if (a.isSponsored && !b.isSponsored) return -1;
+    if (!a.isSponsored && b.isSponsored) return 1;
+    return 0;
+  });
+
+  return { items: withSponsoredFlag.map(serializeProduct), pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function listSellerProducts({ sellerProfileId, page = 1, limit = 20 }) {

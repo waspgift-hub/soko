@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import '../models/order_model.dart';
 import '../services/order_api.dart';
 import '../services/local_cache_service.dart';
@@ -11,19 +9,14 @@ import '../services/local_cache_service.dart';
 /// 3. Update cache and notify listeners.
 class OrderRepository {
   final OrderApiClient _apiClient;
-  final LocalCacheService _cache;
 
-  OrderRepository({
-    required OrderApiClient apiClient,
-    required LocalCacheService cache,
-  }) : _apiClient = apiClient,
-       _cache = cache;
+  OrderRepository({required OrderApiClient apiClient}) : _apiClient = apiClient;
 
   /// Fetches orders for the current user.
   /// Returns a Stream to allow the UI to handle both cached and fresh data.
   Stream<List<OrderData>> watchOrders({String? status}) async* {
     // 1. Emit cached data first
-    final cached = await _cache.getCachedOrders();
+    final cached = await LocalCacheService.getCachedOrders();
     if (cached.isNotEmpty) {
       yield cached.where((o) => status == null || o.status == status).toList();
     }
@@ -33,7 +26,7 @@ class OrderRepository {
       final result = await _apiClient.fetchOrders(status: status);
       
       // 3. Update local cache for offline support
-      await _cache.saveOrders(result.orders);
+      await LocalCacheService.saveOrders(result.orders);
       
       yield result.orders;
     } catch (e) {
@@ -56,7 +49,7 @@ class OrderRepository {
       notes: notes,
     );
     // Invalidate cache for this order
-    await _cache.invalidateOrder(orderId);
+    await LocalCacheService.invalidateOrder(orderId);
     return result;
   }
 
@@ -75,14 +68,14 @@ class OrderRepository {
       orderId,
       otp: otp,
     );
-    await _cache.invalidateOrder(orderId);
+    await LocalCacheService.invalidateOrder(orderId);
     return result;
   }
 
   /// Watches a single order for real-time updates (Cache-Aside).
   Stream<OrderData> watchOrder(String orderId) async* {
     // 1. Emit cached version
-    final cached = await _cache.getCachedOrder(orderId);
+    final cached = await LocalCacheService.getCachedOrder(orderId);
     if (cached != null) yield cached;
 
     // 2. Poll API for fresh state (since API is HTTP, not WebSocket)
@@ -90,7 +83,7 @@ class OrderRepository {
       try {
         final fresh = await _apiClient.fetchOrder(orderId);
         if (fresh != null) {
-          await _cache.saveOrder(fresh);
+          await LocalCacheService.saveOrder(fresh);
           yield fresh;
         }
       } catch (_) {}
@@ -110,7 +103,7 @@ class OrderRepository {
       courierName: courierName,
       trackingNumber: trackingNumber,
     );
-    await _cache.invalidateOrder(orderId);
+    await LocalCacheService.invalidateOrder(orderId);
     return result;
   }
 }

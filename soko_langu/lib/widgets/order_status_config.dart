@@ -64,6 +64,12 @@ OrderStatusInfo orderStatusInfo(String rawStatus, ColorScheme cs) {
             ? 'awaiting_payment'
             : '${status}_label',
       );
+    case OrderStatus.paymentProcessing:
+      return OrderStatusInfo(
+        color: cs.primary,
+        icon: Icons.account_balance_wallet_outlined,
+        labelKey: 'payment_processing_label',
+      );
     case OrderStatus.paid:
       return OrderStatusInfo(
         color: cs.primary,
@@ -75,6 +81,24 @@ OrderStatusInfo orderStatusInfo(String rawStatus, ColorScheme cs) {
         color: cs.secondary,
         icon: Icons.verified_user_outlined,
         labelKey: 'in_escrow_label',
+      );
+    case OrderStatus.escrowHeld:
+      return OrderStatusInfo(
+        color: cs.secondary,
+        icon: Icons.verified_user_outlined,
+        labelKey: 'escrow_held_label',
+      );
+    case OrderStatus.sellerAccepted:
+      return OrderStatusInfo(
+        color: cs.secondary,
+        icon: Icons.verified_user_outlined,
+        labelKey: 'seller_accepted_label',
+      );
+    case OrderStatus.dispatchReady:
+      return OrderStatusInfo(
+        color: cs.secondary,
+        icon: Icons.outbox_rounded,
+        labelKey: 'dispatch_ready_label',
       );
     case OrderStatus.readyToDispatch:
       return OrderStatusInfo(
@@ -103,6 +127,12 @@ OrderStatusInfo orderStatusInfo(String rawStatus, ColorScheme cs) {
         labelKey: status == OrderStatus.dispatched
             ? 'dispatched_label'
             : '${status}_label',
+      );
+    case OrderStatus.arrived:
+      return OrderStatusInfo(
+        color: cs.tertiary,
+        icon: Icons.route_rounded,
+        labelKey: 'arrived',
       );
     case OrderStatus.delivered:
       return OrderStatusInfo(
@@ -158,6 +188,12 @@ OrderStatusInfo orderStatusInfo(String rawStatus, ColorScheme cs) {
         color: cs.error,
         icon: Icons.error_outline_rounded,
         labelKey: 'failed',
+      );
+    case OrderStatus.paymentFailed:
+      return OrderStatusInfo(
+        color: cs.error,
+        icon: Icons.error_outline_rounded,
+        labelKey: 'payment_failed_label',
       );
     default:
       return OrderStatusInfo(

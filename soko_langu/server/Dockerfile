@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev --no-optional
 COPY . .
-EXPOSE 3000
 ENV NODE_OPTIONS="--optimize-for-size --expose-gc"
-CMD ["node", "index.js"]
+# v2 entrypoint (Postgres/Redis stack) — the legacy Firestore `index.js` is
+# frozen compatibility and must not be booted by fresh deployments.
+EXPOSE 3000
+CMD ["node", "src/index.js"]

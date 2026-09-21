@@ -2954,6 +2954,41 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             }
           }
         } catch (_) {}
+      } else if (tx.type === 'kyc_fee') {
+        // ── One-time seller verification fee settled — unlock KYC submission ──
+        // The completed transaction is the fee receipt: kyc-service.hasPaidKycFee
+        // looks for exactly this shape, and it survives rejection/resubmission
+        // cycles ("one time" = per seller, not per application attempt).
+        await txDoc.ref.update({
+          status: 'completed',
+          clickpesaReference: clickpesaRef,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const feeAmount = tx.amount || 15000;
+        db.collection('revenue_transactions').add({
+          userId: 'platform',
+          amount: feeAmount,
+          sokoLanguCommission: feeAmount,
+          type: 'kyc_fee',
+          description: 'KYC verification fee (one time)',
+          transactionId: orderId,
+          buyerPhone: tx.buyerPhone || '',
+          paymentMethod: 'ClickPesa',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+
+        if (tx.userId) {
+          db.collection('notifications').add({
+            userId: tx.userId,
+            title: 'Ada ya Uthibitisho Imelipwa!',
+            body: `Malipo ya TZS ${feeAmount.toLocaleString()} yamepokelewa. Sasa tuma KYC yako kwa ukaguzi.`,
+            data: { type: 'kyc_fee', orderId },
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+          sendOneSignalNotification(tx.userId, 'Ada ya Uthibitisho Imelipwa!', `Malipo ya TZS ${feeAmount.toLocaleString()} yamepokelewa. Sasa tuma KYC yako kwa ukaguzi.`, { type: 'kyc_fee', orderId }).catch(() => {});
+        }
       }
     } else if (paymentStatus === 'failed') {
       const buyerLang = tx.buyerId ? await getUserNotifLang(tx.buyerId) : 'sw';

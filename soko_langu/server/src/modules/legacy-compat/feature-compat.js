@@ -579,7 +579,11 @@ module.exports = function ({ admin: fbAdmin, db }) {
   router.post('/kyc/submit', async (req, res) => {
     try {
       // Auth FIRST — never reveal field requirements to anonymous callers.
-      const { userId, fullName, idType, idNumber, idImageUrl, selfieUrl } = req.body || {};
+      const {
+        userId, fullName, firstName, middleName, lastName,
+        idType, idNumber, idImageUrl, selfieUrl,
+        dateOfBirth, address, phone, email, shopVideoUrl,
+      } = req.body || {};
       if (!(await isOwnerOrAdmin(req, res, userId || ''))) return;
       if (!userId || !fullName || !idType || !idNumber) {
         return res.status(400).json({ error: 'Missing required KYC fields' });
@@ -594,12 +598,21 @@ module.exports = function ({ admin: fbAdmin, db }) {
         return res.status(400).json({ error: 'KYC already approved' });
       }
 
-      // Auto-validate KYC fields
+      // Auto-validate KYC fields. New requirements (three names, DOB, address,
+      // phone, email, shop video) surface in reviewNotes rather than hard-fail:
+      // this handler also serves the web-shop form, which still posts the
+      // legacy payload — the admin sees what is missing and reviews accordingly.
+      // The v1 /api/v1/kyc/submit path is the one that hard-gates on the fee.
       const errors = [];
       const nameParts = fullName.trim().split(/\s+/);
       if (nameParts.length < 2) errors.push('Jina kamili linahitaji angalau majina mawili');
-      if (!idImageUrl) errors.push('Picha ya kitambulisho haijapakiwa');
+      if (!idImageUrl) errors.push('Picha ya pasipoti haijapakiwa');
       if (!selfieUrl) errors.push('Selfie haijapakiwa');
+      if (!shopVideoUrl) errors.push('Video ya duka haijapakiwa');
+      if (!dateOfBirth) errors.push('Tarehe ya kuzaliwa inahitajika');
+      if (!address) errors.push('Anwani inahitajika');
+      if (!phone) errors.push('Namba ya simu inahitajika');
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email))) errors.push('Barua pepe halali inahitajika');
 
       // TODO: Integrate NIDA API for real-time National ID verification
       // TODO: Integrate Face Matching microservice (e.g. AWS Rekognition)
@@ -624,13 +637,44 @@ module.exports = function ({ admin: fbAdmin, db }) {
       const status = 'pending';
       const reason = errors.length > 0 ? errors.join('; ') : 'Inahitaji ukaguzi wa admin';
 
+      // Attach the one-time fee receipt when the seller already paid (via the
+      // v1 /api/v1/kyc/fee/initiate flow). Not hard-required here — see above.
+      let feeAmount = 0;
+      let feeReference = '';
+      let feePaidAt = null;
+      try {
+        const feeSnap = await db.collection('transactions')
+          .where('type', '==', 'kyc_fee')
+          .where('userId', '==', userId)
+          .where('status', '==', 'completed')
+          .limit(1)
+          .get();
+        if (!feeSnap.empty) {
+          const feeTx = feeSnap.docs[0];
+          feeAmount = feeTx.data().amount || 15000;
+          feeReference = feeTx.id;
+          feePaidAt = feeTx.data().completedAt || A.firestore.FieldValue.serverTimestamp();
+        }
+      } catch (_) {}
+
       await db.collection('users').doc(userId).update({
         kyc: {
           fullName,
+          firstName: (firstName || '').trim().slice(0, 100),
+          middleName: (middleName || '').trim().slice(0, 100),
+          lastName: (lastName || '').trim().slice(0, 100),
           idType,
           idNumber: cleanId,
           idImageUrl: idImageUrl || '',
           selfieUrl: selfieUrl || '',
+          dateOfBirth: /^\d{4}-\d{2}-\d{2}$/.test(String(dateOfBirth || '')) ? dateOfBirth : '',
+          address: (address || '').trim().slice(0, 500),
+          phone: (phone || '').trim().slice(0, 30),
+          email: (email || '').trim().slice(0, 200),
+          shopVideoUrl: shopVideoUrl || '',
+          feeAmount,
+          feeReference,
+          feePaidAt,
           status,
           approved: false,
           reviewNotes: reason,
@@ -699,9 +743,19 @@ module.exports = function ({ admin: fbAdmin, db }) {
   // ─── CHAT — send message via REST ─────────────────────────────────────
   router.post('/chat/send', async (req, res) => {
     try {
-      const { senderId, receiverId, roomId, text, productId, productName, replyTo, replyToContent, replyToSender } = req.body;
+      const { senderId, receiverId, roomId, text, productId, productName, replyTo, replyToContent, replyToSender, clientMessageId } = req.body;
       if (!senderId || !receiverId || !roomId || !text) {
         return res.status(400).json({ error: 'Missing required fields (senderId, receiverId, roomId, text)' });
+      }
+      // Offline-first idempotency: a retried send carries the same
+      // clientMessageId, so return the original instead of duplicating.
+      if (clientMessageId) {
+        try {
+          const dupSnap = await db.collection('chat_rooms').doc(roomId).collection('messages').where('client_message_id', '==', clientMessageId).limit(1).get();
+          if (!dupSnap.empty) {
+            return res.json({ success: true, messageId: dupSnap.docs[0].id, duplicate: true });
+          }
+        } catch (_) {}
       }
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -741,6 +795,7 @@ module.exports = function ({ admin: fbAdmin, db }) {
         timestamp: A.firestore.FieldValue.serverTimestamp(),
         is_read: false,
         is_delivered: true,
+        ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
         ...(productId ? { product_id: productId } : {}),
         ...(productName ? { product_name: productName } : {}),
         ...(replyTo ? { reply_to: replyTo } : {}),

@@ -10,6 +10,7 @@ import '../../services/search_service.dart';
 import '../../services/ai/ai_service.dart';
 import '../../services/search_history_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/product_api.dart';
 import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
 import '../../main.dart';
@@ -120,55 +121,76 @@ class _SearchScreenState extends State<SearchScreen>
     } catch (_) {}
   }
 
-  /// Loads a default listing when nothing has been searched: boosted
-  /// products first, non-boosted products after (guideline 11.1).
+  /// Loads a default listing when nothing has been searched: sponsored
+  /// products first, non-sponsored products after (guideline 11.1).
   Future<void> _loadDiscovery() async {
     try {
-      final fs = FirebaseFirestore.instance;
-      final boostedSnap = await fs
-          .collection('products')
-          .where('isActive', isEqualTo: true)
-          .where('isBoosted', isEqualTo: true)
-          .limit(12)
-          .get();
-      final recentSnap = await fs
-          .collection('products')
-          .where('isActive', isEqualTo: true)
-          .orderBy('createdAt', descending: true)
-          .limit(30)
-          .get();
+      // Use the v2 Postgres product API which returns sponsored placements
+      // alongside each product (PUBLIC_SELECT includes the sponsoredCampaigns
+      // relation). This replaces the legacy Firestore boost-only discovery.
+      final products = await ProductApiClient().fetchProducts(limit: 30);
 
-      final boosted = <Product>[];
-      final normal = <SearchResult>[];
-      final seen = <String>{};
-
-      final boostedItems = boostedSnap.docs.map((d) => Product.fromFirestore(d)).toList()
-        ..removeWhere((p) => !p.isBoostedValid)
-        ..sort((a, b) => (b.boostedUntil ?? DateTime(0)).compareTo(a.boostedUntil ?? DateTime(0)));
-      for (final p in boostedItems.take(10)) {
-        boosted.add(p);
-        seen.add(p.id);
-      }
-
-      final recent = recentSnap.docs.map((d) => Product.fromFirestore(d)).toList();
-      for (final p in recent) {
-        if (seen.contains(p.id) || p.isBoostedValid) continue;
-        normal.add(SearchResult.fromProduct(p));
-        seen.add(p.id);
-        if (normal.length >= 20) break;
-      }
+      final sponsored = products.items.where((p) => p.isSponsored).toList();
+      final normal = products.items.where((p) => !p.isSponsored).toList();
 
       if (mounted) {
         setState(() {
           _discoveryProducts = [
-            ...boosted.map((p) => SearchResult.fromProduct(p)),
-            ...normal,
+            ...sponsored.map((p) => SearchResult.fromProduct(p)),
+            ...normal.map((p) => SearchResult.fromProduct(p)),
           ];
           _loadingInitial = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingInitial = false);
+    } catch (e) {
+      // Fallback to Firestore for the discovery view if the API is unreachable.
+      try {
+        final fs = FirebaseFirestore.instance;
+        final boostedSnap = await fs
+            .collection('products')
+            .where('isActive', isEqualTo: true)
+            .where('isBoosted', isEqualTo: true)
+            .limit(12)
+            .get();
+        final recentSnap = await fs
+            .collection('products')
+            .where('isActive', isEqualTo: true)
+            .orderBy('createdAt', descending: true)
+            .limit(30)
+            .get();
+
+        final boosted = <Product>[];
+        final normal = <SearchResult>[];
+        final seen = <String>{};
+
+        final boostedItems = boostedSnap.docs.map((d) => Product.fromFirestore(d)).toList()
+          ..removeWhere((p) => !p.isBoostedValid)
+          ..sort((a, b) => (b.boostedUntil ?? DateTime(0)).compareTo(a.boostedUntil ?? DateTime(0)));
+        for (final p in boostedItems.take(10)) {
+          boosted.add(p);
+          seen.add(p.id);
+        }
+
+        final recent = recentSnap.docs.map((d) => Product.fromFirestore(d)).toList();
+        for (final p in recent) {
+          if (seen.contains(p.id) || p.isBoostedValid) continue;
+          normal.add(SearchResult.fromProduct(p));
+          seen.add(p.id);
+          if (normal.length >= 20) break;
+        }
+
+        if (mounted) {
+          setState(() {
+            _discoveryProducts = [
+              ...boosted.map((p) => SearchResult.fromProduct(p)),
+              ...normal,
+            ];
+            _loadingInitial = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _loadingInitial = false);
+      }
     }
   }
 
@@ -553,7 +575,7 @@ class _SearchScreenState extends State<SearchScreen>
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       itemCount: _suggestions.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+      separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
       itemBuilder: (_, i) {
         final s = _suggestions[i];
         final IconData typeIcon;
@@ -847,6 +869,7 @@ class _SearchScreenState extends State<SearchScreen>
     final isSeller = r.type == 'user' || r.type == 'seller';
     final isCategory = r.type == 'category';
     final flash = isProduct ? _flashSales[r.id] : null;
+    final isSponsored = r.isSponsored;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -944,6 +967,16 @@ class _SearchScreenState extends State<SearchScreen>
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(context.tr('ad_label'), style: TextStyle(fontSize: 10, color: cs.primary)),
+                          ),
+                        if (isSponsored)
+                          Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: cs.secondary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(context.tr('sponsored'), style: TextStyle(fontSize: 10, color: cs.secondary)),
                           ),
                       ],
                     ),
@@ -1184,7 +1217,7 @@ class _SearchScreenState extends State<SearchScreen>
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _mostRatedProducts.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (_, i) => _buildMostRatedProductCard(cs, _mostRatedProducts[i]),
             ),
           ),
@@ -1198,7 +1231,7 @@ class _SearchScreenState extends State<SearchScreen>
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _mostRatedSellers.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (_, i) => _buildMostRatedSellerCard(cs, _mostRatedSellers[i]),
             ),
           ),
@@ -1276,25 +1309,44 @@ class _SearchScreenState extends State<SearchScreen>
                             color: cs.surfaceContainerHighest,
                             child: const Center(child: Icon(Icons.image_outlined, color: Colors.grey)),
                           ),
-                    if (flash != null)
-                      Positioned(
-                        top: 4, right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: cs.error,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '-${flash.discountPercent.toStringAsFixed(0)}%',
-                            style: TextStyle(
-                              color: cs.surface,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
+                     if (r.isSponsored)
+                       Positioned(
+                         top: 4, left: 4,
+                         child: Container(
+                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                           decoration: BoxDecoration(
+                             color: cs.secondary.withValues(alpha: 0.9),
+                             borderRadius: BorderRadius.circular(6),
+                           ),
+                           child: Text(
+                             context.tr('sponsored'),
+                             style: TextStyle(
+                               color: cs.onSecondary,
+                               fontSize: 9,
+                               fontWeight: FontWeight.w700,
+                             ),
+                           ),
+                         ),
+                       ),
+                      if (flash != null)
+                        Positioned(
+                          top: 4, right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: cs.error,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '-${flash.discountPercent.toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                color: cs.surface,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
-                      ),
                   ],
                 ),
               ),

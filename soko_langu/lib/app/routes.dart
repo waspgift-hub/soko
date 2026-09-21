@@ -15,6 +15,7 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String notificationPreferences = '/notification-preferences';
   static const String settings = '/settings';
+  static const String shopCustomization = '/shop-customization';
   static const String publicProfile = '/public-profile';
   static const String search = '/search';
   static const String category = '/category';
@@ -55,6 +56,10 @@ class AppRoutes {
   static const String sellerOrders = '/seller-orders';
   static const String adminUserDetail = '/admin/user';
   static const String boostReceipt = '/boost-receipt';
+  static const String sponsoredDashboard = '/sponsored';
+  static const String sponsoredCreate = '/sponsored/create';
+  static const String sponsoredCampaign = '/sponsored/campaign';
+  static const String sponsoredPerformance = '/sponsored/performance';
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';

@@ -1861,14 +1861,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _pendingKycUsers.length > 0 ? cs.secondary.withValues(alpha: 0.12) : cs.primary.withValues(alpha: 0.12),
+                  color: _pendingKycUsers.isNotEmpty ? cs.secondary.withValues(alpha: 0.12) : cs.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   '${_pendingKycUsers.length}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: _pendingKycUsers.length > 0 ? cs.secondary : cs.primary,
+                    color: _pendingKycUsers.isNotEmpty ? cs.secondary : cs.primary,
                   ),
                 ),
               ),

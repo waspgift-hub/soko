@@ -32,8 +32,11 @@ const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
+const sponsoredRouter = require('./modules/sponsored/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
+const requestId = require('./middleware/requestId');
+const { jsonError } = require('./utils/http');
 
 // BigInt is used for TZS money in DB rows (Prisma Decimal->string->BigInt).
 // Express res.json() cannot serialize BigInt â€” TZS fits a JS safe integer
@@ -51,6 +54,9 @@ app.set('trust proxy', 1);
 // effort on a request when the event loop or heap is saturated.
 const { loadShedder } = require('./middleware/loadShedder');
 app.use(loadShedder());
+
+// API contract §25: one id per request, echoed on every JSON response.
+app.use(requestId);
 
 // Compression
 app.use(compression());
@@ -147,8 +153,7 @@ app.use((req, res, next) => {
     !path.startsWith('/api') &&
     !path.startsWith('/health') &&
     !path.startsWith('/.well-known') &&
-    !path.startsWith('/admin') &&
-    !path.startsWith('/shop')
+    !path.startsWith('/admin')
   ) {
     return res.redirect(301, path.slice(0, -1) + req.originalUrl.slice(path.length));
   }
@@ -175,7 +180,7 @@ app.use(express.json({ limit: '10mb' }));
 // Request timeout
 app.use((req, res, next) => {
   res.setTimeout(20000, () => {
-    res.status(504).json({ error: 'Request timed out' });
+    jsonError(res, { status: 504, code: 'REQUEST_TIMED_OUT', message: 'Request timed out' });
   });
   next();
 });
@@ -234,9 +239,6 @@ app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: '
   // Old panel URLs redirect to the real panel so nobody lands on a stale page.
   app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
 
-// The buyer web shop (marketplace) â€” monochrome design mirroring the Flutter app.
-app.use('/shop', express.static(path.join(__dirname, '..', 'shop'), { index: 'index.html' }));
-
 // The landing page owns the root. HTML is never cached so edits go live
 // immediately; versioned assets (css/js/png/ico/json) cache hard.
 // Brand/favicon images must stay revalidatable (no-cache) so an icon swap
@@ -291,6 +293,7 @@ app.use('/api/v1', sellerAnalyticsRouter);
 app.use('/api/v1/reviews', reviewRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
+  app.use('/api/v1/sponsored', sponsoredRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat so these
@@ -331,7 +334,7 @@ app.use((req, res) => {
     if (!req.accepts('json') && req.accepts('html')) {
       return res.status(404).setHeader('Cache-Control', 'no-cache').type('html').send(NOT_FOUND_HTML);
     }
-    return res.status(404).json({ error: 'Not found' });
+    return jsonError(res, { status: 404, code: 'NOT_FOUND', message: 'Not found' });
   }
   if (!req.accepts('html')) {
     return res.status(404).type('text/plain').send('Not found');
@@ -342,8 +345,11 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('[ERROR]', err.message);
-  res.status(err.status || 500).json({ 
-    error: config.nodeEnv === 'development' ? err.message : 'Internal server error' 
+  const isDev = config.nodeEnv === 'development';
+  jsonError(res, {
+    status: err.status || 500,
+    code: err.code || 'INTERNAL_ERROR',
+    message: isDev ? err.message : 'Internal server error',
   });
 });
 

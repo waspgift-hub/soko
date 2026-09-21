@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:provider/provider.dart';
 
 import '../extensions/context_tr.dart';
+import '../services/network_state_service.dart';
 
 class NetworkSensitiveWrapper extends StatefulWidget {
   final Widget child;
@@ -14,12 +14,10 @@ class NetworkSensitiveWrapper extends StatefulWidget {
 
 class _NetworkSensitiveWrapperState extends State<NetworkSensitiveWrapper>
     with SingleTickerProviderStateMixin {
-  bool _offline = false;
-  bool _initialized = false;
-  late StreamSubscription<List<ConnectivityResult>> _sub;
   late AnimationController _animCtrl;
   late Animation<double> _slideAnim;
   late Animation<double> _opacityAnim;
+  bool _offline = false;
 
   @override
   void initState() {
@@ -31,54 +29,37 @@ class _NetworkSensitiveWrapperState extends State<NetworkSensitiveWrapper>
     _opacityAnim = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut),
     );
-
-    _sub = Connectivity().onConnectivityChanged.listen(_onChange);
-    Connectivity().checkConnectivity().then((results) {
-      if (mounted) {
-        final offline = results.every((r) => r == ConnectivityResult.none);
-        _setOffline(offline);
-        setState(() => _initialized = true);
-      }
-    }).catchError((_) {
-      if (mounted) setState(() => _initialized = true);
-    });
-  }
-
-  void _onChange(List<ConnectivityResult> results) {
-    final offline = results.every((r) => r == ConnectivityResult.none);
-    _setOffline(offline);
-  }
-
-  void _setOffline(bool offline) {
-    if (offline == _offline) return;
-    _offline = offline;
-    if (mounted) {
-      if (offline) {
-        _animCtrl.forward();
-      } else {
-        _animCtrl.reverse();
-      }
-      setState(() {});
-    }
   }
 
   @override
   void dispose() {
-    _sub.cancel();
     _animCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) return widget.child;
+    // Banner shows for anything below fully online; the service owns the
+    // probing, this widget only animates visibility.
+    final offline =
+        context.watch<NetworkStateService>().status != NetworkStatus.online;
+    if (offline != _offline) {
+      _offline = offline;
+      if (offline) {
+        _animCtrl.forward();
+      } else {
+        _animCtrl.reverse();
+      }
+    }
     return Stack(
       children: [
         widget.child,
         AnimatedBuilder(
           animation: _animCtrl,
           builder: (context, _) {
-            if (_animCtrl.isDismissed && !_offline) return const SizedBox.shrink();
+            if (_animCtrl.isDismissed && !_offline) {
+              return const SizedBox.shrink();
+            }
             return Positioned(
               top: 0,
               left: 0,

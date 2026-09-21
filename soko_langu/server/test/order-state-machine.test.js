@@ -5,28 +5,28 @@ const { OrderStateMachine, ORDER_STATES, STATE_TRANSITIONS, STATE_FINANCIAL_RULE
 test('starts in DRAFT with correct financial rule', () => {
   const m = new OrderStateMachine();
   assert.strictEqual(m.state, ORDER_STATES.DRAFT);
-  assert.strictEqual(m.getFinancialRule(), 'NO_UNAUTHORIZED_FINANCIAL_MOVEMENT');
+  assert.strictEqual(m.getFinancialRule(), 'NO_MOVEMENT');
 });
 
-test('valid transitions follow the state machine', () => {
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.DRAFT].includes(ORDER_STATES.PUBLISHED));
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.PUBLISHED].includes(ORDER_STATES.ADDRESS_REQUIRED));
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.ADDRESS_REQUIRED].includes(ORDER_STATES.PENDING_SHIPPING_FEE));
+test('valid payment transitions follow the state machine', () => {
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.PENDING_PAYMENT].includes(ORDER_STATES.PAYMENT_PROCESSING));
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.PAYMENT_PROCESSING].includes(ORDER_STATES.PAID));
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.PAID].includes(ORDER_STATES.ESCROW_HELD));
 });
 
 test('escrow-held orders can move to REFUND_PENDING', () => {
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.IN_ESCROW].includes(ORDER_STATES.REFUND_PENDING));
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.ESCROW_HELD].includes(ORDER_STATES.REFUND_PENDING));
   assert.ok(STATE_TRANSITIONS[ORDER_STATES.READY_TO_DISPATCH].includes(ORDER_STATES.REFUND_PENDING));
   assert.ok(STATE_TRANSITIONS[ORDER_STATES.REFUND_PENDING].includes(ORDER_STATES.REFUNDED));
 });
 
 test('transition records history with financial rule', () => {
   const m = new OrderStateMachine(ORDER_STATES.DRAFT);
-  const t = m.transition(ORDER_STATES.PUBLISHED, { actor: 'buyer', actorId: 'u1', reason: 'publish' });
-  assert.strictEqual(m.state, ORDER_STATES.PUBLISHED);
+  const t = m.transition(ORDER_STATES.PENDING_PAYMENT, { actor: 'system', actorId: 'u1', reason: 'publish' });
+  assert.strictEqual(m.state, ORDER_STATES.PENDING_PAYMENT);
   assert.strictEqual(t.from, ORDER_STATES.DRAFT);
-  assert.strictEqual(t.to, ORDER_STATES.PUBLISHED);
-  assert.strictEqual(t.financialRule, STATE_FINANCIAL_RULES[ORDER_STATES.PUBLISHED]);
+  assert.strictEqual(t.to, ORDER_STATES.PENDING_PAYMENT);
+  assert.strictEqual(t.financialRule, STATE_FINANCIAL_RULES[ORDER_STATES.PENDING_PAYMENT]);
   assert.strictEqual(m.history.length, 1);
 });
 
@@ -35,7 +35,7 @@ test('rejects invalid transitions', () => {
   assert.throws(() => m.transition(ORDER_STATES.COMPLETED, {}), /Invalid order transition/);
 });
 
-test('CANNOT skip directly to IN_ESCROW from DRAFT', () => {
+test('shipping quote flow cannot skip straight to a fulfilled state', () => {
   const m = new OrderStateMachine(ORDER_STATES.DRAFT);
   assert.throws(() => m.transition(ORDER_STATES.IN_ESCROW, { actor: 'system' }), /Invalid order transition/);
 });
@@ -56,4 +56,9 @@ test('protected states are recognized', () => {
 test('isValidState recognizes real and rejects fake', () => {
   assert.strictEqual(OrderStateMachine.isValidState(ORDER_STATES.IN_TRANSIT), true);
   assert.strictEqual(OrderStateMachine.isValidState('NOPE'), false);
+});
+
+test('payment failure can be retried into an escrow hold', () => {
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.PAYMENT_PENDING].includes(ORDER_STATES.FAILED));
+  assert.ok(STATE_TRANSITIONS[ORDER_STATES.FAILED].includes(ORDER_STATES.ESCROW_HELD));
 });

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import '../models/product_model.dart';
 import '../models/cached_product.dart';
 import '../services/product_service.dart';
 import '../services/product_api.dart';
 import '../services/api_config.dart';
 import '../services/local_cache_service.dart';
+import '../services/network_state_service.dart';
 
 /// Repository that coordinates remote (API/Postgres + Firestore) and local
 /// (Hive) data sources.
@@ -21,7 +23,9 @@ import '../services/local_cache_service.dart';
 class ProductRepository {
   final ProductService _remote;
   final ProductApiClient _api;
+  final NetworkStateService? _networkState;
   StreamSubscription<List<ConnectivityResult>>? _connectSub;
+  VoidCallback? _networkListener;
   bool _wasOffline = false;
   dynamic _lastDoc; // Cursor for main feed
   dynamic _brandLastDoc; // Cursor for brand filter
@@ -30,12 +34,19 @@ class ProductRepository {
   int _brandPage = 1;
   int _categoryPage = 1;
 
-  ProductRepository({ProductService? remote, ProductApiClient? api})
+  ProductRepository(
+      {ProductService? remote,
+      ProductApiClient? api,
+      NetworkStateService? networkState})
       : _remote = remote ?? ProductService(),
-        _api = api ?? ProductApiClient();
+        _api = api ?? ProductApiClient(),
+        _networkState = networkState;
 
-  /// Whether the device currently has internet.
-  static Future<bool> get isOnline async {
+  /// Whether a network attempt is worthwhile. Prefers the central
+  /// [NetworkStateService] (transport + `/health` probe); falls back to a
+  /// one-shot transport check when no service was injected (tests).
+  Future<bool> get isOnline async {
+    if (_networkState != null) return _networkState.canAttemptNetwork;
     final results = await Connectivity().checkConnectivity();
     return results.any((r) => r != ConnectivityResult.none);
   }
@@ -235,6 +246,20 @@ class ProductRepository {
   /// can refresh.
   void watchConnectivity(void Function() onRecovered) {
     _connectSub?.cancel();
+    if (_networkListener != null) {
+      _networkState?.removeListener(_networkListener!);
+      _networkListener = null;
+    }
+    if (_networkState != null) {
+      final service = _networkState;
+      _networkListener = () {
+        final online = service.isOnline;
+        if (online && _wasOffline) onRecovered();
+        _wasOffline = !online;
+      };
+      service.addListener(_networkListener!);
+      return;
+    }
     _connectSub = Connectivity().onConnectivityChanged.listen((results) {
       final online = results.any((r) => r != ConnectivityResult.none);
       if (online && _wasOffline) {
@@ -246,6 +271,10 @@ class ProductRepository {
 
   void dispose() {
     _connectSub?.cancel();
+    if (_networkListener != null) {
+      _networkState?.removeListener(_networkListener!);
+      _networkListener = null;
+    }
   }
 
   // ---------------------------------------------------------------------------

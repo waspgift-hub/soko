@@ -14,7 +14,7 @@ class CategoryService {
   Stream<List<Category>>? _cachedStream;
 
   // =========================
-  // 📡 GET ALL CATEGORIES
+  // GET ALL CATEGORIES
   // =========================
   Stream<List<Category>> getCategories() {
     if (ApiConfig.kUseCategoriesApi) {
@@ -45,7 +45,7 @@ class CategoryService {
   List<Category> get cached => _cached ?? [];
 
   // =========================
-  // 📦 GET CATEGORY BY ID
+  // GET CATEGORY BY ID
   // =========================
   Future<Category?> getCategoryById(String categoryId) async {
     if (ApiConfig.kUseCategoriesApi) {

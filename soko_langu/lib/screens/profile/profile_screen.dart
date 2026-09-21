@@ -280,10 +280,10 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                         ),
                       const SizedBox(height: AppInsets.xs),
                       Text(user?.email ?? context.tr('no_email'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm)),
-                      if (_profile?.phone?.isNotEmpty == true) ...[
+                      if (_profile?.phone.isNotEmpty == true) ...[
                         const SizedBox(height: 2),
                         Text(
-                          PhoneUtils.formatForDisplay(_profile!.phone!),
+                          PhoneUtils.formatForDisplay(_profile!.phone),
                           style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm),
                         ),
                       ],

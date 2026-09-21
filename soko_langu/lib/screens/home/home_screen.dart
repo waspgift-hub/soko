@@ -24,6 +24,7 @@ import '../../theme/app_typography.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
+import '../../utils/category_icons.dart';
 import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 import '../../services/flash_sale_service.dart';
@@ -388,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen>
                 height: 40,
                 width: 40,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(
+                errorBuilder: (_, _, _) => Icon(
                   Icons.storefront_rounded,
                   size: 32,
                   color: cs.primary,
@@ -588,7 +589,17 @@ class _HomeScreenState extends State<HomeScreen>
                                     border: Border.all(color: cs.outlineVariant),
                                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
                                   ),
-                                  child: Center(child: Text(cat.icon, style: const TextStyle(fontSize: 28))),
+                                  child: Center(
+                                    child: Icon(
+                                      categoryIconFor(
+                                        icon: cat.icon,
+                                        slug: cat.id,
+                                        name: cat.name,
+                                      ),
+                                      size: 28,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(

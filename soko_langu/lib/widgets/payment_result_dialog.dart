@@ -86,7 +86,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
       child: Center(
         child: AnimatedBuilder(
           animation: _ctrl,
-          builder: (_, __) => Transform.scale(
+          builder: (_, _) => Transform.scale(
             scale: widget.success ? _scaleAnim.value : 1.0,
             child: Transform.rotate(
               angle: widget.success ? 0 : _rotateAnim.value,

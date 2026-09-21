@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/product_model.dart';
 import '../models/category_model.dart';
 import 'api_config.dart';
+import '../utils/category_icons.dart';
 import '../utils/network_error.dart';
 
 /// Server-backed product catalog client (`/api/v1/products`).
@@ -251,7 +252,7 @@ class ProductApiClient {
               id: r.id,
               name: r.name,
               nameSw: r.name,
-              icon: r.iconUrl ?? '📦',
+              icon: r.iconUrl ?? CategoryIconNames.package,
               subcategories: byParent[r.id] ?? const [],
               isActive: true,
               order: r.sortOrder,

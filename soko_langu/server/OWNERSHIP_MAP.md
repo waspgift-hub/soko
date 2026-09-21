@@ -10,15 +10,10 @@ Last verified: September 2026 — every claim below was read from current code.
 | `package.json` | `main: src/index.js` | v2 (Postgres) |
 | `npm start` / Render web | `node src/index.js` | v2 (Postgres) |
 | Render worker | `node src/workers/index.js` | v2 (Postgres/Redis) |
-| Dockerfile `CMD` | `node index.js` ← **LEGACY, out of ring** | v1 (Firestore) |
+| Dockerfile `CMD` | `node src/index.js` | v2 (Postgres) |
 
-The Dockerfile still boots the v1 legacy `index.js` (374 KB). `render.yaml`
-does NOT use the Dockerfile (it uses `runtime: node` + startCommand), so
-production is not affected today — but anyone who deploys via Docker gets the
-legacy stack. This is recorded as a **convergence task** (align `CMD` to
-`node src/index.js`) rather than changed blindly, because the legacy image also
-boots without Postgres/Redis env vars and a swap could break a Docker-based
-rollback path.
+`render.yaml` uses `runtime: node` + startCommand, so production boots via
+`npm start` regardless. The Dockerfile is now aligned to the same v2 entrypoint.
 
 ## 2. Data domain ownership
 
@@ -83,6 +78,45 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 4. Dockerfile entrypoint divergence → recorded, not force-changed (rollback risk).
 5. Removal of any legacy path requires: tests + production verification +
    rollback plan (blueprint §30-G).
+
+## 5a. API contract (§25) + Phase F media entry-point convergence (this session)
+
+1. Response envelope: every JSON response now carries `requestId`
+   (`middleware/requestId.js` echoes the caller's `x-request-id` or generates a
+   uuid and patches `res.json` — additive, never overwrites). The global 404,
+   504 timeout, error handler, `auth.js`, `validation.js` and `rateLimiter.js`
+   errors now return `{ success:false, data:null, error:<code>, code,
+   message, requestId[, details] }` via `utils/http.js jsonError`. `error`
+   intentionally stays a top-level String code so the existing Flutter/browser
+   clients that parse `body.error` keep working; `code`/`message` are the
+   structured fields for new consumers. Per-controller `serviceError`
+   helpers stay `{ error }` this pass (requestId is still added by the
+   middleware) — migrate them to `jsonError` in a follow-up before §25 is
+   fully closed.
+2. Dockerfile `CMD` now boots `node src/index.js` (v2) — the legacy Firestore
+   `index.js` is frozen compatibility and must not be booted by fresh
+   deployments (§1 divergence closed; render.yaml was already v2-correct).
+3. Media Phase F contract fix (`/api/v1/media/upload-url`): `ownerId` accepted
+   a strict uuid but is only an object-key namespace segment — sellers upload
+   media BEFORE the Product row exists (images picked first, listing submitted
+   later), so it now accepts Firebase UIDs or uuid via
+   `/^[A-Za-z0-9][A-Za-z0-9_-]*$/`. `ownerType` became an allow-list enum
+   (`product|user|seller|feed|dispute|chat`) so the R2 key namespace stays
+   clean. Client `r2_media_service.dart` fixed a compile-blocking cast typo
+   (`as Stringeli` → `as String`). `kUseMediaApi` remains OFF until the R2
+   media backfill runs in production (Phase F §30-F).
+4. Pre-existing test debt, now mostly cleared by item 17: at session start
+   `cancel-refund`, `order-state-machine`, `presentation-mirror` (DRAFT),
+   `refund-utils` (escrow-funded states) and `wallet-settle`
+   (creditLegacyBalance TypeError reading 'findFirst') failed 16 tests even
+   with the session diff reverted (verified by stashing). The state-machine
+   cluster (11 of the 16) is fixed under item 17. Remaining: `wallet-settle`
+   ×2 — `creditLegacyBalance` drives `tx.ledgerEntry` + `ledgerService.
+   updateWalletBalance` (the newer ledger abstraction), while the isolated test
+   fake only exposes legacy `walletLedgerEntry`/`wallet.update` rows. This is a
+   ledger-schema conformance item (§7), deferred to the wallet/payout converge
+   (§5 items 8, 15) — nothing in production regressed (same TypeError pre-
+   session and post).
 
 5. Lifecycle wiring caveat (B/C finding): buyer cancel/release are NOT safe to
    flip to /api/v1/orders yet — v1 cancel rejects funds-held orders outright
@@ -175,12 +209,71 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
     existing quote-carousel wiring; buyer "Nimepokea"/confirm-receipt routes to
     `issueHandoverOtp` because v1 escrow release is OTP-gated — the
     seller/recipient completes with `completeOrder(otp)`, which is what settles
-    the Postgres wallet. Cancel stays on legacy `/api/escrow/cancel` — v1
-    `cancelOrder` rejects IN_ESCROW+ states (no ClickPesa refund yet), and the
-    UI only shows cancel for escrow-held orders. Legacy
+    the Postgres wallet. Actually wiring the app cancel to v1 (`cancelOrder`) is
+    now viable after item 17: escrow-funded orders refund through
+    `refundOnCancel` + ClickPesa, pre-escrow orders go through the state machine
+    to CANCELLED. Cancel remains on legacy `/api/escrow/cancel` until the wallet/
+    payout converge flips together (the client cancel button only shows for
+    escrow-held orders anyway). Legacy
     `/api/orders/transition`, `/api/orders/set-shipping-cost`, `/api/escrow/
     dispatch`, `/api/escrow/release` remain the default while the flag is off.
     Dispute stays deferred (§5 item 12).
+
+17. Order state machine converged to the authoritative money model (§8) and all
+    11 of its pre-existing test failures cleared. What was wrong and is now
+    fixed in `order-state-machine.js`:
+    - `ORDER_STATES` was missing states that production PERSISTS or reads:
+      `PENDING_SHIPPING_FEE`, `SHIPPING_FEE_SUBMITTED`, `SHIPPING_FEE_REVIEW`,
+      `AWAITING_ESCROW_PAYMENT`, `PAYMENT_PENDING`, `FAILED`, `IN_ESCROW`,
+      `READY_TO_DISPATCH`, `INSPECTION_PERIOD`, `OTP_PENDING`,
+      `OUT_FOR_DELIVERY`, `DELIVERY_ATTEMPTED`, `WALLET_CREDITED`. Every
+      `ORDER_STATES.X` reference in payment/shipping/refund/handover resolved to
+      `undefined` before — `machine.transition(undefined, ...)` threw at runtime
+      (e.g. shipping-quote approval, payment failure, escrow retry).
+    - The machine exposed only `transition`/`canTransition`/static
+      `getFinancialRule`/`canReleaseFunds`: added `getFinancialRule()`
+      (instance), `history` (every transition appended), static
+      `isProtectedState`, static `isValidState`, and `canonicalStatusOf` — the
+      single canonicalization point. `OrderStateMachine` now canonicalizes its
+      incoming state, so a `ready_to_dispatch` row behaves exactly like
+      `READY_TO_DISPATCH` (this was the primary runtime crash: raw legacy
+      spellings compared against uppercase constants).
+    - `isRefundableEscrowState` (refund-service) now canonicalizes its input,
+      and `order-service.cancelOrder` was implemented (the controller called it
+      but the module never exported it — every cancel 500'd). Escrow-held cancels
+      route through `refundOnCancel` (funds back to buyer via ClickPesa);
+      pre-escrow cancels move through the machine to CANCELLED. Covered by
+      rewrite of `order-state-machine.test.js` + existing `cancel-refund`/
+      `refund-utils` tests (assertions updated to the canonical uppercase
+      spellings that production writes).
+    - `LEGACY_STATUS` now has an explicit key for every canonical state (was
+      missing most money-model states — web-shop mirror fell back to 'pending'
+      for them). Suite result: 283 tests, 281 pass; the 2 remaining failures are
+      the `wallet-settle` ledger-schema item recorded in §5a item 4.
+    Remaining money-model conformance (recorded, not done): rows already in
+    Postgres written under legacy spellings still need a one-time data migration
+    to canonical values during the wallet/payout converge; `verifyPayment`
+    (order-service, legacy path) still writes ESCROW_HELD without a machine
+    transition and `payment-service.confirmCollection` uses explicit
+    PAYMENT_PROCESSING/FAILED — both already valid under the new edges.
+    Also `scripts/migrate-seller-balances.js` remains not-yet-run (§5 item 15).
+
+18. Chat Phase E isolation documented (boundary only — no re-wiring this pass).
+    Chat data stays Firestore-owned today: DM under `chat_rooms` +
+    `chat_rooms/<id>/messages`, group chat under `groups/<id>/messages`.
+    - WRITE owners (verified by grep): `lib/services/chat_service.dart` and
+      `lib/services/group_service.dart` are the ONLY app writers; the server
+      legacy shim `server/src/modules/legacy-compat/feature-compat.js` writes
+      `chat_rooms`/`messages` purely as a moderation/mirror fallback. No
+      commerce module writes chat collections.
+    - READ exception: `admin_dashboard_screen.dart:2181` reads `chat_rooms`
+      directly (admin room list). If Phase E adds richer admin chat surfaces,
+      route them through a read API instead of new direct reads.
+    - Boundary rule recorded in the two client services' class docs: any new
+      chat write goes through `ChatService`/`GroupService` so the domain stays
+      isolated behind its owner. Phase E (owned chat service + Postgres chat,
+      nearline) remains a standalone migration on top of this boundary; nothing
+      here flips live chat off Firestore.
 
 ## 6. Next (Phase B) candidates, in dependency order
 

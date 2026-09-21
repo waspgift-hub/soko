@@ -680,10 +680,26 @@ model KycApplication {
   id          String    @id @default(uuid()) @db.Uuid
   userId      String    @unique @map("user_id") @db.VarChar(128)
   fullName    String    @map("full_name") @db.VarChar(200)
+  // The three-name requirement: sellers submit first/middle/last separately
+  // (matching the passport); fullName stays the combined "first middle last".
+  firstName   String?   @map("first_name") @db.VarChar(100)
+  middleName  String?   @map("middle_name") @db.VarChar(100)
+  lastName    String?   @map("last_name") @db.VarChar(100)
   idType      String    @map("id_type") @db.VarChar(50)
   idNumber    String    @map("id_number") @db.VarChar(50)
   idImageUrl  String?   @map("id_image_url") @db.Text
   selfieUrl   String?   @map("selfie_url") @db.Text
+  // Calendar date only (YYYY-MM-DD), not a timestamp — avoids TZ drift.
+  dateOfBirth String?   @map("date_of_birth") @db.VarChar(10)
+  address     String?   @db.Text
+  phone       String?   @db.VarChar(30)
+  email       String?   @db.VarChar(200)
+  shopVideoUrl String?  @map("shop_video_url") @db.Text
+  // One-time verification fee (kyc_fee transaction in Firestore is the
+  // source of truth; these columns snapshot it for the review queue).
+  feeAmount   Int       @default(0) @map("fee_amount")
+  feeReference String?  @map("fee_reference") @db.VarChar(100)
+  feePaidAt   DateTime? @map("fee_paid_at")
   status      String    @default("pending") @db.VarChar(20)
   approved    Boolean   @default(false)
   reviewNotes String?   @map("review_notes") @db.Text
@@ -732,6 +748,172 @@ model Boost {
   seller  SellerProfile @relation(fields: [sellerId], references: [id])
 
   @@map("boosts")
+}
+
+// ============================================================
+// SPONSORED ADVERTISING TABLES (Phase G)
+// Replaces the legacy Boost system with full campaign lifecycle:
+// budget pacing, placement ranking, impression/click attribution,
+// and fraud protection.
+// ============================================================
+
+model SponsoredCampaign {
+  id              String             @id @default(uuid()) @db.Uuid
+  sellerId        String             @map("seller_id") @db.Uuid
+  name            String             @db.VarChar(200)
+  dailyBudgetTzs  BigInt             @map("daily_budget_tzs") @db.BigInt
+  totalBudgetTzs  BigInt             @map("total_budget_tzs") @db.BigInt
+  bidAmountTzs    BigInt             @map("bid_amount_tzs") @db.BigInt
+  status          String             @default("draft") @db.VarChar(20)
+  placement       String             @default("search") @db.VarChar(30)
+  startsAt        DateTime           @map("starts_at")
+  expiresAt       DateTime           @map("expires_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  // Counters updated by the bidding engine (atomic increments).
+  impressions     Int                @default(0)
+  clicks          Int                @default(0)
+  spendTzs        BigInt             @default(0) @map("spend_tzs") @db.BigInt
+
+  // Placement targeting: which products/sellers this campaign targets.
+  placements      CampaignPlacement[]
+  // Events (impressions/clicks/atl) — append-only event log.
+  events          CampaignEvent[]
+  // Payment record (server-side after ClickPesa confirms).
+  payment         CampaignPayment?
+  // Audit trail of state transitions.
+  auditLogs       CampaignAuditLog[]
+
+  seller SellerProfile @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, status(sort: Desc)])
+  @@index([status, startsAt])
+  @@index([expiresAt])
+  @@map("sponsored_campaigns")
+}
+
+model CampaignPlacement {
+  id          String   @id @default(uuid()) @db.Uuid
+  campaignId  String   @map("campaign_id") @db.Uuid
+  productId   String?  @map("product_id") @db.Uuid
+  isAllProducts Boolean @default(false) @map("is_all_products") @db.Boolean
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  campaign SponsoredCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product  Product?           @relation(fields: [productId], references: [id])
+
+  @@index([campaignId])
+  @@index([productId])
+  @@map("campaign_placements")
+}
+
+model CampaignEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  campaignId    String   @map("campaign_id") @db.Uuid
+  eventType     String   @db.VarChar(20)
+  productId     String?  @map("product_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  ipAddress     String?  @map("ip_address") @db.Inet
+  userAgent     String?  @map("user_agent") @db.Text
+  bidAmountTzs  BigInt?  @map("bid_amount_tzs") @db.BigInt
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  campaign SponsoredCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product  Product?            @relation(fields: [productId], references: [id])
+  user     User?               @relation(fields: [userId], references: [id])
+
+  @@index([campaignId, eventType])
+  @@index([createdAt])
+  @@map("campaign_events")
+}
+
+model CampaignImpression {
+  id            String   @id @default(uuid()) @db.Uuid
+  campaignId    String   @map("campaign_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  ipAddress     String?  @map("ip_address") @db.Inet
+  userAgent     String?  @map("user_agent") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([campaignId, productId])
+  @@index([createdAt])
+  @@map("campaign_impressions")
+}
+
+model CampaignClick {
+  id            String   @id @default(uuid()) @db.Uuid
+  campaignId    String   @map("campaign_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  ipAddress     String?  @map("ip_address") @db.Inet
+  userAgent     String?  @map("user_agent") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([campaignId, productId])
+  @@index([createdAt])
+  @@map("campaign_clicks")
+}
+
+model CampaignAttribution {
+  id            String   @id @default(uuid()) @db.Uuid
+  campaignId    String   @map("campaign_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  orderId       String?  @map("order_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([campaignId])
+  @@index([orderId])
+  @@map("campaign_attributions")
+}
+
+model CampaignPayment {
+  id              String    @id @default(uuid()) @db.Uuid
+  campaignId      String    @unique @map("campaign_id") @db.Uuid
+  provider        String    @db.VarChar(50)
+  providerOrderId String?   @map("provider_order_id") @db.VarChar(200)
+  amountTzs       BigInt    @db.BigInt @map("amount_tzs")
+  currency        String    @default("TZS") @db.VarChar(3)
+  status          String    @default("pending") @db.VarChar(20)
+  webhookReceivedAt DateTime? @map("webhook_received_at")
+  verifiedAt      DateTime? @map("verified_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  campaign SponsoredCampaign @relation(fields: [campaignId], references: [id])
+
+  @@index([status])
+  @@map("campaign_payments")
+}
+
+model CampaignAuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  campaignId  String    @map("campaign_id") @db.Uuid
+  actorId     String?   @map("actor_id") @db.Uuid
+  actorType   String    @default("user") @map("actor_type") @db.VarChar(20)
+  action      String    @db.VarChar(50)
+  oldState    Json?     @map("old_state")
+  newState    Json?     @map("new_state")
+  ipAddress   String?   @map("ip_address") @db.Inet
+  userAgent   String?   @map("user_agent") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  campaign SponsoredCampaign @relation(fields: [campaignId], references: [id])
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@map("campaign_audit_logs")
+}
+
+model AdminSetting {
+  id          String    @id @default(uuid()) @db.Uuid
+  key         String    @unique @db.VarChar(100)
+  value       Json      @db.Json
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("admin_settings")
 }
 
 model ModerationReport {

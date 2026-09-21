@@ -9,6 +9,64 @@ const router = Router();
 // App-facing (Firebase-authenticated, owner-only)
 // ---------------------------------------------------------------------------
 
+// Send a phone OTP (SMS). body: { value }   -> { success, sent, expiresInSec }
+router.post('/verify/phone/send', authenticate, async (req, res) => {
+  try {
+    const result = await kycService.sendContactOtp({
+      userId: req.firebaseUid,
+      channel: 'phone',
+      value: req.body?.value,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_PHONE_OTP_SEND_FAILED', message: e.message } });
+  }
+});
+
+// Verify a phone OTP. body: { value, otp }   -> { success, verified }
+router.post('/verify/phone/confirm', authenticate, async (req, res) => {
+  try {
+    const result = await kycService.verifyContactOtp({
+      userId: req.firebaseUid,
+      channel: 'phone',
+      value: req.body?.value,
+      otp: req.body?.otp,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_PHONE_OTP_INVALID', message: e.message } });
+  }
+});
+
+// Send an email OTP. body: { value }         -> { success, sent, expiresInSec }
+router.post('/verify/email/send', authenticate, async (req, res) => {
+  try {
+    const result = await kycService.sendContactOtp({
+      userId: req.firebaseUid,
+      channel: 'email',
+      value: req.body?.value,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_EMAIL_OTP_SEND_FAILED', message: e.message } });
+  }
+});
+
+// Verify an email OTP. body: { value, otp }  -> { success, verified }
+router.post('/verify/email/confirm', authenticate, async (req, res) => {
+  try {
+    const result = await kycService.verifyContactOtp({
+      userId: req.firebaseUid,
+      channel: 'email',
+      value: req.body?.value,
+      otp: req.body?.otp,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_EMAIL_OTP_INVALID', message: e.message } });
+  }
+});
+
 // Status. Owner or admin may read.
 router.get('/status/:userId', authenticate, async (req, res) => {
   try {
@@ -24,22 +82,97 @@ router.get('/status/:userId', authenticate, async (req, res) => {
   }
 });
 
+// Send a KYC contact OTP (phone => SMS, email => mailer). `channel` is
+// 'phone' or 'email'; `value` is the raw contact to verify.
+router.post('/verify/phone', authenticate, async (req, res) => {
+  try {
+    const result = await kycService.sendContactOtp({
+      userId: req.firebaseUid,
+      channel: 'phone',
+      value: req.body?.value,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_OTP_SEND_FAILED', message: e.message } });
+  }
+});
+
+router.post('/verify/email', authenticate, async (req, res) => {
+  try {
+    const result = await kycService.sendContactOtp({
+      userId: req.firebaseUid,
+      channel: 'email',
+      value: req.body?.value,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_OTP_SEND_FAILED', message: e.message } });
+  }
+});
+
 // Submit/resubmit. The authenticated caller is always the subject.
 router.post('/submit', authenticate, async (req, res) => {
   try {
-    const { fullName, idType, idNumber, idImageUrl, selfieUrl } = req.body || {};
+    const {
+      fullName, firstName, middleName, lastName,
+      idType, idNumber, idImageUrl, selfieUrl,
+      dateOfBirth, address, phone, email, shopVideoUrl,
+    } = req.body || {};
     const result = await kycService.submitKyc({
       userId: req.firebaseUid,
       fullName,
+      firstName,
+      middleName,
+      lastName,
       idType,
       idNumber,
       idImageUrl,
       selfieUrl,
+      dateOfBirth,
+      address,
+      phone,
+      email,
+      shopVideoUrl,
     });
     res.json({ success: true, data: { approved: result.approved, reason: result.reason, message: result.message } });
   } catch (e) {
     const status = e.status || 500;
     const code = e.code || 'KYC_SUBMIT_FAILED';
+    res.status(status).json({ success: false, error: { code, message: e.message } });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// One-time verification fee (TSh 15,000) — ClickPesa collection.
+// ---------------------------------------------------------------------------
+
+// Whether the caller's fee is settled (polled by the app after a USSD push).
+router.get('/fee/status', authenticate, async (req, res) => {
+  try {
+    const fee = await kycService.getKycFeeStatus({ userId: req.firebaseUid });
+    res.json({ success: true, data: fee });
+  } catch (e) {
+    res.status(500).json({ success: false, error: { code: 'KYC_FEE_STATUS_FAILED', message: e.message } });
+  }
+});
+
+// Start a fee collection. `paymentMethod` is 'ussd_push' (default) or 'billpay'.
+router.post('/fee/initiate', authenticate, async (req, res) => {
+  try {
+    const { phone, paymentMethod } = req.body || {};
+    // The webhook URL must be publicly reachable; PUBLIC_SERVER_URL wins over
+    // the request host so direct IP/proxied probes can't redirect callbacks.
+    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const result = await kycService.initiateKycFee({
+      userId: req.firebaseUid,
+      phone,
+      paymentMethod,
+      baseUrl,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    const status = e.status || 500;
+    const code = e.code || 'KYC_FEE_INITIATE_FAILED';
     res.status(status).json({ success: false, error: { code, message: e.message } });
   }
 });

@@ -131,15 +131,19 @@ class CloudinaryService {
       ..fields['timestamp'] = sig['timestamp'].toString()
       ..fields['signature'] = sig['signature'] as String
       ..fields['folder'] = folder
+      // fromPath streams from disk — a 30s shop video can exceed 60MB and
+      // readAsBytes would hold the whole file in RAM during the upload.
       ..files.add(
-        http.MultipartFile.fromBytes(
+        await http.MultipartFile.fromPath(
           'file',
-          await xfile.readAsBytes(),
+          xfile.path,
           filename: '${DateTime.now().millisecondsSinceEpoch}.mp4',
         ),
       );
 
-    final response = await request.send().timeout(const Duration(seconds: 60));
+    // Uploading tens of MB over a mobile uplink takes minutes, not seconds —
+    // a short timeout here would fail every shop-video KYC submission.
+    final response = await request.send().timeout(const Duration(seconds: 300));
     final body = jsonDecode(await response.stream.bytesToString());
 
     if (response.statusCode == 200 && body['secure_url'] != null) {

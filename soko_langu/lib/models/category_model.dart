@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/category_icons.dart';
+
 class Category {
   final String id;
   final String name;
@@ -37,7 +39,7 @@ class Category {
       id: doc.id,
       name: data['name'] ?? '',
       nameSw: data['nameSw'] ?? '',
-      icon: data['icon'] ?? '📦',
+      icon: data['icon'] ?? CategoryIconNames.package,
       image: data['image'],
       subcategories: subs,
       isActive: data['isActive'] ?? true,
@@ -93,7 +95,7 @@ List<Category> getDefaultCategories() {
       id: 'electronics',
       name: 'Electronics',
       nameSw: 'Vifaa vya Umeme',
-      icon: '📱',
+      icon: CategoryIconNames.smartphone,
       subcategories: [
         SubCategory(
           id: 'phones',
@@ -119,7 +121,7 @@ List<Category> getDefaultCategories() {
       id: 'fashion',
       name: 'Fashion',
       nameSw: 'Mavazi',
-      icon: '👕',
+      icon: CategoryIconNames.checkroom,
       subcategories: [
         SubCategory(
           id: 'mens',
@@ -146,7 +148,7 @@ List<Category> getDefaultCategories() {
       id: 'home_garden',
       name: 'Home & Garden',
       nameSw: 'Nyumba na Bustani',
-      icon: '🏠',
+      icon: CategoryIconNames.chair,
       subcategories: [
         SubCategory(id: 'furniture', name: 'Furniture', nameSw: 'Samani'),
         SubCategory(id: 'kitchen', name: 'Kitchen & Dining', nameSw: 'Jikoni'),
@@ -169,7 +171,7 @@ List<Category> getDefaultCategories() {
       id: 'automotive',
       name: 'Automotive',
       nameSw: 'Magari',
-      icon: '🚗',
+      icon: CategoryIconNames.car,
       subcategories: [
         SubCategory(
           id: 'magari',
@@ -200,7 +202,7 @@ List<Category> getDefaultCategories() {
       id: 'health',
       name: 'Health & Beauty',
       nameSw: 'Afya na Urembo',
-      icon: '💄',
+      icon: CategoryIconNames.spa,
       subcategories: [
         SubCategory(
           id: 'skincare',
@@ -231,7 +233,7 @@ List<Category> getDefaultCategories() {
       id: 'sports',
       name: 'Sports & Entertainment',
       nameSw: 'Michezo na Burudani',
-      icon: '⚽',
+      icon: CategoryIconNames.soccer,
       subcategories: [
         SubCategory(id: 'fitness', name: 'Fitness', nameSw: 'Mazoezi'),
         SubCategory(
@@ -257,7 +259,7 @@ List<Category> getDefaultCategories() {
       id: 'business',
       name: 'Business & Industrial',
       nameSw: 'Biashara na Viwanda',
-      icon: '🏭',
+      icon: CategoryIconNames.factory,
       subcategories: [
         SubCategory(id: 'machinery', name: 'Machinery', nameSw: 'Mashine'),
         SubCategory(id: 'construction', name: 'Construction', nameSw: 'Ujenzi'),
@@ -275,7 +277,7 @@ List<Category> getDefaultCategories() {
       id: 'food',
       name: 'Food & Beverages',
       nameSw: 'Chakula na Vinywaji',
-      icon: '🍔',
+      icon: CategoryIconNames.fastfood,
       subcategories: [
         SubCategory(
           id: 'groceries',
@@ -293,7 +295,7 @@ List<Category> getDefaultCategories() {
       id: 'maternal',
       name: 'Maternal & Kids',
       nameSw: 'Mama na Watoto',
-      icon: '👶',
+      icon: CategoryIconNames.childCare,
       subcategories: [
         SubCategory(
           id: 'baby_care',
@@ -318,7 +320,7 @@ List<Category> getDefaultCategories() {
       id: 'services',
       name: 'Services',
       nameSw: 'Huduma',
-      icon: '🔧',
+      icon: CategoryIconNames.handyman,
       subcategories: [
         SubCategory(
           id: 'home_services',
@@ -343,7 +345,7 @@ List<Category> getDefaultCategories() {
       id: 'others',
       name: 'Others',
       nameSw: 'Nyingine',
-      icon: '📦',
+      icon: CategoryIconNames.package,
       subcategories: [
         SubCategory(id: 'other', name: 'Other', nameSw: 'Nyingine'),
         SubCategory(

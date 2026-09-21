@@ -88,8 +88,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final profile = await UserService().getProfile(user.uid);
-    if (mounted && profile?.phone?.isNotEmpty == true) {
-      _phoneCtrl.text = profile!.phone!;
+    if (mounted && profile?.phone.isNotEmpty == true) {
+      _phoneCtrl.text = profile!.phone;
     }
   }
 

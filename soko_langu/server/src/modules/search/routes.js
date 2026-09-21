@@ -22,7 +22,11 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const results = await searchService.searchProducts(req.query);
+    const results = await searchService.searchProducts({
+      ...req.query,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'] || '',
+    });
     res.json({ success: true, data: results });
   }
 );

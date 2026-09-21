@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { jsonError } = require('../utils/http');
 
 // Validation schemas
 const schemas = {
@@ -106,7 +107,7 @@ function validate(schema) {
     }
 
     if (errors.length > 0) {
-      return res.status(400).json({ error: 'VALIDATION_ERROR', details: errors });
+      return jsonError(res, { status: 400, code: 'VALIDATION_ERROR', message: 'VALIDATION_ERROR', details: errors });
     }
 
     next();

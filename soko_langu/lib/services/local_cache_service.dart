@@ -4,6 +4,8 @@ import '../models/cached_chat_room.dart';
 import '../models/cached_message.dart';
 import '../models/message_model.dart';
 import '../models/chat_room.dart';
+import '../models/order_model.dart';
+import '../models/wallet_model.dart';
 
 /// Centralised Hive initialisation and box access for offline caching.
 ///
@@ -14,6 +16,8 @@ class LocalCacheService {
   static const String _productBox = 'cached_products';
   static const String _roomBox = 'cached_rooms';
   static const String _messagePrefix = 'cached_messages_';
+  static const String _orderBox = 'cached_orders';
+  static const String _walletBox = 'cached_wallet';
 
   static bool _initialized = false;
 
@@ -28,6 +32,10 @@ class LocalCacheService {
 
     await Hive.openBox<CachedProduct>(_productBox);
     await Hive.openBox<CachedChatRoom>(_roomBox);
+    // Orders and wallet are stored as plain Maps (API wire shape), so they
+    // need no adapters — avoids codegen for the OrderData/WalletDetail DTOs.
+    await Hive.openBox(_orderBox);
+    await Hive.openBox(_walletBox);
     _initialized = true;
   }
 
@@ -113,4 +121,114 @@ class LocalCacheService {
     final box = _getMessageBox(roomId);
     await box.put(msg.id, CachedMessage.fromMessage(roomId, msg));
   }
+
+  // ---------------------------------------------------------------------------
+  // Order cache
+  // ---------------------------------------------------------------------------
+
+  static Box get _orders => Hive.box(_orderBox);
+
+  /// Re-encode a cached [OrderData] into the API wire shape so it round-trips
+  /// through [OrderData.fromApi]'s tolerant parser.
+  static Map<String, dynamic> _orderToJson(OrderData o) => {
+        'id': o.id,
+        'orderNumber': o.orderNumber,
+        'status': o.status,
+        'productSnapshot': {
+          'title': o.productName,
+          'imageUrl': o.productImage,
+          'unitPrice': o.productPrice,
+          'quantity': o.quantity,
+        },
+        'shippingFee': o.shippingFee,
+        'totalAmount': o.totalAmount,
+        'platformCommission': o.platformCommission,
+        'courierName': o.courierName,
+        'trackingNumber': o.trackingNumber,
+        'buyer': {'displayName': o.buyerName},
+        'seller': {'storeName': o.sellerName},
+        'createdAt': o.createdAt?.toIso8601String(),
+        'paidAt': o.paidAt?.toIso8601String(),
+        'completedAt': o.completedAt?.toIso8601String(),
+        'cancelledAt': o.cancelledAt?.toIso8601String(),
+      };
+
+  static OrderData? _orderFromJson(Object? raw) {
+    return raw is Map
+        ? OrderData.fromApi(Map<String, dynamic>.from(raw))
+        : null;
+  }
+
+  /// All cached orders (by insertion order).
+  static Future<List<OrderData>> getCachedOrders() async =>
+      _orders.values.map(_orderFromJson).whereType<OrderData>().toList();
+
+  /// Replace the entire order cache with fresh data.
+  static Future<void> saveOrders(List<OrderData> orders) async {
+    await _orders.clear();
+    for (final o in orders) {
+      await _orders.put(o.id, _orderToJson(o));
+    }
+  }
+
+  /// Single cached order, or null when not in cache.
+  static Future<OrderData?> getCachedOrder(String id) async =>
+      _orderFromJson(_orders.get(id));
+
+  /// Upsert one order into the cache.
+  static Future<void> saveOrder(OrderData order) async =>
+      _orders.put(order.id, _orderToJson(order));
+
+  /// Drop a single order (e.g. after a mutation invalidates it).
+  static Future<void> invalidateOrder(String id) async => _orders.delete(id);
+
+  // ---------------------------------------------------------------------------
+  // Wallet cache
+  // ---------------------------------------------------------------------------
+
+  static Box get _wallet => Hive.box(_walletBox);
+
+  /// Re-encode a cached [WalletDetail] into the API wire shape so it
+  /// round-trips through [WalletDetail.fromApi]'s tolerant parser.
+  static Map<String, dynamic> _walletToJson(WalletDetail w) => {
+        'balances': {
+          'available': w.available,
+          'pending': w.pending,
+          'frozen': w.frozen,
+          'totalEarned': w.totalEarned,
+          'totalWithdrawn': w.totalWithdrawn,
+        },
+        'ledger': [
+          for (final e in w.ledger)
+            {
+              'id': e.id,
+              'type': e.type,
+              'amount': e.amount,
+              'balanceAfter': e.balanceAfter,
+              'referenceType': e.referenceType,
+              'referenceId': e.referenceId,
+              'description': e.description,
+              'createdAt': e.createdAt?.toIso8601String(),
+            },
+        ],
+      };
+
+  static WalletDetail? _walletFromJson(Object? raw) {
+    return raw is Map
+        ? WalletDetail.fromApi(Map<String, dynamic>.from(raw))
+        : null;
+  }
+
+  /// Cached wallet snapshot, or null when never cached.
+  static Future<WalletDetail?> getCachedWallet() async =>
+      _walletFromJson(_wallet.isEmpty ? null : _wallet.values.first);
+
+  /// Replace the wallet snapshot cache.
+  static Future<void> saveWallet(WalletDetail wallet) async {
+    await _wallet.clear();
+    await _wallet.put('current', _walletToJson(wallet));
+  }
+
+  /// Drop the wallet cache (e.g. after a balance mutation).
+  static Future<void> invalidateWallet() async => _wallet.clear();
 }

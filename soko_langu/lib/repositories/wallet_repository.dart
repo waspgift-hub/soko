@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import '../models/wallet_model.dart';
 import '../services/wallet_api.dart';
 import '../services/local_cache_service.dart';
@@ -12,19 +11,14 @@ import '../services/local_cache_service.dart';
 /// 3. Update cache and notify listeners of the authoritative truth.
 class WalletRepository {
   final WalletApiClient _apiClient;
-  final LocalCacheService _cache;
 
-  WalletRepository({
-    required WalletApiClient apiClient,
-    required LocalCacheService cache,
-  }) : _apiClient = apiClient,
-       _cache = cache;
+  WalletRepository({required WalletApiClient apiClient}) : _apiClient = apiClient;
 
   /// Fetches the current wallet details.
   /// Returns a Stream to allow the UI to show cached data then fresh data.
   Stream<WalletDetail> watchWallet() async* {
     // 1. Emit cached data first for instant load
-    final cached = await _cache.getCachedWallet();
+    final cached = await LocalCacheService.getCachedWallet();
     if (cached != null) {
       yield cached;
     }
@@ -34,7 +28,7 @@ class WalletRepository {
       final fresh = await _apiClient.fetchWallet();
       
       // 3. Update local cache
-      await _cache.saveWallet(fresh);
+      await LocalCacheService.saveWallet(fresh);
       
       yield fresh;
     } catch (e) {
@@ -55,7 +49,7 @@ class WalletRepository {
     );
     
     // Invalidate wallet cache as balance has changed
-    await _cache.invalidateWallet();
+    await LocalCacheService.invalidateWallet();
     
     return result;
   }
