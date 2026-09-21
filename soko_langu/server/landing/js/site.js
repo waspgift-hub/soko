@@ -181,6 +181,10 @@
       if (dict[key] != null) el.innerHTML = dict[key];
     });
     if (dict.doc_title) document.title = dict.doc_title;
+    // The intro carries a fixed English summary paragraph; hide it while the
+    // English translation is active so it neither duplicates nor mixes in.
+    var enSummary = document.querySelector('.intro .en');
+    if (enSummary) enSummary.style.display = (lang === 'en') ? 'none' : '';
     var meta = document.querySelector('meta[name="description"]');
     if (meta && dict.doc_desc) meta.setAttribute('content', dict.doc_desc);
     document.querySelectorAll('select.lang-select').forEach(function (sel) {
