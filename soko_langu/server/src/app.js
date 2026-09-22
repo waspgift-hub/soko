@@ -245,6 +245,44 @@ app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: '
   // Old panel URLs redirect to the real panel so nobody lands on a stale page.
   app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
 
+// Flutter Web marketing site owns the root. The SPA shell lives under
+// server/landing/_flutter (built with --base-href /_flutter/ so every asset
+// resolves under that prefix and never collides with the legacy landing
+// assets). index.html is served no-cache so every deploy goes live instantly.
+const flutterWebDir = path.join(landingDir, '_flutter');
+app.get('/', (req, res) => {
+  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').sendFile(path.join(flutterWebDir, 'index.html'));
+});
+app.use('/_flutter', express.static(flutterWebDir, {
+  index: false,
+  // No directory redirects: the SPA shell is never requested as a folder.
+  redirect: false,
+  setHeaders: (res, filePath) => {
+    const rel = path.relative(flutterWebDir, filePath);
+    // Engine entrypoint files are NOT content-hashed (main.dart.js,
+    // bootstrap, loader, SW) — revalidate on every visit so a deploy never
+    // leaves visitors running a stale bundle. Hashed modules (assets/,
+    // canvaskit/) are immutable.
+    const engineFiles = new Set([
+      'index.html', 'manifest.json', 'main.dart.js',
+      'flutter_bootstrap.js', 'flutter_service_worker.js', 'flutter.js',
+    ]);
+    if (engineFiles.has(rel)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
+// Terminal handler: any /_flutter request that is not a real file returns
+// 404 here so the generic landing static mount below never sees the directory
+// and 301-redirects between /_flutter and /_flutter/ in an endless loop.
+app.use('/_flutter', (req, res) => {
+  res.status(404).type('text/plain').send('Not found');
+});
+
 // The landing page owns the root. HTML is never cached so edits go live
 // immediately; versioned assets (css/js/png/ico/json) cache hard.
 // Brand/favicon images must stay revalidatable (no-cache) so an icon swap
@@ -268,8 +306,8 @@ app.use(express.static(landingDir, {
 }));
 
 // Browsers/bots often request /favicon.ico directly regardless of the <link>
-// tags â€” map the root one to the brand favicon instead of serving a 404.
-app.get('/favicon.ico', (req, res) => res.redirect('/assets/favicon.ico'));
+// tags — map the root one to the Flutter brand favicon instead of a 404.
+app.get('/favicon.ico', (req, res) => res.redirect('/_flutter/favicon.ico'));
 
 // Routes
 app.use('/health', healthRouter);
