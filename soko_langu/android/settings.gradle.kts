@@ -26,4 +26,14 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }
 
+// dynamic_color 1.9.0 declares the Kotlin Gradle plugin on its buildscript
+// classpath but never applies it, so its `kotlin { compilerOptions {} }`
+// block fails script compilation. Apply our KGP to that module here instead
+// of patching the pub cache, which would not survive `flutter pub get`.
+gradle.beforeProject {
+    if (name == "dynamic_color") {
+        apply(plugin = "org.jetbrains.kotlin.android")
+    }
+}
+
 include(":app")
