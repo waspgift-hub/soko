@@ -32,10 +32,35 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
         icon: const Icon(Icons.add),
         label: Text(context.tr('post_request')),
       ),
-      body: StreamBuilder<List<BuyerRequest>>(
-        key: ValueKey('buyer_requests_$_refreshKey'),
-        stream: _service.getRequests(),
-        builder: (context, snap) {
+      body: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnap) {
+          final user = authSnap.data ?? FirebaseAuth.instance.currentUser;
+          if (user == null) {
+            if (authSnap.connectionState == ConnectionState.waiting) {
+              return const Center(child: GoogleLoading(size: 32));
+            }
+            // Signed-out users can't read BuyerRequests (Firestore rule
+            // `isSignedIn()`), so gate the query behind an auth prompt.
+            return SokoVibeEmptyState(
+              icon: Icons.lock_outline,
+              title: context.tr('login_required'),
+              subtitle: context.tr('login_required_body'),
+              actionLabel: context.tr('login'),
+              onAction: () => context.push(AppRoutes.login),
+            );
+          }
+          return _buildRequestsBody();
+        },
+      ),
+    );
+  }
+
+  Widget _buildRequestsBody() {
+    return StreamBuilder<List<BuyerRequest>>(
+      key: ValueKey('buyer_requests_$_refreshKey'),
+      stream: _service.getRequests(),
+      builder: (context, snap) {
           if (snap.hasError) {
             return _ErrorState(
               detail: snap.error?.toString() ?? '',
@@ -64,8 +89,7 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
             ),
           );
         },
-      ),
-    );
+      );
   }
 
   Widget _buildRequestCard(BuyerRequest req) {

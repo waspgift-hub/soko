@@ -6,6 +6,7 @@ import '../../services/sponsored_service.dart';
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/soko_vibe_states.dart';
 import '../../theme/app_colors.dart';
 
 class SponsoredDashboardScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class _SponsoredDashboardScreenState extends State<SponsoredDashboardScreen> {
   final SponsoredService _service = SponsoredService();
   List<SponsoredCampaign> _campaigns = [];
   bool _loading = true;
-  String? _error;
+  Object? _error;
 
   @override
   void initState() {
@@ -33,13 +34,16 @@ class _SponsoredDashboardScreenState extends State<SponsoredDashboardScreen> {
       if (mounted) {
         setState(() {
           _campaigns = campaigns;
+          _error = null;
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) {
+        // Keep the raw error, not `e.toString()`, so it can be translated
+        // (e.g. ErrorKeys.poorNetwork) at render time.
         setState(() {
-          _error = e.toString();
+          _error = e;
           _loading = false;
         });
       }
@@ -81,7 +85,10 @@ class _SponsoredDashboardScreenState extends State<SponsoredDashboardScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? Center(child: Text(_error!))
+                  ? SokoVibeErrorState(
+                      message: context.trError(_error),
+                      onRetry: _loadCampaigns,
+                    )
                   : _buildContent(cs, nf),
         ),
       ),

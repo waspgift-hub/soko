@@ -483,6 +483,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   String _nf(num n) => NumberFormat('#,###', 'en').format(n);
 
+  /// Money fields can arrive as NaN/Infinity from the server; `toInt()` and
+  /// `round()` throw on those, so collapse them to zero instead of crashing.
+  int _safeInt(num n) => n.isFinite ? n.round() : 0;
+
   /// Position on the seven-stage Trust-Commerce journey (see TrustStage).
   int _currentStep() => trustStageOf(status).index;
 
@@ -776,7 +780,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 Row(
                   children: [
                     Text(
-                      'TZS ${_nf(totalAmount.toInt())}',
+                      'TZS ${_nf(_safeInt(totalAmount))}',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -1327,13 +1331,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   _tableRow(
                     cs,
                     context.tr('product_price'),
-                    'TZS ${_nf(price.toInt())}',
+                    'TZS ${_nf(_safeInt(price))}',
                   ),
                   if (shippingCost != null && shippingCost > 0) ...[
                     _tableRow(
                       cs,
                       context.tr('shipping_cost'),
-                      'TZS ${_nf(shippingCost.toInt())}',
+                      'TZS ${_nf(_safeInt(shippingCost))}',
                     ),
                     if (_shippingQuote?.containsKey('verdict') ?? false) ...[
                       const SizedBox(height: 8),
@@ -1344,17 +1348,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     _tableRow(
                       cs,
                       context.tr('discount'),
-                      '-TZS ${_nf(discount.toInt())}',
+                      '-TZS ${_nf(_safeInt(discount))}',
                     ),
                   _tableRow(
                     cs,
                     context.tr('soko_vibe_commission'),
-                    'TZS ${_nf(platformFee.toInt())}',
+                    'TZS ${_nf(_safeInt(platformFee))}',
                   ),
                   _tableRow(
                     cs,
                     context.tr('processing_fee'),
-                    'TZS ${_nf(processingFee.toInt())}',
+                    'TZS ${_nf(_safeInt(processingFee))}',
                   ),
                   const SizedBox(height: 6),
                   Container(
@@ -1383,7 +1387,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                         ),
                         const Spacer(),
                         Text(
-                          'TZS ${_nf(totalAmount.toInt())}',
+                          'TZS ${_nf(_safeInt(totalAmount))}',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w900,
@@ -1709,7 +1713,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         _addrRow(
           cs,
           context.tr('soko_vibe_commission'),
-          '-TZS ${_nf(platformFee.toInt())}',
+          '-TZS ${_nf(_safeInt(platformFee))}',
         ),
       );
     }
@@ -1718,7 +1722,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         _addrRow(
           cs,
           context.tr('processing_fee'),
-          'TZS ${_nf(processingFee.toInt())}',
+          'TZS ${_nf(_safeInt(processingFee))}',
         ),
       );
     }
@@ -1732,7 +1736,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         _addrRow(
           cs,
           context.tr('seller_receives'),
-          'TZS ${_nf(sellerReceives.toInt())}',
+          'TZS ${_nf(_safeInt(sellerReceives))}',
           bold: true,
         ),
       );
@@ -1866,21 +1870,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ),
               child: Column(
                 children: [
-                  _feeRow2(cs, context.tr('product_price'), 'TZS ${_nf(price.toInt())}', cs.onSurface),
+                  _feeRow2(cs, context.tr('product_price'), 'TZS ${_nf(_safeInt(price))}', cs.onSurface),
                   if (shipping > 0) ...[
                     const SizedBox(height: 6),
-                    _feeRow2(cs, context.tr('shipping_cost'), 'TZS ${_nf(shipping.toInt())}', cs.tertiary),
+                    _feeRow2(cs, context.tr('shipping_cost'), 'TZS ${_nf(_safeInt(shipping))}', cs.tertiary),
                   ],
                   const SizedBox(height: 6),
-                  _feeRow2(cs, context.tr('commission_3_5', 'Commission (3.5%)'), 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
+                  _feeRow2(cs, context.tr('commission_3_5', 'Commission (3.5%)'), 'TZS ${_nf(_safeInt(platformFee))}', cs.onSurfaceVariant),
                   if (_gatewayFee > 0) ...[
                     const SizedBox(height: 6),
-                    _feeRow2(cs, context.tr('gateway_fee'), 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
+                    _feeRow2(cs, context.tr('gateway_fee'), 'TZS ${_nf(_safeInt(_gatewayFee))}', cs.secondary),
                   ],
                   const SizedBox(height: 8),
                   Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
                   const SizedBox(height: 8),
-                  _feeRow2(cs, context.tr('total'), 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
+                  _feeRow2(cs, context.tr('total'), 'TZS ${_nf(_safeInt(total))}', cs.primary, bold: true),
                 ],
               ),
             ),
@@ -3008,7 +3012,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'method': 'ussd_push', 'amount': price.round()}),
+        body: jsonEncode({'method': 'ussd_push', 'amount': _safeInt(price)}),
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;

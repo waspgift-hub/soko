@@ -6,12 +6,13 @@ import 'package:intl/intl.dart';
 import '../../widgets/product_cached_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/order_status_config.dart';
 import '../../models/order_statuses.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/animations/soko_animated_art.dart';
 
 class SellerOrdersScreen extends StatefulWidget {
   const SellerOrdersScreen({super.key});
@@ -22,6 +23,7 @@ class SellerOrdersScreen extends StatefulWidget {
 
 class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   String _filter = 'all';
+  int _refreshKey = 0;
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
   Timer? _ticker;
@@ -97,6 +99,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           _buildPendingOrdersSection(cs, user),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
+              key: ValueKey('seller_orders_$_refreshKey'),
               stream: FirebaseFirestore.instance
                   .collection('transactions')
                   .where('sellerId', isEqualTo: user.uid)
@@ -104,61 +107,72 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                   .snapshots(),
               builder: (context, snap) {
                 if (snap.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text('${context.tr('error')}: ${snap.error}'),
-                    ),
+                  return SokoVibeErrorState(
+                    message: context.trError(snap.error),
+                    onRetry: () => setState(() => _refreshKey++),
                   );
                 }
                 if (!snap.hasData) {
-                  return const Center(child: GoogleLoading());
+                  return const Center(child: CircularProgressIndicator());
                 }
 
-                var docs = snap.data!.docs.where((doc) {
-                  if ((doc.data() as Map)['deletedForSeller'] == true) return false;
-                  if (_filter == 'all') return true;
-                  final status = (doc.data() as Map)['status'] as String? ?? '';
-                  return status == _filter;
-                }).toList();
-
-                return RefreshIndicator(
-                  onRefresh: () async => setState(() {}),
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverToBoxAdapter(child: _buildStatsHeader(cs, snap.data!.docs)),
-                      SliverToBoxAdapter(child: _buildFilterBar(cs, snap.data!.docs)),
-                      if (docs.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(
-                            child: DsEmptyState(
-                              icon: Icons.inbox_outlined,
-                              title: context.tr('no_received_orders'),
-                              centered: false,
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (_, i) {
-                                final d = docs[i].data() as Map<String, dynamic>;
-                                final txId = docs[i].id;
-                                return _buildOrderCard(context, cs, d, txId);
-                              },
-                              childCount: docs.length,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
+                try {
+                  return _buildOrderList(cs, snap.data!.docs);
+                } catch (e) {
+                  // One malformed document must not blank the whole screen.
+                  return SokoVibeErrorState(
+                    message: context.trError(e),
+                    onRetry: () => setState(() => _refreshKey++),
+                  );
+                }
               },
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderList(ColorScheme cs, List<QueryDocumentSnapshot> docs) {
+    final visible = docs.where((doc) {
+      if ((doc.data() as Map)['deletedForSeller'] == true) return false;
+      if (_filter == 'all') return true;
+      final status = (doc.data() as Map)['status'] as String? ?? '';
+      return status == _filter;
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: () async => setState(() {}),
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: _buildStatsHeader(cs, docs)),
+          SliverToBoxAdapter(child: _buildFilterBar(cs, docs)),
+          if (visible.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: DsEmptyState(
+                  icon: Icons.inbox_outlined,
+                  artwork: const EmptyOrdersArt(),
+                  title: context.tr('no_received_orders'),
+                  centered: false,
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) {
+                    final d = visible[i].data() as Map<String, dynamic>;
+                    final txId = visible[i].id;
+                    return _buildOrderCard(context, cs, d, txId);
+                  },
+                  childCount: visible.length,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -747,6 +761,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
 
   Widget _buildPendingOrdersSection(ColorScheme cs, User user) {
     return StreamBuilder<QuerySnapshot>(
+      key: ValueKey('seller_pending_orders_$_refreshKey'),
       stream: FirebaseFirestore.instance
           .collection('orders')
           .where('sellerId', isEqualTo: user.uid)
@@ -754,6 +769,29 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           .limit(150)
           .snapshots(),
       builder: (context, snap) {
+        if (snap.hasError) {
+          // Surfacing the failure here keeps the section from silently
+          // disappearing (which read as a blank top half of the screen).
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, size: 18, color: cs.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    context.trError(snap.error),
+                    style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _refreshKey++),
+                  child: Text(context.tr('retry')),
+                ),
+              ],
+            ),
+          );
+        }
         if (!snap.hasData) return const SizedBox.shrink();
         final pending = snap.data!.docs.where((doc) {
           final data = doc.data() as Map;

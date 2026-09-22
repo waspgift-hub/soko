@@ -9,6 +9,11 @@ class BuyerRequestService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Stream<List<BuyerRequest>> getRequests() {
+    // Signed-out users never start this stream — Firestore rules reject the
+    // read with permission-denied, which would surface as a raw error state.
+    if (_auth.currentUser == null) {
+      return Stream.value(const <BuyerRequest>[]);
+    }
     return _db
         .collection(collection)
         .orderBy('createdAt', descending: true)
