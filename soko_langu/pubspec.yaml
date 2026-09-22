@@ -86,6 +86,7 @@ dependencies:
   speech_to_text: ^7.0.0
   mobile_scanner: ^6.0.0
   safe_text: ^2.1.7
+  dynamic_color: ^1.9.0
 
 
 

@@ -21,4 +21,18 @@ class Motion {
   static const Curve easeInOutCubic = Curves.easeInOutCubic;
   static const Curve easeOutQuart = Curves.easeOutQuart;
   static const Curve overshootSpring = Curves.easeOutBack;
+
+  // M3 Expressive spring presets (m3.material.io motion specs: stiffness k +
+  // damping ratio zeta, unit mass). Flutter's SpringDescription takes the
+  // damping *coefficient* c = 2*zeta*sqrt(k*m), converted below — passing
+  // the ratio straight in would leave the spring nearly undamped.
+  // The framework ships no expressive motion system, so these Flutter-native
+  // descriptions are the single source for spring-driven effects: expressive
+  // for hero/key interactions (gentle overshoot), standard for utilitarian
+  // motion (minimal bounce). Springs retarget seamlessly, so interrupted
+  // gestures never jump.
+  static const SpringDescription expressiveSpring =
+      SpringDescription(mass: 1, stiffness: 200, damping: 16.97);
+  static const SpringDescription standardSpring =
+      SpringDescription(mass: 1, stiffness: 300, damping: 27.71);
 }

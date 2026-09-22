@@ -88,7 +88,14 @@ ThemeData buildDarkTheme(Color seed) {
   return _buildTheme(scheme);
 }
 
-ThemeData _buildTheme(ColorScheme scheme) {
+/// Builds the full branded theme from any [ColorScheme].
+///
+/// Used by the static brand themes and by the M3 Expressive dynamic-color
+/// path (see dynamic_scheme.dart), which passes a harmonized [brand].
+ThemeData buildThemeFromScheme(ColorScheme scheme, {SokoColors? brand}) =>
+    _buildTheme(scheme, brandOverride: brand);
+
+ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   final isDark = scheme.brightness == Brightness.dark;
 
   // Surfaces prefer solid, opaque fills for legibility; glass
@@ -97,14 +104,15 @@ ThemeData _buildTheme(ColorScheme scheme) {
   final cardSurface = isDark ? scheme.surfaceContainerLow : scheme.surface;
   final sheetSurface = isDark ? scheme.surfaceContainerLow : scheme.surface;
 
-  final brand = SokoColors(
-    commerce: const Color(0xFF00C853),
-    onCommerce: const Color(0xFF000000),
-    successText: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
-    warning: const Color(0xFFF59E0B),
-    brandOnSurface: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
-    deepGreen: const Color(0xFF009624),
-  );
+  final brand = brandOverride ??
+      SokoColors(
+        commerce: const Color(0xFF00C853),
+        onCommerce: const Color(0xFF000000),
+        successText: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
+        warning: const Color(0xFFF59E0B),
+        brandOnSurface: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
+        deepGreen: const Color(0xFF009624),
+      );
 
   final base = ThemeData(
     useMaterial3: true,

@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   cloud_firestore
   connectivity_plus
+  dynamic_color
   file_selector_windows
   firebase_app_check
   firebase_auth

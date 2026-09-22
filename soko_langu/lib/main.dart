@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'package:firebase_performance/firebase_performance.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -657,21 +658,29 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         Provider.value(value: _onboardingService),
         ChangeNotifierProvider.value(value: _authNotifier),
       ],
-      child: MaterialApp.router(
-        routerConfig: appRouter,
-        debugShowCheckedModeBanner: false,
-        title: 'Soko Vibe',
-        locale: Locale(_langCode),
-        supportedLocales: const [Locale('en'), Locale('sw'), Locale('zh')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        theme: themeManager.lightTheme,
-        darkTheme: themeManager.darkTheme,
-        themeMode: themeManager.themeMode,
-        builder: _appBuilder,
+      // M3 Expressive dynamic color: OS schemes (Android 12+ wallpaper,
+      // desktop accents) flow into ThemeManager, which falls back to the
+      // static brand themes wherever the OS reports none.
+      child: DynamicColorBuilder(
+        builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+          themeManager.setDynamicSchemes(lightDynamic, darkDynamic);
+          return MaterialApp.router(
+            routerConfig: appRouter,
+            debugShowCheckedModeBanner: false,
+            title: 'Soko Vibe',
+            locale: Locale(_langCode),
+            supportedLocales: const [Locale('en'), Locale('sw'), Locale('zh')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: themeManager.lightTheme,
+            darkTheme: themeManager.darkTheme,
+            themeMode: themeManager.themeMode,
+            builder: _appBuilder,
+          );
+        },
       ),
     );
   }
