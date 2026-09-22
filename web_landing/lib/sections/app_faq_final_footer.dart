@@ -84,6 +84,12 @@ class AppSection extends StatelessWidget {
               child: PhoneMockup(
                 searchHint: context.str('hero_mock_search'),
                 chips: const ['Simu', 'Samani', 'Mavazi', 'Magari'],
+                rows: [
+                  (Icons.lock_outline, context.str('f_escrow_t')),
+                  (Icons.chat_bubble_outline, context.str('f_chat_t')),
+                  (Icons.fingerprint, context.str('f_otp_t')),
+                  (Icons.smart_toy_outlined, context.str('f_ai_t')),
+                ],
               ),
             ),
           );
@@ -221,8 +227,8 @@ class _FaqTileState extends State<_FaqTile>
 
 /// Dramatic but clean closing CTA (green accent, not a green wall).
 class FinalCtaSection extends StatelessWidget {
-  final VoidCallback onViewProducts;
-  const FinalCtaSection({super.key, required this.onViewProducts});
+  final VoidCallback onServices;
+  const FinalCtaSection({super.key, required this.onServices});
 
   @override
   Widget build(BuildContext context) {
@@ -275,8 +281,8 @@ class FinalCtaSection extends StatelessWidget {
                         openLink(context, SokoLinks.whatsappApp),
                   ),
                   _GhostButton(
-                    label: context.str('cta_view_products'),
-                    onTap: onViewProducts,
+                    label: context.str('cta_services'),
+                    onTap: onServices,
                   ),
                 ],
               ),
@@ -378,7 +384,6 @@ class SiteFooter extends StatelessWidget {
                     _FootCol(
                       title: context.str('foot_soko'),
                       links: [
-                        (context.str('foot_market'), () => onNavigate('market')),
                         (context.str('foot_how'), () => onNavigate('how')),
                         (context.str('foot_safety'), () => onNavigate('security')),
                         (context.str('foot_fees'), () => onNavigate('boost')),

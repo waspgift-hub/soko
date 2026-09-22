@@ -12,12 +12,4 @@ extension SokoLayoutX on SokoLayout {
   bool get isMobile => this == SokoLayout.mobile;
   bool get isTablet => this == SokoLayout.tablet;
   bool get isDesktop => this == SokoLayout.desktop || this == SokoLayout.wide;
-
-  /// Marketplace grid columns for the given layout.
-  int get marketColumns => switch (this) {
-        SokoLayout.mobile => 2,
-        SokoLayout.tablet => 3,
-        SokoLayout.desktop => 4,
-        SokoLayout.wide => 5,
-      };
 }

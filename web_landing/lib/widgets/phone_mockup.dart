@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// Stylized Android app preview: search bar, chips, mini product rows.
+/// Stylized Android app preview: search bar, category chips, feature rows.
 /// Pure Flutter widgets — no fake screenshots.
 class PhoneMockup extends StatelessWidget {
   final String searchHint;
   final List<String> chips;
+  final List<(IconData, String)> rows;
 
   const PhoneMockup({
     super.key,
     required this.searchHint,
     required this.chips,
+    this.rows = const [],
   });
 
   @override
@@ -54,20 +56,13 @@ class PhoneMockup extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: Row(
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: SokoBrand.black,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'S',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: Image.asset(
+                      'assets/brand/app_icon.png',
+                      width: 30,
+                      height: 30,
+                      fit: BoxFit.cover,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -143,10 +138,10 @@ class PhoneMockup extends StatelessWidget {
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: 3,
+                itemCount: rows.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (_, i) => Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     border: Border.all(color: SokoBrand.line),
                     borderRadius: BorderRadius.circular(16),
@@ -154,32 +149,27 @@ class PhoneMockup extends StatelessWidget {
                   child: Row(
                     children: [
                       Container(
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: const Color(0xFFF4F5F4),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(
-                          Icons.image_outlined,
-                          color: SokoBrand.muted,
+                        child: Icon(
+                          rows[i].$1,
+                          color: SokoBrand.deepGreen,
+                          size: 20,
                         ),
                       ),
                       const SizedBox(width: 10),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _Bar(width: 110),
-                            SizedBox(height: 6),
-                            _Bar(width: 70),
-                          ],
+                      Expanded(
+                        child: Text(
+                          rows[i].$2,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const Icon(
-                        Icons.verified,
-                        size: 16,
-                        color: SokoBrand.deepGreen,
                       ),
                     ],
                   ),
@@ -188,23 +178,6 @@ class PhoneMockup extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Bar extends StatelessWidget {
-  final double width;
-  const _Bar({required this.width});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: 10,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE7E7E4),
-        borderRadius: BorderRadius.circular(5),
       ),
     );
   }

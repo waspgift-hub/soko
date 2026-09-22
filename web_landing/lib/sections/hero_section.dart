@@ -3,17 +3,14 @@ import '../localization/app_strings.dart';
 import '../models/models.dart';
 import '../theme/app_breakpoints.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_theme.dart';
 import '../widgets/animated_reveal.dart';
 import '../widgets/open_link.dart';
 import '../widgets/premium_button.dart';
 import '../widgets/responsive_container.dart';
 
-/// Hero: marketing statement left, animated marketplace mock right.
+/// Hero: marketing statement left, animated app-features overview right.
 class HeroSection extends StatelessWidget {
-  final VoidCallback onViewProducts;
-
-  const HeroSection({super.key, required this.onViewProducts});
+  const HeroSection({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -145,8 +142,8 @@ class _HeroActions extends StatelessWidget {
   }
 }
 
-/// Sophisticated marketplace mock built from widgets: search bar, chips,
-/// compact product rows, escrow + delivery indicators.
+/// Sophisticated app preview built from widgets: search bar, category chips,
+/// feature rows, escrow + delivery indicators.
 class _HeroPreview extends StatefulWidget {
   const _HeroPreview({super.key});
 
@@ -196,7 +193,6 @@ class _HeroPreviewState extends State<_HeroPreview>
 
   @override
   Widget build(BuildContext context) {
-    final prices = Theme.of(context).extension<SokoPrices>()!;
     return FadeTransition(
       opacity: _fade,
       child: ScaleTransition(
@@ -232,19 +228,20 @@ class _HeroPreviewState extends State<_HeroPreview>
                   ],
                 ),
               ),
-              _MockRow(
-                icon: Icons.smartphone_outlined,
-                title: 'Galaxy A15 128GB',
-                price: 'TSh 385,000',
-                priceStyle: prices.amountSmall,
-                verifiedLabel: context.str('hero_mock_verified'),
+              _FeatureRow(
+                icon: Icons.lock_outline,
+                title: context.str('f_escrow_t'),
+                sub: context.str('f_escrow_b'),
               ),
-              _MockRow(
-                icon: Icons.chair_outlined,
-                title: 'Sofa 3 seats',
-                price: 'TSh 750,000',
-                priceStyle: prices.amountSmall,
-                verifiedLabel: context.str('hero_mock_verified'),
+              _FeatureRow(
+                icon: Icons.chat_bubble_outline,
+                title: context.str('f_chat_t'),
+                sub: context.str('f_chat_b'),
+              ),
+              _FeatureRow(
+                icon: Icons.smart_toy_outlined,
+                title: context.str('f_ai_t'),
+                sub: context.str('f_ai_b'),
               ),
               Container(
                 margin: const EdgeInsets.all(18),
@@ -374,19 +371,15 @@ class _MockChips extends StatelessWidget {
   }
 }
 
-class _MockRow extends StatelessWidget {
+class _FeatureRow extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String price;
-  final TextStyle priceStyle;
-  final String verifiedLabel;
+  final String sub;
 
-  const _MockRow({
+  const _FeatureRow({
     required this.icon,
     required this.title,
-    required this.price,
-    required this.priceStyle,
-    required this.verifiedLabel,
+    required this.sub,
   });
 
   @override
@@ -405,7 +398,7 @@ class _MockRow extends StatelessWidget {
               color: const Color(0xFFF4F5F4),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: SokoBrand.muted),
+            child: Icon(icon, color: SokoBrand.deepGreen),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -417,16 +410,17 @@ class _MockRow extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
-                Text(price, style: priceStyle),
+                Text(
+                  sub,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: SokoBrand.muted,
+                    height: 1.4,
+                  ),
+                ),
               ],
-            ),
-          ),
-          Tooltip(
-            message: verifiedLabel,
-            child: const Icon(
-              Icons.verified,
-              size: 18,
-              color: SokoBrand.deepGreen,
             ),
           ),
         ],

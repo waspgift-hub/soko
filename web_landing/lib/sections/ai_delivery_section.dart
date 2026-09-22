@@ -7,7 +7,7 @@ import '../widgets/animated_reveal.dart';
 import '../widgets/responsive_container.dart';
 import '../widgets/section_header.dart';
 
-/// AI + voice search demo: typed query appears, sample results fade in.
+/// AI + voice search demo: typed query appears, category suggestions fade in.
 /// Clearly labeled as a demonstration illustration.
 class AiSearchSection extends StatefulWidget {
   const AiSearchSection({super.key});
@@ -132,15 +132,31 @@ class _AiSearchSectionState extends State<AiSearchSection> {
                               key: const ValueKey('results'),
                               children: [
                                 const SizedBox(height: 14),
-                                _DemoResult(
-                                  icon: Icons.smartphone_outlined,
-                                  title: 'Galaxy A15 · TSh 385,000',
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF4F5F4),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.lightbulb_outline,
+                                        color: SokoBrand.deepGreen,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          context.str('ai_suggest'),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(height: 10),
-                                _DemoResult(
-                                  icon: Icons.smartphone_outlined,
-                                  title: 'Redmi 13C · TSh 295,000',
-                                ),
+                                const SizedBox(height: 12),
+                                const _AiCategoryChips(),
                                 const SizedBox(height: 14),
                                 Text(
                                   context.str('ai_demo_note'),
@@ -164,44 +180,36 @@ class _AiSearchSectionState extends State<AiSearchSection> {
   }
 }
 
-class _DemoResult extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  const _DemoResult({required this.icon, required this.title});
+class _AiCategoryChips extends StatelessWidget {
+  const _AiCategoryChips();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: SokoBrand.line),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
+    const chips = ['Samani', 'Simu', 'Mavazi', 'Magari'];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var i = 0; i < chips.length; i++)
           Container(
-            width: 44,
-            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F5F4),
-              borderRadius: BorderRadius.circular(10),
+              color: i == 0 ? SokoBrand.black : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: i == 0 ? SokoBrand.black : SokoBrand.line,
+              ),
             ),
-            child: Icon(icon, color: SokoBrand.muted),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
             child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              chips[i],
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: i == 0 ? Colors.white : SokoBrand.ink,
+              ),
             ),
           ),
-          const Icon(
-            Icons.verified,
-            size: 16,
-            color: SokoBrand.deepGreen,
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

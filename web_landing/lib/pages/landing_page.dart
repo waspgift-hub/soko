@@ -6,7 +6,6 @@ import '../sections/boost_security_section.dart';
 import '../sections/buyers_sellers_section.dart';
 import '../sections/escrow_section.dart';
 import '../sections/hero_section.dart';
-import '../sections/marketplace_section.dart';
 import '../sections/site_nav.dart';
 import '../sections/trust_bar.dart';
 import '../sections/why_section.dart';
@@ -27,10 +26,10 @@ class _LandingPageState extends State<LandingPage> {
   bool _scrolled = false;
 
   final _keys = <String, GlobalKey>{
-    'market': GlobalKey(),
     'how': GlobalKey(),
     'security': GlobalKey(),
     'sellers': GlobalKey(),
+    'boost': GlobalKey(),
     'faq': GlobalKey(),
   };
 
@@ -82,19 +81,11 @@ class _LandingPageState extends State<LandingPage> {
               flexibleSpace: SiteNav(
                 scrolled: _scrolled,
                 onNavigate: _go,
-                onSearch: () => _go('market'),
                 strings: _strings,
               ),
             ),
-            SliverToBoxAdapter(
-              child: HeroSection(onViewProducts: () => _go('market')),
-            ),
+            const SliverToBoxAdapter(child: HeroSection()),
             const SliverToBoxAdapter(child: TrustBar()),
-            SliverToBoxAdapter(
-              child: Container(
-                  key: _keys['market'],
-                  child: const MarketplaceSection()),
-            ),
             SliverToBoxAdapter(
               child:
                   Container(key: _keys['how'], child: const WhySection()),
@@ -108,7 +99,10 @@ class _LandingPageState extends State<LandingPage> {
             ),
             const SliverToBoxAdapter(child: AiSearchSection()),
             const SliverToBoxAdapter(child: DeliverySection()),
-            const SliverToBoxAdapter(child: BoostSection()),
+            SliverToBoxAdapter(
+              child: Container(
+                  key: _keys['boost'], child: const BoostSection()),
+            ),
             SliverToBoxAdapter(
               child: Container(
                   key: _keys['security'],
@@ -120,7 +114,7 @@ class _LandingPageState extends State<LandingPage> {
                   Container(key: _keys['faq'], child: const FaqSection()),
             ),
             SliverToBoxAdapter(
-              child: FinalCtaSection(onViewProducts: () => _go('market')),
+              child: FinalCtaSection(onServices: () => _go('how')),
             ),
             SliverToBoxAdapter(child: SiteFooter(onNavigate: _go)),
           ],

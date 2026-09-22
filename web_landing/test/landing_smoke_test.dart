@@ -59,15 +59,14 @@ Future<void> settlePage(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('mobile renders hero, market, escrow, faq',
+  testWidgets('mobile renders hero, features, escrow, faq',
       (tester) async {
     await pumpAt(tester, const Size(390, 844));
 
     expect(find.text('Nunua kwa uhakika.'), findsOneWidget);
     expect(find.text('Uza kwa ujasiri.'), findsOneWidget);
     expect(find.text('Anza Kununua'), findsWidgets);
-    await expectVisible(
-        tester, 'Bidhaa unazotafuta, sehemu moja.');
+    await expectVisible(tester, 'Ununuzi unaanza kwa kuamini.');
     await expectVisible(tester, 'Fedha zako hazitoki mpaka upokee.');
     await settlePage(tester);
   });

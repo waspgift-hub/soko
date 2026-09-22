@@ -8,14 +8,12 @@ import '../widgets/open_link.dart';
 class SiteNav extends StatelessWidget {
   final bool scrolled;
   final void Function(String section) onNavigate;
-  final VoidCallback onSearch;
   final AppStrings strings;
 
   const SiteNav({
     super.key,
     required this.scrolled,
     required this.onNavigate,
-    required this.onSearch,
     required this.strings,
   });
 
@@ -59,11 +57,6 @@ class SiteNav extends StatelessWidget {
                       const SizedBox(width: 28),
                       Flexible(
                         child: _NavLink(
-                            label: context.str('nav_soko'),
-                            onTap: () => onNavigate('market')),
-                      ),
-                      Flexible(
-                        child: _NavLink(
                             label: context.str('nav_how'),
                             onTap: () => onNavigate('how')),
                       ),
@@ -86,16 +79,6 @@ class SiteNav extends StatelessWidget {
                     const Spacer(),
                     _LangSwitch(strings: strings, compact: compact),
                     const SizedBox(width: 4),
-                    // Icon-only search: the "Soko" link already scrolls to
-                    // the marketplace, so a full second button wastes space.
-                    if (!compact)
-                      Tooltip(
-                        message: context.str('nav_search'),
-                        child: IconButton(
-                          onPressed: onSearch,
-                          icon: const Icon(Icons.search, size: 20),
-                        ),
-                      ),
                     if (!compact) const SizedBox(width: 8),
                     if (!compact)
                       FilledButton(
@@ -137,7 +120,6 @@ class SiteNav extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (final entry in const [
-              ('market', 'nav_soko'),
               ('how', 'nav_how'),
               ('security', 'nav_security'),
               ('sellers', 'nav_sellers'),
@@ -198,21 +180,13 @@ class _Mark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: SokoBrand.black,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      alignment: Alignment.center,
-      child: const Text(
-        'S',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 18,
-        ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.asset(
+        'assets/brand/app_icon.png',
+        width: 34,
+        height: 34,
+        fit: BoxFit.cover,
       ),
     );
   }
