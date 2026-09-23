@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const admin = require('firebase-admin');
 const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
@@ -8,6 +9,7 @@ const activity = require('../../services/activity');
 const { getPrisma } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
+const { sendMail } = require('../../services/mailer');
 
 const router = Router();
 
@@ -636,6 +638,135 @@ router.put(
         error: (e && e.message) || 'Kuna hitilafu ya ndani wakati wa kuhifadhi mipangilio.',
       });
     }
+  }
+);
+
+// ---- Landing (coming-soon) submissions + waitlist email broadcast ----
+// Everything collected on www.sokovibe.co.tz lives in Firestore
+// (landing_waitlist / landing_feature_suggestions / landing_comments), so the
+// browser panel reads it with the server's admin SDK instead of opening rules.
+
+function fsDoc(d) {
+  const data = d.data() || {};
+  const out = { id: d.id };
+  for (const k of Object.keys(data)) {
+    // Timestamps serialize as ISO so the panel renders dates without a client SDK.
+    out[k] = data[k] && typeof data[k].toDate === 'function' ? data[k].toDate().toISOString() : data[k];
+  }
+  return out;
+}
+
+async function landingSnapshot(db, collectionName, limit) {
+  const ref = db.collection(collectionName);
+  const [snap, cnt] = await Promise.all([
+    ref.orderBy('createdAt', 'desc').limit(limit).get(),
+    ref.count().get(),
+  ]);
+  return { items: snap.docs.map(fsDoc), total: cnt.data().count };
+}
+
+// Overview: waitlist subscribers, feature suggestions and public comments.
+router.get('/landing', async (req, res) => {
+  const db = getFirebaseFirestore();
+  if (!db) return res.status(503).json({ error: 'FIRESTORE_UNAVAILABLE' });
+  const [waitlist, suggestions, comments] = await Promise.all([
+    landingSnapshot(db, 'landing_waitlist', 500),
+    landingSnapshot(db, 'landing_feature_suggestions', 200),
+    landingSnapshot(db, 'landing_comments', 100),
+  ]);
+  res.json({ success: true, data: { waitlist, suggestions, comments } });
+});
+
+// Broadcast an email to every waitlist subscriber ("the app is ready").
+// Sends through the existing SMTP mailer with bounded concurrency so Gmail's
+// per-hour send limit is never hammered all at once.
+router.post(
+  '/landing/broadcast',
+  requireActiveAdmin,
+  validate({
+    body: z.object({
+      subject: z.string().min(3).max(150),
+      body: z.string().min(3).max(5000),
+    }),
+  }),
+  async (req, res) => {
+    const db = getFirebaseFirestore();
+    if (!db) return res.status(503).json({ error: 'FIRESTORE_UNAVAILABLE' });
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return res.status(503).json({ error: 'SMTP haijasanidiwa (weka SMTP_USER/SMTP_PASS).' });
+    }
+
+    const snap = await db.collection('landing_waitlist').get();
+    const entries = snap.docs.map(fsDoc);
+    const byEmail = {};
+    const emails = [];
+    for (const e of entries) {
+      const em = String(e.email || '').trim().toLowerCase();
+      if (!em || byEmail[em]) continue;
+      byEmail[em] = e;
+      emails.push(em);
+    }
+    if (!emails.length) {
+      return res.json({ success: true, data: { total: 0, sent: 0, failed: 0 } });
+    }
+
+    const escapeHtml = (v) =>
+      String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const htmlFor = (email, body) => {
+      const name = byEmail[email] && byEmail[email].name ? String(byEmail[email].name).split(' ')[0] : '';
+      const greet = name ? 'Habari ' + escapeHtml(name) + ',' : 'Habari,';
+      return (
+        '<!doctype html><html><body style="margin:0;background:#f4f0ee;font-family:Segoe UI,Arial,sans-serif">' +
+        '<div style="max-width:560px;margin:24px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e7dddd">' +
+        '<div style="padding:20px 28px;background:linear-gradient(120deg,#5a44e8,#c0004c,#e07900);color:#fff;font-size:20px;font-weight:800;letter-spacing:-.02em">Soko Vibe</div>' +
+        '<div style="padding:28px;color:#201a1b;line-height:1.6">' +
+        '<p style="margin:0 0 14px">' + greet + '</p>' +
+        '<div style="white-space:pre-line">' + escapeHtml(body) + '</div>' +
+        '<p style="margin:26px 0 0;color:#6f6768;font-size:13px">Soko Vibe — dinasikiliza maoni yako.<br>' +
+        'Hutaki kupokea ujumbe huu tena? Tujibu na barua hii tutakuondoa kwenye orodha.</p>' +
+        '</div></div></body></html>'
+      );
+    };
+
+    const CONCURRENCY = 5;
+    let cursor = 0, sent = 0, failed = 0;
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (true) {
+        const i = cursor++;
+        if (i >= emails.length) break;
+        const ok = await sendMail(emails[i], req.body.subject, htmlFor(emails[i], req.body.body));
+        if (ok) sent++; else failed++;
+      }
+    });
+    await Promise.all(workers);
+
+    try {
+      await writeAudit({
+        ...auditFromReq(req),
+        action: 'landing.broadcast',
+        entityType: 'landing_waitlist',
+        entityId: 'broadcast',
+        newState: { subject: req.body.subject, total: emails.length, sent, failed },
+      });
+    } catch (ae) {
+      console.error('[admin:landing] audit write skipped:', ae?.message || ae);
+    }
+    try {
+      await db.collection('landing_broadcasts').add({
+        subject: req.body.subject,
+        body: req.body.body,
+        total: emails.length,
+        sent,
+        failed,
+        executedBy: req.user?.id || 'admin',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (ce) {
+      console.error('[admin:landing] broadcast log write failed:', ce?.message || ce);
+    }
+
+    res.json({ success: true, data: { total: emails.length, sent, failed } });
   }
 );
 

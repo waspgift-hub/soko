@@ -105,6 +105,7 @@ const NAV_SW = {
   'grp-finance': 'Fedha', 'nav-revenue': 'Mapato ya Jukwaa', 'nav-finance': 'Fedha & Ledger',
   'nav-referrals': 'Rufaa', 'grp-comm': 'Mawasiliano', 'nav-broadcasts': 'Matangazo ya Broad',
   'nav-audit': 'Ukaguzi (Audit)', 'nav-settings': 'Mipangilio', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
+  'nav-landing': 'Landing / Orodha',
 };
 const NAV_EN = {
   'nav-dashboard': 'Dashboard', 'grp-manage': 'Management', 'nav-users': 'Users', 'nav-sellers': 'Sellers',
@@ -114,12 +115,14 @@ const NAV_EN = {
   'grp-finance': 'Finance', 'nav-revenue': 'Platform Revenue', 'nav-finance': 'Finance & Ledger',
   'nav-referrals': 'Referrals', 'grp-comm': 'Communication', 'nav-broadcasts': 'Broadcasts',
   'nav-audit': 'Audit', 'nav-settings': 'Settings', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
+  'nav-landing': 'Landing / Waitlist',
 };
 const TITLES_EN = {
   dashboard: 'Dashboard', users: 'Users', sellers: 'Sellers', products: 'Products', orders: 'Orders',
   disputes: 'Disputes', refunds: 'Refunds', reports: 'Reports & Safety', kyc: 'Verifications (KYC)',
   promos: 'Boost & Flash Sales', revenue: 'Platform Revenue', finance: 'Finance & Ledger',
   referrals: 'Referrals', broadcasts: 'Broadcasts', audit: 'Audit', stats: 'Usage Statistics', settings: 'Settings',
+  landing: 'Landing / Waitlist',
 };
 const SW2EN = {
   // Nav / titles
@@ -213,6 +216,19 @@ const SW2EN = {
   'Inapakia mipangilio…': 'Loading settings…', 'Hifadhi mipangilio': 'Save settings',
   'Mipangilio imehifadhiwa': 'Settings saved', 'Imeshindwa kuhifadhi mipangilio': 'Failed to save settings',
   'Futa cache': 'Clear cache', 'Imefutwa': 'Cleared',
+  // Landing / Orodha
+  'Waliopokea taarifa': 'Waitlist subscribers', 'Maoni ya vipengele': 'Feature suggestions',
+  'Maoni ya jamii': 'Community comments',
+  'Tuma barua pepe kwa waliopokea taarifa':
+    'Email the waitlist subscribers',
+  'Tumia hii ukamilishe app. Ujumbe unaenda kwa barua pepe zote zilizojisajili kwenye ukurasa wa "App ipo kwenye maendeleo".':
+    'Use this when the app ships. The email goes to every address collected on the "App under development" page.',
+  'Kichwa (subject)': 'Subject', 'Maandishi (body)': 'Message (body)',
+  'Tuma kwa wote': 'Send to all',
+  'Hakuna waliojisajili': 'No subscribers yet',
+  'Hakuna maoni ya vipengele': 'No feature suggestions yet',
+  'Hakuna maoni ya jamii': 'No community comments yet',
+  'Maelezo': 'Details', 'Vipengele': 'Features', 'Jina': 'Name', 'Lugha': 'Language', 'Wakati': 'Time',
 };
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 const SW2EN_PAIRS = Object.entries(SW2EN).sort((a, b) => b[0].length - a[0].length);
@@ -370,6 +386,7 @@ const TITLES = {
   revenue: 'Mapato ya Jukwaa',
   finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
   stats: 'Takwimu za Matumizi', settings: 'Mipangilio',
+  landing: 'Landing / Waitlist',
 };
 const Pg = {};
 function pgState(sec, field) {
@@ -1774,6 +1791,87 @@ async function loadBroadcasts() {
 }
 
 // ---------------------------------------------------------------------------
+// Landing / Orodha (coming-soon submissions + waitlist email broadcast)
+// ---------------------------------------------------------------------------
+function landingRows(items, cols) {
+  return items.map((it) => '<tr>' + cols.map((c) => c(it)).join('') + '</tr>').join('');
+}
+function landingLang(it) { return esc(String(it.lang || it.locale || '')); }
+function landingWhen(it) { return '<td class="dim">' + fmtTime(tsToISO(it.createdAt)) + '</td>'; }
+async function loadLanding() {
+  const el = secEl('landing');
+  el.innerHTML =
+    '<div class="grid kpis" style="margin-bottom:14px">' +
+    '<div class="kpi"><span class="lab">Waliopokea taarifa</span><span class="val" id="ldK1">…</span><span class="sub">barua pepe zilizokusanywa</span></div>' +
+    '<div class="kpi"><span class="lab">Maoni ya vipengele</span><span class="val" id="ldK2">…</span><span class="sub">feature wishes</span></div>' +
+    '<div class="kpi"><span class="lab">Maoni ya jamii</span><span class="val" id="ldK3">…</span><span class="sub">comments za wageni</span></div>' +
+    '</div>' +
+    '<div class="card" style="max-width:760px">' +
+    '<div class="cardhead"><h3>Tuma barua pepe kwa waliopokea taarifa</h3></div>' +
+    '<p class="intro">Tumia hii ukamilishe app. Ujumbe unaenda kwa barua pepe zote zilizojisajili kwenye ukurasa wa "App ipo kwenye maendeleo".</p>' +
+    '<label>Kichwa (subject)</label><input class="field" id="ldSubject" placeholder="K.m. Soko Vibe ipo tayari!">' +
+    '<label>Maandishi (body)</label><textarea class="field" id="ldBody" rows="3" placeholder="Hujambo…"></textarea>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">' +
+    '<button class="btn accent" id="ldSend">Tuma kwa wote</button></div>' +
+    '<div id="ldOut" style="margin-top:14px"></div></div>' +
+    '<div class="card"><div class="cardhead"><h3>Waliopokea taarifa (barua pepe)</h3></div>' +
+    '<div class="tablewrap"><table class="tbl"><thead><tr><th>Barua pepe</th><th>Jina</th><th>Lugha</th><th>Wakati</th></tr></thead>' +
+    '<tbody id="ldWL"><tr><td colspan="4" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div></div>' +
+    '<div class="card"><div class="cardhead"><h3>Maoni ya vipengele</h3></div>' +
+    '<div class="tablewrap"><table class="tbl"><thead><tr><th>Vipengele</th><th>Maelezo</th><th>Jina</th><th>Wakati</th></tr></thead>' +
+    '<tbody id="ldSUG"><tr><td colspan="4" class="empty">…</td></tr></tbody></table></div></div>' +
+    '<div class="card"><div class="cardhead"><h3>Maoni ya jamii</h3></div>' +
+    '<div class="tablewrap"><table class="tbl"><thead><tr><th>Jina</th><th>Maoni</th><th>Lugha</th><th>Wakati</th></tr></thead>' +
+    '<tbody id="ldCM"><tr><td colspan="4" class="empty">…</td></tr></tbody></table></div></div>';
+  $('ldSend').onclick = () => run(async () => {
+    const subject = $('ldSubject').value.trim();
+    if (!subject) { toast('Andika subject', false); return; }
+    $('ldSend').disabled = true;
+    try {
+      const j = await postJSON('/api/v1/admin/landing/broadcast', { subject, body: $('ldBody').value });
+      const d = (j && j.data) || {};
+      const ok = Number(d.sent) > 0;
+      $('ldOut').innerHTML = '<div class="bdg ' + (Number(d.failed) ? 'warn' : 'ok') + '">Imemalizika — jumla ' + fmtNum(d.total || 0) +
+        ' · tuma ' + fmtNum(d.sent || 0) + ' · haikufaulu ' + fmtNum(d.failed || 0) + '</div>';
+      toast((ok ? 'Barua pepe zimetumwa' : 'Hakuna barua zilizotumwa'), ok);
+    } finally { $('ldSend').disabled = false; }
+  });
+  try {
+    const j = await getJSON('/api/v1/admin/landing');
+    const d = (j && j.data) || {};
+    const wl = (d.waitlist && d.waitlist.items) || [];
+    const sg = (d.suggestions && d.suggestions.items) || [];
+    const cm = (d.comments && d.comments.items) || [];
+    $('ldK1').textContent = fmtNum((d.waitlist && d.waitlist.total) || wl.length);
+    $('ldK2').textContent = fmtNum((d.suggestions && d.suggestions.total) || sg.length);
+    $('ldK3').textContent = fmtNum((d.comments && d.comments.total) || cm.length);
+    $('ldWL').innerHTML = landingRows(wl, [
+      (it) => '<td class="mono">' + esc(it.email) + '</td>',
+      (it) => '<td>' + esc(it.name || '—') + '</td>',
+      (it) => '<td>' + landingLang(it) + '</td>',
+      landingWhen,
+    ]) || '<tr><td colspan="4" class="empty">Hakuna waliojisajili</td></tr>';
+    $('ldSUG').innerHTML = landingRows(sg, [
+      (it) => '<td>' + ((it.features || []).map((f) => '<span class="bdg info"><span class="dot"></span>' + esc(f) + '</span>').join(' ') || '<span class="dim">—</span>') + '</td>',
+      (it) => '<td>' + esc(it.details || it.suggestion || '') + '</td>',
+      (it) => '<td>' + esc(it.name || '—') + '</td>',
+      landingWhen,
+    ]) || '<tr><td colspan="4" class="empty">Hakuna maoni ya vipengele</td></tr>';
+    $('ldCM').innerHTML = landingRows(cm, [
+      (it) => '<td>' + esc(it.name || it.email || '—') + '</td>',
+      (it) => '<td>' + esc(it.text || it.comment || '') + '</td>',
+      (it) => '<td>' + landingLang(it) + '</td>',
+      landingWhen,
+    ]) || '<tr><td colspan="4" class="empty">Hakuna maoni ya jamii</td></tr>';
+  } catch (e) {
+    $('ldWL').innerHTML = '<tr><td colspan="4" class="empty">' + esc(e.message) + '</td></tr>';
+    $('ldSUG').innerHTML = '<tr><td colspan="4" class="empty">' + esc(e.message) + '</td></tr>';
+    $('ldCM').innerHTML = '<tr><td colspan="4" class="empty">' + esc(e.message) + '</td></tr>';
+  }
+  bindSection('landing'); touch();
+}
+
+// ---------------------------------------------------------------------------
 // Ukaguzi
 // ---------------------------------------------------------------------------
 function auditToolbar() {
@@ -2338,6 +2436,7 @@ const LOADERS = {
   orders: loadOrders, disputes: loadDisputes, refunds: loadRefunds, reports: loadReports,
   kyc: loadKyc, promos: loadPromos, revenue: loadRevenue,
   finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
+  landing: loadLanding,
   stats: loadStats, settings: loadSettings,
 };
 function bindToolbar(sec, qId, goId, qKey) {
