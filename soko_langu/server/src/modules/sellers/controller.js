@@ -1,13 +1,13 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { SellerStateMachine, SELLER_STATES } = require('./seller-state-machine');
 
 // Request to become a seller
 async function requestSellerMode(req, res) {
   try {
-    const prisma = getPrisma();
+    const store = getStore();
     
     // Check current seller state
-    const existing = await prisma.sellerProfile.findUnique({
+    const existing = await store.sellerProfile.findUnique({
       where: { userId: req.user.id },
     });
 
@@ -19,12 +19,12 @@ async function requestSellerMode(req, res) {
     }
 
     if (existing) {
-      await prisma.sellerProfile.update({
+      await store.sellerProfile.update({
         where: { id: existing.id },
         data: { sellerStatus: SELLER_STATES.MODE_REQUESTED },
       });
     } else {
-      await prisma.sellerProfile.create({
+      await store.sellerProfile.create({
         data: {
           userId: req.user.id,
           storeName: '',  // Must be filled in profile step
@@ -35,7 +35,7 @@ async function requestSellerMode(req, res) {
     }
 
     // Update user role
-    await prisma.user.update({
+    await store.user.update({
       where: { id: req.user.id },
       data: { role: 'seller' },
     });
@@ -60,9 +60,9 @@ async function createSellerProfile(req, res) {
       return res.status(400).json({ error: 'Store name is required' });
     }
 
-    const prisma = getPrisma();
+    const store = getStore();
     
-    const existing = await prisma.sellerProfile.findUnique({
+    const existing = await store.sellerProfile.findUnique({
       where: { userId: req.user.id },
     });
 
@@ -77,7 +77,7 @@ async function createSellerProfile(req, res) {
 
     let profile;
     if (existing) {
-      profile = await prisma.sellerProfile.update({
+      profile = await store.sellerProfile.update({
         where: { id: existing.id },
         data: {
           storeName: storeName.trim(),
@@ -88,7 +88,7 @@ async function createSellerProfile(req, res) {
         },
       });
     } else {
-      profile = await prisma.sellerProfile.create({
+      profile = await store.sellerProfile.create({
         data: {
           userId: req.user.id,
           storeName: storeName.trim(),
@@ -114,18 +114,18 @@ async function createSellerProfile(req, res) {
       newStatus = SELLER_STATES.PENDING_REVIEW;
     }
 
-    profile = await prisma.sellerProfile.update({
+    profile = await store.sellerProfile.update({
       where: { id: profile.id },
       data: { sellerStatus: newStatus },
     });
 
     // Create wallet for seller
-    const existingWallet = await prisma.wallet.findUnique({
+    const existingWallet = await store.wallet.findUnique({
       where: { sellerId: profile.id },
     });
 
     if (!existingWallet) {
-      await prisma.wallet.create({
+      await store.wallet.create({
         data: {
           sellerId: profile.id,
         },
@@ -149,9 +149,9 @@ async function createSellerProfile(req, res) {
 // Get own seller profile
 async function getSellerProfile(req, res) {
   try {
-    const prisma = getPrisma();
+    const store = getStore();
     
-    const profile = await prisma.sellerProfile.findUnique({
+    const profile = await store.sellerProfile.findUnique({
       where: { userId: req.user.id },
       include: {
         products: {
@@ -184,9 +184,9 @@ async function updateSellerProfile(req, res) {
   try {
     const { storeName, storeDescription, logoUrl, coverUrl, businessType } = req.body;
     
-    const prisma = getPrisma();
+    const store = getStore();
     
-    const profile = await prisma.sellerProfile.update({
+    const profile = await store.sellerProfile.update({
       where: { userId: req.user.id },
       data: {
         storeName: storeName?.trim(),
@@ -207,9 +207,9 @@ async function updateSellerProfile(req, res) {
 // Get seller dashboard
 async function getSellerDashboard(req, res) {
   try {
-    const prisma = getPrisma();
+    const store = getStore();
     
-    const profile = await prisma.sellerProfile.findUnique({
+    const profile = await store.sellerProfile.findUnique({
       where: { userId: req.user.id },
     });
 
@@ -218,8 +218,8 @@ async function getSellerDashboard(req, res) {
     }
 
     const [orders, recentOrders, wallet] = await Promise.all([
-      prisma.order.count({ where: { sellerId: profile.id } }),
-      prisma.order.findMany({
+      store.order.count({ where: { sellerId: profile.id } }),
+      store.order.findMany({
         where: { sellerId: profile.id },
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -231,7 +231,7 @@ async function getSellerDashboard(req, res) {
           createdAt: true,
         },
       }),
-      prisma.wallet.findUnique({ where: { sellerId: profile.id } }),
+      store.wallet.findUnique({ where: { sellerId: profile.id } }),
     ]);
 
     res.json({

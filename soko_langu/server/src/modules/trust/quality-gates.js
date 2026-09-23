@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 const GATE_THRESHOLDS = {
   highRiskSellerScore: 30,      // reliabilityScore below this => high risk (0-1 scale)
@@ -12,8 +12,8 @@ const GATE_THRESHOLDS = {
  * Returns { allowed, gates, reasons }.
  */
 async function evaluateQualityGates({ sellerId, productId }) {
-  const prisma = getPrisma();
-  const seller = await prisma.sellerProfile.findUnique({
+  const store = getStore();
+  const seller = await store.sellerProfile.findUnique({
     where: { id: sellerId },
     include: { products: true },
   });
@@ -42,7 +42,7 @@ async function evaluateQualityGates({ sellerId, productId }) {
 
   // High-value listing photo gate
   if (productId) {
-    const product = await prisma.product.findUnique({
+    const product = await store.product.findUnique({
       where: { id: productId },
       include: { media: true },
     });

@@ -1,5 +1,13 @@
 # Soko Vibe — Scaling Playbook
 
+> **NOTE (2026):** the Postgres/Prisma references in this playbook are the
+> historical v2-era design. The current runtime is **Firestore-only**: the
+> `getStore()`/`getReadStore()` seam in `src/config/database.js` resolves both
+> to the Firestore store, there is no `pg`/Prisma dependency, and no
+> `DATABASE_URL`/`DATABASE_URL_REPLICA`. Treat the Postgres read-replica and
+> Prisma pool-cap levers below as obsolete-guidance; Firestore is the single
+> data store, Redis/R2 remain as described.
+
 How the stack grows from a single instance to thousands of concurrent users.
 This is the operational counterpart to the code-level pagination/caching work.
 
@@ -8,7 +16,6 @@ This is the operational counterpart to the code-level pagination/caching work.
 - **Express API** (`src/index.js`) on Render, single instance, health `/health`.
 - **Firestore** holds products, orders, transactions, notifications, chat,
   flash sales, statuses, reports, payouts. Read-heavy paths hit it directly.
-- **Postgres + Prisma** holds users, wallets, sessions, admin tables.
 - **Redis (Upstash/ioredis)**: two-tier cache (LRU 500 + Redis), rate limiter
   counters, BullMQ queue, idempotency locks (`SET NX EX`).
 - **Flutter app** reads products/categories/orders DIRECTLY via the Firestore
@@ -24,7 +31,7 @@ This is the operational counterpart to the code-level pagination/caching work.
 | 2 | Composite indexes | `server/firestore.indexes.json` | Without them Firestore refuses combined queries as data grows |
 | 3 | Redis API caching | `search.js`, `trust-compat.js` | Trust passport = 600 reads/req; global-search = 9 reads/req |
 | 4 | BullMQ workers | `src/workers/index.js` | Move autorelease + media off the request path |
-| 5 | Prisma pool cap | `src/config/database.js` | Per-instance `connection_limit`; scale instances not pool |
+| 5 | Store query normalization | `src/config/database.js` | Keep store queries indexed; scale instances not pools |
 | 6 | Horizontal replicas | `server/render.yaml` | 3–6 web replicas behind LB; dedicated worker service |
 
 ## Hot paths today
@@ -89,15 +96,20 @@ Added so the origin survives a 10M-user spike instead of degrading:
 - **Firestore budget guardrails**: client reads are paginated (`.limit()` +
   cursors); enabled features map to quotas in this doc's tier table.
 
-## Postgres read replicas (Tier D groundwork)
+## Postgres read replicas (Tier D groundwork) — HISTORICAL, NOT APPLICABLE
+
+> This lever described the retired Postgres/Prisma stack. The runtime is
+> Firestore-only today: `database.js#getReadStore()` resolves to the same
+> Firestore store as `getStore()`, and there is no `DATABASE_URL_REPLICA`.
+> Kept only as a record of the v2-era horizontal-read plan; do not implement.
 
 Render Postgres supports dedicated read replicas. The server already routes the
 hot public catalog reads (`products`, `categories`) through the replica when one
 exists and falls back to the primary when not:
 
 - Set `DATABASE_URL_REPLICA` (Render: your-DB → Read replicas → Create, paste
-  the replica's internal URL). Code gate is `database.js#getReadPrisma()`.
-- Every write stays on the primary (`getPrisma`); the replica is used ONLY for
+  the replica's internal URL). Code gate is `database.js#getReadStore()`.
+- Every write stays on the primary (`getStore`); the replica is used ONLY for
   cache-safe catalog reads, so even seconds of lag are invisible behind the
   30s-1h cache TTLs.
 - Per-instance pool cap applies to both URLs (`connection_limit=10`).
@@ -145,7 +157,6 @@ every combined query uses a single index.
 
 What's already live toward C/D: Render autoscale 1→6, dedicated BullMQ worker,
 edge cache at 200+ cities, stampede protection, circuit breakers, load shedder,
-every read route paginated. Groundwork for D: `DATABASE_URL_REPLICA` read
-replica routing (products/categories), Cloudflare regional-origin routing.
-Remaining for true multi-region D: provisioning the actual Postgres read replica
-+ regional Render replicas, Firestore per-tenant collections, KV/edge state.
+every read route paginated. Remaining for true multi-region D: Cloudflare
+regional-origin routing + regional Render replicas, Firestore per-tenant
+collections, KV/edge state.

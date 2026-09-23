@@ -15,7 +15,7 @@ services:
     runtime: node
     plan: starter
     rootDir: server
-    buildCommand: npm ci && npx prisma generate
+    buildCommand: npm ci
     startCommand: node --optimize-for-size --expose-gc src/index.js
     healthCheckPath: /health
     numInstances: 1
@@ -29,20 +29,14 @@ services:
         value: production
       - key: FINANCE_WORKER_IN_PROCESS
         value: "false"
-      - key: DATABASE_POOL_LIMIT
-        value: "10"
-      # Optional Postgres read replica (Render:  Databases -> your-DB -> Read
-      # replicas -> Create). Leave unset to keep ALL traffic on the primary.
-      - key: DATABASE_URL_REPLICA
-        # value: postgres://...  (paste the replica internal URL here)
       - key: PORT
         value: "10000"
       # Event-loop shedder switch: answers 503 + Retry-After when the loop lags
       # past 1500ms AND heap exceeds 512MB, letting the orchestrator retarget.
       - key: SHED_LOAD
         value: "true"
-      # Bigger libuv threadpool: multiple instances × 10 pool = more parallel
-      # crypto/Prisma client calls per instance (each pool thread is one DB op).
+      # Bigger libuv threadpool: multiple instances × workers = more parallel
+      # crypto/network calls per instance (firebase-admin, ClickPesa, R2).
       - key: UV_THREADPOOL_SIZE
         value: "10"
       - key: NODE_OPTIONS
@@ -58,7 +52,7 @@ services:
     runtime: node
     plan: starter
     rootDir: server
-    buildCommand: npm ci && npx prisma generate
+    buildCommand: npm ci
     startCommand: npm run worker
     numInstances: 1
     envVars:

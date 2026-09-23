@@ -2,7 +2,7 @@
 // embedded Firestore users/{uid}.kyc doc that is the current source of truth.
 // userId is the Firebase UID (opaque), so the row exists even before the
 // Postgres users backfill and while the app-admin panel still reads Firestore.
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const config = require('../../config');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');
@@ -61,8 +61,8 @@ function toPublic(row) {
 
 /** The caller's current KYC status (or the legacy 'none' shape). */
 async function getStatus({ userId }) {
-  const prisma = getPrisma();
-  const row = await prisma.kycApplication.findUnique({ where: { userId } });
+  const store = getStore();
+  const row = await store.kycApplication.findUnique({ where: { userId } });
   return row ? toPublic(row) : { status: 'none', approved: false };
 }
 
@@ -244,11 +244,11 @@ async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push' }) {
  * it up-front via initiateKycFee, so a resubmission after rejection is free.
  */
 async function submitKyc({ userId, fullName, firstName, middleName, lastName, idType, idNumber, idImageUrl, selfieUrl, dateOfBirth, address, phone, email, shopVideoUrl }) {
-  const prisma = getPrisma();
+  const store = getStore();
   if (!userId || !fullName || !idType || !idNumber) {
     throw httpError(400, 'VALIDATION', 'Missing required KYC fields');
   }
-  const existing = await prisma.kycApplication.findUnique({ where: { userId } });
+  const existing = await store.kycApplication.findUnique({ where: { userId } });
   if (existing && existing.status === 'approved') {
     throw httpError(400, 'KYC_ALREADY_APPROVED', 'KYC already approved');
   }
@@ -289,8 +289,8 @@ async function submitKyc({ userId, fullName, firstName, middleName, lastName, id
     revokedAt: null,
   };
   const row = existing
-    ? await prisma.kycApplication.update({ where: { userId }, data })
-    : await prisma.kycApplication.create({ data });
+    ? await store.kycApplication.update({ where: { userId }, data })
+    : await store.kycApplication.create({ data });
 
   await notifyAdminOfSubmission(row).catch(() => {});
   await mirrorToFirestore(row).catch(() => {});
@@ -299,24 +299,24 @@ async function submitKyc({ userId, fullName, firstName, middleName, lastName, id
 
 /** All applications for the admin queue, newest first. */
 async function listApplications({ status, page = 1, limit = 50 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const where = status ? { status } : {};
   const take = Math.min(Math.max(1, limit), 100);
   const skip = (Math.max(1, page) - 1) * take;
   const [rows, total] = await Promise.all([
-    prisma.kycApplication.findMany({ where, orderBy: { submittedAt: 'desc' }, skip, take }),
-    prisma.kycApplication.count({ where }),
+    store.kycApplication.findMany({ where, orderBy: { submittedAt: 'desc' }, skip, take }),
+    store.kycApplication.count({ where }),
   ]);
   return { applications: rows.map(toPublic).map((k, i) => ({ ...k, userId: rows[i].userId, id: rows[i].id })), pagination: { page: Math.max(1, page), limit: take, total } };
 }
 
 /** Admin approve/reject. */
 async function reviewKyc({ userId, approve, notes }) {
-  const prisma = getPrisma();
-  const row = await prisma.kycApplication.findUnique({ where: { userId } });
+  const store = getStore();
+  const row = await store.kycApplication.findUnique({ where: { userId } });
   if (!row) throw httpError(404, 'KYC_NOT_FOUND', 'KYC application not found');
   const status = approve ? 'approved' : 'rejected';
-  const updated = await prisma.kycApplication.update({
+  const updated = await store.kycApplication.update({
     where: { userId },
     data: {
       status,
@@ -336,10 +336,10 @@ async function reviewKyc({ userId, approve, notes }) {
 
 /** Admin revoke. */
 async function revokeKyc({ userId, reason }) {
-  const prisma = getPrisma();
-  const row = await prisma.kycApplication.findUnique({ where: { userId } });
+  const store = getStore();
+  const row = await store.kycApplication.findUnique({ where: { userId } });
   if (!row) throw httpError(404, 'KYC_NOT_FOUND', 'KYC application not found');
-  const updated = await prisma.kycApplication.update({
+  const updated = await store.kycApplication.update({
     where: { userId },
     data: {
       status: 'revoked',
@@ -357,14 +357,14 @@ async function revokeKyc({ userId, reason }) {
 
 /** Admin delete: removes the application row + Firestore mirror. */
 async function deleteKyc({ userId }) {
-  const prisma = getPrisma();
-  const existing = await prisma.kycApplication.findUnique({ where: { userId } });
+  const store = getStore();
+  const existing = await store.kycApplication.findUnique({ where: { userId } });
   if (existing) {
-    await prisma.kycApplication.delete({ where: { userId } });
+    await store.kycApplication.delete({ where: { userId } });
   }
-  const store = getFirebaseFirestore();
-  if (store) {
-    await store.collection('users').doc(userId).set({ kyc: { status: 'none' } }, { merge: true }).catch(() => {});
+  const fs = getFirebaseFirestore();
+  if (fs) {
+    await fs.collection('users').doc(userId).set({ kyc: { status: 'none' } }, { merge: true }).catch(() => {});
     await updateProductsKycFlag(userId, false).catch(() => {});
   }
   return { deleted: Boolean(existing) };
@@ -380,17 +380,17 @@ async function notifyAdminOfSubmission(row) {
 
 async function notifyUser(row, title, body) {
   // Postgres inbox first (the app reads it when kUseNotificationsApi is on).
-  const prisma = getPrisma();
-  const user = await prisma.user.findUnique({ where: { firebaseUid: row.userId } });
+  const store = getStore();
+  const user = await store.user.findUnique({ where: { firebaseUid: row.userId } });
   if (user) {
-    await prisma.notification.create({
+    await store.notification.create({
       data: { userId: user.id, type: 'kyc', title, body, data: { type: 'kyc', status: row.status } },
     }).catch(() => {});
   }
   // OneSignal + Firestore fallback for app versions on the legacy inbox.
-  const store = getFirebaseFirestore();
-  if (store) {
-    await store.collection('notifications').add({
+  const db = getFirebaseFirestore();
+  if (db) {
+    await db.collection('notifications').add({
       userId: row.userId,
       title,
       body,

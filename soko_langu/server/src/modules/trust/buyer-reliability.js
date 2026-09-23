@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 /**
  * Compute a buyer reliability score (0-100) for abuse prevention.
@@ -6,16 +6,16 @@ const { getPrisma } = require('../../config/database');
  * dispute-filing abuse, chargeback rate.
  */
 async function computeBuyerReliability({ buyerId }) {
-  const prisma = getPrisma();
+  const store = getStore();
 
   const [orders, buyerDisputes, refunds] = await Promise.all([
-    prisma.order.findMany({
+    store.order.findMany({
       where: { buyerId },
       orderBy: { createdAt: 'desc' },
       take: 50,
     }),
-    prisma.dispute.count({ where: { filedBy: buyerId, status: 'resolved', resolution: 'FULL_REFUND' } }),
-    prisma.refund.findMany({ where: { order: { buyerId } } }),
+    store.dispute.count({ where: { filedBy: buyerId, status: 'resolved', resolution: 'FULL_REFUND' } }),
+    store.refund.findMany({ where: { order: { buyerId } } }),
   ]);
 
   const total = orders.length;

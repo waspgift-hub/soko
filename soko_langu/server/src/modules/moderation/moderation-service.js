@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getFirebaseAuth, getFirebaseFirestore } = require('../../config/firebase');
 const { notifyAdmins } = require('../legacy-compat/notify');
 
@@ -9,13 +9,13 @@ function httpError(status, message) {
   return err;
 }
 
-// Ensure a Prisma user row exists for the Firebase identity (reporters may
+// Ensure a seam user row exists for the Firebase identity (reporters may
 // never have touched v1 commerce endpoints before reporting).
 async function ensureUser({ firebaseUid, email, phone }) {
-  const prisma = getPrisma();
-  let user = await prisma.user.findUnique({ where: { firebaseUid } });
+  const store = getStore();
+  let user = await store.user.findUnique({ where: { firebaseUid } });
   if (!user) {
-    user = await prisma.user.create({
+    user = await store.user.create({
       data: {
         firebaseUid,
         email: email || null,
@@ -31,7 +31,7 @@ async function submitReport({ reporterUid, reporterName, reportedUserId, reporte
   if (!reportedUserId || !reason || !description) {
     throw httpError(400, 'Missing required fields');
   }
-  const prisma = getPrisma();
+  const store = getStore();
   const auth = getFirebaseAuth();
 
   let email = null;
@@ -46,7 +46,7 @@ async function submitReport({ reporterUid, reporterName, reportedUserId, reporte
 
   const reporter = await ensureUser({ firebaseUid: reporterUid, email, phone });
 
-  const report = await prisma.moderationReport.create({
+  const report = await store.moderationReport.create({
     data: {
       reporterId: reporter.id,
       targetId: reportedUserId,
@@ -92,28 +92,28 @@ async function submitReport({ reporterUid, reporterName, reportedUserId, reporte
 }
 
 async function listReports({ status, targetType, page = 1, limit = 20 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const where = {};
   if (status) where.status = status;
   if (targetType) where.targetType = targetType;
   const [items, total] = await Promise.all([
-    prisma.moderationReport.findMany({
+    store.moderationReport.findMany({
       where,
       include: { reporter: { select: { id: true, email: true, phone: true } } },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.moderationReport.count({ where }),
+    store.moderationReport.count({ where }),
   ]);
   return { items, pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function reviewReport({ id, status, reviewedBy }) {
-  const prisma = getPrisma();
-  const report = await prisma.moderationReport.findUnique({ where: { id } });
+  const store = getStore();
+  const report = await store.moderationReport.findUnique({ where: { id } });
   if (!report) throw httpError(404, 'REPORT_NOT_FOUND');
-  return prisma.moderationReport.update({
+  return store.moderationReport.update({
     where: { id },
     data: { status, reviewedBy, reviewedAt: new Date() },
   });

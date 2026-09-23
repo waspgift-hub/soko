@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { validateShippingQuote } = require('./shipping-validation');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
@@ -6,11 +6,11 @@ const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machi
 // Seller submits a shipping quote for an order.
 // Runs platform validation to decide NORMAL / REVIEW_REQUIRED / BLOCKED.
 async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, shippingAddress, sellerRegion }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`shipping:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId }, include: { seller: true } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.sellerId !== sellerId) throw httpError(403, 'FORBIDDEN');
@@ -79,13 +79,14 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
   }
 }
 
-// Admin approves a validated/queued quote, moving order toward payment.
-async function approveQuote({ orderId, approvedBy }) {
-  const prisma = getPrisma();
+// Buyer or admin approves a validated/queued quote, moving order toward payment.
+// actor defaults to 'admin' for the admin route; the buyer route overrides it.
+async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
+  const store = getStore();
   const lock = await acquireLock(`shipping:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
@@ -95,7 +96,7 @@ async function approveQuote({ orderId, approvedBy }) {
 
       const machine = new OrderStateMachine(order.status);
       machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {
-        actor: 'admin',
+        actor,
         actorId: approvedBy,
         reason: 'Quote approved',
       });
@@ -126,11 +127,11 @@ async function approveQuote({ orderId, approvedBy }) {
 
 // Admin blocks a quote, returning order to PENDING_SHIPPING_FEE for revision.
 async function blockQuote({ orderId, blockedBy, reason }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`shipping:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.status !== ORDER_STATES.SHIPPING_FEE_REVIEW) {

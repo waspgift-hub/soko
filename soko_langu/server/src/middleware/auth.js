@@ -1,5 +1,5 @@
 const { getFirebaseAuth } = require('../config/firebase');
-const { getPrisma } = require('../config/database');
+const { getStore } = require('../config/database');
 const { recordUserActivity } = require('../services/activity');
 const config = require('../config');
 const { jsonError } = require('../utils/http');
@@ -34,8 +34,8 @@ async function authenticate(req, res, next) {
     // the legacy-shop buyer sync), so v1 endpoints must provision the row the
     // same way legacy-shop's resolveShopBuyer does — otherwise every /api/v1/*
     // call returns 401 USER_NOT_FOUND for that seller.
-    const prisma = getPrisma();
-    let user = await prisma.user.findUnique({
+    const store = getStore();
+    let user = await store.user.findUnique({
       where: { firebaseUid: decoded.uid },
       select: {
         id: true,
@@ -48,7 +48,7 @@ async function authenticate(req, res, next) {
 
     if (!user) {
       const rec = await getFirebaseAuth().getUser(decoded.uid);
-      user = await prisma.user.create({
+      user = await store.user.create({
         data: {
           firebaseUid: decoded.uid,
           email: rec.email || null,
@@ -110,8 +110,8 @@ async function optionalAuth(req, res, next) {
     const decoded = await auth.verifyIdToken(token);
     req.firebaseUid = decoded.uid;
     
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({
+    const store = getStore();
+    const user = await store.user.findUnique({
       where: { firebaseUid: decoded.uid },
       select: {
         id: true,

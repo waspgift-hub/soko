@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { clickpesaQueryPayments, clickpesaQueryPayouts } = require('../../../clickpesa');
 
 function httpError(status, message) {
@@ -36,14 +36,14 @@ async function runReconciliation({ provider = 'clickpesa', periodStart, periodEn
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
     throw httpError(400, 'Invalid period');
   }
-  const prisma = getPrisma();
+  const store = getStore();
 
   const [paidAgg, payoutAgg] = await Promise.all([
-    prisma.payment.aggregate({
+    store.payment.aggregate({
       where: { status: 'completed', createdAt: { gte: start, lt: end } },
       _sum: { amount: true },
     }),
-    prisma.payoutTransaction.aggregate({
+    store.payoutTransaction.aggregate({
       where: { status: 'completed', createdAt: { gte: start, lt: end } },
       _sum: { amount: true },
     }),
@@ -75,7 +75,7 @@ async function runReconciliation({ provider = 'clickpesa', periodStart, periodEn
     .reduce((sum, r) => sum + r.amount, 0);
 
   const difference = internalTotal - toBig(providerTotal);
-  const row = await prisma.reconciliation.create({
+  const row = await store.reconciliation.create({
     data: {
       periodStart: start,
       periodEnd: end,
@@ -94,14 +94,14 @@ async function runReconciliation({ provider = 'clickpesa', periodStart, periodEn
 }
 
 async function listReconciliations({ page = 1, limit = 20 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const [items, total] = await Promise.all([
-    prisma.reconciliation.findMany({
+    store.reconciliation.findMany({
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.reconciliation.count(),
+    store.reconciliation.count(),
   ]);
   return { items, pagination: { page: Number(page), limit: Number(limit), total } };
 }

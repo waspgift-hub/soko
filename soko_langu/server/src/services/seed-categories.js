@@ -1,5 +1,5 @@
 // Seeds default marketplace categories (idempotent by slug).
-const { getPrisma } = require('../config/database');
+const { getStore } = require('../config/database');
 
 const DEFAULTS = [
   'Fashion',
@@ -17,14 +17,14 @@ const DEFAULTS = [
 ];
 
 async function seedCategories() {
-  const prisma = getPrisma();
+  const store = getStore();
   let created = 0;
   for (let i = 0; i < DEFAULTS.length; i++) {
     const name = DEFAULTS[i];
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const existing = await prisma.category.findUnique({ where: { slug } });
+    const existing = await store.category.findUnique({ where: { slug } });
     if (!existing) {
-      await prisma.category.create({ data: { name, slug, sortOrder: i } });
+      await store.category.create({ data: { name, slug, sortOrder: i } });
       created++;
     }
   }

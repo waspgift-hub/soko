@@ -31,14 +31,8 @@ const shutdown = async (signal) => {
   server.close(async () => {
     console.log('[API] HTTP server closed');
     
-    // Close database connections
-    const { prisma } = require('./config/database');
-    if (prisma) {
-      await prisma.$disconnect();
-      console.log('[API] Database connections closed');
-    }
-    
-    // Close Redis
+    // Close Redis (Firestore/firebase-admin owns its own pooled connection,
+    // so there is no database handle left to tear down here).
     const { redis } = require('./config/redis');
     if (redis) {
       await redis.quit();

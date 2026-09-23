@@ -1,6 +1,6 @@
 const crypto = require('crypto');
-const { getPrisma } = require('../../config/database');
-const { getReadPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
+const { getReadStore } = require('../../config/database');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -34,9 +34,9 @@ const PUBLIC_SELECT = {
   seller: { select: { id: true, storeName: true, storeSlug: true, user: { select: { firebaseUid: true, phone: true } } } },
   media: { orderBy: { sortOrder: 'asc' }, take: 4 },
   // List cards need the legacy-only metadata (boost/feature flags, category,
-  // location, ratings) that has no Postgres column. Prisma cannot project
-  // selected JSON keys (SelectionSetOnScalar is unimplemented for Postgres),
-  // so the whole snapshot is returned — same contract as the detail endpoint.
+  // location, ratings) that has no Postgres column. The store cannot project
+  // selected JSON keys, so the whole snapshot is returned — same contract as
+  // the detail endpoint.
   snapshot: true,
   // Sponsored campaigns: include the campaign id so the client can render the
   // "Sponsored" label and route clicks through the attribution endpoint.
@@ -99,20 +99,20 @@ function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, 
 // uuid-backed branches are only attempted for uuid-shaped inputs — a Firebase
 // UID against a uuid column would fail Postgres' cast before any row matched.
 async function resolveSellerProfile(idOrUid) {
-  const prisma = getPrisma();
+  const store = getStore();
   const branches = [{ user: { firebaseUid: idOrUid } }];
   if (UUID_RE.test(idOrUid)) {
     branches.push({ id: idOrUid }, { userId: idOrUid });
   }
-  return prisma.sellerProfile.findFirst({
+  return store.sellerProfile.findFirst({
     where: { OR: branches },
     select: { id: true },
   });
 }
 
 async function requireSellerProfile(userId) {
-  const prisma = getPrisma();
-  const profile = await prisma.sellerProfile.findUnique({
+  const store = getStore();
+  const profile = await store.sellerProfile.findUnique({
     where: { userId },
     select: { id: true, storeName: true },
   });
@@ -122,11 +122,20 @@ async function requireSellerProfile(userId) {
 
 async function categoryName(id) {
   if (!id) return null;
-  const category = await getReadPrisma().category.findUnique({
+  const category = await getReadStore().category.findUnique({
     where: { id },
     select: { name: true },
   });
   return category?.name ?? null;
+}
+
+async function getOwnedProduct({ id, sellerProfileId }) {
+  const store = getStore();
+  const product = await store.product.findFirst({
+    where: { id, sellerId: sellerProfileId, deletedAt: null },
+  });
+  if (!product) throw httpError(404, 'PRODUCT_NOT_FOUND');
+  return product;
 }
 
 // Legacy-only product fields that live in the JSON snapshot during the
@@ -160,8 +169,8 @@ function applySnapshotPatch(base, data) {
   return snapshot;
 }
 
-async function createProduct({ sellerProfileId, data }) {
-  const prisma = getPrisma();
+async function createProduct({ sellerProfileId, data, id }) {
+  const store = getStore();
   const snapshot = {
     title: data.title,
     description: data.description || null,
@@ -198,8 +207,11 @@ async function createProduct({ sellerProfileId, data }) {
     soldCount: 0,
   };
   try {
-    return await prisma.product.create({
+    return await store.product.create({
       data: {
+        // Firestore-first stores pass the pre-generated uuid so the products/
+        // {id} doc and the money-facing row always share one identity.
+        id: id || undefined,
         sellerId: sellerProfileId,
         title: snapshot.title,
         slug: slugify(snapshot.title),
@@ -222,8 +234,8 @@ async function createProduct({ sellerProfileId, data }) {
 }
 
 async function getOwnedProduct({ id, sellerProfileId }) {
-  const prisma = getPrisma();
-  const product = await prisma.product.findFirst({
+  const store = getStore();
+  const product = await store.product.findFirst({
     where: { id, sellerId: sellerProfileId, deletedAt: null },
   });
   if (!product) throw httpError(404, 'PRODUCT_NOT_FOUND');
@@ -231,7 +243,7 @@ async function getOwnedProduct({ id, sellerProfileId }) {
 }
 
 async function updateProduct({ id, sellerProfileId, data }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const owned = await getOwnedProduct({ id, sellerProfileId });
   const allowed = ['title', 'description', 'categoryId', 'price', 'originalPrice', 'stock', 'condition', 'weightGrams', 'shippingRequired'];
   const patch = {};
@@ -253,24 +265,24 @@ async function updateProduct({ id, sellerProfileId, data }) {
     if (data[key] !== undefined) snapshot[key] = data[key];
   }
   patch.snapshot = snapshot;
-  return prisma.product.update({ where: { id }, data: patch });
+  return store.product.update({ where: { id }, data: patch });
 }
 
 async function setStatus({ id, sellerProfileId, status }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const product = await getOwnedProduct({ id, sellerProfileId });
   if (status === 'published') {
     if (!product.title || Number(product.price) <= 0) {
       throw httpError(400, 'PUBLISH_REQUIRES_TITLE_AND_PRICE');
     }
   }
-  return prisma.product.update({ where: { id }, data: { status } });
+  return store.product.update({ where: { id }, data: { status } });
 }
 
 async function softDelete({ id, sellerProfileId }) {
-  const prisma = getPrisma();
+  const store = getStore();
   await getOwnedProduct({ id, sellerProfileId });
-  return prisma.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
+  return store.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
 // Flatten the seller relation into the client contract the legacy product doc
@@ -297,7 +309,7 @@ function serializeProduct(product) {
 async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerId, ids, page = 1, limit = 20 }) {
   // Catalog reads go through the read replica when one is configured: public
   // browsing tolerates lag and must never compete for primary connections.
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   let sellerProfileId;
   if (sellerId) {
     const profile = await resolveSellerProfile(sellerId);
@@ -313,7 +325,7 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
   // relation is included on each product row via PUBLIC_SELECT, but we also
   // need the ordering: active-sponsored first, then the rest.
   const now = new Date();
-  const sponsoredIds = await prisma.sponsoredCampaign.findMany({
+  const sponsoredIds = await store.sponsoredCampaign.findMany({
     where: {
       status: 'active',
       startsAt: { lte: now },
@@ -328,14 +340,14 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
   );
 
   const [items, total] = await Promise.all([
-    prisma.product.findMany({
+    store.product.findMany({
       where,
       select: PUBLIC_SELECT,
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.product.count({ where }),
+    store.product.count({ where }),
   ]);
 
   // Re-rank: sponsored products first (sorted by bid amount desc), then
@@ -356,25 +368,25 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
 }
 
 async function listSellerProducts({ sellerProfileId, page = 1, limit = 20 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const where = { sellerId: sellerProfileId, deletedAt: null };
   const [items, total] = await Promise.all([
-    prisma.product.findMany({
+    store.product.findMany({
       where,
       include: { media: { orderBy: { sortOrder: 'asc' }, take: 4 } },
       orderBy: { updatedAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.product.count({ where }),
+    store.product.count({ where }),
   ]);
   return { items, pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function getProduct(idOrSlug) {
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
-  const product = await prisma.product.findFirst({
+  const product = await store.product.findFirst({
     where: {
       ...(isUuid ? { OR: [{ id: idOrSlug }, { slug: idOrSlug }] } : { slug: idOrSlug }),
       status: 'published',
@@ -391,11 +403,11 @@ async function getProduct(idOrSlug) {
 }
 
 async function attachMedia({ id, sellerProfileId, items }) {
-  const prisma = getPrisma();
+  const store = getStore();
   await getOwnedProduct({ id, sellerProfileId });
   const rows = await Promise.all(
     items.map((m, i) =>
-      prisma.productMedia.create({
+      store.productMedia.create({
         data: {
           productId: id,
           type: m.type || 'image',
@@ -415,15 +427,17 @@ async function attachMedia({ id, sellerProfileId, items }) {
 }
 
 async function moderate({ id, status }) {
-  const prisma = getPrisma();
-  const product = await prisma.product.findUnique({ where: { id } });
+  const store = getStore();
+  const product = await store.product.findUnique({ where: { id } });
   if (!product) throw httpError(404, 'PRODUCT_NOT_FOUND');
-  return prisma.product.update({ where: { id }, data: { status } });
+  return store.product.update({ where: { id }, data: { status } });
 }
 
 module.exports = {
   requireSellerProfile,
   resolveSellerProfile,
+  getOwnedProduct,
+  categoryName,
   createProduct,
   updateProduct,
   setStatus,

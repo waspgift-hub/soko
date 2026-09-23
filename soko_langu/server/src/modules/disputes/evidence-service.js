@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 
 const EVIDENCE_TYPES = [
@@ -19,11 +19,11 @@ const EVIDENCE_TYPES = [
  * `type` must be one of EVIDENCE_TYPES; r2Key is the uploaded object key.
  */
 async function addEvidence({ disputeId, submittedBy, type, r2Key, description }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`evidence:${disputeId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const dispute = await tx.dispute.findUnique({
         where: { id: disputeId },
         include: { order: { select: { buyerId: true, sellerId: true } } },
@@ -59,8 +59,8 @@ async function addEvidence({ disputeId, submittedBy, type, r2Key, description })
  * List evidence for a dispute. Access restricted to parties and admins.
  */
 async function listEvidence({ disputeId, requesterId }) {
-  const prisma = getPrisma();
-  const dispute = await prisma.dispute.findUnique({
+  const store = getStore();
+  const dispute = await store.dispute.findUnique({
     where: { id: disputeId },
     include: { order: true },
   });
@@ -71,12 +71,12 @@ async function listEvidence({ disputeId, requesterId }) {
     dispute.order.sellerId === requesterId ||
     dispute.filedBy === requesterId;
 
-  const requester = await prisma.user.findUnique({ where: { id: requesterId } });
+  const requester = await store.user.findUnique({ where: { id: requesterId } });
   const isAdmin = requester && ['super_admin', 'admin'].includes(requester.role);
 
   if (!isParty && !isAdmin) throw httpError(403, 'FORBIDDEN');
 
-  const evidence = await prisma.disputeEvidence.findMany({
+  const evidence = await store.disputeEvidence.findMany({
     where: { disputeId },
     orderBy: { createdAt: 'asc' },
   });

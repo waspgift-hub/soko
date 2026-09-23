@@ -18,7 +18,7 @@
 // writes on mirrored docs).
 const { Router } = require('express');
 const { FieldValue } = require('firebase-admin/firestore');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getFirebaseAuth, getFirebaseFirestore } = require('../../config/firebase');
 const { optionalAuth } = require('../../middleware/auth');
 const { paymentService } = require('../payments/payment-service');
@@ -106,9 +106,9 @@ async function resolveShopBuyer(req, res, next) {
   try {
     if (req.firebaseUid) {
       if (!req.user) {
-        const prisma = getPrisma();
+        const store = getStore();
         const rec = await getFirebaseAuth().getUser(req.firebaseUid);
-        req.user = await prisma.user.create({
+        req.user = await store.user.create({
           data: {
             firebaseUid: req.firebaseUid,
             email: rec.email || null,
@@ -121,14 +121,14 @@ async function resolveShopBuyer(req, res, next) {
         });
       }
     } else {
-      const prisma = getPrisma();
+      const store = getStore();
       const body = req.body || {};
       const q = req.query || {};
       const phone = String(body.buyerPhone || q.buyerPhone || body.phone || q.phone || '').trim();
       const candidateId = String(body.buyerId || q.buyerId || '').trim();
       let user = null;
       if (candidateId) {
-        user = await prisma.user.findUnique({ where: { id: candidateId }, select: { id: true, firebaseUid: true, phone: true, role: true, accountStatus: true } });
+        user = await store.user.findUnique({ where: { id: candidateId }, select: { id: true, firebaseUid: true, phone: true, role: true, accountStatus: true } });
         if (
           !user ||
           !String(user.firebaseUid || '').startsWith('guest:') ||
@@ -142,9 +142,9 @@ async function resolveShopBuyer(req, res, next) {
           return res.status(401).json({ error: 'AUTH_REQUIRED' });
         }
         const firebaseUid = `guest:${phone.replace(/\D/g, '')}`;
-        user = await prisma.user.findUnique({ where: { firebaseUid }, select: { id: true, firebaseUid: true, phone: true, role: true, accountStatus: true } });
+        user = await store.user.findUnique({ where: { firebaseUid }, select: { id: true, firebaseUid: true, phone: true, role: true, accountStatus: true } });
         if (!user) {
-          user = await prisma.user.create({
+          user = await store.user.create({
             data: {
               firebaseUid,
               phone,
@@ -172,13 +172,13 @@ async function resolveShopBuyer(req, res, next) {
 // demand exactly like the migration script does.
 async function ensureSellerProfile(firebaseUid, sellerName, sellerPhone) {
   if (!firebaseUid) return null;
-  const prisma = getPrisma();
-  const user = await prisma.user.findUnique({ where: { firebaseUid: String(firebaseUid) } });
+  const store = getStore();
+  const user = await store.user.findUnique({ where: { firebaseUid: String(firebaseUid) } });
   if (!user) return null;
-  let profile = await prisma.sellerProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
+  let profile = await store.sellerProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
   if (!profile) {
     const base = (sellerName || 'Duka').toString().toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 40) || 'duka';
-    profile = await prisma.sellerProfile.create({
+    profile = await store.sellerProfile.create({
       data: {
         userId: user.id,
         storeName: sellerName || 'Duka',
@@ -188,7 +188,7 @@ async function ensureSellerProfile(firebaseUid, sellerName, sellerPhone) {
       select: { id: true },
     });
     if (sellerPhone) {
-      await prisma.user.update({ where: { id: user.id }, data: { phone: String(sellerPhone) } }).catch(() => {});
+      await store.user.update({ where: { id: user.id }, data: { phone: String(sellerPhone) } }).catch(() => {});
     }
   }
   return profile.id;
@@ -197,7 +197,7 @@ async function ensureSellerProfile(firebaseUid, sellerName, sellerPhone) {
 const router = Router();
 
 router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) => {
-  const prisma = getPrisma();
+  const store = getStore();
   const body = req.body || {};
   if (body.buyerId && body.buyerId !== req.user.firebaseUid) throw httpError(403, 'FORBIDDEN');
 
@@ -211,7 +211,7 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
 
   const { commission, totalAmount } = computeSellerParity(BigInt(productPrice), 0n);
 
-  const order = await prisma.order.create({
+  const order = await store.order.create({
     data: {
       orderNumber: generateOrderNumber(),
       buyerId: req.user.id,
@@ -254,11 +254,11 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
 });
 
 router.post('/create-marketplace-payment-link', optionalAuth, resolveShopBuyer, async (req, res) => {
-  const prisma = getPrisma();
+  const store = getStore();
   const body = req.body || {};
   const orderId = body.existingTransactionId || body.order_id;
   if (!orderId) throw httpError(400, 'ORDER_ID_REQUIRED');
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  const order = await store.order.findUnique({ where: { id: orderId } });
   if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
   if (order.buyerId !== req.user.id) throw httpError(403, 'FORBIDDEN');
 
@@ -287,8 +287,8 @@ router.post('/create-marketplace-payment-link', optionalAuth, resolveShopBuyer, 
 });
 
 router.get('/orders/:orderId/status', optionalAuth, resolveShopBuyer, async (req, res) => {
-  const prisma = getPrisma();
-  const order = await prisma.order.findUnique({ where: { id: req.params.orderId } });
+  const store = getStore();
+  const order = await store.order.findUnique({ where: { id: req.params.orderId } });
   if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
   if (order.buyerId !== req.user.id) throw httpError(403, 'FORBIDDEN');
 
@@ -309,15 +309,15 @@ router.get('/orders/:orderId/status', optionalAuth, resolveShopBuyer, async (req
 // Postgres orders by buyerId + phone; used by the web shop's My Orders page
 // when the buyer checked out without signing in.
 router.get('/orders/guest/list', optionalAuth, resolveShopBuyer, async (req, res) => {
-  const prisma = getPrisma();
-  const orders = await prisma.order.findMany({
+  const store = getStore();
+  const orders = await store.order.findMany({
     where: { buyerId: req.user.id },
     orderBy: { createdAt: 'desc' },
     take: 100,
   });
   const sellerIds = Array.from(new Set(orders.map((o) => o.sellerId).filter(Boolean)));
   const sellers = sellerIds.length
-    ? await prisma.sellerProfile.findMany({ where: { id: { in: sellerIds } }, select: { id: true, storeName: true } })
+    ? await store.sellerProfile.findMany({ where: { id: { in: sellerIds } }, select: { id: true, storeName: true } })
     : [];
   const sellerNames = new Map(sellers.map((s) => [s.id, s.storeName]));
   const addr = (o) => (o.shippingAddressSnapshot && typeof o.shippingAddressSnapshot === 'object' ? o.shippingAddressSnapshot : {});

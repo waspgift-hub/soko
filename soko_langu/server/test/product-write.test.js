@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { applySnapshotPatch, serializeProduct } = require('../src/modules/products/product-service');
+const { applyListingPatch, listingPseudoRow } = require('../src/modules/products/product-store');
 
 describe('applySnapshotPatch', () => {
   it('starts from the existing snapshot when present', () => {
@@ -71,5 +72,44 @@ describe('serializeProduct', () => {
   it('passes products without a seller relation through unchanged', () => {
     const row = { id: 'p2', price: 5n, snapshot: {} };
     assert.equal(serializeProduct(row), row);
+  });
+});
+
+describe('applyListingPatch (Firestore-first doc patch)', () => {
+  it('maps title/price/stock/condition to the doc schema', () => {
+    const patched = applyListingPatch(
+      { name: 'A', searchName: 'a' },
+      { title: 'Bmw M4', price: 30000000, stock: 2, condition: 'used_like_new' }
+    );
+    assert.equal(patched.name, 'Bmw M4');
+    assert.equal(patched.searchName, 'bmw m4');
+    assert.equal(patched.price, 30000000);
+    assert.equal(patched.stock, 2);
+    assert.equal(patched.condition, 'used_like_new');
+  });
+
+  it('keeps the flattened legacy keys the app reads', () => {
+    const doc = { name: 'X', images: [], brand: 'OldBrand' };
+    const patched = applyListingPatch(doc, { brand: 'Bmw', imageMetadata: [{ url: 'u' }], variants: [] });
+    assert.equal(patched.brand, 'Bmw');
+    assert.deepEqual(patched.imageMetadata, [{ url: 'u' }]);
+    assert.deepEqual(patched.variants, []);
+    assert.equal(patched.images.length, 0);
+  });
+
+  it('touches updatedAt on every patch', () => {
+    assert.ok(applyListingPatch({}, {}).updatedAt);
+  });
+});
+
+describe('listingPseudoRow', () => {
+  it('supplies the row fields buildMirrorDoc needs', () => {
+    const row = listingPseudoRow({
+      id: 'abc', data: { title: 'A', price: 5000 }, category: 'Vehicles', status: 'draft', createdAt: new Date('2026-09-01'),
+    });
+    assert.equal(row.id, 'abc');
+    assert.equal(row.price, 5000);
+    assert.equal(row.snapshot.category, 'Vehicles');
+    assert.equal(row.status, 'draft');
   });
 });

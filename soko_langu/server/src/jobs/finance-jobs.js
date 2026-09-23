@@ -12,7 +12,7 @@
  *   finance.disputeEscalate        — alert admins when open disputes exceed SLA
  */
 const config = require('../config');
-const { getPrisma } = require('../config/database');
+const { getStore } = require('../config/database');
 const { acquireLock, releaseLock } = require('../config/redis');
 const { getProvider } = require('../modules/payments/provider-factory');
 const paymentService = require('../modules/payments/payment-service');
@@ -57,9 +57,9 @@ async function throttledNotify(key, ttlSeconds, fn) {
 }
 
 async function notifyBuyer(order, title, body, data) {
-  const prisma = getPrisma();
+  const store = getStore();
   try {
-    const buyer = await prisma.user.findUnique({ where: { id: order.buyerId } });
+    const buyer = await store.user.findUnique({ where: { id: order.buyerId } });
     if (buyer) {
       await sendOneSignalNotification(buyer.firebaseUid, title, body, { ...data, orderId: order.id });
     }
@@ -73,9 +73,9 @@ async function notifyBuyer(order, title, body, data) {
 /* ------------------------------------------------------------------ */
 
 async function expireStalePayments({ now = new Date() } = {}) {
-  const prisma = getPrisma();
+  const store = getStore();
   const due = new Date(now.getTime() - config.finance.paymentExpireMs);
-  const prismaOrders = await prisma.order.findMany({
+  const pendingOrders = await store.order.findMany({
     where: {
       status: { in: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING] },
       createdAt: { lte: due },
@@ -85,17 +85,17 @@ async function expireStalePayments({ now = new Date() } = {}) {
   });
 
   const summary = { expired: 0, paidRecovered: 0, skipped: 0, failed: 0 };
-  for (const order of prismaOrders) {
+  for (const order of pendingOrders) {
     const lock = await acquireLock(`expire:${order.id}`, 60);
     try {
-      const fresh = await prisma.order.findUnique({ where: { id: order.id } });
+      const fresh = await store.order.findUnique({ where: { id: order.id } });
       if (![ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING].includes(fresh.status)) {
         summary.skipped += 1;
         continue;
       }
 
       if (fresh.status === ORDER_STATES.PAYMENT_PROCESSING) {
-        const payment = await prisma.payment.findFirst({
+        const payment = await store.payment.findFirst({
           where: { orderId: fresh.id, status: { in: PAYMENT_STATES_ACTIVE } },
           orderBy: { createdAt: 'desc' },
         });
@@ -131,7 +131,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
         }
       }
 
-      await prisma.$transaction(async (tx) => {
+      await store.$transaction(async (tx) => {
         const machine = new OrderStateMachine(fresh.status);
         machine.transition(ORDER_STATES.EXPIRED, { actor: 'system', reason: 'Payment window elapsed' });
         const updated = await tx.order.update({
@@ -164,9 +164,9 @@ async function expireStalePayments({ now = new Date() } = {}) {
 /* ------------------------------------------------------------------ */
 
 async function runAutoReleaseSweep({ now = new Date() } = {}) {
-  const prisma = getPrisma();
+  const store = getStore();
   const due = new Date(now.getTime() - config.finance.autoReleaseDays * 24 * 3600 * 1000);
-  const orders = await prisma.order.findMany({
+  const orders = await store.order.findMany({
     where: {
       legacyFirestoreId: null,
       status: { in: [ORDER_STATES.DELIVERED, ORDER_STATES.DELIVERY_CONFIRMED] },
@@ -206,11 +206,11 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
 /* ------------------------------------------------------------------ */
 
 async function processPendingWithdrawals({ now = new Date() } = {}) {
-  const prisma = getPrisma();
+  const store = getStore();
   const autoCutoff = new Date(now.getTime() - config.finance.withdrawalAutoProcessMs);
   const stuckCutoff = new Date(now.getTime() - config.finance.withdrawalStuckMs);
 
-  const pendings = await prisma.withdrawal.findMany({
+  const pendings = await store.withdrawal.findMany({
     where: { status: 'pending', createdAt: { lte: autoCutoff } },
     take: 50,
     orderBy: { createdAt: 'asc' },
@@ -227,7 +227,7 @@ async function processPendingWithdrawals({ now = new Date() } = {}) {
     }
   }
 
-  const stuck = await prisma.withdrawal.findMany({
+  const stuck = await store.withdrawal.findMany({
     where: { status: 'processing', createdAt: { lte: stuckCutoff } },
     take: 20,
     orderBy: { createdAt: 'asc' },
@@ -276,9 +276,9 @@ async function runReconciliationSweep({ now = new Date() } = {}) {
 /* ------------------------------------------------------------------ */
 
 async function escalateDisputes({ now = new Date() } = {}) {
-  const prisma = getPrisma();
+  const store = getStore();
   const cutoff = new Date(now.getTime() - config.finance.disputeSlaMs);
-  const open = await prisma.dispute.findMany({
+  const open = await store.dispute.findMany({
     where: { status: 'open', createdAt: { lte: cutoff } },
     take: 20,
     orderBy: { createdAt: 'asc' },
@@ -296,12 +296,12 @@ async function escalateDisputes({ now = new Date() } = {}) {
     );
 
     if (!d.order) continue;
-    const sellerProfile = await prisma.sellerProfile.findUnique({
+    const sellerProfile = await store.sellerProfile.findUnique({
       where: { id: d.order.sellerId },
       select: { userId: true },
     });
     const partyIds = [d.order.buyerId, sellerProfile ? sellerProfile.userId : null].filter(Boolean);
-    const parties = await prisma.user.findMany({
+    const parties = await store.user.findMany({
       where: { id: { in: partyIds } },
       select: { id: true, firebaseUid: true },
     });
@@ -324,12 +324,12 @@ async function escalateDisputes({ now = new Date() } = {}) {
 /* ------------------------------------------------------------------ */
 
 async function refundUnstuck({ now = new Date() } = {}) {
-  const prisma = getPrisma();
+  const store = getStore();
   const processingCutoff = new Date(now.getTime() - 2 * 3600 * 1000);
   const failedCutoff = new Date(now.getTime() - 24 * 3600 * 1000);
   const summary = { stuck: 0 };
 
-  const stuck = await prisma.refund.findMany({
+  const stuck = await store.refund.findMany({
     where: {
       OR: [
         { status: 'processing', createdAt: { lte: processingCutoff } },

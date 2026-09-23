@@ -1,7 +1,8 @@
 // Seller analytics bridge — Phase F.
 // Replaces legacy Firestore fan-out GET /api/seller-analytics/:sellerId with a
 // Postgres aggregate under /api/v1. DTO matches Flutter SellerAnalytics.fromApi.
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
+const { getFirebaseFirestore } = require('../../config/firebase');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,59 +32,77 @@ function snapshotImage(snapshot) {
 const PAID = ['paid', 'paid_escrow_hold', 'paid_escrow_held', 'dispatched', 'delivered', 'delivery_confirmed', 'confirmed', 'completed', 'successful'];
 const FAILED = ['failed', 'refunded', 'cancelled', 'expired'];
 
-async function resolveSeller(prisma, sellerId) {
+async function resolveSeller(store, sellerId) {
   if (UUID_RE.test(sellerId)) {
-    const byId = await prisma.sellerProfile
-      .findUnique({ where: { id: sellerId }, select: { id: true } })
+    const byId = await store.sellerProfile
+      .findUnique({ where: { id: sellerId }, select: { id: true, userId: true } })
       .catch(() => null);
     if (byId) return byId;
   }
-  return prisma.sellerProfile
-    .findFirst({ where: { snapshot: { path: ['legacyId'], equals: sellerId } }, select: { id: true } })
+  return store.sellerProfile
+    .findFirst({ where: { snapshot: { path: ['legacyId'], equals: sellerId } }, select: { id: true, userId: true } })
     .catch(() => null);
 }
 
-async function resolveBoost(prisma, boostId) {
+// Firestore reviews are keyed by the seller's Firebase UID; the overview only
+// holds the SellerProfile row, so resolve the UID (uuid branch via User row,
+// opaque legacy seller id branch already IS the UID).
+async function sellerFirebaseUid(store, seller) {
+  if (seller.userId) {
+    const u = await store.user.findUnique({ where: { id: seller.userId }, select: { firebaseUid: true } }).catch(() => null);
+    if (u?.firebaseUid) return u.firebaseUid;
+  }
+  return seller.id; // legacy path treats the opaque seller id as the UID
+}
+
+async function resolveBoost(store, boostId) {
   if (UUID_RE.test(boostId)) {
-    const byId = await prisma.boost
+    const byId = await store.boost
       .findUnique({ where: { id: boostId }, select: { id: true } })
       .catch(() => null);
     if (byId) return byId;
   }
-  return prisma.boost
+  return store.boost
     .findFirst({ where: { snapshot: { path: ['legacyId'], equals: boostId } }, select: { id: true } })
     .catch(() => null);
 }
 
 // GET /sellers/:sellerId/analytics/overview
 async function getSellerAnalyticsOverview(req, res) {
-  const prisma = getPrisma();
+  const store = getStore();
   const { sellerId } = req.params;
   const now = new Date();
   try {
-    const seller = await resolveSeller(prisma, sellerId);
+    const seller = await resolveSeller(store, sellerId);
     if (!seller) return res.status(404).json({ success: false, error: 'Muuzaji haipatikani' });
+    const sellerUid = await sellerFirebaseUid(store, seller);
+    const reviewSnap = (() => {
+      const store = getFirebaseFirestore();
+      if (!store) return Promise.resolve(null);
+      return store.collection('reviews').where('sellerId', '==', sellerUid).limit(200).get();
+    })();
 
-    const [products, boosts, orders, reviews] = await Promise.all([
-      prisma.product.findMany({
+    const [products, boosts, orders, reviewsSnap] = await Promise.all([
+      store.product.findMany({
         where: { sellerId: seller.id, deletedAt: null },
         select: { id: true, title: true, snapshot: true },
       }),
-      prisma.boost.findMany({
+      store.boost.findMany({
         where: { sellerId: seller.id },
         select: { impressions: true, clicks: true },
       }),
-      prisma.order.findMany({
+      store.order.findMany({
         where: { sellerId: seller.id },
         select: { status: true, totalAmount: true, createdAt: true },
       }),
-      prisma.review.findMany({
-        where: { sellerId: seller.id },
-        select: { rating: true },
-      }),
+      reviewSnap,
     ]);
 
-    const boostsByProduct = await prisma.boost.findMany({
+    const reviews = reviewsSnap
+      ? reviewsSnap.docs.map((d) => ({ rating: Number(d.data().rating || 0) }))
+      : [];
+
+    const boostsByProduct = await store.boost.findMany({
       where: { sellerId: seller.id, productId: { not: null } },
       select: { productId: true, impressions: true },
     });
@@ -200,12 +219,12 @@ async function getSellerAnalyticsOverview(req, res) {
 
 // POST /boosts/:id/impressions
 async function recordBoostImpression(req, res) {
-  const prisma = getPrisma();
+  const store = getStore();
   const { id } = req.params;
   try {
-    const boost = await resolveBoost(prisma, id);
+    const boost = await resolveBoost(store, id);
     if (!boost) return res.status(404).json({ success: false, error: 'Boost haipatikani' });
-    const updated = await prisma.boost.update({
+    const updated = await store.boost.update({
       where: { id: boost.id },
       data: { impressions: { increment: 1 } },
       select: { id: true, impressions: true, clicks: true },
@@ -218,12 +237,12 @@ async function recordBoostImpression(req, res) {
 
 // POST /boosts/:id/clicks
 async function recordBoostClick(req, res) {
-  const prisma = getPrisma();
+  const store = getStore();
   const { id } = req.params;
   try {
-    const boost = await resolveBoost(prisma, id);
+    const boost = await resolveBoost(store, id);
     if (!boost) return res.status(404).json({ success: false, error: 'Boost haipatikani' });
-    const updated = await prisma.boost.update({
+    const updated = await store.boost.update({
       where: { id: boost.id },
       data: { clicks: { increment: 1 } },
       select: { id: true, impressions: true, clicks: true },

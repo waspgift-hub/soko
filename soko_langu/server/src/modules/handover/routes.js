@@ -39,4 +39,22 @@ router.post(
   }
 );
 
+// Verify the QR handover token and complete the order atomically
+router.post(
+  '/:orderId/qr/verify',
+  authenticate,
+  requireActive,
+  validate({
+    body: z.object({ token: z.string().min(32).max(200) }),
+  }),
+  async (req, res) => {
+    const result = await handoverService.verifyQrAndComplete({
+      orderId: req.params.orderId,
+      token: req.body.token,
+      verifiedBy: req.user.id,
+    });
+    res.json({ success: true, data: result });
+  }
+);
+
 module.exports = router;

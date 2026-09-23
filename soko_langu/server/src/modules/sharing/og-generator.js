@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const config = require('../../config');
 const { ogTags, publicUrl } = require('../media/cdn-service');
 
@@ -7,8 +7,8 @@ const { ogTags, publicUrl } = require('../media/cdn-service');
  * Route: /product/:slugOrId
  */
 async function productOgMeta(slugOrId) {
-  const prisma = getPrisma();
-  const product = await prisma.product.findFirst({
+  const store = getStore();
+  const product = await store.product.findFirst({
     where: { OR: [{ slug: slugOrId }, { id: slugOrId }], status: 'published' },
     include: {
       media: { orderBy: { sortOrder: 'asc' }, take: 1 },
@@ -35,8 +35,8 @@ async function productOgMeta(slugOrId) {
  * Route: /seller/:username
  */
 async function sellerOgMeta(username) {
-  const prisma = getPrisma();
-  const seller = await prisma.sellerProfile.findUnique({
+  const store = getStore();
+  const seller = await store.sellerProfile.findUnique({
     where: { storeSlug: username },
     include: { user: true },
   });

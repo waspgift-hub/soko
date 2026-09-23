@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -18,7 +18,7 @@ async function getMyCode({ userId }) {
 }
 
 async function resolveReferrerIdScan(code) {
-  const prisma = getPrisma();
+  const store = getStore();
   const clean = String(code || '').trim().toUpperCase();
   if (!/^[A-Z0-9]{8}$/.test(clean)) throw httpError(400, 'INVALID_REFERRAL_CODE');
   // Scan users in chunks; stops at first match. Fine at current scale;
@@ -26,7 +26,7 @@ async function resolveReferrerIdScan(code) {
   const pageSize = 500;
   let skip = 0;
   for (;;) {
-    const users = await prisma.user.findMany({
+    const users = await store.user.findMany({
       select: { id: true },
       take: pageSize,
       skip,
@@ -42,12 +42,12 @@ async function resolveReferrerIdScan(code) {
 }
 
 async function applyReferral({ userId, code }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const referrerId = await resolveReferrerId(code);
   if (referrerId === userId) throw httpError(400, 'SELF_REFERRAL_NOT_ALLOWED');
-  const existing = await prisma.referral.findFirst({ where: { referredId: userId } });
+  const existing = await store.referral.findFirst({ where: { referredId: userId } });
   if (existing) throw httpError(409, 'ALREADY_REFERRED');
-  const referral = await prisma.referral.create({
+  const referral = await store.referral.create({
     data: {
       referrerId,
       referredId: userId,
@@ -59,14 +59,14 @@ async function applyReferral({ userId, code }) {
 }
 
 async function listMine({ userId }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const [asReferrer, asReferred] = await Promise.all([
-    prisma.referral.findMany({
+    store.referral.findMany({
       where: { referrerId: userId },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
-    prisma.referral.findFirst({ where: { referredId: userId } }),
+    store.referral.findFirst({ where: { referredId: userId } }),
   ]);
   return { asReferrer, asReferred };
 }
@@ -74,11 +74,11 @@ async function listMine({ userId }) {
 // Admin/system completes a referral after a qualifying action.
 // Rewards are platform credits (voucher/boost), never wallet cash.
 async function completeReferral({ id, qualifyingAction, rewardType, rewardAmount }) {
-  const prisma = getPrisma();
-  const referral = await prisma.referral.findUnique({ where: { id } });
+  const store = getStore();
+  const referral = await store.referral.findUnique({ where: { id } });
   if (!referral) throw httpError(404, 'REFERRAL_NOT_FOUND');
   if (referral.status === 'completed') return referral;
-  return prisma.referral.update({
+  return store.referral.update({
     where: { id },
     data: {
       status: 'completed',

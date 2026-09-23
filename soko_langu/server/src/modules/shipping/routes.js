@@ -3,13 +3,13 @@ const { authenticate, requireActive } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const shippingService = require('./shipping-quote-service');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 const router = Router();
 
 async function requireSellerProfile(req) {
-  const prisma = getPrisma();
-  const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user.id } });
+  const store = getStore();
+  const profile = await store.sellerProfile.findUnique({ where: { userId: req.user.id } });
   if (!profile) {
     const err = new Error('SELLER_PROFILE_NOT_FOUND');
     err.status = 403;

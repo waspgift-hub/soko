@@ -1,5 +1,12 @@
 # Soko Vibe — Server Migration Runbook
 
+> **HISTORICAL (2025 v2 era).** This runbook describes the old host-move drill for
+> the PostgreSQL/Prisma + Redis stack. The current runtime is **Firestore-only**:
+> `getStore()`/`getReadStore()` resolve to the Firestore store seam
+> (`src/config/database.js`), there is no `pg`/Prisma dependency, and there is no
+> `DATABASE_URL`/`DATABASE_URL_REPLICA`. Keep this file only as a record of the
+> pre-Firestore-only fan-out procedure below is obsolete for the current stack.
+
 Goal: any server hosting (Render, Railway, Fly.io, Vercel, your own VPS, another
 provider) must be swappable **in under 15 minutes, with zero user disruption**.
 This works because the architecture keeps one stable public face (the Cloudflare
@@ -28,13 +35,11 @@ users ──> api.sokovibe.co.tz (Cloudflare Worker)
 
 | Part | Where it lives now | Env var to change on a move |
 |---|---|---|
-| HTTP backend | `server/` (Express + Prisma) | `ORIGIN_URL` in `cf-worker/wrangler.toml` |
-| Primary DB | Render Postgres | `DATABASE_URL` |
-| Read replica | Render Postgres (optional) | `DATABASE_URL_REPLICA` |
+| HTTP backend | `server/` (Express + Firestore store seam) | `ORIGIN_URL` in `cf-worker/wrangler.toml` |
+| Database | Firestore (Firebase) | N/A — Firebase is provider-managed, never moved |
 | Cache/queue | Upstash/Render Redis | `REDIS_URL` |
 | Object storage | Cloudflare R2 | `R2_*` vars |
 | Auth | Firebase Auth | `FIREBASE_*` vars (project is portable) |
-| Firestore | Firebase | N/A — Firebase is already "the cloud", never moved |
 | SMS | Meseji + Notify Africa | `MESEJI_BASE_URL` / `NOTIFY_AFRICA_SMS_BASE_URL` |
 | Push | OneSignal | `ONE_SIGNAL_BASE_URL` |
 | Payments | ClickPesa | `CLICKPESA_API_URL` |
@@ -51,8 +56,7 @@ hosts never requires code changes — only new env values on the new host.
 ### 0. Pre-flight (any time before)
 1. `node --check` on every changed file; `npm test` green (202 tests).
 2. Push latest to GitHub (Render auto-deploys; your new host can pull too).
-3. Back up: Postgres `pg_dump`, Firestore `firebase firestore:export`, R2
-   bucket list.
+3. Back up: Firestore `firebase firestore:export`, R2 bucket list.
 
 ### 1. Provision the new host
 - Create a new service running `server/` (same image/commit), set ALL env vars
@@ -60,18 +64,16 @@ hosts never requires code changes — only new env values on the new host.
 - Do **not** point its `ORIGIN_URL` change yet — it's still behind the old one.
 
 ### 2. Migrate data (fan-out while both are live)
-- **Postgres:** create new Postgres, `pg_dump` on the old → `pg_restore` on the
-  new. Verify row counts match.
+- **Firestore:** everything — Firebase is provider-managed and portable by
+  service account JSON (same keys work from any host); nothing to migrate.
 - **Redis:** it is a pure cache + ephemeral queue. Do NOT migrate it — let it
   re-warm from the DB/edge. New Redis on the new host just starts empty.
 - **R2:** same bucket is reachable by any host that holds the keys (regional
   endpoints change only if you also move buckets — see "Data locality" below).
-- **Firebase:** nothing to do — Firebase is provider-managed and portable by
-  service account JSON (same keys work from any host).
 
 ### 3. Cut over (the only "downtime" is zero)
-1. Set the new host's env to the PRODUCTION Postgres/R2/Firebase (still the
-   old ones — both hosts on the same data).
+1. Set the new host's env to the PRODUCTION Firestore/R2 (still the old ones —
+   both hosts on the same data).
 2. Smoke-test the new host directly: `GET <new-host>/health` returns
    `version: 2.0.0`, `database: ok`, `redis: ok`.
 3. Edit `cf-worker/wrangler.toml` → `ORIGIN_URL = "<new-host>"`, deploy the
@@ -80,14 +82,13 @@ hosts never requires code changes — only new env values on the new host.
    `redis.ok`, no 5xx in Render logs.
 
 ### 4. Decommission the old host (AFTER verification, e.g. +24h)
-1. Keep the old Postgres as a failback (`DATABASE_URL` can point at it
-   instantly if the new DB misbehaves).
+1. Verify Firestore reads/writes on the new host first (same data, same keys).
 2. Once confident, drop the old host. Rollback = flip `ORIGIN_URL` back.
 
 ## Rollback (i.e., "the move went wrong")
 - **Within minutes:** flip `ORIGIN_URL` back in `wrangler.toml`, redeploy the
   worker (8s). Users never noticed anything because the edge never went down.
-- **Data issue:** point the new host back at the OLD Postgres first (both were
+- **Data issue:** point the new host at the same Firestore project (both were
   live on the same data during fan-out), then fix and re-cut.
 
 ## Free → paid path (no code rewrite)
@@ -98,9 +99,8 @@ by code:
 | Resource | Free now | Paid upgrade (same code) | Trigger |
 |---|---|---|---|
 | Backend | Render free/starter, 1–6 replicas | Same image on Render/Railway/Fly | traffic exceeds free quota |
-| Postgres | Render free Postgres | Render Pro Postgres / Neon / Supabase | storage/connections |
-| Redis cache | Upstash/Render free | Upstash paid (scales mem+throughput) | Redis saturation |
 | Firestore | Spark free (50k reads/day) | Blaze pay-as-you-go + Flame cap | read growth |
+| Redis cache | Upstash/Render free | Upstash paid (scales mem+throughput) | Redis saturation |
 | R2 storage | free egress + 10GB | pay-as-you-go | media growth |
 | Edge cache | Cloudflare free | Cloudflare paid plan | cache size/queries |
 | SMS | Meseji/Notify free credits | paid SMS (same `MESEJI_BASE_URL`) | volume |

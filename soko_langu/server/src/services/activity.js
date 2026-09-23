@@ -14,7 +14,7 @@
 //   users:YYYYMMDD        hash uid -> request count (EX 400d)
 //   login:UID             throttle flag so lastLoginAt updates hourly (EX 1h)
 const { getRedis } = require('../config/redis');
-const { getPrisma } = require('../config/database');
+const { getStore } = require('../config/database');
 
 const P = 'sv:act:';
 const HOUR = 3600;
@@ -51,9 +51,9 @@ async function backfillLastLogin() {
   if (backfillDone) return;
   backfillDone = true;
   try {
-    const prisma = getPrisma();
-    if (!prisma) return;
-    const nullCount = await prisma.user.count({ where: { lastLoginAt: null } });
+    const store = getStore();
+    if (!store) return;
+    const nullCount = await store.user.count({ where: { lastLoginAt: null } });
     if (!nullCount) return;
     const { getFirebaseFirestore } = require('../config/firebase');
     const db = getFirebaseFirestore();
@@ -67,7 +67,7 @@ async function backfillLastLogin() {
       const at = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
       if (!at || isNaN(at.getTime())) continue;
       ops.push(
-        prisma.user.updateMany({
+        store.user.updateMany({
           where: { firebaseUid: doc.id, OR: [{ lastLoginAt: null }, { lastLoginAt: { lt: at } }] },
           data: { lastLoginAt: at },
         }).catch(() => {})
@@ -130,8 +130,8 @@ function recordUserActivity(uid) {
       try {
         const setRes = res && res[4];
         if (setRes && setRes[1] === 'OK') {
-          const prisma = getPrisma();
-          if (prisma) fire(prisma.user.update({ where: { id }, data: { lastLoginAt: new Date() } }));
+          const store = getStore();
+          if (store) fire(store.user.update({ where: { id }, data: { lastLoginAt: new Date() } }));
         }
       } catch (_) {}
     }));
@@ -144,25 +144,36 @@ function recordUserActivity(uid) {
 async function getActiveStats() {
   const fallback = { day: 0, week: 0, month: 0, year: 0, totalUsers: 0, series14: [] };
   try {
-    const prisma = getPrisma();
-    if (!prisma) return fallback;
+    const store = getStore();
+    if (!store) return fallback;
     await backfillLastLogin();
     const now = Date.now();
     const cut = (ms) => new Date(now - ms);
     const [day, week, month, year, totalUsers] = await Promise.all([
-      prisma.user.count({ where: { lastLoginAt: { gte: cut(24 * HOUR * 1000) } } }),
-      prisma.user.count({ where: { lastLoginAt: { gte: cut(7 * DAY * 1000) } } }),
-      prisma.user.count({ where: { lastLoginAt: { gte: cut(30 * DAY * 1000) } } }),
-      prisma.user.count({ where: { lastLoginAt: { gte: cut(365 * DAY * 1000) } } }),
-      prisma.user.count(),
+      store.user.count({ where: { lastLoginAt: { gte: cut(24 * HOUR * 1000) } } }),
+      store.user.count({ where: { lastLoginAt: { gte: cut(7 * DAY * 1000) } } }),
+      store.user.count({ where: { lastLoginAt: { gte: cut(30 * DAY * 1000) } } }),
+      store.user.count({ where: { lastLoginAt: { gte: cut(365 * DAY * 1000) } } }),
+      store.user.count(),
     ]);
     let series14 = [];
     try {
-      const rows = await prisma.$queryRaw`
-        SELECT TO_CHAR(DATE(last_login_at), 'YYYY-MM-DD') AS date, COUNT(*)::int AS users
-        FROM users WHERE last_login_at >= ${cut(14 * DAY * 1000)}
-        GROUP BY 1 ORDER BY 1`;
-      series14 = (rows || []).map((r) => ({ date: String(r.date), users: Number(r.users) || 0 }));
+      // Firestore-native equivalent of the old TO_CHAR(last_login_at) GROUP BY
+      // day query: read the 14-day lastLoginAt window and bucket in memory.
+      const users = await store.user.findMany({
+        where: { lastLoginAt: { gte: cut(14 * DAY * 1000) } },
+        select: { lastLoginAt: true },
+      });
+      const byDate = new Map();
+      for (const u of users || []) {
+        const at = u.lastLoginAt ? new Date(u.lastLoginAt) : null;
+        if (!at || isNaN(at.getTime())) continue;
+        const key = at.toISOString().slice(0, 10);
+        byDate.set(key, (byDate.get(key) || 0) + 1);
+      }
+      series14 = [...byDate.entries()]
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+        .map(([date, users]) => ({ date, users }));
     } catch (_) {}
     return { day, week, month, year, totalUsers, series14 };
   } catch (_) {
@@ -260,10 +271,10 @@ async function getTopUsers(days, limit) {
     }
     const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
     if (!ranked.length) return { users: [], days, tracked: true };
-    const prisma = getPrisma();
+    const store = getStore();
     let profiles = [];
     try {
-      profiles = await prisma.user.findMany({
+      profiles = await store.user.findMany({
         where: { id: { in: ranked.map((x) => x[0]) } },
         select: { id: true, email: true, phone: true, displayName: true, role: true, lastLoginAt: true },
       });

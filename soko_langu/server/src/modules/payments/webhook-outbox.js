@@ -13,7 +13,7 @@
  * module degrades to an in-process, ephemeral dedupe map instead of crashing.
  */
 const crypto = require('crypto');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 const TABLE_MISSING_CODE = 'P2021';
 
@@ -52,11 +52,11 @@ function cacheSet(dedupKey, status) {
  * seen so callers can de-dupe by status.
  */
 async function recordWebhookEvent({ provider, dedupKey, type, rawPayload, signature, orderReference }) {
-  const prisma = getPrisma();
+  const store = getStore();
   try {
-    const existing = await prisma.webhookEvent.findUnique({ where: { dedupKey } });
+    const existing = await store.webhookEvent.findUnique({ where: { dedupKey } });
     if (existing) return existing;
-    return await prisma.webhookEvent.create({
+    return await store.webhookEvent.create({
       data: {
         provider,
         dedupKey,
@@ -78,10 +78,10 @@ async function recordWebhookEvent({ provider, dedupKey, type, rawPayload, signat
 }
 
 async function markWebhookProcessing(event) {
-  const prisma = getPrisma();
+  const store = getStore();
   if (!event || !event.id) return;
   try {
-    await prisma.webhookEvent.update({
+    await store.webhookEvent.update({
       where: { id: event.id },
       data: { status: 'processing' },
     });
@@ -95,7 +95,7 @@ async function markWebhookProcessed(event) {
   if (!event || !event.dedupKey) return;
   if (event.id) {
     try {
-      await getPrisma().webhookEvent.update({
+      await getStore().webhookEvent.update({
         where: { id: event.id },
         data: { status: 'processed', processedAt: new Date() },
       });
@@ -112,7 +112,7 @@ async function markWebhookFailed(event, error) {
   if (!event || !event.dedupKey) return;
   if (event.id) {
     try {
-      await getPrisma().webhookEvent.update({
+      await getStore().webhookEvent.update({
         where: { id: event.id },
         data: {
           status: 'failed',

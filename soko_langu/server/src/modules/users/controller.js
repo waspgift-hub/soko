@@ -1,13 +1,14 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { SettingsStateMachine, SETTINGS_DOMAINS } = require('./settings-state-machine');
 const { ACCOUNT_STATES } = require('./account-state-machine');
+const accountStore = require('../../services/account-store');
 
 // Get all settings for current user
 async function getSettings(req, res) {
   try {
-    const prisma = getPrisma();
+    const store = getStore();
     
-    const settings = await prisma.userSetting.findMany({
+    const settings = await store.userSetting.findMany({
       where: { userId: req.user.id },
     });
 
@@ -54,10 +55,10 @@ async function updateSettings(req, res) {
 
     machine.transition('load_server');
     
-    const prisma = getPrisma();
+    const store = getStore();
     
     // Check if settings exist
-    const existing = await prisma.userSetting.findUnique({
+    const existing = await store.userSetting.findUnique({
       where: {
         userId_domain: {
           userId: req.user.id,
@@ -79,7 +80,7 @@ async function updateSettings(req, res) {
 
     let updated;
     if (existing) {
-      updated = await prisma.userSetting.update({
+      updated = await store.userSetting.update({
         where: { id: existing.id },
         data: {
           settings: changes,
@@ -87,7 +88,7 @@ async function updateSettings(req, res) {
         },
       });
     } else {
-      updated = await prisma.userSetting.create({
+      updated = await store.userSetting.create({
         data: {
           userId: req.user.id,
           domain,
@@ -113,27 +114,24 @@ async function updateSettings(req, res) {
   }
 }
 
-// Request account deletion
+// Request account deletion. The flag lives on the Firestore users/{uid} doc
+// (mirrored to Postgres) so every read path honours the 30-day grace period.
 async function requestDeletion(req, res) {
   try {
-    const prisma = getPrisma();
-    
-    // Set account to deletion pending
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        accountStatus: ACCOUNT_STATES.DELETION_PENDING,
-      },
-    });
+    const store = getStore();
+
+    if (req.user.accountStatus !== ACCOUNT_STATES.DELETION_PENDING) {
+      await accountStore.updateFlags(req.firebaseUid, { accountStatus: ACCOUNT_STATES.DELETION_PENDING });
+    }
 
     // Create audit log
-    await prisma.auditLog.create({
+    await store.auditLog.create({
       data: {
-        actorId: user.id,
+        actorId: req.user.id,
         actorType: 'user',
         action: 'REQUEST_ACCOUNT_DELETION',
         entityType: 'user',
-        entityId: user.id,
+        entityId: req.user.id,
         newState: { accountStatus: ACCOUNT_STATES.DELETION_PENDING },
         ipAddress: req.ip,
         userAgent: req.headers['user-agent'],
@@ -151,29 +149,36 @@ async function requestDeletion(req, res) {
   }
 }
 
-// Export user data
+// Export user data — Firestore profile is authoritative; Postgres rows supply
+// the settings and addresses the app has not yet mirrored.
 async function exportData(req, res) {
   try {
-    const prisma = getPrisma();
-    
+    const store = getStore();
+    const fsProfile = await accountStore.getProfile(req.firebaseUid);
+
     const [user, settings, addresses] = await Promise.all([
-      prisma.user.findUnique({ where: { id: req.user.id } }),
-      prisma.userSetting.findMany({ where: { userId: req.user.id } }),
-      prisma.address.findMany({ where: { userId: req.user.id } }),
+      store.user.findUnique({ where: { id: req.user.id } }),
+      store.userSetting.findMany({ where: { userId: req.user.id } }),
+      store.address.findMany({ where: { userId: req.user.id } }),
     ]);
+
+    const profile = fsProfile
+      ? {
+          displayName: fsProfile.displayName || null,
+          email: fsProfile.email || null,
+          phone: fsProfile.phone || null,
+          createdAt: fsProfile.createdAt || null,
+        }
+      : {
+          displayName: user.displayName || null,
+          email: user.email || null,
+          phone: user.phone || null,
+          createdAt: user.createdAt ? user.createdAt.toISOString() : null,
+        };
 
     res.json({
       success: true,
-      data: {
-        profile: {
-          displayName: user.displayName,
-          email: user.email,
-          phone: user.phone,
-          createdAt: user.createdAt,
-        },
-        settings,
-        addresses,
-      },
+      data: { profile, settings, addresses },
     });
   } catch (error) {
     console.error('[SETTINGS] Export error:', error.message);
@@ -197,27 +202,9 @@ function getDefaultSettings(domain) {
   return defaults[domain] || {};
 }
 
-// Extended profile fields the app stores in Firestore users/{uid} that have no
-// dedicated Postgres column. Kept under metadata.profile so reads are a single
-// document fetch and no schema migration is needed (Phase D bridge).
-const PROFILE_META_FIELDS = [
-  'location', 'mood', 'latitude', 'longitude', 'paymentNumbers',
-  'shopBanner', 'shopBannerColor', 'shopAccentColor', 'gender', 'dateOfBirth',
-];
-
-// Columns that map 1:1 from the client profile payload.
-const PROFILE_COLUMN_FIELDS = {
-  displayName: 'displayName',
-  username: 'username',
-  bio: 'bio',
-  phone: 'phone',
-  email: 'email',
-  profileImage: 'avatarUrl',
-  langCode: 'preferredLanguage',
-};
-
 // Shape the app's UserProfile.fromMap reads from Firestore users/{uid}; key
-// names match so the Dart side can keep its existing model.
+// names match so the Dart side can keep its existing model. Only used in the
+// legacy Postgres fallback path (accounts that have no Firestore doc yet).
 function serializeSelfProfile(user, kycApproved, lastActive) {
   const meta = user.metadata && typeof user.metadata === 'object' ? user.metadata : {};
   const p = meta.profile || {};
@@ -247,36 +234,22 @@ function serializeSelfProfile(user, kycApproved, lastActive) {
   };
 }
 
-// Splits a client profile payload into column data + metadata.profile fields.
-// Extra keys are dropped; the result is the safe whitelisted shape for PUT /me.
-function applyProfileUpdate(user, body) {
-  const data = body && typeof body === 'object' ? body : {};
-  const col = {};
-  const metaFields = {};
-  for (const [clientKey, dbKey] of Object.entries(PROFILE_COLUMN_FIELDS)) {
-    if (clientKey in data) {
-      const v = data[clientKey];
-      col[dbKey] = (typeof v === 'string' && v.trim() === '') ? null : v;
-    }
-  }
-  for (const f of PROFILE_META_FIELDS) {
-    if (f in data) metaFields[f] = data[f];
-  }
-  const currentMeta = user.metadata && typeof user.metadata === 'object' ? user.metadata : {};
-  const mergedProfile = { ...(currentMeta.profile || {}), ...metaFields };
-  const meta = { ...currentMeta, profile: mergedProfile };
-  return { col, meta };
-}
-
-// GET /api/v1/users/me — the current user's profile in Firestore users/{uid}
-// shape. Self profile + KYC flag; used as the primary read for the app profile.
+// GET /api/v1/users/me — the current user's profile, Firestore-primary.
+// Firestore users/{uid} is the authoritative app profile; Postgres is only a
+// legacy fallback for accounts created before the account-store existed.
 async function getMe(req, res) {
   try {
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const uid = req.firebaseUid;
+    const doc = await accountStore.getProfile(uid);
+    if (doc) {
+      return res.json({ success: true, data: accountStore.serializeFirestoreProfile(doc) });
+    }
+
+    const store = getStore();
+    const user = await store.user.findUnique({ where: { id: req.user.id } });
     if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
 
-    const kyc = await prisma.kycApplication.findUnique({
+    const kyc = await store.kycApplication.findUnique({
       where: { userId: user.firebaseUid },
       select: { status: true, approved: true },
     });
@@ -298,34 +271,24 @@ async function getMe(req, res) {
   }
 }
 
-// PUT /api/v1/users/me — storefront/profile edits. Whitelisted fields are
-// persisted to Postgres columns or metadata.profile; unknown fields are ignored.
+// PUT /api/v1/users/me — storefront/profile edits land in Firestore first;
+// the seam row is then written so money-facing modules keep their uuid join.
 async function updateMe(req, res) {
   try {
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    const uid = req.firebaseUid;
+    const doc = await accountStore.getProfile(uid);
+    const current = doc || { metadata: {} };
+    const { col, meta } = accountStore.applyProfileUpdate(current, req.body);
 
-    const { col, meta } = applyProfileUpdate(user, req.body);
+    await accountStore.writeProfile(uid, { col, meta });
 
-    const updated = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { ...col, metadata: meta },
-    });
-
-    const kyc = await prisma.kycApplication.findUnique({
-      where: { userId: user.firebaseUid },
-      select: { status: true, approved: true },
-    });
-
-    res.json({
-      success: true,
-      data: serializeSelfProfile(
-        updated,
-        kyc && kyc.approved && kyc.status === 'approved',
-        meta.lastActive ? new Date(meta.lastActive) : null,
-      ),
-    });
+    const fresh = (await accountStore.getProfile(uid)) || {
+      ...current,
+      ...col,
+      metadata: meta,
+      userId: uid,
+    };
+    res.json({ success: true, data: accountStore.serializeFirestoreProfile(fresh) });
   } catch (error) {
     console.error('[USERS] PUT /me error:', error.message);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -333,19 +296,47 @@ async function updateMe(req, res) {
 }
 
 // GET /api/v1/users/public/:identifier — a public profile for another user
-// (buyer or seller) by Firebase UID or Postgres uuid. No private fields; used
-// by chat and review flows that previously read Firestore users/{uid}.
+// (buyer or seller) by Firebase UID or Profile User id. Firestore-primary;
+// legacy accounts fall back to Postgres for seller-profile details.
 async function getPublicProfile(req, res) {
   try {
     const { identifier } = req.params;
     if (!identifier) return res.status(400).json({ error: 'MISSING_IDENTIFIER' });
 
+    const doc = await accountStore.getProfile(identifier);
+    if (doc) {
+      const s = accountStore.serializeFirestoreProfile({ ...doc, userId: identifier });
+      return res.json({
+        success: true,
+        data: {
+          id: identifier,
+          displayName: s.displayName,
+          username: s.username,
+          bio: s.bio,
+          location: s.location,
+          mood: s.mood,
+          profileImage: s.profileImage,
+          lastActive: s.lastActive,
+          role: doc.role || 'buyer',
+          isSeller: Boolean(doc.sellerProfile && doc.sellerProfile.sellerStatus === 'seller'),
+          seller: doc.sellerProfile
+            ? {
+                storeName: doc.sellerProfile.storeName,
+                storeSlug: doc.sellerProfile.storeSlug,
+                logoUrl: doc.sellerProfile.logoUrl || '',
+                coverUrl: doc.sellerProfile.coverUrl || '',
+                verificationStatus: doc.sellerProfile.verificationStatus,
+              }
+            : null,
+        },
+      });
+    }
+
     // uuid columns reject non-uuid comparison values, so only add the id arm
-    // when the identifier actually looks like a Postgres uuid (Firebase UIDs,
-    // opaque ids will throw a cast error otherwise).
+    // when the identifier actually looks like a Postgres uuid.
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
-    const prisma = getPrisma();
-    const user = await prisma.user.findFirst({
+    const store = getStore();
+    const user = await store.user.findFirst({
       where: isUuid
         ? { OR: [{ firebaseUid: identifier }, { id: identifier }] }
         : { firebaseUid: identifier },
@@ -387,29 +378,34 @@ async function getPublicProfile(req, res) {
 }
 
 // GET /api/v1/users/check-username?username=X&excludeUid=Y — username
-// uniqueness check behind the profile edit flow (replaces a Firestore
-// collection query). excludeUid may be a Firebase UID or Postgres uuid; the
-// profile owner's own username never counts as taken.
+// uniqueness check behind the profile edit flow. Firestore query first;
+// Postgres fallback covers legacy rows. excludeUid may be a Firebase UID or
+// Postgres uuid; the owner's own username never counts as taken.
 async function checkUsername(req, res) {
   try {
     const q = String(req.query.username || '').trim();
     if (!q) return res.status(400).json({ error: 'MISSING_USERNAME' });
     const excludeUid = String(req.query.excludeUid || '');
+    const norm = q.toLowerCase();
 
-    const prisma = getPrisma();
-    const found = await prisma.user.findFirst({
-      where: { username: String(q && q.toLowerCase()) },
-      select: { id: true, firebaseUid: true },
-    });
+    const fs = await accountStore.byUsernameFirestore(norm);
+    let foundId = fs ? fs._uid : null;
 
-    let available = !found;
-    if (found && excludeUid) {
-      if (found.id === excludeUid || found.firebaseUid === excludeUid) {
-        available = true;
-      }
+    if (!foundId) {
+      const store = getStore();
+      const row = await store.user.findFirst({
+        where: { username: norm },
+        select: { id: true, firebaseUid: true },
+      });
+      if (row) foundId = row.firebaseUid || row.id;
     }
 
-    res.json({ success: true, data: { available, username: found ? found.username : q } });
+    let available = !foundId;
+    if (foundId && excludeUid) {
+      if (foundId === excludeUid) available = true;
+    }
+
+    res.json({ success: true, data: { available, username: foundId ? norm : q } });
   } catch (error) {
     console.error('[USERS] check-username error:', error.message);
     res.status(500).json({ error: 'Failed to check username' });
@@ -422,7 +418,6 @@ module.exports = {
   requestDeletion,
   exportData,
   serializeSelfProfile,
-  applyProfileUpdate,
   getMe,
   updateMe,
   getPublicProfile,

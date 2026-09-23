@@ -20,36 +20,11 @@ router.get('/product/:productId', optionalAuth, async (req, res) => {
   }
 });
 
-// Seller rating summary (average + distribution) — public.
+// Seller rating summary (average + distribution) — public, Firestore-only.
 router.get('/seller/:sellerId/summary', async (req, res) => {
   try {
-    const { getPrisma } = require('../../config/database');
-    const prisma = getPrisma();
-    const rows = await prisma.review.findMany({ where: { sellerId: req.params.sellerId }, select: { rating: true } });
-    if (rows.length === 0) {
-      return res.json({ success: true, data: { averageRating: 0, totalReviews: 0, fiveStar: 0, fourStar: 0, threeStar: 0, twoStar: 0, oneStar: 0 } });
-    }
-    let total = 0, f5 = 0, f4 = 0, f3 = 0, f2 = 0, f1 = 0;
-    for (const r of rows) {
-      total += r.rating;
-      if (r.rating >= 5) f5++;
-      else if (r.rating >= 4) f4++;
-      else if (r.rating >= 3) f3++;
-      else if (r.rating >= 2) f2++;
-      else f1++;
-    }
-    res.json({
-      success: true,
-      data: {
-        averageRating: total / rows.length,
-        totalReviews: rows.length,
-        fiveStar: f5,
-        fourStar: f4,
-        threeStar: f3,
-        twoStar: f2,
-        oneStar: f1,
-      },
-    });
+    const data = await reviewService.sellerRatingSummary({ sellerId: req.params.sellerId });
+    res.json({ success: true, data });
   } catch (e) {
     res.status(500).json({ success: false, error: { code: 'SELLER_SUMMARY_FAILED', message: e.message } });
   }

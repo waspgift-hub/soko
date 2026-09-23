@@ -1,4 +1,4 @@
-const { getPrisma, getReadPrisma } = require('../../config/database');
+const { getStore, getReadStore } = require('../../config/database');
 const cache = require('../../../cache');
 
 function httpError(status, message) {
@@ -86,15 +86,15 @@ const DEFAULT_BUDGET_TIERS = [
 // middleware attaches the Postgres `users` row to req.user, but callers may
 // also pass a Firebase UID string from legacy client calls.
 async function resolveSellerProfile(userId) {
-  const prisma = getPrisma();
+  const store = getStore();
   if (userId && userId.length === 36) {
-    const profile = await prisma.sellerProfile.findUnique({
+    const profile = await store.sellerProfile.findUnique({
       where: { id: userId },
       select: { id: true, storeName: true, userId: true },
     });
     if (profile) return profile;
   }
-  const profile = await prisma.sellerProfile.findFirst({
+  const profile = await store.sellerProfile.findFirst({
     where: { userId: userId },
     select: { id: true, storeName: true, userId: true },
   });
@@ -104,8 +104,8 @@ async function resolveSellerProfile(userId) {
 // Validate that the authenticated user owns the seller profile for the
 // campaign, or is an admin.
 async function requireSellerForCampaign(campaignId, reqUser) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { sellerId: true, name: true },
   });
@@ -119,7 +119,7 @@ async function requireSellerForCampaign(campaignId, reqUser) {
 // Create a draft campaign. The campaign starts in `draft` status and must
 // have its payment confirmed before it can be activated.
 async function createCampaign({ sellerProfileId, data }) {
-  const prisma = getPrisma();
+  const store = getStore();
 
   const {
     name,
@@ -160,13 +160,13 @@ async function createCampaign({ sellerProfileId, data }) {
 
   // Verify all product ids belong to this seller.
   if (productIds.length > 0 && !isAllProducts) {
-    const ownedCount = await prisma.product.count({
+    const ownedCount = await store.product.count({
       where: { id: { in: productIds }, sellerId: sellerProfileId, deletedAt: null },
     });
     if (ownedCount !== productIds.length) throw httpError(403, 'PRODUCT_NOT_OWNED');
   }
 
-  return await prisma.$transaction(async (tx) => {
+  return await store.$transaction(async (tx) => {
     const campaign = await tx.sponsoredCampaign.create({
       data: {
         sellerId: sellerProfileId,
@@ -207,8 +207,8 @@ async function createCampaign({ sellerProfileId, data }) {
 // Update a draft/paused campaign. Only non-financial fields can be edited
 // after creation to prevent bid manipulation mid-flight.
 async function updateCampaign({ campaignId, sellerProfileId, data }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { sellerId: true, status: true },
   });
@@ -227,12 +227,12 @@ async function updateCampaign({ campaignId, sellerProfileId, data }) {
     patch.status = status;
   }
 
-  const updated = await prisma.sponsoredCampaign.update({
+  const updated = await store.sponsoredCampaign.update({
     where: { id: campaignId },
     data: patch,
   });
 
-  await prisma.campaignAuditLog.create({
+  await store.campaignAuditLog.create({
     data: {
       campaignId,
       actorId: sellerProfileId,
@@ -249,15 +249,15 @@ async function updateCampaign({ campaignId, sellerProfileId, data }) {
 
 // Pause an active campaign.
 async function pauseCampaign({ campaignId, sellerProfileId }) {
-  const prisma = getPrisma();
-  const campaign = await getOwnedCampaign(prisma, campaignId, sellerProfileId);
+  const store = getStore();
+  const campaign = await getOwnedCampaign(store, campaignId, sellerProfileId);
   if (campaign.status !== CAMPAIGN_STATUSES.ACTIVE) throw httpError(409, 'CANNOT_PAUSE_INACTIVE');
 
-  await prisma.sponsoredCampaign.update({
+  await store.sponsoredCampaign.update({
     where: { id: campaignId },
     data: { status: CAMPAIGN_STATUSES.PAUSED },
   });
-  await prisma.campaignAuditLog.create({
+  await store.campaignAuditLog.create({
     data: {
       campaignId,
       actorId: sellerProfileId,
@@ -272,16 +272,16 @@ async function pauseCampaign({ campaignId, sellerProfileId }) {
 
 // Resume a paused campaign.
 async function resumeCampaign({ campaignId, sellerProfileId }) {
-  const prisma = getPrisma();
-  const campaign = await getOwnedCampaign(prisma, campaignId, sellerProfileId);
+  const store = getStore();
+  const campaign = await getOwnedCampaign(store, campaignId, sellerProfileId);
   if (campaign.status !== CAMPAIGN_STATUSES.PAUSED) throw httpError(409, 'CANNOT_RESUME');
   if (new Date() > campaign.expiresAt) throw httpError(400, 'CAMPAIGN_EXPIRED');
 
-  await prisma.sponsoredCampaign.update({
+  await store.sponsoredCampaign.update({
     where: { id: campaignId },
     data: { status: CAMPAIGN_STATUSES.ACTIVE },
   });
-  await prisma.campaignAuditLog.create({
+  await store.campaignAuditLog.create({
     data: {
       campaignId,
       actorId: sellerProfileId,
@@ -296,15 +296,15 @@ async function resumeCampaign({ campaignId, sellerProfileId }) {
 
 // Cancel a campaign (any state except completed).
 async function cancelCampaign({ campaignId, sellerProfileId }) {
-  const prisma = getPrisma();
-  const campaign = await getOwnedCampaign(prisma, campaignId, sellerProfileId);
+  const store = getStore();
+  const campaign = await getOwnedCampaign(store, campaignId, sellerProfileId);
   if (campaign.status === CAMPAIGN_STATUSES.COMPLETED) throw httpError(409, 'CANNOT_CANCEL_COMPLETED');
 
-  await prisma.sponsoredCampaign.update({
+  await store.sponsoredCampaign.update({
     where: { id: campaignId },
     data: { status: CAMPAIGN_STATUSES.CANCELLED },
   });
-  await prisma.campaignAuditLog.create({
+  await store.campaignAuditLog.create({
     data: {
       campaignId,
       actorId: sellerProfileId,
@@ -319,15 +319,15 @@ async function cancelCampaign({ campaignId, sellerProfileId }) {
 
 // Mark a campaign as active (called by the payment webhook after confirmation).
 async function activateCampaign({ campaignId, paymentId }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { status: true, sellerId: true, startsAt: true, expiresAt: true, payment: { select: { id: true, status: true } } },
   });
   if (!campaign) throw httpError(404, 'CAMPAIGN_NOT_FOUND');
   if (campaign.status !== CAMPAIGN_STATUSES.PAYMENT_PENDING) throw httpError(409, 'CANNOT_ACTIVATE');
 
-  await prisma.$transaction(async (tx) => {
+  await store.$transaction(async (tx) => {
     await tx.sponsoredCampaign.update({
       where: { id: campaignId },
       data: { status: CAMPAIGN_STATUSES.ACTIVE },
@@ -353,8 +353,8 @@ async function activateCampaign({ campaignId, paymentId }) {
   cache.delPattern('sponsored:placements:*');
 }
 
-async function getOwnedCampaign(prisma, campaignId, sellerProfileId) {
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+async function getOwnedCampaign(store, campaignId, sellerProfileId) {
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { sellerId: true, status: true, expiresAt: true, startsAt: true },
   });
@@ -365,7 +365,7 @@ async function getOwnedCampaign(prisma, campaignId, sellerProfileId) {
 
 // List a seller's campaigns with optional status filter and pagination.
 async function listSellerCampaigns({ sellerProfileId, status, page = 1, limit = 20 }) {
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   const cacheKey = `sponsored:campaigns:${sellerProfileId}:${status || 'all'}:p${page}:l${limit}`;
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
@@ -380,14 +380,14 @@ async function listSellerCampaigns({ sellerProfileId, status, page = 1, limit = 
 
   const where = { sellerId: sellerProfileId, ...(status ? { status } : {}) };
   const [items, total] = await Promise.all([
-    prisma.sponsoredCampaign.findMany({
+    store.sponsoredCampaign.findMany({
       where,
       include: { placements: { include: { product: { select: { id: true, title: true } } } } },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.sponsoredCampaign.count({ where }),
+    store.sponsoredCampaign.count({ where }),
   ]);
 
   const result = { items, pagination: { page: Number(page), limit: Number(limit), total } };
@@ -397,8 +397,8 @@ async function listSellerCampaigns({ sellerProfileId, status, page = 1, limit = 
 
 // Get a single campaign with placements and payment info.
 async function getCampaign({ campaignId, sellerProfileId }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     include: {
       placements: {
@@ -425,12 +425,12 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
 
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   const now = new Date();
 
   // Fraud protection: deduplicate impressions per (campaign, ip, userAgent) within a 60s window.
   // This prevents impression inflation via rapid refreshes.
-  const recentImpressions = await prisma.campaignEvent.findMany({
+  const recentImpressions = await store.campaignEvent.findMany({
     where: {
       eventType: 'impression',
       createdAt: { gte: new Date(now.getTime() - 60000) },
@@ -474,7 +474,7 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
     },
   };
 
-  let placements = await prisma.sponsoredCampaign.findMany(query);
+  let placements = await store.sponsoredCampaign.findMany(query);
 
   // Filter out campaigns that have hit their daily budget or total budget.
   placements = placements.filter((c) => {
@@ -497,7 +497,7 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
   if (ipAddress && userAgent) {
     placements.slice(0, limit).forEach(async (c) => {
       try {
-        await prisma.campaignEvent.create({
+        await store.campaignEvent.create({
           data: {
             campaignId: c.id,
             eventType: 'impression',
@@ -507,7 +507,7 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
             bidAmountTzs: c.bidAmountTzs,
           },
         });
-        await prisma.campaignImpression.create({
+        await store.campaignImpression.create({
           data: {
             campaignId: c.id,
             productId: c.placements[0]?.productId || '',
@@ -515,7 +515,7 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
             userAgent,
           },
         });
-        await prisma.sponsoredCampaign.update({
+        await store.sponsoredCampaign.update({
           where: { id: c.id },
           data: {
             impressions: { increment: 1 },
@@ -542,15 +542,15 @@ function spendRatio(campaign) {
 // Record a click on a sponsored placement. Prevents self-clicking by
 // checking that the clicker is not the campaign owner.
 async function recordClick({ campaignId, productId, userId, ipAddress, userAgent }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { sellerId: true, status: true },
   });
   if (!campaign) return;
   if (userId && campaign.sellerId === userId) {
     // Self-click fraud protection: log but don't count.
-    await prisma.campaignEvent.create({
+    await store.campaignEvent.create({
       data: {
         campaignId,
         eventType: 'self_click_blocked',
@@ -563,7 +563,7 @@ async function recordClick({ campaignId, productId, userId, ipAddress, userAgent
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await store.$transaction(async (tx) => {
     await tx.campaignEvent.create({
       data: { campaignId, eventType: 'click', productId, userId, ipAddress, userAgent },
     });
@@ -579,8 +579,8 @@ async function recordClick({ campaignId, productId, userId, ipAddress, userAgent
 
 // Get campaign performance metrics for a seller's campaign.
 async function getCampaignMetrics({ campaignId, sellerProfileId, days = 30 }) {
-  const prisma = getReadPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getReadStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { sellerId: true, name: true },
   });
@@ -590,9 +590,9 @@ async function getCampaignMetrics({ campaignId, sellerProfileId, days = 30 }) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const [impressions, clicks, spend] = await Promise.all([
-    prisma.campaignImpression.count({ where: { campaignId, createdAt: { gte: since } } }),
-    prisma.campaignClick.count({ where: { campaignId, createdAt: { gte: since } } }),
-    prisma.sponsoredCampaign.findUnique({
+    store.campaignImpression.count({ where: { campaignId, createdAt: { gte: since } } }),
+    store.campaignClick.count({ where: { campaignId, createdAt: { gte: since } } }),
+    store.sponsoredCampaign.findUnique({
       where: { id: campaignId },
       select: { spendTzs: true, impressions: true, clicks: true },
     }),
@@ -610,7 +610,7 @@ async function getCampaignMetrics({ campaignId, sellerProfileId, days = 30 }) {
 
 // Get platform-wide ad performance for the admin dashboard.
 async function getAdminSponsoredMetrics({ days = 30 }) {
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   try {
@@ -620,13 +620,13 @@ async function getAdminSponsoredMetrics({ days = 30 }) {
   }
 
   const [campaigns, impressions, clicks, payments] = await Promise.all([
-    prisma.sponsoredCampaign.findMany({
+    store.sponsoredCampaign.findMany({
       where: { createdAt: { gte: since } },
       select: { id: true, name: true, status: true, dailyBudgetTzs: true, totalBudgetTzs: true, spendTzs: true, impressions: true, clicks: true, createdAt: true },
     }),
-    prisma.campaignImpression.count({ where: { createdAt: { gte: since } } }),
-    prisma.campaignClick.count({ where: { createdAt: { gte: since } } }),
-    prisma.campaignPayment.findMany({
+    store.campaignImpression.count({ where: { createdAt: { gte: since } } }),
+    store.campaignClick.count({ where: { createdAt: { gte: since } } }),
+    store.campaignPayment.findMany({
       where: { createdAt: { gte: since }, status: 'completed' },
       select: { amountTzs: true, createdAt: true },
     }),
@@ -660,9 +660,9 @@ async function initiateCampaignPayment({ campaignId, sellerProfileId, phone, pay
   const { clickpesaCollect, clickpesaCreateBillPayOrder, calcGatewayFee } = require('../../../clickpesa');
   const { v4: uuidv4 } = require('uuid');
 
-  const prisma = getPrisma();
+  const store = getStore();
 
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { sellerId: true, status: true, totalBudgetTzs: true, name: true, payment: { select: { id: true } } },
   });
@@ -676,7 +676,7 @@ async function initiateCampaignPayment({ campaignId, sellerProfileId, phone, pay
   const totalToCollect = isBillPay ? amount + gatewayFee : amount;
   const orderReference = `camp_${Date.now()}_${uuidv4().slice(0, 8)}`;
 
-  return await prisma.$transaction(async (tx) => {
+  return await store.$transaction(async (tx) => {
     const payment = await tx.campaignPayment.create({
       data: {
         campaignId,
@@ -746,8 +746,8 @@ function normalizePhone(phone) {
 
 // Process a webhook/confirm callback for a campaign payment.
 async function confirmPayment({ orderReference, status, paymentId }) {
-  const prisma = getPrisma();
-  const payment = await prisma.campaignPayment.findUnique({
+  const store = getStore();
+  const payment = await store.campaignPayment.findUnique({
     where: orderReference ? { providerOrderId: orderReference } : { id: paymentId },
     select: { id: true, campaignId: true, status: true, amountTzs: true },
   });
@@ -758,7 +758,7 @@ async function confirmPayment({ orderReference, status, paymentId }) {
     await activateCampaign({ campaignId: payment.campaignId, paymentId: payment.id });
     return { activated: true, paymentId: payment.id, campaignId: payment.campaignId };
   } else {
-    await prisma.campaignPayment.update({
+    await store.campaignPayment.update({
       where: { id: payment.id },
       data: { status: 'failed' },
     });
@@ -768,8 +768,8 @@ async function confirmPayment({ orderReference, status, paymentId }) {
 
 // Get all admin settings (masked for secrets).
 async function getSettings() {
-  const prisma = getReadPrisma();
-  const settings = await prisma.adminSetting.findMany();
+  const store = getReadStore();
+  const settings = await store.adminSetting.findMany();
   const masked = settings.map((s) => ({
     key: s.key,
     value: s.value,
@@ -780,8 +780,8 @@ async function getSettings() {
 
 // Update an admin setting.
 async function updateSetting(key, value, description) {
-  const prisma = getPrisma();
-  return await prisma.adminSetting.upsert({
+  const store = getStore();
+  return await store.adminSetting.upsert({
     where: { key },
     update: { value, description, updatedAt: new Date() },
     create: { key, value, description },
@@ -792,8 +792,8 @@ async function updateSetting(key, value, description) {
 // an admin has not configured them. Values are stored as strings in
 // AdminSetting, so coerce defensively.
 async function getSponsorshipLimits() {
-  const prisma = getReadPrisma();
-  const rows = await prisma.adminSetting.findMany({
+  const store = getReadStore();
+  const rows = await store.adminSetting.findMany({
     where: { key: { in: Object.values(SETTING_KEYS) } },
     select: { key: true, value: true },
   });
@@ -812,10 +812,10 @@ async function getSponsorshipLimits() {
 
 // List campaigns platform-wide for the admin panel.
 async function adminListCampaigns({ status, page = 1, limit = 50 }) {
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   const where = status ? { status } : {};
   const [campaigns, total] = await Promise.all([
-    prisma.sponsoredCampaign.findMany({
+    store.sponsoredCampaign.findMany({
       where,
       include: {
         seller: { select: { id: true, storeName: true, userId: true } },
@@ -825,15 +825,15 @@ async function adminListCampaigns({ status, page = 1, limit = 50 }) {
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.sponsoredCampaign.count({ where }),
+    store.sponsoredCampaign.count({ where }),
   ]);
   return { campaigns, pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 // Get a single campaign with full audit history for the admin panel.
 async function adminGetCampaign(campaignId) {
-  const prisma = getReadPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getReadStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     include: {
       seller: { select: { id: true, storeName: true, userId: true } },
@@ -859,15 +859,15 @@ async function adminSetStatus({
   ipAddress,
   userAgent,
 }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { id: true, status: true, sellerId: true },
   });
   if (!campaign) throw httpError(404, 'CAMPAIGN_NOT_FOUND');
   if (campaign.status === nextStatus) return campaign;
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await store.$transaction(async (tx) => {
     const c = await tx.sponsoredCampaign.update({
       where: { id: campaignId },
       data: { status: nextStatus },
@@ -895,8 +895,8 @@ async function adminSetStatus({
 // Admin: approve a campaign into active service (overrides the payment gate,
 // but every override is recorded in the audit log).
 async function adminApproveCampaign({ campaignId, adminActorId, ipAddress, userAgent }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { status: true },
   });
@@ -916,8 +916,8 @@ async function adminApproveCampaign({ campaignId, adminActorId, ipAddress, userA
 
 // Admin: reject a campaign (terminal). Any non-terminal campaign can be rejected.
 async function adminRejectCampaign({ campaignId, adminActorId, reason, ipAddress, userAgent }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { status: true },
   });
@@ -936,8 +936,8 @@ async function adminRejectCampaign({ campaignId, adminActorId, reason, ipAddress
 
 // Admin: pause any active campaign.
 async function adminPauseCampaign({ campaignId, adminActorId, ipAddress, userAgent }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { status: true },
   });
@@ -955,8 +955,8 @@ async function adminPauseCampaign({ campaignId, adminActorId, ipAddress, userAge
 
 // Admin: resume a paused campaign (unless it has already lapsed).
 async function adminResumeCampaign({ campaignId, adminActorId, ipAddress, userAgent }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { status: true, expiresAt: true },
   });
@@ -975,8 +975,8 @@ async function adminResumeCampaign({ campaignId, adminActorId, ipAddress, userAg
 
 // Admin: end a campaign early (terminal completed).
 async function adminEndCampaign({ campaignId, adminActorId, ipAddress, userAgent }) {
-  const prisma = getPrisma();
-  const campaign = await prisma.sponsoredCampaign.findUnique({
+  const store = getStore();
+  const campaign = await store.sponsoredCampaign.findUnique({
     where: { id: campaignId },
     select: { status: true },
   });
@@ -1003,9 +1003,9 @@ async function sweepCampaignStatuses({ force = false } = {}) {
   if (!force && now - lastSweepAt < 60 * 1000) return { skipped: true };
   lastSweepAt = now;
 
-  const prisma = getPrisma();
+  const store = getStore();
   const nowDate = new Date();
-  const active = await prisma.sponsoredCampaign.findMany({
+  const active = await store.sponsoredCampaign.findMany({
     where: { status: CAMPAIGN_STATUSES.ACTIVE },
     select: { id: true, expiresAt: true, spendTzs: true, totalBudgetTzs: true },
   });
@@ -1017,12 +1017,12 @@ async function sweepCampaignStatuses({ force = false } = {}) {
     else if (Number(c.spendTzs) >= Number(c.totalBudgetTzs)) outOfBudgetIds.push(c.id);
   }
 
-  await prisma.$transaction([
-    prisma.sponsoredCampaign.updateMany({
+  await store.$transaction([
+    store.sponsoredCampaign.updateMany({
       where: { id: { in: expiredIds } },
       data: { status: CAMPAIGN_STATUSES.EXPIRED },
     }),
-    prisma.sponsoredCampaign.updateMany({
+    store.sponsoredCampaign.updateMany({
       where: { id: { in: outOfBudgetIds } },
       data: { status: CAMPAIGN_STATUSES.OUT_OF_BUDGET },
     }),

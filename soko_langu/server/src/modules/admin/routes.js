@@ -6,7 +6,7 @@ const { z } = require('zod');
 const adminService = require('./admin-service');
 const settingsService = require('./settings-service');
 const activity = require('../../services/activity');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const { sendMail } = require('../../services/mailer');
@@ -52,12 +52,12 @@ router.put(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
-    const before = await prisma.user.findUnique({
+    const store = getStore();
+    const before = await store.user.findUnique({
       where: { id: req.params.userId },
       select: { accountStatus: true, firebaseUid: true },
     });
-    const user = await prisma.user.update({
+    const user = await store.user.update({
       where: { id: req.params.userId },
       data: { accountStatus: req.body.accountStatus },
       select: { id: true, accountStatus: true, email: true, firebaseUid: true },
@@ -121,7 +121,7 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = {
       ...(req.query.status ? { status: req.query.status } : {}),
       ...(req.query.q
@@ -136,7 +136,7 @@ router.get(
         : {}),
     };
     const [orderRows, total] = await Promise.all([
-      prisma.order.findMany({
+      store.order.findMany({
         where,
         include: {
           buyer: { select: { id: true, email: true, phone: true, displayName: true } },
@@ -149,7 +149,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.order.count({ where }),
+      store.order.count({ where }),
     ]);
     // The panel shows one dispute per order: expose the latest as `dispute`.
     const orders = orderRows.map(({ disputes, ...o }) => ({ ...o, dispute: disputes[0] || null }));
@@ -202,10 +202,10 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = req.query.status ? { status: req.query.status } : {};
     const [withdrawals, total] = await Promise.all([
-      prisma.withdrawal.findMany({
+      store.withdrawal.findMany({
         where,
         include: {
           seller: { select: { id: true, storeName: true, userId: true } },
@@ -215,7 +215,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.withdrawal.count({ where }),
+      store.withdrawal.count({ where }),
     ]);
     res.json({
       success: true,
@@ -226,8 +226,8 @@ router.get(
 
 // Withdrawal status + payout attempts
 router.get('/withdrawals/:id/status', async (req, res) => {
-  const prisma = getPrisma();
-  const withdrawal = await prisma.withdrawal.findUnique({
+  const store = getStore();
+  const withdrawal = await store.withdrawal.findUnique({
     where: { id: req.params.id },
     include: { payouts: { orderBy: { createdAt: 'desc' } } },
   });
@@ -258,12 +258,12 @@ router.post('/withdrawals/:id/process', async (req, res) => {
 // Retry a failed withdrawal: resets to pending, then processes again.
 router.post('/withdrawals/:id/retry', async (req, res) => {
   try {
-    const prisma = getPrisma();
-    const current = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
+    const store = getStore();
+    const current = await store.withdrawal.findUnique({ where: { id: req.params.id } });
     if (!current) return res.status(404).json({ error: 'WITHDRAWAL_NOT_FOUND' });
     if (current.status === 'completed') return res.status(409).json({ error: 'WITHDRAWAL_ALREADY_COMPLETED' });
     if (current.status === 'failed') {
-      await prisma.withdrawal.update({
+      await store.withdrawal.update({
         where: { id: req.params.id },
         data: { status: 'pending', providerPayoutId: null },
       });
@@ -326,7 +326,7 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = {
       ...(req.query.q
         ? {
@@ -342,7 +342,7 @@ router.get(
       ...(req.query.sellerStatus ? { sellerStatus: req.query.sellerStatus } : {}),
     };
     const [sellerRows, total] = await Promise.all([
-      prisma.sellerProfile.findMany({
+      store.sellerProfile.findMany({
         where,
         include: {
           user: { select: { id: true, email: true, phone: true, displayName: true, avatarUrl: true, accountStatus: true } },
@@ -353,7 +353,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.sellerProfile.count({ where }),
+      store.sellerProfile.count({ where }),
     ]);
     // sellerId is unique on wallets: expose the single wallet as `wallet`.
     const sellers = sellerRows.map(({ wallets, ...s }) => ({ ...s, wallet: wallets[0] || null }));
@@ -371,8 +371,8 @@ router.put(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
-    const seller = await prisma.sellerProfile.findUnique({ where: { id: req.params.sellerId } });
+    const store = getStore();
+    const seller = await store.sellerProfile.findUnique({ where: { id: req.params.sellerId } });
     if (!seller) return res.status(404).json({ error: 'SELLER_NOT_FOUND' });
     const action = req.body.action;
     const data =
@@ -381,7 +381,7 @@ router.put(
         : action === 'reject'
           ? { verificationStatus: 'rejected', sellerStatus: 'rejected' }
           : { verificationStatus: 'pending' };
-    const updated = await prisma.sellerProfile.update({ where: { id: req.params.sellerId }, data });
+    const updated = await store.sellerProfile.update({ where: { id: req.params.sellerId }, data });
     await writeAudit({
       ...auditFromReq(req),
       action: 'seller.verification',
@@ -407,7 +407,7 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = {
       deletedAt: null,
       ...(req.query.q
@@ -422,7 +422,7 @@ router.get(
       ...(req.query.categoryId ? { categoryId: req.query.categoryId } : {}),
     };
     const [products, total] = await Promise.all([
-      prisma.product.findMany({
+      store.product.findMany({
         where,
         include: {
           seller: { select: { id: true, storeName: true, storeSlug: true } },
@@ -434,7 +434,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.product.count({ where }),
+      store.product.count({ where }),
     ]);
     res.json({ success: true, data: { products, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
   }
@@ -445,9 +445,9 @@ router.get(
   '/users/:userId',
   validate({ params: z.object({ userId: z.string().uuid() }) }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const [user, buyerOrders, sellerOrders] = await Promise.all([
-      prisma.user.findUnique({
+      store.user.findUnique({
         where: { id: req.params.userId },
         include: {
           sellerProfile: { include: { wallets: { orderBy: { createdAt: 'desc' }, take: 1 } } },
@@ -455,8 +455,8 @@ router.get(
           addresses: { orderBy: { isDefault: 'desc' }, take: 10 },
         },
       }),
-      prisma.order.groupBy({ by: ['status'], where: { buyerId: req.params.userId }, _count: { _all: true }, _sum: { totalAmount: true } }),
-      prisma.order.groupBy({ by: ['status'], where: { seller: { userId: req.params.userId } }, _count: { status: true } }),
+      store.order.groupBy({ by: ['status'], where: { buyerId: req.params.userId }, _count: { _all: true }, _sum: { totalAmount: true } }),
+      store.order.groupBy({ by: ['status'], where: { seller: { userId: req.params.userId } }, _count: { status: true } }),
     ]);
     if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
     if (user.sellerProfile) {
@@ -478,10 +478,10 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = req.query.status ? { status: req.query.status } : {};
     const [disputes, total] = await Promise.all([
-      prisma.dispute.findMany({
+      store.dispute.findMany({
         where,
         include: {
           order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } },
@@ -492,7 +492,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.dispute.count({ where }),
+      store.dispute.count({ where }),
     ]);
     res.json({ success: true, data: { disputes, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
   }
@@ -509,10 +509,10 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = req.query.status ? { status: req.query.status } : {};
     const [refunds, total] = await Promise.all([
-      prisma.refund.findMany({
+      store.refund.findMany({
         where,
         include: {
           order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } },
@@ -522,7 +522,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.refund.count({ where }),
+      store.refund.count({ where }),
     ]);
     res.json({ success: true, data: { refunds, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
   }
@@ -539,10 +539,10 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const where = req.query.status ? { status: req.query.status } : {};
     const [referrals, total] = await Promise.all([
-      prisma.referral.findMany({
+      store.referral.findMany({
         where,
         include: {
           referrer: { select: { id: true, email: true, phone: true, displayName: true } },
@@ -552,7 +552,7 @@ router.get(
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
       }),
-      prisma.referral.count({ where }),
+      store.referral.count({ where }),
     ]);
     res.json({ success: true, data: { referrals, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
   }

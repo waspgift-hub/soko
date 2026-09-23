@@ -3,8 +3,8 @@ const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require(
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./product-service');
-const { mirrorProduct, mirrorProductDelete } = require('./product-mirror');
-const { getReadPrisma } = require('../../config/database');
+const productStore = require('./product-store');
+const { getReadStore } = require('../../config/database');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const cache = require('../../../cache');
 
@@ -79,10 +79,14 @@ const productPatch = z.object({
   ...legacyFields,
 });
 
-// Every mutation echoes the Postgres row into the legacy Firestore products
-// doc so boosts/comments/deep-link reads keying off {uuid} keep working.
+// Every mutation is Firestore-first (products/{id} is the app-facing record);
+// the seam row follows as the money-facing mirror.
 function sellerContext(profile, req) {
-  return { sellerFirebaseUid: req.user?.firebaseUid || null, sellerName: profile?.storeName || null };
+  return {
+    sellerFirebaseUid: req.user?.firebaseUid || null,
+    sellerName: profile?.storeName || null,
+    sellerPhone: req.user?.phone || null,
+  };
 }
 
 function serviceError(res, e) {
@@ -142,13 +146,13 @@ router.get(
 
 // Public categories
 router.get('/categories', async (req, res) => {
-  const prisma = getReadPrisma();
+  const store = getReadStore();
   // Category list is near-static and shared by every visitor: route it through
   // the two-tier cache so the in-memory copy (and then Redis) absorbs the
-  // cluster-wide read before Prisma is ever called. Single-flight inside
+  // cluster-wide read before the store is ever called. Single-flight inside
   // getOrCompute collapses a thundering herd into one DB query per expiry.
   const data = await cache.getOrCompute('catalog:categories:v1', async () => {
-    const categories = await prisma.category.findMany({
+    const categories = await store.category.findMany({
       where: { isActive: true },
       select: { id: true, name: true, slug: true, parentId: true, iconUrl: true, sortOrder: true },
       orderBy: { sortOrder: 'asc' },
@@ -196,17 +200,17 @@ router.post(
   async (req, res) => {
     try {
       const profile = await service.requireSellerProfile(req.user.id);
-      const product = await service.createProduct({
+      const { product, id } = await productStore.createListing({
         sellerProfileId: profile.id,
+        sellerContext: sellerContext(profile, req),
         data: req.body,
       });
       invalidateProductCache(product);
-      await mirrorProduct(product, sellerContext(profile, req));
       await writeAudit({
         ...auditFromReq(req),
         action: 'product.create',
         entityType: 'product',
-        entityId: product.id,
+        entityId: id,
       });
       res.status(201).json({ success: true, data: product });
     } catch (e) {
@@ -224,13 +228,13 @@ router.put(
   async (req, res) => {
     try {
       const profile = await service.requireSellerProfile(req.user.id);
-      const product = await service.updateProduct({
-        id: req.params.id,
+      const product = await productStore.updateListing({
+        productId: req.params.id,
         sellerProfileId: profile.id,
         data: req.body,
+        sellerContext: sellerContext(profile, req),
       });
       invalidateProductCache(product);
-      await mirrorProduct(product, sellerContext(profile, req));
       res.json({ success: true, data: product });
     } catch (e) {
       serviceError(res, e);
@@ -242,13 +246,12 @@ router.put(
 router.post('/:id/publish', authenticate, requireActive, async (req, res) => {
   try {
     const profile = await service.requireSellerProfile(req.user.id);
-    const product = await service.setStatus({
-      id: req.params.id,
+    const product = await productStore.setListingPublished({
+      productId: req.params.id,
       sellerProfileId: profile.id,
       status: 'published',
     });
     invalidateProductCache(product);
-    await mirrorProduct(product, sellerContext(profile, req));
     await writeAudit({
       ...auditFromReq(req),
       action: 'product.publish',
@@ -264,13 +267,12 @@ router.post('/:id/publish', authenticate, requireActive, async (req, res) => {
 router.post('/:id/unpublish', authenticate, requireActive, async (req, res) => {
   try {
     const profile = await service.requireSellerProfile(req.user.id);
-    const product = await service.setStatus({
-      id: req.params.id,
+    const product = await productStore.setListingPublished({
+      productId: req.params.id,
       sellerProfileId: profile.id,
       status: 'draft',
     });
     invalidateProductCache(product);
-    await mirrorProduct(product, sellerContext(profile, req));
     res.json({ success: true, data: product });
   } catch (e) {
     serviceError(res, e);
@@ -305,10 +307,11 @@ router.post(
   async (req, res) => {
     try {
       const profile = await service.requireSellerProfile(req.user.id);
-      const rows = await service.attachMedia({
-        id: req.params.id,
+      const rows = await productStore.attachListingMedia({
+        productId: req.params.id,
         sellerProfileId: profile.id,
         items: req.body.items,
+        sellerContext: sellerContext(profile, req),
       });
       invalidateProductCache({ id: req.params.id });
       res.status(201).json({ success: true, data: rows });
@@ -322,9 +325,11 @@ router.post(
 router.delete('/:id', authenticate, requireActive, async (req, res) => {
   try {
     const profile = await service.requireSellerProfile(req.user.id);
-    const product = await service.softDelete({ id: req.params.id, sellerProfileId: profile.id });
+    const product = await productStore.deleteListing({
+      productId: req.params.id,
+      sellerProfileId: profile.id,
+    });
     invalidateProductCache(product);
-    await mirrorProductDelete(req.params.id);
     await writeAudit({
       ...auditFromReq(req),
       action: 'product.delete',
@@ -350,11 +355,11 @@ router.put(
   }),
   async (req, res) => {
     try {
-      const product = await service.moderate({ id: req.params.id, status: req.body.status });
+      const product = await productStore.moderateListing({
+        productId: req.params.id,
+        status: req.body.status,
+      });
       invalidateProductCache(product);
-      // Admin moderation has no seller context; the mirror falls back to the
-      // snapshot's stored seller fields (buildMirrorDoc handles empty ctx).
-      await mirrorProduct(product, {});
       await writeAudit({
         ...auditFromReq(req),
         action: 'product.moderate',

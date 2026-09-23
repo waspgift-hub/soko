@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { authenticate, requireActive } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const walletService = require('./wallet-service');
 
 const router = Router();
@@ -10,8 +10,8 @@ const router = Router();
 // Resolve the caller's SellerProfile (wallet owner). Wallets belong to
 // SellerProfile rows, not directly to users.
 async function requireSellerProfile(userId) {
-  const prisma = getPrisma();
-  const profile = await prisma.sellerProfile.findUnique({
+  const store = getStore();
+  const profile = await store.sellerProfile.findUnique({
     where: { userId },
     select: { id: true },
   });
@@ -57,9 +57,9 @@ router.post(
 
 // List withdrawal history
 router.get('/withdrawals', authenticate, requireActive, async (req, res) => {
-  const prisma = getPrisma();
+  const store = getStore();
   const profile = await requireSellerProfile(req.user.id);
-  const withdrawals = await prisma.withdrawal.findMany({
+  const withdrawals = await store.withdrawal.findMany({
     where: { sellerId: profile.id },
     orderBy: { createdAt: 'desc' },
   });

@@ -1,6 +1,6 @@
 // Append-only audit log for sensitive actions (admin ops, financial
 // transitions, security events). Never update or delete rows.
-const { getPrisma } = require('../config/database');
+const { getStore } = require('../config/database');
 
 async function writeAudit({
   actorId = null,
@@ -16,8 +16,8 @@ async function writeAudit({
 }) {
   if (!action) throw new Error('AUDIT_ACTION_REQUIRED');
   try {
-    const prisma = getPrisma();
-    return await prisma.auditLog.create({
+    const store = getStore();
+    return await store.auditLog.create({
       data: {
         actorId,
         actorType,

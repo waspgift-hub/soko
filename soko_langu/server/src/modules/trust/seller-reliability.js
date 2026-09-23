@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 const SCORE_WINDOW_ORDERS = 50;
 const BASE_WEIGHTS = {
@@ -15,9 +15,9 @@ const BASE_WEIGHTS = {
  * produce a higher score.
  */
 async function computeSellerReliability({ sellerId }) {
-  const prisma = getPrisma();
+  const store = getStore();
 
-  const recentOrders = await prisma.order.findMany({
+  const recentOrders = await store.order.findMany({
     where: { sellerId },
     orderBy: { createdAt: 'desc' },
     take: SCORE_WINDOW_ORDERS,
@@ -48,7 +48,7 @@ async function computeSellerReliability({ sellerId }) {
   const rounded = Math.round(clamp(score, 0, 100));
 
   // Persist back onto seller profile
-  await prisma.sellerProfile.update({
+  await store.sellerProfile.update({
     where: { id: sellerId },
     data: { reliabilityScore: rounded / 100 } // stored as 0..1 decimal
   });

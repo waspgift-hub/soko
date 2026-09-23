@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 
 /**
  * Trust passport: combines seller identity, transaction history, fulfillment,
@@ -6,24 +6,24 @@ const { getPrisma } = require('../../config/database');
  * visible Trust indicators.
  */
 async function getTrustPassport({ sellerId }) {
-  const prisma = getPrisma();
+  const store = getStore();
 
   // Accept both the Postgres SellerProfile UUID and the Firebase UID (User.id /
   // SellerProfile.userId).  Client order docs carry the Firebase UID; admin or
   // internal callers may pass the Postgres UUID directly.
-  let seller = await prisma.sellerProfile.findUnique({ where: { id: sellerId } });
+  let seller = await store.sellerProfile.findUnique({ where: { id: sellerId } });
   if (!seller) {
-    seller = await prisma.sellerProfile.findUnique({ where: { userId: sellerId } });
+    seller = await store.sellerProfile.findUnique({ where: { userId: sellerId } });
   }
   if (!seller) throw httpError(404, 'SELLER_NOT_FOUND');
 
   // Aggregate order metrics
   const [totalOrders, completedOrders, onTimeDispatches, activeDisputes, reviews] = await Promise.all([
-    prisma.order.count({ where: { sellerId } }),
-    prisma.order.count({ where: { sellerId, status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
-    prisma.order.count({ where: { sellerId, dispatchedAt: { not: null } } }),
-    prisma.dispute.count({ where: { order: { sellerId }, status: 'open' } }),
-    prisma.order.count({ where: { sellerId, status: 'completed' } }), // placeholder for reviews
+    store.order.count({ where: { sellerId } }),
+    store.order.count({ where: { sellerId, status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
+    store.order.count({ where: { sellerId, dispatchedAt: { not: null } } }),
+    store.dispute.count({ where: { order: { sellerId }, status: 'open' } }),
+    store.order.count({ where: { sellerId, status: 'completed' } }), // placeholder for reviews
   ]);
 
   const fulfillmentRate = totalOrders > 0 ? completedOrders / totalOrders : 0;

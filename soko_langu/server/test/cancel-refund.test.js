@@ -2,13 +2,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 // ---------------------------------------------------------------------------
-// Module seams: refundOnCancel/cancelOrder call getPrisma(), getProvider(), the
+// Module seams: refundOnCancel/cancelOrder call getStore(), getProvider(), the
 // legacy mirror and OneSignal at runtime. Patch those dependencies BEFORE the
 // service modules bind them, so the tests run hermetically with a fake Prisma
 // and a fake payout provider (no network, no Postgres).
 // ---------------------------------------------------------------------------
 const state = {
-  prisma: null,
+  store: null,
   provider: null,
   payoutCalls: [],
 };
@@ -18,7 +18,7 @@ const ProviderFactory = require('../src/modules/payments/provider-factory');
 const Mirror = require('../src/modules/legacy-compat/presentation-mirror');
 const Notify = require('../src/modules/legacy-compat/notify');
 
-DB.getPrisma = () => state.prisma;
+DB.getStore = () => state.store;
 ProviderFactory.getProvider = () => state.provider;
 Mirror.syncLegacyOrderStatus = async () => null;
 Notify.sendOneSignalNotification = async () => null;
@@ -43,7 +43,7 @@ function setProvider(handler) {
 }
 
 // ---------------------------------------------------------------------------
-// Fake in-memory Prisma covering the exact subset of tx.* / prisma.* calls the
+// Fake in-memory Prisma covering the exact subset of tx.* / store.* calls the
 // cancel/refund paths make. Mirrors wallet-settle.test.js: tiny on purpose.
 // ---------------------------------------------------------------------------
 function createFakePrisma(seed = {}) {
@@ -236,7 +236,7 @@ function providerPayout(seed) {
     state.payoutCalls.push(payload);
     return { id: 'px-1', status: 'processing', received: payload };
   });
-  state.prisma = createFakePrisma(seed);
+  state.store = createFakePrisma(seed);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ test('buyer cancel refunds full totalAmount and ends the order REFUNDED', async 
   assert.equal(result.refund.amount, 50000n);
   assert.equal(result.order.status, 'REFUNDED');
 
-  const store = state.prisma._store;
+  const store = state.store._store;
   assert.equal(store.order[0].status, 'REFUNDED');
   assert.equal(store.escrowHold[0].status, 'released_to_buyer');
   assert.equal(store.escrowHold[0].releasedToBuyer, 50000n);
@@ -286,7 +286,7 @@ test('escrow stays holding when the payout fails; order parks in REFUND_PENDING'
   setProvider(async () => {
     throw new Error('PAYOUT_DOWN');
   });
-  state.prisma = createFakePrisma(seedEscrowOrder());
+  state.store = createFakePrisma(seedEscrowOrder());
 
   const result = await refundOnCancel({ orderId: 'o1', actorId: 'u-buyer', role: 'buyer' });
 
@@ -294,7 +294,7 @@ test('escrow stays holding when the payout fails; order parks in REFUND_PENDING'
   assert.match(result.refund.lastError, /PAYOUT_DOWN/);
   assert.equal(result.order.status, 'REFUND_PENDING');
 
-  const store = state.prisma._store;
+  const store = state.store._store;
   assert.equal(store.order[0].status, 'REFUND_PENDING');
   assert.equal(store.escrowHold[0].status, 'holding');
   assert.equal(store.escrowHold[0].releasedToBuyer, 0n);
@@ -324,7 +324,7 @@ test('re-running a completed cancel does not double-payout', async () => {
   assert.equal(result.refund.status, 'completed');
   assert.equal(result.order.status, 'refunded');
   assert.equal(state.payoutCalls.length, 0, 'existing payoutTransaction short-circuits the payout');
-  assert.equal(state.prisma._store.payoutTransaction.length, 0);
+  assert.equal(state.store._store.payoutTransaction.length, 0);
 });
 
 test('non-owner cannot trigger a refund', async () => {
@@ -365,6 +365,6 @@ test('pre-escrow cancel goes through the state machine, no refund', async () => 
   const updated = await cancelOrder({ orderId: 'o1', actorId: 'u-buyer', reason: 'Changed mind' });
 
   assert.equal(updated.status, 'CANCELLED');
-  assert.equal(state.prisma._store.order[0].status, 'CANCELLED');
+  assert.equal(state.store._store.order[0].status, 'CANCELLED');
   assert.equal(cancelCalls.length, before, 'no refund for pre-escrow cancel');
 });

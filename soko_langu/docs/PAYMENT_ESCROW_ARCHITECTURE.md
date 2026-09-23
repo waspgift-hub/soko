@@ -1,5 +1,12 @@
 # Soko Vibe — Marketplace Payment & Escrow Architecture
 
+> **HISTORICAL (2026 v2-era).** This design targeted the retired PostgreSQL/Prisma
+> stack ("V2 modular" below). The current runtime is **Firestore-only**: the
+> `getStore()` seam in `src/config/database.js` resolves to the Firestore store,
+> and the retired `server/prisma/schema.prisma` was removed — Firestore is the
+> only live store now. Read it as the design + money
+> invariants spec, not as the current storage topology.
+
 Status: **Design v1 (architecture + gap analysis + integration plan)**
 Scope: payment, order, escrow, shipping, OTP handover, seller payout, refund, dispute, retry/recovery, ledger, webhooks, notifications, admin.
 
@@ -242,7 +249,13 @@ Status-priority checks make every job idempotent: re-running a completed/expired
 
 ---
 
-## 12. PostgreSQL Schema (Prisma, `server/prisma/schema.prisma`)
+## 12. PostgreSQL Schema (Prisma, `server/prisma/schema.prisma`) — HISTORICAL
+
+> The Postgres/Prisma design in this section documents the retired v2 era. The
+> runtime is **Firestore-only**: the `getStore()` seam resolves to the Firestore
+> store, and `schema.prisma` was removed after the Firestore store was verified.
+> Retained below because it is the precise money-shape spec the Firestore store
+> mirrors (BigInt TZS, `idempotencyKey` envelopes, `balanceAfter` logic).
 
 ### 12.1 Existing financial models (already modeled)
 
@@ -568,7 +581,10 @@ Ground rule: **never break the live shop/app.** Each phase ends green: tests pas
 - **Phase 7 — Hardening:** reconcile daily, rate-limit all financial APIs, security audit (webhook, OTP, RBAC), runbook + on-call alerts.
 
 > **Phase-1 implementation notes**
-> - New table `webhook_events` (see §12.2). Apply to the running DB with `npx prisma db push` (the repo has no migration history); the outbox degrades to an in-memory dedupe until the table exists.
+> - New webhook outbox: the story of the retired `webhook_events` table (see
+>   §12.2) — on the Firestore-only stack this maps to a `webhook_events`
+>   collection with in-memory dedupe until persisted; there is no `prisma db
+>   push` (Prisma is not a dependency).
 > - New config block `config.finance` (envs: `FINANCE_WORKER_IN_PROCESS=false` for dedicated-worker setups, `FINANCE_PAYMENT_EXPIRE_MS`, `FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN`, `FINANCE_WITHDRAWAL_STUCK_HOURS`, `FINANCE_RECONCILIATION_WINDOW_HOURS`, `FINANCE_DISPUTE_SLA_HOURS`). Schedules are registered idempotently (BullMQ repeatable `jobId`).
 > - Payment expiry never expires a `payment_pending` order without a provider re-query; a confirmed-but-lost-webhook payment is recovered via `confirmCollection` instead of being expired (trapped-money protection).
 > - Deployment gotcha: the checked-in `Dockerfile`, `render.yaml` and `railway.json` all start `node index.js` (legacy). The live health endpoint (`/health` with DB+Redis checks) confirms production actually runs the v2 entrypoint `src/index.js`. These deploy files are stale and should be updated to `node src/index.js` (and run the worker where a dedicated worker is desired).

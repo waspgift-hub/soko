@@ -1,8 +1,6 @@
 // Phase F bridge tests — seller analytics overview DTO + boost counters.
-// Exercises the exported handlers through a tiny express app with the real
-// Postgres schema via Prisma where available; collapses safely when the test
-// DB (TEST_DATABASE_URL) is not configured so CI without a database still
-// passes the formatting/route-shape assertions.
+// Collapses safely when no live database is configured so CI without one
+// still passes the formatting/route-shape assertions.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

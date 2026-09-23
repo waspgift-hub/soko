@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('./provider-factory');
 const config = require('../../config');
@@ -26,11 +26,11 @@ async function initiatePayment({
   amount,
   phoneNumber,
 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`payment:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.buyerId !== buyerId) throw httpError(403, 'FORBIDDEN');
@@ -95,12 +95,12 @@ async function confirmCollection({
   amount,
   force = false,
 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`collection:${orderReference}`, 60);
 
   let result;
   try {
-    await prisma.$transaction(async (tx) => {
+    await store.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: { orderNumber: orderReference },
       });
@@ -247,11 +247,11 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
 }
 
 async function markPaymentFailed(orderReference) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`fail:${orderReference}`, 60);
   let result;
   try {
-    await prisma.$transaction(async (tx) => {
+    await store.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: { orderNumber: orderReference },
       });
@@ -290,20 +290,20 @@ function calcCommission(productPrice) {
 // Escrow-funded notice to the seller (in-app row + push). Best-effort: a
 // notification failure must never fail the finance commit it follows.
 async function notifySellerEscrowFunded(order) {
-  const prisma = getPrisma();
+  const store = getStore();
   try {
-    const sellerUserId = (await prisma.sellerProfile.findUnique({
+    const sellerUserId = (await store.sellerProfile.findUnique({
       where: { id: order.sellerId },
       select: { userId: true },
     }))?.userId;
     if (!sellerUserId) return;
-    const seller = await prisma.user.findUnique({ where: { id: sellerUserId } });
+    const seller = await store.user.findUnique({ where: { id: sellerUserId } });
     if (!seller) return;
     const title = 'Malipo Yamefika Escrow';
     const body = `Oda ${order.orderNumber}: mnunuzi amelipa. Tayarisha kusafirisha.`;
     const data = { type: 'escrow_funded', orderId: order.id };
     try {
-      await prisma.notification.create({ data: { userId: seller.id, type: 'escrow_funded', title, body, data } });
+      await store.notification.create({ data: { userId: seller.id, type: 'escrow_funded', title, body, data } });
     } catch (e) {
       console.error('[PAYMENT][NOTIFY-SELLER-DB]', e.message);
     }

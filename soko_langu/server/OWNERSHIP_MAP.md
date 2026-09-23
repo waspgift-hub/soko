@@ -1,5 +1,13 @@
 # Soko Vibe — Data Domain Ownership Map (Phase A: FREEZE)
 
+> **HISTORICAL (2026 v2-era).** Everything below describes the pre-Firestore-only
+> world where "Postgres" was intended to hold v2 data. That is obsolete: the
+> `getStore()`/`getReadStore()` seam in `src/config/database.js` now resolves
+> to the Firestore store, so every module listed here (products, orders,
+> payments, wallet, referrals, notifications, reviews, kyc, search, etc.) reads
+> and writes Firestore. The retired `server/prisma/schema.prisma` was removed.
+> Treat all "Postgres" / "v2 (Postgres)" labels below as historical.
+
 Status: Phase A deliverable per MASTER_ARCHITECTURE.pdf §30.
 Last verified: September 2026 — every claim below was read from current code.
 
@@ -176,8 +184,8 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
     sellers can see and withdraw their earnings.
 14. Withdrawal destination phone is now captured and audited: `Withdrawal`
     gained `phoneNumber` (`withdrawals.phone_number`,
-
-    schema.prisma); `requestWithdrawal` persists the phone submitted in the
+    per the retired schema.prisma); `requestWithdrawal` persists the phone
+    submitted in the
     request; `processWithdrawal` pays to the stored phone via the exported
     `withdrawalPayoutPhone(withdrawal)` helper (falls back to the seller profile
     phone for rows created before the column existed; tested). Client: seller

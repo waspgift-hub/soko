@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const sponsoredService = require('../sponsored/sponsored-service');
 
 // Slot positions (0-based) where a sponsored placement may appear on page 1.
@@ -7,15 +7,15 @@ const SPONSORED_SLOTS = [0, 3, 6];
 const MAX_SPONSORED_PER_PAGE = SPONSORED_SLOTS.length;
 
 /**
- * Search products using PostgreSQL ILIKE + trigram similarity.
- * Returns ranked results respecting price/category filters.
+ * Search products via the Firestore store seam (case-insensitive matches on
+ * title/description/slug). Returns ranked results respecting price/category filters.
  *
  * Active `search`-placement campaigns are interleaved at fixed slots on page 1
  * and marked with `isSponsored` + `sponsoredCampaign` so the client can show
  * the required Sponsored label. Organic ranking is otherwise untouched.
  */
 async function searchProducts({ query, categoryId, minPrice, maxPrice, sort, page = 1, limit = 20, ipAddress, userAgent }) {
-  const prisma = getPrisma();
+  const store = getStore();
 
   const where = {
     status: 'published',
@@ -32,7 +32,7 @@ async function searchProducts({ query, categoryId, minPrice, maxPrice, sort, pag
   };
 
   const [products, total] = await Promise.all([
-    prisma.product.findMany({
+    store.product.findMany({
       where,
       include: {
         media: { orderBy: { sortOrder: 'asc' }, take: 1 },
@@ -48,7 +48,7 @@ async function searchProducts({ query, categoryId, minPrice, maxPrice, sort, pag
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.product.count({ where }),
+    store.product.count({ where }),
   ]);
 
   let merged = products;

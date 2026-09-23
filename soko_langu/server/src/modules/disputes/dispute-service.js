@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { releaseEscrowAndSettle } = require('../handover/handover-service');
@@ -21,16 +21,19 @@ const SELLER_REASONS = ['BUYER_FRAUD'];
  * Moves order to DISPUTED and freezes the escrow hold.
  */
 async function fileDispute({ orderId, filedBy, reason, description, role }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`dispute:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
       const isBuyer = order.buyerId === filedBy;
-      const isSeller = order.sellerId === filedBy;
+      // Order.sellerId is a SellerProfile id, so the acting user must first be
+      // resolved to their seller profile before the ownership comparison.
+      const sellerProfile = await tx.sellerProfile.findUnique({ where: { userId: filedBy } });
+      const isSeller = Boolean(sellerProfile && order.sellerId === sellerProfile.id);
       if (!isBuyer && !isSeller) throw httpError(403, 'FORBIDDEN');
 
       // Validate reason belongs to the filer's allowed list
@@ -93,11 +96,11 @@ async function fileDispute({ orderId, filedBy, reason, description, role }) {
  *    remainder in escrow until delivery/OTP completes
  */
 async function resolveDispute({ disputeId, resolvedBy, resolution, note, buyerAmount, sellerAmount }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`dispute:${disputeId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const dispute = await tx.dispute.findUnique({ where: { id: disputeId }, include: { order: true } });
       if (!dispute) throw httpError(404, 'DISPUTE_NOT_FOUND');
       if (dispute.status !== 'open') throw httpError(409, 'DISPUTE_NOT_OPEN');
@@ -208,7 +211,10 @@ async function openRefundForOrder(tx, dispute, resolvedBy, buyerAmount) {
 
 function isDisputableState(status) {
   return [
+    ORDER_STATES.ESCROW_HELD,
     ORDER_STATES.IN_ESCROW,
+    ORDER_STATES.SELLER_ACCEPTED,
+    ORDER_STATES.DISPATCH_READY,
     ORDER_STATES.READY_TO_DISPATCH,
     ORDER_STATES.DISPATCHED,
     ORDER_STATES.IN_TRANSIT,

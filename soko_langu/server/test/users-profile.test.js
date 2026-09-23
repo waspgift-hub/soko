@@ -2,8 +2,8 @@
 const assert = require('node:assert');
 const {
   serializeSelfProfile,
-  applyProfileUpdate,
 } = require('../src/modules/users/controller');
+const { applyProfileUpdate } = require('../src/services/account-store');
 
 function baseUser(overrides = {}) {
   return {

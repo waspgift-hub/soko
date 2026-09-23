@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 
 // The app is Firestore-first (products, users, BuyerRequests and legacy orders
@@ -43,26 +43,26 @@ async function getFirestoreOverlay() {
  * Admin dashboard KPIs: revenue, orders, users, disputes, system health.
  */
 async function getDashboard() {
-  const prisma = getPrisma();
+  const store = getStore();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const [users, newUsers, orders, completedOrders, revenue, activeDisputes, escrowHeld, products] =
     await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { createdAt: { gte: today } } }),
-      prisma.order.count(),
-      prisma.order.count({ where: { status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
-      prisma.order.aggregate({
+      store.user.count(),
+      store.user.count({ where: { createdAt: { gte: today } } }),
+      store.order.count(),
+      store.order.count({ where: { status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
+      store.order.aggregate({
         _sum: { platformCommission: true },
         where: { status: { in: ['completed', 'wallet_credited'] } },
       }),
-      prisma.dispute.count({ where: { status: 'open' } }),
-      prisma.escrowHold.aggregate({
+      store.dispute.count({ where: { status: 'open' } }),
+      store.escrowHold.aggregate({
         _sum: { amount: true },
         where: { status: 'holding' },
       }),
-      prisma.product.count(),
+      store.product.count(),
     ]);
 
   const fs = await getFirestoreOverlay();
@@ -93,7 +93,7 @@ async function getDashboard() {
  * Search users for admin (by email, phone, username, id).
  */
 async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const where = {
     ...(q
       ? {
@@ -110,7 +110,7 @@ async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
   };
 
   const [users, total] = await Promise.all([
-    prisma.user.findMany({
+    store.user.findMany({
       where,
       select: {
         id: true,
@@ -128,7 +128,7 @@ async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.user.count({ where }),
+    store.user.count({ where }),
   ]);
 
   // Firestore rules gate client-side product writes / BuyerRequests reads on
@@ -166,7 +166,7 @@ async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
     const fsDb = getFirebaseFirestore();
     if (fsDb) {
       const pgUids = new Set(
-        (await prisma.user.findMany({ where: { firebaseUid: { not: null } }, select: { firebaseUid: true } }))
+        (await store.user.findMany({ where: { firebaseUid: { not: null } }, select: { firebaseUid: true } }))
           .map((u) => u.firebaseUid).filter(Boolean)
       );
       const snap = await fsDb.collection('users').orderBy('createdAt', 'desc').limit(250).get().catch(() => null);
@@ -228,41 +228,41 @@ async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
  * Get all transactions/ledger for admin financial module.
  */
 async function listLedger({ type, page = 1, limit = 50 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const where = type ? { type } : {};
   const [entries, total] = await Promise.all([
-    prisma.walletLedgerEntry.findMany({
+    store.walletLedgerEntry.findMany({
       where,
       include: { wallet: { include: { seller: true } } },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.walletLedgerEntry.count({ where }),
+    store.walletLedgerEntry.count({ where }),
   ]);
   return { entries, pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function listAuditLogs({ action, entityType, actorId, page = 1, limit = 50 }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const where = {};
   if (action) where.action = action;
   if (entityType) where.entityType = entityType;
   if (actorId) where.actorId = actorId;
   const [entries, total] = await Promise.all([
-    prisma.auditLog.findMany({
+    store.auditLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.auditLog.count({ where }),
+    store.auditLog.count({ where }),
   ]);
   return { entries, pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function getMetrics() {
-  const prisma = getPrisma();
+  const store = getStore();
   const [
     userCount,
     orderStatusGroups,
@@ -271,12 +271,12 @@ async function getMetrics() {
     disputesOpen,
     escrowHolding,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.order.groupBy({ by: ['status'], _count: { status: true }, _sum: { totalAmount: true } }),
-    prisma.payment.groupBy({ by: ['status'], _count: { status: true }, _sum: { amount: true } }),
-    prisma.withdrawal.count({ where: { status: { in: ['pending', 'processing'] } } }),
-    prisma.dispute.count({ where: { status: { in: ['open', 'under_review'] } } }),
-    prisma.escrowHold.aggregate({ _sum: { amount: true }, _count: true }),
+    store.user.count(),
+    store.order.groupBy({ by: ['status'], _count: { status: true }, _sum: { totalAmount: true } }),
+    store.payment.groupBy({ by: ['status'], _count: { status: true }, _sum: { amount: true } }),
+    store.withdrawal.count({ where: { status: { in: ['pending', 'processing'] } } }),
+    store.dispute.count({ where: { status: { in: ['open', 'under_review'] } } }),
+    store.escrowHold.aggregate({ _sum: { amount: true }, _count: true }),
   ]);
   const gmv = orderStatusGroups
     .filter((g) => !['cancelled', 'refunded'].includes(g.status))

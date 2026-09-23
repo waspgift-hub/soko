@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const orderService = require('./order-service');
 const paymentService = require('../payments/payment-service');
 const handoverService = require('../handover/handover-service');
@@ -9,8 +9,8 @@ function asyncHandler(fn) {
 
 // Order.sellerId refers to the SellerProfile row, so the acting seller's
 // profile id must be resolved from their user id before any comparison.
-async function resolveSellerProfile(prisma, userId) {
-  const profile = await prisma.sellerProfile.findUnique({ where: { userId } });
+async function resolveSellerProfile(store, userId) {
+  const profile = await store.sellerProfile.findUnique({ where: { userId } });
   if (!profile) {
     const err = new Error('SELLER_PROFILE_NOT_FOUND');
     err.status = 403;
@@ -36,9 +36,9 @@ const orderController = {
 
   getOrder: asyncHandler(async (req, res) => {
     const { orderId } = req.params;
-    const prisma = getPrisma();
+    const store = getStore();
 
-    const order = await prisma.order.findUnique({
+    const order = await store.order.findUnique({
       where: { id: orderId },
       include: {
         buyer: { select: { id: true, displayName: true, avatarUrl: true } },
@@ -67,11 +67,11 @@ const orderController = {
   }),
 
   listOrders: asyncHandler(async (req, res) => {
-    const prisma = getPrisma();
+    const store = getStore();
     const userId = req.user.id;
     const { status, role, page = 1, limit = 20, sort } = req.query;
 
-    const profile = await prisma.sellerProfile.findUnique({ where: { userId } });
+    const profile = await store.sellerProfile.findUnique({ where: { userId } });
     const where = {
       OR: [
         { buyerId: userId },
@@ -83,7 +83,7 @@ const orderController = {
       where.status = status;
     }
 
-    const orders = await prisma.order.findMany({
+    const orders = await store.order.findMany({
       where,
       orderBy: { createdAt: sort === 'asc' ? 'asc' : 'desc' },
       take: Number(limit),
@@ -95,7 +95,7 @@ const orderController = {
       },
     });
 
-    const total = await prisma.order.count({ where });
+    const total = await store.order.count({ where });
 
     res.json({
       success: true,
@@ -108,8 +108,8 @@ const orderController = {
 
   submitShippingQuote: asyncHandler(async (req, res) => {
     const { orderId } = req.params;
-    const prisma = getPrisma();
-    const profile = await resolveSellerProfile(prisma, req.user.id);
+    const store = getStore();
+    const profile = await resolveSellerProfile(store, req.user.id);
     const sellerId = profile.id;
     const { amount, estimatedDays, notes } = req.body;
 
@@ -128,8 +128,8 @@ const orderController = {
     const { orderId } = req.params;
     const userId = req.user.id;
 
-    const prisma = getPrisma();
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const store = getStore();
+    const order = await store.order.findUnique({ where: { id: orderId } });
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
@@ -166,8 +166,8 @@ const orderController = {
 
   markDispatched: asyncHandler(async (req, res) => {
     const { orderId } = req.params;
-    const prisma = getPrisma();
-    const profile = await resolveSellerProfile(prisma, req.user.id);
+    const store = getStore();
+    const profile = await resolveSellerProfile(store, req.user.id);
     const sellerId = profile.id;
     const { courierName, trackingNumber } = req.body;
 
@@ -185,16 +185,17 @@ const orderController = {
     const { orderId } = req.params;
     const actorId = req.user.id;
 
-    const prisma = getPrisma();
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const store = getStore();
+    const order = await store.order.findUnique({ where: { id: orderId } });
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
     }
 
-    // BOLA FIX: Only the assigned courier, seller, or admin can mark as delivered.
-    // If there is a specific courier assignment, check that. Otherwise, check roles.
-    const isSeller = order.seller && order.seller.userId === actorId;
+    // Order.sellerId is a SellerProfile id — resolve the acting user's profile
+    // and compare, exactly like the dispatch handler does.
+    const profile = await store.sellerProfile.findUnique({ where: { userId: actorId } });
+    const isSeller = Boolean(profile && order.sellerId === profile.id);
     const isAdmin = req.user.role === 'super_admin' || req.user.role === 'admin';
     const isCourier = req.user.role === 'courier';
 

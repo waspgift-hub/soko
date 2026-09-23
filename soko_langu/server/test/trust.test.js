@@ -36,7 +36,7 @@ function req(method, path, headers = {}) {
 
 // NOTE: the public passport GET is optionalAuth and DB-backed; it is not
 // exercised here because the test env has no local Postgres (a 504 DB-unreachable
-// response is expected, and the prisma lazy-connect outlives the test harness).
+// response is expected, and the store lazy-connect outlives the test harness).
 // Auth-gated routes below reject before touching the DB.
 
 test('reliability computation rejects anonymous callers', async () => {

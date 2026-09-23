@@ -22,6 +22,15 @@ function generateOtp(length = DEFAULTS.otpLength) {
 }
 
 /**
+ * Generate a high-entropy one-time handover token for the QR credential.
+ * The token is delivered to the buyer/courier inside the QR payload and only
+ * ever stored hashed (same salt:sha256 scheme as the OTP).
+ */
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
  * Hash a plaintext OTP with a random salt for storage.
  * Returns { hash, salt }.
  */
@@ -65,6 +74,7 @@ function generateQrPayload({ orderId, orderNumber, token, expiresAt }) {
 module.exports = {
   DEFAULTS,
   generateOtp,
+  generateToken,
   hashOtp,
   verifyOtp,
   generateQrPayload,

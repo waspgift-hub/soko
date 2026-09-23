@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const path = require('path');
 const compression = require('compression');
 const cors = require('cors');
@@ -38,7 +38,7 @@ const legacyShopRouter = require('./modules/legacy-shop/routes');
 const requestId = require('./middleware/requestId');
 const { jsonError } = require('./utils/http');
 
-// BigInt is used for TZS money in DB rows (Prisma Decimal->string->BigInt).
+// BigInt is used for TZS money in DB rows (store Decimal->string->BigInt).
 // Express res.json() cannot serialize BigInt â€” TZS fits a JS safe integer
 // (max ~9e15), so serialize to Number before responding.
 BigInt.prototype.toJSON = function toJSON() {
@@ -302,8 +302,8 @@ app.use('/api/v1/reviews', reviewRouter);
   app.use('/api/v1/sponsored', sponsoredRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
-// the shop SPA needs no client change. Mounted before legacy-compat so these
-// execute against Postgres, not Firestore.
+// the shop SPA needs no client change. Mounted before legacy-compat; both mount
+// groups resolve to the same Firestore store seam via getStore().
 const { generalLimiter } = require('./middleware/rateLimiter');
 app.use('/api', generalLimiter, legacyShopRouter);
 

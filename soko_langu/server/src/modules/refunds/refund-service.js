@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
 const { OrderStateMachine, ORDER_STATES, canonicalStatusOf } = require('../orders/order-state-machine');
@@ -61,11 +61,11 @@ function buildCorrelationId(orderNumber) {
 // Create a Refund record for an order. Money stays put; the actual release is
 // executed by processRefund (admin only). Buyer requests never move the order.
 async function requestRefund({ orderId, requestedBy, role, reason, amount }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`refundreq:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
@@ -122,11 +122,11 @@ async function requestRefund({ orderId, requestedBy, role, reason, amount }) {
 // Execute a refund: release escrow to the buyer per the Refund's mode, then
 // disburse the money to the buyer's phone via the provider payout channel.
 async function processRefund({ refundId, processedBy = 'system' }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`refund:${refundId}`, 60);
 
   try {
-    const { refund, order, escrowHold, finalState } = await prisma.$transaction(async (tx) => {
+    const { refund, order, escrowHold, finalState } = await store.$transaction(async (tx) => {
       const refundRecord = await tx.refund.findUnique({
         where: { id: refundId },
         include: { order: true },
@@ -232,14 +232,14 @@ async function processRefund({ refundId, processedBy = 'system' }) {
 // Push the refunded amount to the buyer's phone via the provider payout.
 // Idempotent per refund: one PayoutTransaction row guards re-runs.
 async function disburseRefund(refund) {
-  const prisma = getPrisma();
-  const existing = await prisma.payoutTransaction.findUnique({ where: { refundId: refund.id } });
+  const store = getStore();
+  const existing = await store.payoutTransaction.findUnique({ where: { refundId: refund.id } });
   if (existing) return existing;
 
-  const orderRecord = await prisma.order.findUnique({ where: { id: refund.orderId } });
+  const orderRecord = await store.order.findUnique({ where: { id: refund.orderId } });
   if (!orderRecord) return markRefundFailed(refund, 'ORDER_NOT_FOUND');
 
-  const buyerUser = await prisma.user.findUnique({ where: { id: orderRecord.buyerId } });
+  const buyerUser = await store.user.findUnique({ where: { id: orderRecord.buyerId } });
   if (!buyerUser || !buyerUser.phone) {
     await markRefundFailed(refund, 'BUYER_NO_PHONE');
     await notifyRefundAdmin(`Refund ${refund.id} blocked: mnunuzi hana namba ya simu`, { refundId: refund.id, orderId: refund.orderId });
@@ -247,7 +247,7 @@ async function disburseRefund(refund) {
   }
 
   try {
-    const payment = await prisma.payment.findUnique({ where: { id: refund.paymentId } });
+    const payment = await store.payment.findUnique({ where: { id: refund.paymentId } });
     const provider = getProvider((payment && payment.provider) || 'clickpesa');
     const payout = await provider.initiatePayout({
       amount: Number(refund.amount),
@@ -255,7 +255,7 @@ async function disburseRefund(refund) {
       phoneNumber: buyerUser.phone,
     });
 
-    await prisma.payoutTransaction.create({
+    await store.payoutTransaction.create({
       data: {
         refundId: refund.id,
         amount: refund.amount,
@@ -264,7 +264,7 @@ async function disburseRefund(refund) {
       },
     });
 
-    const completed = await prisma.refund.update({
+    const completed = await store.refund.update({
       where: { id: refund.id },
       data: { status: REFUND_STATES.COMPLETED, processedAt: new Date() },
     });
@@ -284,7 +284,7 @@ async function disburseRefund(refund) {
 // move to REFUNDED after the provider payout succeeds; failures park the order
 // in REFUND_PENDING (retryable via the standard admin processRefund flow).
 async function refundOnCancel({ orderId, actorId, role, reason }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`cancelrefund:${orderId}`, 60);
 
   try {
@@ -293,9 +293,9 @@ async function refundOnCancel({ orderId, actorId, role, reason }) {
     // Completed refund => pure no-op (token idempotency, no double payout). If
     // the money moved but finalize never ran (process crash between disburse and
     // Phase C), heal the order/escrow through the same finalize path.
-    const prior = await prisma.refund.findFirst({ where: { orderId } });
+    const prior = await store.refund.findFirst({ where: { orderId } });
     if (prior && prior.status === REFUND_STATES.COMPLETED) {
-      const orderNow = await prisma.order.findUnique({ where: { id: orderId } });
+      const orderNow = await store.order.findUnique({ where: { id: orderId } });
       if (orderNow.status === ORDER_STATES.REFUND_PENDING) {
         const healed = await finalizeRefunded({ orderId, actorId, refundRecord: prior });
         await syncLegacyOrderStatus(healed);
@@ -307,7 +307,7 @@ async function refundOnCancel({ orderId, actorId, role, reason }) {
     // Phase A: create/locate the full Refund and park the order in
     // REFUND_PENDING (escrow stays holding — nothing moves yet).
     let refundRecord;
-    await prisma.$transaction(async (tx) => {
+    await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (role !== 'admin' && order.buyerId !== actorId) throw httpError(403, 'FORBIDDEN');
@@ -381,7 +381,7 @@ async function refundOnCancel({ orderId, actorId, role, reason }) {
       });
     });
 
-    const orderForNotify = await prisma.order.findUnique({
+    const orderForNotify = await store.order.findUnique({
       where: { id: orderId },
       include: { seller: { include: { user: true } } },
     });
@@ -398,14 +398,14 @@ async function refundOnCancel({ orderId, actorId, role, reason }) {
     if (disburseResult && disburseResult.status === REFUND_STATES.COMPLETED) {
       const finalized = await finalizeRefunded({ orderId, actorId, refundRecord });
       await syncLegacyOrderStatus(finalized);
-      const completedRefund = await prisma.refund.findUnique({ where: { id: refundRecord.id } });
+      const completedRefund = await store.refund.findUnique({ where: { id: refundRecord.id } });
       return { refund: completedRefund, order: finalized };
     }
 
     // Payout failed or still processing: order stays REFUND_PENDING. Admin can
     // retry via the standard PUT /api/v1/refunds/:id/process path.
-    const refundNow = await prisma.refund.findUnique({ where: { id: refundRecord.id } });
-    const orderNow = await prisma.order.findUnique({ where: { id: orderId } });
+    const refundNow = await store.refund.findUnique({ where: { id: refundRecord.id } });
+    const orderNow = await store.order.findUnique({ where: { id: orderId } });
     await syncLegacyOrderStatus(orderNow);
     return { refund: refundNow, order: orderNow };
   } finally {
@@ -416,8 +416,8 @@ async function refundOnCancel({ orderId, actorId, role, reason }) {
 // Escrow + order move to REFUNDED only once the payout is confirmed. Shared by
 // Phase C and the crash-heal path (money moved, finalize never ran).
 async function finalizeRefunded({ orderId, actorId, refundRecord }) {
-  const prisma = getPrisma();
-  return prisma.$transaction(async (tx) => {
+  const store = getStore();
+  return store.$transaction(async (tx) => {
     const escrowHold = await tx.escrowHold.findFirst({
       where: { orderId, status: { in: ['holding'] } },
     });
@@ -457,14 +457,14 @@ async function finalizeRefunded({ orderId, actorId, refundRecord }) {
 // Seller-facing cancel notification (in-app row + push). Buyer notification is
 // issued by disburseRefund when the payout completes.
 async function notifySellerCancel(order, refund) {
-  const prisma = getPrisma();
+  const store = getStore();
   const sellerUser = order && order.seller && order.seller.user;
   if (!sellerUser) return;
   const title = 'Oda Imeghairiwa';
   const body = `Oda ${order.orderNumber} imeghairiwa na mnunuzi. Pesa zimerudishwa kwake.`;
   const data = { type: 'cancelled', orderId: order.id, refundId: refund.id };
   try {
-    await prisma.notification.create({
+    await store.notification.create({
       data: { userId: sellerUser.id, type: 'cancelled', title, body, data },
     });
   } catch (e) {
@@ -478,16 +478,16 @@ async function notifySellerCancel(order, refund) {
 }
 
 async function markRefundFailed(refund, error) {
-  const prisma = getPrisma();
-  return prisma.refund.update({
+  const store = getStore();
+  return store.refund.update({
     where: { id: refund.id },
     data: { status: REFUND_STATES.FAILED, lastError: String(error).slice(0, 500), errorAt: new Date() },
   });
 }
 
 async function notifyBuyerRefund(order, refund) {
-  const prisma = getPrisma();
-  const buyer = await prisma.user.findUnique({ where: { id: order.buyerId } });
+  const store = getStore();
+  const buyer = await store.user.findUnique({ where: { id: order.buyerId } });
   if (!buyer) return;
 
   const title = 'Pesa Zimerudishwa';
@@ -495,7 +495,7 @@ async function notifyBuyerRefund(order, refund) {
   const data = { type: 'refund', orderId: order.id, refundId: refund.id };
 
   try {
-    await prisma.notification.create({
+    await store.notification.create({
       data: { userId: buyer.id, type: 'refund', title, body, data },
     });
   } catch (e) {
@@ -517,8 +517,8 @@ async function notifyRefundAdmin(body, data) {
 }
 
 function listRefundsForOrder({ orderId, requesterId, role }) {
-  const prisma = getPrisma();
-  return prisma.$transaction(async (tx) => {
+  const store = getStore();
+  return store.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
     if (role !== 'admin' && order.buyerId !== requesterId && order.sellerId !== requesterId) {

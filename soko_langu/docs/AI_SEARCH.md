@@ -17,7 +17,9 @@ lib/services/search_service.dart ──POST /api/search/*──▶ server/search
 - **Primary engine:** `server/search.js` (inayotumiwa na app). 
 - **Duplicate/dead:** `functions/search/query.js` (Cloud Functions — same algorithms, imedrifika,
   Haiwezi kufikia app). **Consolidation ni architecture work — iliyopendekezwa.**
-- **Legacy:** `server/src/modules/search/search-service.js` (PostgreSQL/Prisma ILIKE — kwa web, si app).
+- **Legacy:** `server/src/modules/search/search-service.js` (v1 web API search —
+  now Firestore store seam via `getStore()`; the "PostgreSQL/Prisma ILIKE" tag
+  below reflects the retired v2 era, the store runs Firestore).
 - **AI chat:** Groq via server proxy (`/api/ai/chat`), db-grounded kwa AI assistant screen – sio kwenye
   search results UI.
 

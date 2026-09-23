@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { FieldValue } = require('firebase-admin/firestore');
 

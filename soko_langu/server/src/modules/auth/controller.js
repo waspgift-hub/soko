@@ -1,9 +1,10 @@
 const crypto = require('crypto');
 const { getFirebaseAuth } = require('../../config/firebase');
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { sendSms } = require('../../services/sms-service');
 const { saveOtp, getOtp, markUsed, bumpAttempts } = require('../../services/otp-store');
 const { sendMail } = require('../../services/mailer');
+const accountStore = require('../../services/account-store');
 
 const OTP_TTL_SECONDS = 300; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
@@ -212,12 +213,21 @@ async function otpSignIn(req, res) {
       return res.status(404).json({ error: 'auth_user_not_found' });
     }
 
-    const prisma = getPrisma();
-    const user = await prisma.user.findFirst({
+    const store = getStore();
+    let isAdmin = false;
+    const user = await store.user.findFirst({
       where: { firebaseUid: uid },
       select: { role: true },
     });
-    if (!user || !['admin', 'super_admin'].includes(user.role)) {
+    if (user && ['admin', 'super_admin'].includes(user.role)) {
+      isAdmin = true;
+    } else {
+      // Firestore users/{uid}.role is authoritative for admin identity once the
+      // account has no seam row (fresh-backed admin bookings).
+      const doc = await accountStore.getProfile(uid);
+      if (doc && ['admin', 'super_admin'].includes(doc.role)) isAdmin = true;
+    }
+    if (!isAdmin) {
       return res.status(403).json({ error: 'ADMIN_REQUIRED' });
     }
 
@@ -229,18 +239,23 @@ async function otpSignIn(req, res) {
   }
 }
 
-// Check if phone exists
+// Check if phone exists — Firestore users/{uid} is authoritative; Postgres
+// is a fallback for legacy accounts that predate the Firestore records.
 async function checkPhone(req, res) {
   try {
     const { phone } = req.body;
-    
+
     if (!phone) {
       return res.status(400).json({ error: 'Phone number required' });
     }
 
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({
-      where: { phone },
+    const clean = cleanPhone(phone);
+    const fs = await accountStore.byPhoneFirestore(clean);
+    if (fs) return res.json({ exists: true });
+
+    const store = getStore();
+    const user = await store.user.findFirst({
+      where: { OR: phoneVariants(clean).map((p) => ({ phone: p })) },
       select: { id: true },
     });
 
@@ -251,18 +266,23 @@ async function checkPhone(req, res) {
   }
 }
 
-// Check if email exists
+// Check if email exists — Firestore users/{uid} is authoritative; Postgres
+// is a fallback for legacy accounts that predate the Firestore records.
 async function checkEmail(req, res) {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'Email required' });
     }
 
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const cleanEmail = String(email).trim().toLowerCase();
+    const fs = await accountStore.byEmailFirestore(cleanEmail);
+    if (fs) return res.json({ exists: true });
+
+    const store = getStore();
+    const user = await store.user.findUnique({
+      where: { email: cleanEmail },
       select: { id: true },
     });
 
@@ -319,9 +339,9 @@ async function phoneLogin(req, res) {
 
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
-    const prisma = getPrisma();
+    const store = getStore();
 
-    let user = await prisma.user.findFirst({
+    let user = await store.user.findFirst({
       where: { OR: phoneVariants(clean).map((p) => ({ phone: p })) },
       select: { id: true, firebaseUid: true },
     });
@@ -336,7 +356,7 @@ async function phoneLogin(req, res) {
         displayName: `User ${clean.slice(-4)}`,
       });
       uid = userRecord.uid;
-      await prisma.user.create({
+      await store.user.create({
         data: {
           firebaseUid: uid,
           phone: clean,
@@ -347,12 +367,59 @@ async function phoneLogin(req, res) {
           lastLoginAt: new Date(),
         },
       });
+      // Firestore users/{uid} is the authoritative app profile; seed it so
+      // /me, public profiles, and phone/email checks read Firestore first.
+      await accountStore.writeProfile(uid, {
+        col: {
+          phone: clean,
+          email,
+          displayName: `User ${clean.slice(-4)}`,
+          preferredLanguage: 'sw',
+          phoneVerified: true,
+          accountStatus: 'active',
+          createdAt: new Date().toISOString(),
+        },
+        meta: { lastActive: new Date().toISOString(), profile: {} },
+      });
     } else {
       uid = user.firebaseUid;
-      await prisma.user.update({
+      await store.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date(), phoneVerified: true, accountStatus: 'active' },
       }).catch(() => {});
+
+      // Lazy-migrate old accounts: create the Firestore doc on first login so
+      // the full user base reaches Firestore-primary without a bulk backfill.
+      const doc = await accountStore.getProfile(uid);
+      if (!doc) {
+        const row = await store.user.findUnique({
+          where: { id: user.id },
+          select: {
+            displayName: true, username: true, phone: true, email: true,
+            preferredLanguage: true, avatarUrl: true, accountStatus: true,
+            createdAt: true, metadata: true,
+          },
+        });
+        if (row) {
+          await accountStore.writeProfile(uid, {
+            col: {
+              phone: row.phone || null,
+              email: row.email || null,
+              displayName: row.displayName || null,
+              username: row.username || null,
+              avatarUrl: row.avatarUrl || null,
+              preferredLanguage: row.preferredLanguage || 'sw',
+              phoneVerified: true,
+              accountStatus: row.accountStatus || 'active',
+              createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+            },
+            meta: {
+              lastActive: new Date().toISOString(),
+              profile: (row.metadata && row.metadata.profile) || {},
+            },
+          });
+        }
+      }
     }
 
     const token = await auth.createCustomToken(uid);
@@ -379,9 +446,9 @@ async function resetPasswordByPhone(req, res) {
 
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
-    const prisma = getPrisma();
+    const store = getStore();
 
-    const user = await prisma.user.findFirst({
+    const user = await store.user.findFirst({
       where: { OR: phoneVariants(clean).map((p) => ({ phone: p })) },
       select: { firebaseUid: true },
     });

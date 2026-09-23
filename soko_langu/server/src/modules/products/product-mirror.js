@@ -1,23 +1,18 @@
-const admin = require('firebase-admin');
-const { getFirebaseFirestore } = require('../../config/firebase');
-
-// Presentation mirror (Postgres truth -> Firestore shape), same pattern as the
-// orders presentation-mirror: keep the legacy Firestore `products/{id}` doc in
-// lockstep with the authoritative Postgres row so the client-owned consumers
-// that still key off a Firestore product doc by opaque id (boosts, comments,
-// admin moderation, deep-link reads) keep working for products created via the
-// v1 API after the catalog migrated.
+// Shape builder for the app-facing product doc, shared by the Firestore-first
+// product store and its migration tests. `buildMirrorDoc` produces the legacy
+// `products/{id}` shape from either a Postgres row or a pseudo-row (Phase 2
+// listings) so every writer emits byte-identical docs.
 
 // Builds the legacy Firestore document shape from a Postgres product row.
 // Pure: unit tests cover it without a database. `createdAt` is emitted as an
-// ISO string here and swapped for a real Timestamp by [mirrorProduct].
+// ISO string so the app reads a stable serializable value.
 function buildMirrorDoc(product, sellerContext) {
   const snap = product.snapshot || {};
   const sellerName =
     sellerContext?.sellerName ||
     snap.sellerName ||
     null;
-  const sellerPhone = snap.sellerPhone || null;
+  const sellerPhone = sellerContext?.sellerPhone || snap.sellerPhone || null;
   return {
     name: snap.title || product.title || '',
     searchName: String(snap.title || product.title || '').toLowerCase(),
@@ -61,33 +56,6 @@ function buildMirrorDoc(product, sellerContext) {
   };
 }
 
-async function mirrorProduct(product, sellerContext) {
-  const store = getFirebaseFirestore();
-  if (!store || !product?.id) return;
-  const doc = buildMirrorDoc(product, sellerContext);
-  const createdAt =
-    product.createdAt instanceof Date ? product.createdAt : new Date();
-  doc.createdAt = admin.firestore.Timestamp.fromDate(createdAt);
-  try {
-    await store.collection('products').doc(product.id).set(doc, { merge: true });
-  } catch (e) {
-    // Never block the primary Postgres write on a disposable mirror.
-    console.warn(`[mirror] product ${product.id} not synced: ${e.message}`);
-  }
-}
-
-async function mirrorProductDelete(id) {
-  const store = getFirebaseFirestore();
-  if (!store) return;
-  try {
-    await store.collection('products').doc(id).delete();
-  } catch (e) {
-    console.warn(`[mirror] product ${id} not removed: ${e.message}`);
-  }
-}
-
 module.exports = {
   buildMirrorDoc,
-  mirrorProduct,
-  mirrorProductDelete,
 };

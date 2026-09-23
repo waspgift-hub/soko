@@ -5,12 +5,21 @@ Toleo la ufafanuzi: v2.0 "Trust-Commerce" (server src/) + v1 legacy-compat
 Tarehe: Septemba 2026
 Maandishi haya yanatokana na uchunguzi wa code halisi (sio mawazo).
 
+>>> HISTORICAL NOTE (2026): Maandishi chini yanarejelea mchakato wa v2
+>>> uliotengwa kuhamia PostgreSQL/Prisma. RUNTIME YA SASA ni Firestore-ONLY:
+>>> `getStore()`/`getReadStore()` in `server/src/config/database.js` yote
+>>> miwili inaresolve kwenye Firestore store seam; hapana dependency ya
+>>> `pg`/Prisma, hapana `DATABASE_URL`/`DATABASE_URL_REPLICA`. `server/prisma/
+>>> schema.prisma` iliondolewa baada ya Firestore store kuthibitishwa,
+>>> haitumiki kwenye runtime. Vipengele vya "Postgres" chini ni kumbukumbu ya
+>>> mpango wa zamani.
+
 ================================================================================
 1. MUHTASARI WA JUU (HIGH-LEVEL)
 ================================================================================
 
 Soko Vibe ni marketplace ya Tanzania: Flutter app (mobile/web) + Node/Express
-server + Firebase + PostgreSQL + Redis + ClickPesa + OneSignal + Cloudflare.
+server + Firebase + Redis + ClickPesa + OneSignal + Cloudflare.
 
 Trafiki hupitia mlango mmoja wa umma:
 

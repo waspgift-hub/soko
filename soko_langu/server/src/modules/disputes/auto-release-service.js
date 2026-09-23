@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 
@@ -48,11 +48,11 @@ async function evaluateAutoRelease(tx, orderId) {
  * Idempotent: does nothing if already released/completed.
  */
 async function autoRelease({ orderId, triggeredBy = 'system' }) {
-  const prisma = getPrisma();
+  const store = getStore();
   const lock = await acquireLock(`autorelease:${orderId}`, 60);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
@@ -65,9 +65,23 @@ async function autoRelease({ orderId, triggeredBy = 'system' }) {
         return { status: 'BLOCKED', missingSafeguards };
       }
 
-      // Everything checks out: transition to COMPLETED and release escrow.
-      const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.COMPLETED, {
+      // Everything checks out: authorize settlement (DELIVERY_CONFIRMED),
+      // release escrow, then move to COMPLETED. The two-step keeps the
+      // state machine honest — COMPLETED is only reachable from
+      // DELIVERY_CONFIRMED, which carries the SETTLEMENT_AUTHORIZED rule.
+      const stepOne = new OrderStateMachine(order.status);
+      stepOne.transition(ORDER_STATES.DELIVERY_CONFIRMED, {
+        actor: 'system',
+        actorId: triggeredBy,
+        reason: 'Auto-release: delivery verified after inspection window',
+      });
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: ORDER_STATES.DELIVERY_CONFIRMED, statusChangedBy: triggeredBy },
+      });
+
+      const stepTwo = new OrderStateMachine(ORDER_STATES.DELIVERY_CONFIRMED);
+      stepTwo.transition(ORDER_STATES.COMPLETED, {
         actor: 'system',
         actorId: triggeredBy,
         reason: 'Auto-release after inspection window',

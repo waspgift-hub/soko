@@ -1,4 +1,4 @@
-const { getPrisma } = require('../../config/database');
+const { getStore } = require('../../config/database');
 const { getRedis } = require('../../config/redis');
 
 async function checkHealth() {
@@ -10,10 +10,10 @@ async function checkHealth() {
     checks: {},
   };
 
-  // Check database
+  // Check database (Firestore liveness probe)
   try {
-    const prisma = getPrisma();
-    await prisma.$queryRaw`SELECT 1`;
+    const store = getStore();
+    await store.ping();
     health.checks.database = { status: 'ok', latency: 'fast' };
   } catch (error) {
     health.status = 'error';
