@@ -572,6 +572,51 @@ service cloud.firestore {
       allow write: if isOwner(userId) || isAdmin();
     }
 
+    // ─── LANDING WAITLIST (sokovibe.co.tz coming-soon page) ─────
+    // Doc id = normalized email, so a second signup is rejected by the
+    // exists() guard (public create only). Emails stay private: reads are
+    // admin-only to avoid email harvesting via doc-id enumeration.
+    match /landing_waitlist/{email} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasAll(['email', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 5
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.email == email
+        && request.resource.data.createdAt is timestamp
+        && !exists(/databases/$(database)/documents/landing_waitlist/$(email));
+    }
+
+    // ─── LANDING FEATURE SUGGESTIONS ─────────────────────────────
+    // Public create from the landing page; content is private (admin-only
+    // reads) because some rows carry contact details.
+    match /landing_feature_suggestions/{suggestionId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasAll(['createdAt'])
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.keys().hasAny(['features', 'details'])
+        && request.resource.data.features is list
+        && request.resource.data.get('details', '') is string
+        && request.resource.data.get('details', '').size() <= 1500;
+    }
+
+    // ─── LANDING COMMENTS ─────────────────────────────────────────
+    // Public create + read: the coming-soon page renders recent comments
+    // for anyone. Moderation/deletes are admin-only.
+    match /landing_comments/{commentId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'text', 'createdAt'])
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 3
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.get('email', '') is string;
+      allow update, delete: if isAdmin();
+    }
+
     // ─── SMOKE: deny-all fallback for any undocumented collection ──
     match /{document=**} {
       allow read, write: if false;
