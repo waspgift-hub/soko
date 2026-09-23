@@ -43,6 +43,13 @@ const config = {
     webhookSecret: process.env.CLICKPESA_WEBHOOK_SECRET,
     checksumKey: process.env.CLICKPESA_CHECKSUM_KEY,
     allowedIps: process.env.CLICKPESA_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
+    // The ONE ClickPesa collection callback URL. Every payment-initiation path
+    // must use this value — providers must never receive a guessed/derived URL.
+    // Kept separate from APP_URL: the webhook host is not the canonical app URL.
+    collectionWebhookUrl: process.env.CLICKPESA_COLLECTION_WEBHOOK_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? ''
+        : 'http://localhost:3000/api/v1/payments/webhook/clickpesa'),
   },
   
   // SMS
@@ -111,9 +118,12 @@ const config = {
     disputeSlaMs: (parseInt(process.env.FINANCE_DISPUTE_SLA_HOURS) || 72) * 3600 * 1000,
   },
   
-  // URLs
+  // URLs. APP_URL is the canonical public API/application URL; it must be set
+  // explicitly in production — there is deliberately NO fallback domain here so
+  // a missing value fails loudly instead of silently routing callbacks to a
+  // dead host. Payment webhooks use clickpesa.collectionWebhookUrl, never APP_URL.
   urls: {
-    app: process.env.APP_URL || 'https://api.soko-vibe.co.tz',
+    app: process.env.APP_URL || '',
     frontend: process.env.FRONTEND_URL || 'https://soko-vibe.co.tz',
     admin: process.env.ADMIN_URL || 'https://admin.soko-vibe.co.tz',
   },
@@ -127,5 +137,17 @@ const config = {
     webProductUrl: process.env.WEB_PRODUCT_URL || 'https://www.sokovibe.co.tz/product/',
   },
 };
+
+// Fail fast in production: a missing APP_URL / collection webhook URL silently
+// points payment callbacks at an empty or dead host — never recover from that
+// at runtime. Development keeps documented local defaults.
+if (config.nodeEnv === 'production') {
+  if (!config.urls.app) {
+    throw new Error('APP_URL must be configured in production (e.g. https://api.sokovibe.co.tz)');
+  }
+  if (!config.clickpesa.collectionWebhookUrl) {
+    throw new Error('CLICKPESA_COLLECTION_WEBHOOK_URL must be configured in production (e.g. https://soko-langu-server.onrender.com/api/v1/payments/webhook/clickpesa)');
+  }
+}
 
 module.exports = config;

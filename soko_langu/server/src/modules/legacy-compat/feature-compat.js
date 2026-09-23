@@ -1004,8 +1004,8 @@ module.exports = function ({ admin: fbAdmin, db }) {
           });
         }
 
-        const baseUrl2 = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-        clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: `${baseUrl2}/api/clickpesa/webhook` })
+        // Central webhook config: never derive the callback from the request host.
+        clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
           .then((result) => {
             const ref = result?.id || result?.orderReference || '';
             if (!ref) { console.error(`[USSD] Boost ClickPesa no ref for ${order_id}`); return; }

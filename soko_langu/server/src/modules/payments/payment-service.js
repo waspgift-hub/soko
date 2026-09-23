@@ -6,6 +6,7 @@ const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machi
 const { sameAmount } = require('../../utils/money');
 const outbox = require('./webhook-outbox');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
+const { sendOneSignalNotification } = require('../legacy-compat/notify');
 
 /**
  * Payment service.
@@ -49,7 +50,7 @@ async function initiatePayment({
         amount,
         orderReference: order.orderNumber,
         phoneNumber,
-        callbackUrl: `${config.urls.app}/api/v1/payments/webhook/clickpesa`,
+        callbackUrl: config.clickpesa.collectionWebhookUrl,
       });
 
       const payment = await tx.payment.create({
@@ -111,12 +112,18 @@ async function confirmCollection({
       });
       if (!payment) throw httpError(404, 'PAYMENT_NOT_FOUND');
 
+      // Server-authoritative money: the provider may echo a different amount
+      // than we asked the buyer to pay — never credit more than the order.
+      if (amount != null && !sameAmount(amount, order.totalAmount)) {
+        throw httpError(400, `AMOUNT_MISMATCH:${amount.toString()}`);
+      }
+
       // Layer 4: status priority check
       if (order.status === ORDER_STATES.ESCROW_HELD) {
         result = { status: 'ALREADY_IN_ESCROW', order };
         return;
       }
-      if (![ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
+      if (![ORDER_STATES.PAYMENT_PENDING, ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
@@ -162,24 +169,9 @@ async function confirmCollection({
         data: { status: ORDER_STATES.ESCROW_HELD, paidAt: new Date() },
       });
 
-      // Ledger: buyer -> escrow
-      const escrowAccount = await tx.ledgerAccount.findFirst({
-        where: { accountName: 'ESCROW_POOL' },
-      });
-
-      if (!escrowAccount) throw new Error('ESCROW_POOL_ACCOUNT_MISSING');
-
-      await tx.ledgerEntry.create({
-        data: {
-          accountId: escrowAccount.id,
-          transactionId: payment.id,
-          direction: 'CREDIT',
-          amount: payment.amount,
-          referenceType: 'ORDER_PAYMENT',
-          referenceId: payment.orderId,
-        },
-      });
-
+      // Ledger: the escrow_holds row above IS the v2 money trail (payment ->
+      // hold). Phase 5 moved seller wallets to Firestore, released on handover
+      // via ledger-service, so no Postgres pool ledger sits here anymore.
       result = { status: 'VERIFIED', order: updatedOrder, escrowHold };
     });
   } finally {
@@ -189,6 +181,7 @@ async function confirmCollection({
   // Presentation mirror AFTER commit
   if (result && result.status === 'VERIFIED') {
     await syncLegacyOrderStatus(result.order);
+    await notifySellerEscrowFunded(result.order);
   }
   return result;
 }
@@ -292,6 +285,36 @@ async function markPaymentFailed(orderReference) {
 function calcCommission(productPrice) {
   const percent = config.business.platformCommissionPercent;
   return Math.round(Number(productPrice) * percent);
+}
+
+// Escrow-funded notice to the seller (in-app row + push). Best-effort: a
+// notification failure must never fail the finance commit it follows.
+async function notifySellerEscrowFunded(order) {
+  const prisma = getPrisma();
+  try {
+    const sellerUserId = (await prisma.sellerProfile.findUnique({
+      where: { id: order.sellerId },
+      select: { userId: true },
+    }))?.userId;
+    if (!sellerUserId) return;
+    const seller = await prisma.user.findUnique({ where: { id: sellerUserId } });
+    if (!seller) return;
+    const title = 'Malipo Yamefika Escrow';
+    const body = `Oda ${order.orderNumber}: mnunuzi amelipa. Tayarisha kusafirisha.`;
+    const data = { type: 'escrow_funded', orderId: order.id };
+    try {
+      await prisma.notification.create({ data: { userId: seller.id, type: 'escrow_funded', title, body, data } });
+    } catch (e) {
+      console.error('[PAYMENT][NOTIFY-SELLER-DB]', e.message);
+    }
+    try {
+      await sendOneSignalNotification(seller.firebaseUid, title, body, data);
+    } catch (e) {
+      console.error('[PAYMENT][NOTIFY-SELLER-OS]', e.message);
+    }
+  } catch (e) {
+    console.error('[PAYMENT][NOTIFY-SELLER]', order.id, e.message);
+  }
 }
 
 function httpError(status, message) {

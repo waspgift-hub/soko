@@ -377,8 +377,8 @@ router.post('/create-marketplace-payment-link', paymentLimiter, async (req, res)
       await db.collection('transactions').doc(order_id).set(txData, { merge: true });
 
       // Fire ClickPesa async — don't wait for it
-      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+      // Central webhook config: never derive the callback from the request host.
+      const callbackUrl = config.clickpesa.collectionWebhookUrl;
       clickpesaCollect({ amount: totalAmount, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl })
         .then((result) => {
           const ref = result?.id || result?.orderReference || '';

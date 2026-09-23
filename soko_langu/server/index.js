@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const axios = require('axios');
 const Redis = require('ioredis');
 const path = require('path');
+const config = require('./src/config');
 
 // Firebase init — MUST be before any module that calls admin.firestore() at require time
 let db;
@@ -679,14 +680,12 @@ async function dequeueFailedBoosts(maxCount = 10) {
 // ---------------------------------------------------------------------------
 // Webhook IP Whitelisting — Defense Layer 1
 //
-// Only ClickPesa's known outgoing IPs should reach this endpoint. Even if
-// an attacker discovers the URL, they cannot reach it from a different IP.
-//
-// SETUP: Add CLICKPESA_ALLOWED_IPS to .env as a comma-separated list:
-//   CLICKPESA_ALLOWED_IPS=203.0.113.1,203.0.113.2,198.51.100.0/24
-//
-// If the env var is empty or missing, IP checks are skipped (for local dev).
-// In production this MUST be set — the guard is explicit.
+// IP Whitelist is OPTIONAL defense-in-depth. ClickPesa's PRIMARY webhook
+// verification mechanism is HMAC/checksum (see verifyWebhook below) — not
+// IP whitelist. Since a Render-hosted server has no static outbound IP,
+// a missing CLICKPESA_ALLOWED_IPS simply skips this layer and relies on
+// HMAC instead. In production, set CLICKPESA_ALLOWED_IPS to a comma-
+// separated list (single IPs or CIDR blocks) if you want IP-level gating.
 // ---------------------------------------------------------------------------
 const ipRangeCheck = (() => {
   try { return require('ip-range-check'); } catch { return null; }
@@ -695,10 +694,8 @@ const ipRangeCheck = (() => {
 function webhookIpWhitelist(req, res, next) {
   const allowedRaw = process.env.CLICKPESA_ALLOWED_IPS;
   if (!allowedRaw) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[SECURITY] CLICKPESA_ALLOWED_IPS not set — rejecting webhook in production');
-      return res.status(503).json({ error: 'Webhook IP whitelist not configured' });
-    }
+    // No whitelist configured — skip IP gating. HMAC verification
+    // (applied downstream by verifyWebhook) is the primary gate.
     return next();
   }
 
@@ -1080,8 +1077,7 @@ app.post('/api/boost-product', async (req, res) => {
       }
 
       // Fire ClickPesa async
-      const baseUrl2 = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-      clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: `${baseUrl2}/api/clickpesa/webhook` })
+      clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
         .then((result) => {
           const ref = result?.id || result?.orderReference || '';
           if (!ref) { console.error(`[USSD] Boost ClickPesa no ref for ${order_id}`); return; }
@@ -4236,8 +4232,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       await db.collection('transactions').doc(order_id).set(txData, { merge: true });
 
       // Fire ClickPesa async — don't wait for it
-      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+      const callbackUrl = config.clickpesa.collectionWebhookUrl;
       clickpesaCollect({ amount: totalAmount, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl })
         .then((result) => {
           const ref = result?.id || result?.orderReference || '';
@@ -8098,8 +8093,7 @@ app.post('/api/wallet/deposit', async (req, res) => {
       });
 
       // Fire ClickPesa async — return immediately
-      const baseUrl3 = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-      clickpesaCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: `${baseUrl3}/api/clickpesa/webhook` })
+      clickpesaCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
         .then((result) => {
           const ref = result?.id || '';
           if (!ref) { console.error(`[USSD] Deposit ClickPesa no ref for ${depositRef}`); return; }

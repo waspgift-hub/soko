@@ -4,6 +4,7 @@
 // Postgres users backfill and while the app-admin panel still reads Firestore.
 const { getPrisma } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
+const config = require('../../config');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');
 const { clickpesaCollect, clickpesaCreateBillPayOrder, calcGatewayFee } = require('../../../clickpesa');
 // Contact (phone/email) verification OTPs reuse the same store the auth login
@@ -147,7 +148,7 @@ async function getKycFeeStatus({ userId }) {
  * in the background (same contract as marketplace payments); BillPay returns
  * a control number the seller enters manually in M-Pesa.
  */
-async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push', baseUrl }) {
+async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push' }) {
   if (!userId) throw httpError(401, 'UNAUTHORIZED', 'Not authenticated');
   const existing = await hasPaidKycFee(userId);
   if (existing.paid) {
@@ -218,7 +219,7 @@ async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push', base
   }
   // Fire the push async — the caller gets an instant response and the webhook
   // flips the transaction to 'completed' (applyClickPesaPayment, kyc_fee branch).
-  const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+  const callbackUrl = config.clickpesa.collectionWebhookUrl;
   clickpesaCollect({ amount: totalAmount, orderReference: orderId, phoneNumber: normalizedPhone, callbackUrl })
     .then((result) => {
       const ref = result?.id || result?.orderReference || '';

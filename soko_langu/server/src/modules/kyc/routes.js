@@ -160,14 +160,10 @@ router.get('/fee/status', authenticate, async (req, res) => {
 router.post('/fee/initiate', authenticate, async (req, res) => {
   try {
     const { phone, paymentMethod } = req.body || {};
-    // The webhook URL must be publicly reachable; PUBLIC_SERVER_URL wins over
-    // the request host so direct IP/proxied probes can't redirect callbacks.
-    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
     const result = await kycService.initiateKycFee({
       userId: req.firebaseUid,
       phone,
       paymentMethod,
-      baseUrl,
     });
     res.json({ success: true, data: result });
   } catch (e) {

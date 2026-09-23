@@ -20,13 +20,17 @@ try {
   ipRangeCheck = null;
 }
 
+// IP Whitelist is OPTIONAL defense-in-depth. ClickPesa's PRIMARY webhook
+// verification mechanism is HMAC/checksum (see verifyWebhook) — not IP
+// whitelist. A missing CLICKPESA_ALLOWED_IPS skips this layer and relies
+// on HMAC instead. Set CLICKPESA_ALLOWED_IPS to a comma-separated list
+// (IPs or CIDR blocks) to add IP-level gating.
+
 function webhookIpWhitelist(req, res, next) {
   const allowedRaw = process.env.CLICKPESA_ALLOWED_IPS;
   if (!allowedRaw) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[SECURITY] CLICKPESA_ALLOWED_IPS not set — rejecting webhook in production');
-      return res.status(503).json({ error: 'Webhook IP whitelist not configured' });
-    }
+    // No whitelist configured — skip IP gating. HMAC verification
+    // (applied downstream by verifyWebhook) is the primary gate.
     return next();
   }
   const clientIp = req.ip || (req.connection && req.connection.remoteAddress) || '';
