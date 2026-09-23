@@ -99,9 +99,9 @@ function serviceError(res, e) {
 function invalidateProductCache(product) {
   const id = product?.id;
   const slug = product?.slug;
-  if (id) cache.del(`catalog:product:v1:${id}`);
-  if (slug) cache.del(`catalog:product:v1:${slug}`);
-  cache.delPattern('catalog:list:v1:*');
+  if (id) cache.del(`catalog:product:v2:${id}`);
+  if (slug) cache.del(`catalog:product:v2:${slug}`);
+  cache.delPattern('catalog:list:v2:*');
 }
 
 // Public catalog
@@ -138,7 +138,7 @@ router.get(
   async (req, res) => {
     // Key the cache entry on the full filter set so distinct listings stay
     // separate; single-flight prevents a herd from re-running the same query.
-    const key = `catalog:list:v1:${JSON.stringify(req.query)}`;
+    const key = `catalog:list:v2:${JSON.stringify(req.query)}`;
     const data = await cache.getOrCompute(key, () => service.listProducts(req.query), 30 * 1000);
     res.json({ success: true, data });
   }
@@ -151,7 +151,9 @@ router.get('/categories', async (req, res) => {
   // the two-tier cache so the in-memory copy (and then Redis) absorbs the
   // cluster-wide read before the store is ever called. Single-flight inside
   // getOrCompute collapses a thundering herd into one DB query per expiry.
-  const data = await cache.getOrCompute('catalog:categories:v1', async () => {
+  // v2 namespace: v1 keys were written by the legacy Postgres backend and still
+  // live in shared Redis — a fresh Firestore-only deploy must not serve those.
+  const data = await cache.getOrCompute('catalog:categories:v2', async () => {
     const categories = await store.category.findMany({
       where: { isActive: true },
       select: { id: true, name: true, slug: true, parentId: true, iconUrl: true, sortOrder: true },
@@ -181,7 +183,7 @@ router.get('/seller', authenticate, requireActive, async (req, res) => {
 router.get('/:idOrSlug', async (req, res) => {
   try {
     const data = await cache.getOrCompute(
-      `catalog:product:v1:${req.params.idOrSlug}`,
+      `catalog:product:v2:${req.params.idOrSlug}`,
       () => service.getProduct(req.params.idOrSlug),
       30 * 1000
     );
