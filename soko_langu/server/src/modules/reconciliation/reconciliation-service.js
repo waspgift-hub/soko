@@ -29,7 +29,7 @@ function isSuccessful(status) {
   return ['SUCCESS', 'SUCCESSFUL', 'PAID', 'COMPLETED'].includes(String(status || '').toUpperCase());
 }
 
-async function runReconciliation({ provider = 'clickpesa', periodStart, periodEnd }) {
+async function runReconciliation({ provider = 'clickpesa', periodStart, periodEnd, skipWhenQuiet = false }) {
   if (!periodStart || !periodEnd) throw httpError(400, 'periodStart and periodEnd required');
   const start = new Date(periodStart);
   const end = new Date(periodEnd);
@@ -75,6 +75,17 @@ async function runReconciliation({ provider = 'clickpesa', periodStart, periodEn
     .reduce((sum, r) => sum + r.amount, 0);
 
   const difference = internalTotal - toBig(providerTotal);
+
+  // The hourly sweep has nothing to reconcile on an idle system; persisting a
+  // zero-vs-zero row each tick would fabricate business data in a clean start.
+  // Admin-invoked runs (skipWhenQuiet=false) always record for the audit trail.
+  const quiet =
+    skipWhenQuiet &&
+    internalTotal === 0n &&
+    providerTotal === 0n &&
+    providerRecords.length === 0;
+  if (quiet) return null;
+
   const row = await store.reconciliation.create({
     data: {
       periodStart: start,

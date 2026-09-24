@@ -254,8 +254,12 @@ async function runReconciliationSweep({ now = new Date() } = {}) {
       provider: 'clickpesa',
       periodStart: start.toISOString(),
       periodEnd: now.toISOString(),
+      skipWhenQuiet: true,
     });
-    if (row && row.status === 'mismatched') {
+    // runReconciliation returns null when there is no payment activity to
+    // reconcile (idle system) — nothing to record or alert on.
+    if (!row) return { status: 'idle' };
+    if (row.status === 'mismatched') {
       await throttledNotify('reconciliation:mismatch', 24 * 3600, () =>
         notifyAdmins(
           'Payment reconciliation mismatch',
