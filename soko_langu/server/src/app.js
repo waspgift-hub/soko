@@ -1,3 +1,8 @@
+// Express 4 swallows rejected promises from async route handlers, leaving
+// requests hanging until the proxy gives up (504). Patch Layer#handle_request
+// before any route mounts so async rejections reach the error handler below.
+require('./utils/express-async');
+
 const express = require('express');
 const path = require('path');
 const compression = require('compression');
