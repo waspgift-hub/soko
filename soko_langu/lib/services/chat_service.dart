@@ -7,10 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../models/chat_room.dart';
 import '../models/message_model.dart';
-import '../models/sync_operation.dart';
 import 'api_config.dart';
 import 'local_cache_service.dart';
-import 'sync_queue_service.dart';
 
 /// Firestore owner of DM chat (`chat_rooms`, `chat_rooms/<id>/messages`).
 /// Repository boundary (§14): chat collections are written ONLY here; no
@@ -241,62 +239,6 @@ Stream<List<ChatRoom>> getRooms() {
     }
   }
 
-  /// Persist a message locally and queue it for delivery. Returns the
-  /// client message id used as the Hive key, the UI temp id, and the
-  /// outbox idempotency key — one id for all three, so restarts and
-  /// retries can never duplicate the message.
-  Future<String> queueMessage({
-    required SyncQueueService outbox,
-    required String receiverId,
-    required String content,
-    String? productId,
-    String? productName,
-    String? replyTo,
-    String? replyToContent,
-    String? replyToSender,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
-    final roomId = roomIdFor(user.uid, receiverId);
-    final clientMessageId = const Uuid().v4();
-    await LocalCacheService.cacheSingleMessage(
-      roomId,
-      Message(
-        id: clientMessageId,
-        senderId: user.uid,
-        receiverId: receiverId,
-        content: content,
-        timestamp: DateTime.now(),
-        isRead: false,
-        isDelivered: false,
-        productId: productId,
-        productName: productName,
-        replyTo: replyTo,
-        replyToContent: replyToContent,
-        replyToSender: replyToSender,
-      ),
-    );
-    await outbox.enqueue(
-      operationType: SyncOperationType.chatSend,
-      entityType: 'message',
-      entityId: clientMessageId,
-      payload: {
-        'receiverId': receiverId,
-        'roomId': roomId,
-        'senderId': user.uid,
-        'content': content,
-        'productId': ?productId,
-        'productName': ?productName,
-        'replyTo': ?replyTo,
-        'replyToContent': ?replyToContent,
-        'replyToSender': ?replyToSender,
-      },
-      priority: SyncPriority.high,
-      idempotencyKey: clientMessageId,
-    );
-    return clientMessageId;
-  }
-
   /// Mark all unread incoming messages as read in Firestore.
   Future<void> markMessagesAsRead(String roomId) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -505,42 +447,4 @@ Stream<List<ChatRoom>> getRooms() {
     final blocked = List<String>.from(doc.data()!['blockedUsers'] ?? []);
     return blocked.contains(userId);
   }
-}
-
-/// SyncEngine handler for [SyncOperationType.chatSend]. Resends with the
-/// stored idempotency key (server dedupes, never duplicates), flips the
-/// local cached copy to delivered, and throws on failure so the engine
-/// retries or dead-letters instead of silently dropping the message.
-Future<void> syncQueuedChatMessage(SyncOperation op) async {
-  final p = op.payload;
-  final messageId = await ChatService().sendMessage(
-    receiverId: p['receiverId'] as String,
-    content: p['content'] as String,
-    productId: p['productId'] as String?,
-    productName: p['productName'] as String?,
-    replyTo: p['replyTo'] as String?,
-    replyToContent: p['replyToContent'] as String?,
-    replyToSender: p['replyToSender'] as String?,
-    clientMessageId: op.idempotencyKey,
-  );
-  if (messageId == null || messageId.isEmpty) {
-    throw Exception('Chat resend returned no message id');
-  }
-  await LocalCacheService.cacheSingleMessage(
-    p['roomId'] as String,
-    Message(
-      id: op.idempotencyKey,
-      senderId: p['senderId'] as String,
-      receiverId: p['receiverId'] as String,
-      content: p['content'] as String,
-      timestamp: op.createdAt,
-      isRead: false,
-      isDelivered: true,
-      productId: p['productId'] as String?,
-      productName: p['productName'] as String?,
-      replyTo: p['replyTo'] as String?,
-      replyToContent: p['replyToContent'] as String?,
-      replyToSender: p['replyToSender'] as String?,
-    ),
-  );
 }

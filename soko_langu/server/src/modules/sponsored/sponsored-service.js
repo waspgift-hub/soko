@@ -166,6 +166,20 @@ async function createCampaign({ sellerProfileId, data }) {
     if (ownedCount !== productIds.length) throw httpError(403, 'PRODUCT_NOT_OWNED');
   }
 
+  // Resolve the products the campaign will place. isAllProducts advertises
+  // every active listing the seller owns; narrow it at creation so serving
+  // never has to expand the set on request (Firestore post-filters are
+  // capped, and ad eligibility must stay deterministic).
+  const targetProductIds = isAllProducts
+    ? await store.product
+        .findMany({
+          where: { sellerId: sellerProfileId, status: 'published', deletedAt: null },
+          select: { id: true },
+          take: 100,
+        })
+        .then((rows) => rows.map((r) => r.id))
+    : productIds;
+
   return await store.$transaction(async (tx) => {
     const campaign = await tx.sponsoredCampaign.create({
       data: {
@@ -178,17 +192,27 @@ async function createCampaign({ sellerProfileId, data }) {
         startsAt: start,
         expiresAt: end,
         status: CAMPAIGN_STATUSES.DRAFT,
-        placements: isAllProducts
-          ? undefined
-          : {
-              create: productIds.map((pid) => ({
-                productId: pid,
-                isAllProducts: false,
-              })),
-            },
+        dailySpendTzs: 0,
+        dailySpendDate: null,
+        placements: [],
       },
       include: { placements: true },
     });
+
+    // The store seam mirrors Prisma's relation syntax but Firestore documents
+    // are written individually, so `placements: { create }` would land as a
+    // literal nested field. Write rows explicitly.
+    const placements = await Promise.all(
+      targetProductIds.map((pid) =>
+        tx.campaignPlacement.create({
+          data: {
+            campaignId: campaign.id,
+            productId: pid,
+            isAllProducts: Boolean(isAllProducts),
+          },
+        })
+      )
+    );
 
     await tx.campaignAuditLog.create({
       data: {
@@ -196,11 +220,11 @@ async function createCampaign({ sellerProfileId, data }) {
         actorId: sellerProfileId,
         actorType: 'user',
         action: 'campaign.created',
-        newState: { name, dailyBudgetTzs, totalBudgetTzs, bidAmountTzs, placement, status: 'draft' },
+        newState: { name, dailyBudgetTzs, totalBudgetTzs, bidAmountTzs, placement, status: 'draft', products: targetProductIds.length },
       },
     });
 
-    return campaign;
+    return { ...campaign, placements };
   });
 }
 
@@ -327,10 +351,11 @@ async function activateCampaign({ campaignId, paymentId }) {
   if (!campaign) throw httpError(404, 'CAMPAIGN_NOT_FOUND');
   if (campaign.status !== CAMPAIGN_STATUSES.PAYMENT_PENDING) throw httpError(409, 'CANNOT_ACTIVATE');
 
+  const today = dayKey(new Date());
   await store.$transaction(async (tx) => {
     await tx.sponsoredCampaign.update({
       where: { id: campaignId },
-      data: { status: CAMPAIGN_STATUSES.ACTIVE },
+      data: { status: CAMPAIGN_STATUSES.ACTIVE, dailySpendTzs: 0, dailySpendDate: today },
     });
     if (paymentId) {
       await tx.campaignPayment.update({
@@ -417,16 +442,25 @@ async function getCampaign({ campaignId, sellerProfileId }) {
   return campaign;
 }
 
+// intl-localisation-free date key (YYYY-MM-DD in server timezone).
+function dayKey(d) {
+  const x = d || new Date();
+  const m = String(x.getMonth() + 1).padStart(2, '0');
+  const day = String(x.getDate()).padStart(2, '0');
+  return `${x.getFullYear()}-${m}-${day}`;
+}
+
 // Get active sponsored placements for a product category (used by the search/catalog
 // engine to interleave sponsored results). Fraud protection: deduplicates by IP+userAgent
 // so a single client can't inflate impression counts.
 async function getActivePlacements({ categoryId, placement, limit = 10, ipAddress, userAgent }) {
-  const cacheKey = `sponsored:placements:${placement || 'all'}:${categoryId || 'all'}:l${limit}`;
+  const cacheKey = `sponsored:placements:${placement || 'all'}:${categoryId || 'all'}:l${limit}:${today}`;
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
 
   const store = getReadStore();
   const now = new Date();
+  const today = dayKey(now);
 
   // Fraud protection: deduplicate impressions per (campaign, ip, userAgent) within a 60s window.
   // This prevents impression inflation via rapid refreshes.
@@ -437,25 +471,21 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
       ipAddress: ipAddress || undefined,
     },
     select: { campaignId: true },
-    distinct: ['campaignId'],
   });
   const dedupedCampaignIds = new Set(recentImpressions.map((r) => r.campaignId));
 
-  const query = {
+  // The store seam resolves relation clauses only via `include`, and in-memory
+  // `where` filters are pushed down one equality at a time — a
+  // `placements: { some: { product: { categoryId } } }` clause is silently
+  // ignored. Fetch placement rows + products, then enforce category/schedule
+  // eligibility here so cross-category ads can never leak into a listing.
+  const campaigns = await store.sponsoredCampaign.findMany({
     where: {
       status: CAMPAIGN_STATUSES.ACTIVE,
-      startsAt: { lte: now },
-      expiresAt: { gte: now },
       ...(placement ? { placement } : {}),
-      ...(categoryId
-        ? { placements: { some: { product: { categoryId: categoryId } } } }
-        : {}),
     },
-    orderBy: { bidAmountTzs: 'desc' },
-    take: Number(limit),
     include: {
       placements: {
-        where: { product: { categoryId: categoryId || undefined } },
         include: {
           product: {
             select: {
@@ -465,6 +495,10 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
               price: true,
               currency: true,
               originalPrice: true,
+              categoryId: true,
+              status: true,
+              sellerId: true,
+              deletedAt: true,
               seller: { select: { id: true, storeName: true, storeSlug: true } },
               media: { orderBy: { sortOrder: 'asc' }, take: 1 },
             },
@@ -472,32 +506,49 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
         },
       },
     },
-  };
-
-  let placements = await store.sponsoredCampaign.findMany(query);
-
-  // Filter out campaigns that have hit their daily budget or total budget.
-  placements = placements.filter((c) => {
-    if (dedupedCampaignIds.has(c.id)) return false;
-    const spend = Number(c.spendTzs) || 0;
-    if (spend >= Number(c.totalBudgetTzs)) return false;
-    return true;
   });
 
-  // Sort by effective bid (bid minus spend ratio) and take top N.
-  placements.sort((a, b) => {
+  // Keep campaigns with at least one eligible placement in the requested
+  // category, deduplicated against the IP's recent impressions.
+  const filtered = [];
+  for (const c of campaigns) {
+    if (dedupedCampaignIds.has(c.id)) continue;
+    if (!(c.startsAt <= now && c.expiresAt >= now)) continue;
+    if (Number(c.spendTzs) >= Number(c.totalBudgetTzs)) continue;
+
+    // Daily pacing: a campaign may not exceed its daily budget. spendTzs is
+    // lifetime; dailySpendTzs/dailySpendDate are reset at day boundary.
+    if (c.dailySpendDate === today && Number(c.dailySpendTzs) >= Number(c.dailyBudgetTzs)) continue;
+
+    const placements = (c.placements || []).filter(
+      (p) =>
+        p.product &&
+        p.product.status === 'published' &&
+        !p.product.deletedAt &&
+        (categoryId ? p.product.categoryId === categoryId : true)
+    );
+    if (placements.length === 0) continue;
+
+    filtered.push({ ...c, placements });
+  }
+
+  // Sort by effective bid (bid minus spend ratio) and take top N, so a
+  // campaign that has nearly exhausted its budget ranks behind fresher ones.
+  filtered.sort((a, b) => {
     const aScore = Number(a.bidAmountTzs) * (1 - (spendRatio(a) || 0));
     const bScore = Number(b.bidAmountTzs) * (1 - (spendRatio(b) || 0));
     return bScore - aScore;
   });
 
-  const result = placements.slice(0, limit);
+  const result = filtered.slice(0, limit);
 
-  // Record impression events asynchronously (non-blocking).
-  if (ipAddress && userAgent) {
-    placements.slice(0, limit).forEach(async (c) => {
+  // Record impression events asynchronously (non-blocking). Elk/Live: the
+  // daily bucket is advanced on first impression of a new day.
+  if (ipAddress && userAgent && result.length) {
+    const writeStore = getStore();
+    result.forEach(async (c) => {
       try {
-        await store.campaignEvent.create({
+        await writeStore.campaignEvent.create({
           data: {
             campaignId: c.id,
             eventType: 'impression',
@@ -507,7 +558,7 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
             bidAmountTzs: c.bidAmountTzs,
           },
         });
-        await store.campaignImpression.create({
+        await writeStore.campaignImpression.create({
           data: {
             campaignId: c.id,
             productId: c.placements[0]?.productId || '',
@@ -515,11 +566,13 @@ async function getActivePlacements({ categoryId, placement, limit = 10, ipAddres
             userAgent,
           },
         });
-        await store.sponsoredCampaign.update({
+        await writeStore.sponsoredCampaign.update({
           where: { id: c.id },
           data: {
             impressions: { increment: 1 },
             spendTzs: { increment: c.bidAmountTzs },
+            dailySpendTzs: c.dailySpendDate === today ? { increment: c.bidAmountTzs } : Number(c.bidAmountTzs),
+            dailySpendDate: today,
           },
         });
       } catch (e) {
@@ -996,7 +1049,8 @@ async function adminEndCampaign({ campaignId, adminActorId, ipAddress, userAgent
 
 // Sweep active campaigns whose schedule lapsed (expired) or whose budget is
 // exhausted (out_of_budget). Throttled so it runs at most once a minute, and
-// safe to call from any read path.
+// safe to call from any read path. Also rolls the daily spend bucket at the
+// day boundary and retires payment_pending campaigns abandoned mid-checkout.
 let lastSweepAt = 0;
 async function sweepCampaignStatuses({ force = false } = {}) {
   const now = Date.now();
@@ -1005,33 +1059,58 @@ async function sweepCampaignStatuses({ force = false } = {}) {
 
   const store = getStore();
   const nowDate = new Date();
+  const today = dayKey(nowDate);
+
   const active = await store.sponsoredCampaign.findMany({
     where: { status: CAMPAIGN_STATUSES.ACTIVE },
-    select: { id: true, expiresAt: true, spendTzs: true, totalBudgetTzs: true },
+    select: { id: true, expiresAt: true, spendTzs: true, totalBudgetTzs: true, dailySpendTzs: true, dailyBudgetTzs: true, dailySpendDate: true },
   });
 
   const expiredIds = [];
   const outOfBudgetIds = [];
+  const stalePendingIds = [];
+  const resetDailyIds = [];
   for (const c of active) {
     if (c.expiresAt < nowDate) expiredIds.push(c.id);
     else if (Number(c.spendTzs) >= Number(c.totalBudgetTzs)) outOfBudgetIds.push(c.id);
+    else if (c.dailySpendDate && c.dailySpendDate !== today) resetDailyIds.push(c.id);
+  }
+
+  // Daily pacing is enforced at serve time (a campaign that hits its daily
+  // budget simply stops appearing for the rest of the day); only lifetime
+  // exhaustion is terminal. The bucket reset above rolls spendTzs view to 0
+  // for a new day's gauge without touching the ad-side status.
+
+  // Abandoned checkouts: payment_pending with no confirmation inside 24h.
+  const stalePending = await store.sponsoredCampaign.findMany({
+    where: { status: CAMPAIGN_STATUSES.PAYMENT_PENDING },
+    select: { id: true, updatedAt: true, payment: { select: { id: true, createdAt: true } } },
+  });
+  const staleCutoff = new Date(nowDate.getTime() - 24 * 60 * 60 * 1000);
+  for (const c of stalePending) {
+    const lastTouch = c.payment?.createdAt || c.updatedAt || c.createdAt;
+    if (lastTouch && lastTouch < staleCutoff) stalePendingIds.push(c.id);
   }
 
   await store.$transaction([
-    store.sponsoredCampaign.updateMany({
-      where: { id: { in: expiredIds } },
-      data: { status: CAMPAIGN_STATUSES.EXPIRED },
-    }),
-    store.sponsoredCampaign.updateMany({
-      where: { id: { in: outOfBudgetIds } },
-      data: { status: CAMPAIGN_STATUSES.OUT_OF_BUDGET },
-    }),
+    ...(expiredIds.length
+      ? [store.sponsoredCampaign.updateMany({ where: { id: { in: expiredIds } }, data: { status: CAMPAIGN_STATUSES.EXPIRED } })]
+      : []),
+    ...(outOfBudgetIds.length
+      ? [store.sponsoredCampaign.updateMany({ where: { id: { in: outOfBudgetIds } }, data: { status: CAMPAIGN_STATUSES.OUT_OF_BUDGET } })]
+      : []),
+    ...(stalePendingIds.length
+      ? [store.sponsoredCampaign.updateMany({ where: { id: { in: stalePendingIds } }, data: { status: CAMPAIGN_STATUSES.EXPIRED } })]
+      : []),
+    ...(resetDailyIds.length
+      ? [store.sponsoredCampaign.updateMany({ where: { id: { in: resetDailyIds } }, data: { dailySpendTzs: 0, dailySpendDate: today } })]
+      : []),
   ]);
 
   if (expiredIds.length || outOfBudgetIds.length) {
     cache.delPattern('sponsored:placements:*');
   }
-  return { expired: expiredIds.length, outOfBudget: outOfBudgetIds.length };
+  return { expired: expiredIds.length, outOfBudget: outOfBudgetIds.length, stalePending: stalePendingIds.length, dailyReset: resetDailyIds.length };
 }
 
 module.exports = {

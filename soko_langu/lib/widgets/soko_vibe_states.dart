@@ -10,6 +10,10 @@ class SokoVibeEmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// Animated illustration shown in place of the icon circle (see
+  /// `soko_animated_art.dart`). Null keeps the classic icon rendering.
+  final Widget? artwork;
+
   const SokoVibeEmptyState({
     super.key,
     required this.icon,
@@ -17,6 +21,7 @@ class SokoVibeEmptyState extends StatelessWidget {
     this.subtitle,
     this.actionLabel,
     this.onAction,
+    this.artwork,
   });
 
   @override
@@ -28,16 +33,19 @@ class SokoVibeEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+            if (artwork != null)
+              artwork!
+            else
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+                ),
+                child: Icon(icon, size: 40, color: cs.primary.withValues(alpha: 0.8)),
               ),
-              child: Icon(icon, size: 40, color: cs.primary.withValues(alpha: 0.8)),
-            ),
             const SizedBox(height: 18),
             Text(
               title,

@@ -9,6 +9,8 @@ import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/ds/ds_empty_state.dart';
+import '../../widgets/animations/soko_animated_art.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/product_cached_image.dart';
 
@@ -71,33 +73,12 @@ class _WishlistScreenState extends State<WishlistScreen> {
             ? const GoogleLoadingPage()
             : _wishlistIds.isEmpty
             ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.favorite_border,
-                      size: 64,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('wishlist_empty'),
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => context.push('/'),
-                      icon: const Icon(Icons.shopping_bag),
-                      label: Text(context.tr('start_shopping')),
-                    ),
-                  ],
+                child: DsEmptyState(
+                  icon: Icons.favorite_border,
+                  artwork: const EmptyWishlistArt(),
+                  title: context.tr('wishlist_empty'),
+                  actionLabel: context.tr('start_shopping'),
+                  onAction: () => context.push('/'),
                 ),
               )
             : ListView.builder(

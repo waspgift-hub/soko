@@ -70,10 +70,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     content: context.tr('help_seller_dashboard'),
                   ),
                   _helpTile(
-                    title: context.tr('boosting'),
-                    content: context.tr('help_boosting'),
-                  ),
-                  _helpTile(
                     title: context.tr('flash_sales'),
                     content: context.tr('help_flash_sales'),
                   ),

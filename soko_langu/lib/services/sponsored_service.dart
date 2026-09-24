@@ -33,7 +33,7 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/campaigns')).replace(queryParameters: params);
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaigns: ${res.statusCode}', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch campaigns: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return [];
@@ -47,7 +47,7 @@ class SponsoredService {
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode == 404) return null;
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaign: ${res.statusCode}', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch campaign: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return null;
@@ -107,7 +107,7 @@ class SponsoredService {
     );
     if (res.statusCode >= 400) {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to update campaign', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: body['error'] ?? 'Failed to update campaign', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     return SponsoredCampaign.fromApi(body['data'] as Map<String, dynamic>);
@@ -119,7 +119,7 @@ class SponsoredService {
     final res = await _http.post(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to pause campaign', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: body['error'] ?? 'Failed to pause campaign', userMessage: translateHttpStatus(res.statusCode));
     }
   }
 
@@ -129,7 +129,7 @@ class SponsoredService {
     final res = await _http.post(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to resume campaign', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: body['error'] ?? 'Failed to resume campaign', userMessage: translateHttpStatus(res.statusCode));
     }
   }
 
@@ -139,7 +139,7 @@ class SponsoredService {
     final res = await _http.post(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to cancel campaign', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: body['error'] ?? 'Failed to cancel campaign', userMessage: translateHttpStatus(res.statusCode));
     }
   }
 
@@ -157,7 +157,7 @@ class SponsoredService {
     );
     if (res.statusCode >= 400) {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to initiate payment', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: body['error'] ?? 'Failed to initiate payment', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     return body['data'] as Map<String, dynamic>;
@@ -171,7 +171,7 @@ class SponsoredService {
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to fetch metrics', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: body['error'] ?? 'Failed to fetch metrics', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return null;
@@ -183,7 +183,7 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/budget-tiers'));
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch budget tiers', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch budget tiers', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic>) return [];
@@ -217,7 +217,7 @@ class SponsoredService {
         .replace(queryParameters: {'days': '$days'});
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch admin metrics: ${res.statusCode}', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch admin metrics: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     final data = body is Map<String, dynamic> && body['data'] is Map<String, dynamic>
@@ -239,7 +239,7 @@ class SponsoredService {
     });
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaigns: ${res.statusCode}', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch campaigns: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return [];
@@ -253,7 +253,7 @@ class SponsoredService {
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode == 404) return null;
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaign: ${res.statusCode}', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch campaign: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return null;
@@ -293,7 +293,7 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/admin/settings'));
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch settings', userMessage: ErrorKeys.poorNetwork);
+      throw NetworkError(message: 'Failed to fetch settings', userMessage: translateHttpStatus(res.statusCode));
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     final data = body is Map<String, dynamic> && body['data'] is Map<String, dynamic>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../extensions/context_tr.dart';
+import 'animations/soko_animated_art.dart';
 
 class PaymentResult {
   static Future<void> show({
@@ -123,19 +124,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: cs.primary.withValues(alpha: 0.08),
-              ),
-              child: Icon(
-                Icons.check_circle,
-                size: 48,
-                color: cs.primary,
-              ),
-            ),
+            SuccessCheckArt(size: 72, color: cs.primary),
             const SizedBox(height: 16),
             Text(
               context.tr('payment_successful'),

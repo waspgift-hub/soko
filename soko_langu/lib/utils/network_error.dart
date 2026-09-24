@@ -32,6 +32,41 @@ class ErrorKeys {
   static const timeout = 'error_timeout';
 }
 
+/// Maps an HTTP status code to a user-facing error KEY (see [ErrorKeys]).
+/// An HTTP response means the server DID answer — so 4xx/5xx are server-side
+/// failures or permission problems, never "poor internet". Only genuine
+/// transport failures (SocketException / TimeoutException) map to
+/// [ErrorKeys.poorNetwork]; those never carry an HTTP status.
+///
+/// [serverMessage] should be the raw `error` string the API returned in its
+/// body (if any). It wins for business-level rejections (e.g. 422 validation
+/// or a ClickPesa 400 with a human-readable reason) so the user sees the
+/// actual cause instead of a guessed key.
+String translateHttpStatus(int statusCode, {String? serverMessage}) {
+  switch (statusCode) {
+    case 401:
+      return ErrorKeys.sessionExpired Assemblies;
+    case 403:
+      return ErrorKeys.noPermission;
+    case 404:
+      return ErrorKeys.notFound;
+    case 408:
+      return ErrorKeys.timeout;
+    case 429:
+      return ErrorKeys.tooManyAttempts;
+    case 409:
+      return ErrorKeys.alreadyExists;
+  }
+
+  if (statusCode >= 500) return ErrorKeys.generic;
+
+  // 4xx business rejection: trust the server's own message when present.
+  if (serverMessage != null && serverMessage.isNotEmpty) {
+    return serverMessage;
+  }
+  return ErrorKeys.generic;
+}
+
 class FirestoreErrorInfo {
   final FirestoreErrorKind kind;
   final String raw;
@@ -145,7 +180,9 @@ String translateError(dynamic error) {
       case 'invalid-credential':
         return ErrorKeys.invalidCredentials;
       default:
-        return error.message ?? ErrorKeys.poorNetwork;
+        // A FirebaseAuthException that isn't a recognised transport code is an
+        // auth/business failure, not an internet problem.
+        return error.message ?? ErrorKeys.generic;
     }
   }
   if (error is TimeoutException) {

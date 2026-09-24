@@ -392,7 +392,6 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     final totalAdmin = (f['totalAdminBalance'] as num?)?.toDouble() ?? 0;
     final commissions = (f['totalCommissions'] as num?)?.toDouble() ?? 0;
     final adRevenue = (f['actualAdRevenue'] as num?)?.toDouble() ?? 0;
-    final boostRevenue = (f['totalBoostRevenue'] as num?)?.toDouble() ?? 0;
     final processed = (f['totalProcessed'] as num?)?.toDouble() ?? 0;
     final payouts = (f['totalPayouts'] as num?)?.toDouble() ?? 0;
     final available = (f['availableBalance'] as num?)?.toDouble() ?? 0;
@@ -446,12 +445,6 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
               nf,
             ),
             const SizedBox(height: 4),
-            _financeRow(
-              context.tr('boost_revenue'),
-              boostRevenue,
-              cs.onSurface,
-              nf,
-            ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Divider(thickness: 1),

@@ -101,7 +101,6 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {

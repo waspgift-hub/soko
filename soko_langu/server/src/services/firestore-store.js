@@ -63,7 +63,7 @@ const MODELS = {
   moderationReport: { col: 'moderationReports' },
   adminSetting: { col: 'adminSettings', keyField: 'key' },
   reconciliation: { col: 'reconciliations' },
-  sponsoredCampaign: { col: 'sponsoredCampaigns', money: ['bidAmountTzs', 'dailyBudgetTzs', 'totalBudgetTzs', 'spendTzs'] },
+  sponsoredCampaign: { col: 'sponsoredCampaigns', money: ['bidAmountTzs', 'dailyBudgetTzs', 'totalBudgetTzs', 'spendTzs', 'dailySpendTzs'] },
   campaignPlacement: { col: 'campaignPlacements' },
   campaignEvent: { col: 'campaignEvents' },
   campaignImpression: { col: 'campaignImpressions' },
@@ -106,7 +106,16 @@ const RELATIONS = {
   payment: { order: { model: 'order', local: 'orderId', remote: 'id' } },
   withdrawal: { seller: { model: 'sellerProfile', local: 'sellerId', remote: 'id' } },
   referral: { referrer: { model: 'user', local: 'referrerId', remote: 'id' } },
-  sponsoredCampaign: { seller: { model: 'sellerProfile', local: 'sellerId', remote: 'id' } },
+  sponsoredCampaign: {
+    seller: { model: 'sellerProfile', local: 'sellerId', remote: 'id' },
+    placements: { model: 'campaignPlacement', local: 'id', remote: 'campaignId', many: true },
+    payment: { model: 'campaignPayment', local: 'id', remote: 'campaignId' },
+    auditLogs: { model: 'campaignAuditLog', local: 'id', remote: 'campaignId', many: true },
+  },
+  campaignPlacement: {
+    campaign: { model: 'sponsoredCampaign', local: 'campaignId', remote: 'id' },
+    product: { model: 'product', local: 'productId', remote: 'id' },
+  },
 };
 
 // ---------------------------- value helpers ------------------------------

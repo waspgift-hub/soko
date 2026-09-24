@@ -17,23 +17,23 @@ class DynamicBanner extends StatelessWidget {
       builder: (context, snap) {
         final products = snap.data ?? [];
         if (products.isEmpty) return const EarnMoneyBanner();
-        return _BoostedCarousel(products: products);
+        return _AdsCarousel(products: products);
       },
     );
   }
 }
 
-// Single banner that cycles every boosted product inside it, mirroring the
-// flash-sale banner so boosts never stack as one banner per product.
-class _BoostedCarousel extends StatefulWidget {
+// Single banner that cycles every sponsored product inside it, mirroring the
+// flash-sale banner so ads never stack as one banner per product.
+class _AdsCarousel extends StatefulWidget {
   final List<Product> products;
-  const _BoostedCarousel({required this.products});
+  const _AdsCarousel({required this.products});
 
   @override
-  State<_BoostedCarousel> createState() => _BoostedCarouselState();
+  State<_AdsCarousel> createState() => _AdsCarouselState();
 }
 
-class _BoostedCarouselState extends State<_BoostedCarousel> {
+class _AdsCarouselState extends State<_AdsCarousel> {
   late PageController _pageController;
   int _currentPage = 0;
   Timer? _timer;
@@ -46,7 +46,7 @@ class _BoostedCarouselState extends State<_BoostedCarousel> {
   }
 
   @override
-  void didUpdateWidget(_BoostedCarousel old) {
+  void didUpdateWidget(_AdsCarousel old) {
     super.didUpdateWidget(old);
     final newLength = widget.products.length;
     if (newLength != old.products.length) {
@@ -67,7 +67,7 @@ class _BoostedCarouselState extends State<_BoostedCarousel> {
   void _startAutoSlide(int itemCount) {
     _timer?.cancel();
     if (itemCount <= 1) return;
-    // 30s per slide so every boost gets a full read, same as flash sales.
+    // 30s per slide so every ad gets a full read, same as flash sales.
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       final nextPage = (_currentPage + 1) % itemCount;
@@ -193,7 +193,7 @@ class _BoostedCarouselState extends State<_BoostedCarousel> {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  context.tr('boosted'),
+                  context.tr('sponsored'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

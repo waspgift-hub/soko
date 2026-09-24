@@ -77,10 +77,12 @@ class ApiConfig {
   /// presigned PUT flow (media bytes go straight to Cloudflare R2, no
   /// Cloudinary credentials ever touch the client) with `r2PublicUrl` as the
   /// public read base — mirroring the `CloudinaryService` API so callers swap
-  /// via one const. Flipped true only after the R2 evidence/media backfill
-  /// lands in production and the media queue (thumbnails/video-transcode) is
-  /// verified on live buckets. Until then uploads stay on Cloudinary.
-  static const bool kUseMediaApi = false;
+  /// via one const. Now enabled after the fresh-start reset: buckets
+  /// (soko-vibe-{images,videos,thumbnails,backups}) exist and presigned PUT
+  /// generation is verified on the live R2 account. R2 env vars must be set
+  /// on the Render dashboard (both soko-langu-api and soko-langu-worker)
+  /// or uploads will 503 R2_NOT_CONFIGURED.
+  static const bool kUseMediaApi = true;
 
   /// Public read origin for R2 media (server: `R2_PUBLIC_URL`, served through
   /// the media CDN edge). Objects live at `<r2PublicUrl>/<kind>/<key>`.

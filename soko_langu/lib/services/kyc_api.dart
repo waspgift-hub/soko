@@ -35,7 +35,7 @@ class KycApiClient {
   NetworkError _errorFor(int status, {String action = 'KYC request'}) =>
       NetworkError(
         message: '$action failed ($status)',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateHttpStatus(status),
       );
 
   /// The authenticated user's KYC status, or null when no application exists.

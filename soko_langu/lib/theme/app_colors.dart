@@ -100,18 +100,6 @@ extension AppColorScheme on ColorScheme {
       ? const Color(0xFF00C853)
       : const Color(0xFF009624);
 
-  Color get boostGold => brightness == Brightness.dark
-      ? const Color(0xFFB45309)
-      : const Color(0xFF7A5A00);
-
-  Color get boostSilver => brightness == Brightness.dark
-      ? const Color(0xFFC0C0C0)
-      : const Color(0xFF7A7A7A);
-
-  Color get boostBronze => brightness == Brightness.dark
-      ? const Color(0xFF8E8E8E)
-      : const Color(0xFF9E9E9E);
-
   Color get premiumAmber => brightness == Brightness.dark
       ? const Color(0xFFF59E0B)
       : const Color(0xFFB45309);

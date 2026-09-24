@@ -37,7 +37,7 @@ class ReviewApiClient {
   NetworkError _errorFor(int status, {String action = 'review request'}) =>
       NetworkError(
         message: 'Reviews failed ($status): $action',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateHttpStatus(status),
       );
 
   Future<({List<Review> reviews, int total})> fetchProductReviews({

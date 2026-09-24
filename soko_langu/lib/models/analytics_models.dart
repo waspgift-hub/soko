@@ -67,8 +67,6 @@ class SellerAnalytics {
   final Map<String, int> genderBreakdown;
   final Map<String, int> locationBreakdown;
   final Map<String, int> ageBreakdown;
-  final int boostImpressions;
-  final Map<String, int> boostLocationBreakdown;
   final double monthlyEarnings;
   final int totalOrders;
   final int successfulOrders;
@@ -91,8 +89,6 @@ class SellerAnalytics {
     this.genderBreakdown = const {},
     this.locationBreakdown = const {},
     this.ageBreakdown = const {},
-    this.boostImpressions = 0,
-    this.boostLocationBreakdown = const {},
     this.monthlyEarnings = 0,
     this.totalOrders = 0,
     this.successfulOrders = 0,
@@ -153,27 +149,6 @@ class ProductViewRecord {
     'gender': gender,
     'location': location,
     'age': age,
-    'timestamp': timestamp,
-  };
-}
-
-class BoostImpressionRecord {
-  final String id;
-  final String productId;
-  final String? location;
-  final DateTime timestamp;
-
-  BoostImpressionRecord({
-    required this.id,
-    required this.productId,
-    this.location,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'productId': productId,
-    'location': location,
     'timestamp': timestamp,
   };
 }

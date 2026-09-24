@@ -117,8 +117,6 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                   _buildTopProductsCard(cs, nf),
                   const SizedBox(height: 16),
                   _buildDemographicsCard(cs),
-                  const SizedBox(height: 16),
-                  _buildBoostsCard(cs, nf),
                 ],
               ),
             ),
@@ -561,56 +559,6 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildBoostsCard(ColorScheme cs, NumberFormat nf) {
-    return DsCard(
-      radius: 20,
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: cs.boostGold.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.rocket_launch_rounded, color: cs.boostGold, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.tr('boosts'),
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${_data!.boostImpressions} ${context.tr('impressions')}',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          if (_data!.boostLocationBreakdown.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.boostGold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _data!.boostLocationBreakdown.entries
-                    .reduce((a, b) => a.value > b.value ? a : b)
-                    .key,
-                style: TextStyle(fontSize: 11, color: cs.boostGold),
-              ),
-            ),
-        ],
-      ),
     );
   }
 

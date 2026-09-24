@@ -238,7 +238,6 @@ class NotificationService {
           }
         }
         break;
-      case 'boost':
       case 'promotion':
         channelId = 'general_notifications_v6';
         headsUpTitle = title;

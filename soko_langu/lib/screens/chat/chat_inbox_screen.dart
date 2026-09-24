@@ -10,6 +10,7 @@ import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/animations/soko_animated_art.dart';
 import '../../widgets/soko_vibe_states.dart';
 
 class ChatInboxScreen extends StatefulWidget {
@@ -327,6 +328,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 if (rooms.isEmpty) {
                   return SokoVibeEmptyState(
                     icon: Icons.chat_bubble_outline,
+                    artwork: const EmptyChatArt(),
                     title: context.tr('no_conversations', 'No conversations yet'),
                   );
                 }

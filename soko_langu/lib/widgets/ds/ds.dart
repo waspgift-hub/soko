@@ -4,7 +4,7 @@ library;
 export 'animated_press.dart';
 export 'ds_avatar.dart';
 export 'ds_badge.dart';
-export 'ds_boost_badge.dart';
+export 'ds_ad_badge.dart';
 export 'ds_button.dart';
 export 'ds_card.dart';
 export 'ds_celebration_rain.dart';

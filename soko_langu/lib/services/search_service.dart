@@ -1,6 +1,7 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'search_api.dart';
@@ -20,7 +21,6 @@ class SearchResult {
   final String? location;
   final double? latitude;
   final double? longitude;
-  final bool isBoosted;
   final bool kycApproved;
   final double? discount;
   final bool isSponsored;
@@ -40,7 +40,6 @@ class SearchResult {
     this.location,
     this.latitude,
     this.longitude,
-    this.isBoosted = false,
     this.kycApproved = false,
     this.discount,
     this.isSponsored = false,
@@ -62,7 +61,6 @@ class SearchResult {
       location: map['location'] as String?,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
-      isBoosted: map['isBoosted'] as bool? ?? false,
       kycApproved: map['kycApproved'] as bool? ?? false,
       discount: (map['discount'] as num?)?.toDouble(),
       isSponsored: map['isSponsored'] as bool? ?? false,
@@ -83,9 +81,8 @@ class SearchResult {
       rating: p.rating,
       reviewCount: p.reviewCount,
       location: p.location,
-      isBoosted: p.isBoostedValid,
-      kycApproved: p.sellerKycApproved,
       isSponsored: p.isSponsored,
+      kycApproved: p.sellerKycApproved,
       sponsorshipCampaignId: p.sponsorshipCampaignId,
     );
   }
@@ -131,7 +128,7 @@ class SearchResponse {
   final Map<String, dynamic> detected;
 
   /// True when the server automatically applied a high-confidence typo
-  /// correction (samsng → samsung) because nothing matched raw.
+  /// correction (samsng â†’ samsung) because nothing matched raw.
   final bool autoCorrected;
 
   SearchResponse({
@@ -289,12 +286,12 @@ class SearchService {
       final serverResp = SearchResponse.fromMap(data as Map<String, dynamic>);
       // If server returned 0 results (search_index empty), use Firestore fallback
       if (serverResp.total == 0) {
-        print('[SearchService] Server returned 0 results, using Firestore fallback');
+        debugPrint('[SearchService] Server returned 0 results, using Firestore fallback');
         return _firestoreSearch(query: query, type: type, pageSize: pageSize);
       }
       return serverResp;
     } catch (e) {
-      print('[SearchService] Server search failed, using Firestore fallback: $e');
+      debugPrint('[SearchService] Server search failed, using Firestore fallback: $e');
       return _firestoreSearch(query: query, type: type, pageSize: pageSize);
     }
   }
@@ -336,7 +333,7 @@ class SearchService {
 
       return SearchResponse.fromProducts(products, query);
     } catch (e) {
-      print('[SearchService] Firestore search fallback also failed: $e');
+      debugPrint('[SearchService] Firestore search fallback also failed: $e');
       return SearchResponse(results: [], sources: {}, total: 0, page: 0, hasMore: false, query: query);
     }
   }
@@ -347,7 +344,7 @@ class SearchService {
       final list = (data as Map<String, dynamic>)['suggestions'] as List<dynamic>? ?? [];
       return list.map((e) => SearchSuggestion.fromMap(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      print('[SearchService] Autocomplete server failed: $e');
+      debugPrint('[SearchService] Autocomplete server failed: $e');
       return _firestoreAutocomplete(query);
     }
   }
@@ -376,7 +373,7 @@ class SearchService {
         );
       }).toList();
     } catch (e) {
-      print('[SearchService] Firestore autocomplete failed: $e');
+      debugPrint('[SearchService] Firestore autocomplete failed: $e');
       return [];
     }
   }
@@ -387,7 +384,7 @@ class SearchService {
       final list = (data as Map<String, dynamic>)['trending'] as List<dynamic>? ?? [];
       return list.cast<Map<String, dynamic>>();
     } catch (e) {
-      print('[SearchService] Trending server failed, returning empty: $e');
+      debugPrint('[SearchService] Trending server failed, returning empty: $e');
       return [];
     }
   }
@@ -406,7 +403,7 @@ class SearchService {
           .toList();
       return MostRatedData(products: products, sellers: sellers);
     } catch (e) {
-      print('[SearchService] Most-rated failed: $e');
+      debugPrint('[SearchService] Most-rated failed: $e');
       return null;
     }
   }

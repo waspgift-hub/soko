@@ -243,7 +243,7 @@ class _AdminAdsManagementScreenState extends State<AdminAdsManagementScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: _filters.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, i) {
               final f = _filters[i];
               final selected = _statusFilter == f;

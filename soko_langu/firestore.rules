@@ -346,6 +346,22 @@ service cloud.firestore {
       }
     }
 
+    // ─── SPONSORED CAMPAIGNS ────────────────────────────────
+    // Campaign lifecycle is SERVER-owned (/api/v1/sponsored/*): the app never
+    // writes them. Rules let the owning seller read their own campaigns (and
+    // expiring clients) while every write — activation, budget spend, status —
+    // stays admin/SDK-only so bid fraud and click inflation are impossible.
+    match /sponsoredCampaigns/{campaignId} {
+      allow read: if isSignedIn() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+
+      // Placement/impression/click/payment/audit rows under a campaign are
+      // server-authoritative; clients never touch them.
+      match /{doc=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
     // ─── BOOST ANALYTICS ────────────────────────────────────
     // Client tracks impressions. Server reads for dashboards.
     match /boost_analytics/{productId} {

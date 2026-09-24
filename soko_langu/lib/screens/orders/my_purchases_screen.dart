@@ -18,6 +18,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/payment_banner.dart';
+import '../../widgets/animations/soko_animated_art.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/order_status_config.dart';
@@ -802,13 +803,14 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            hasOrders
-                ? Icons.filter_list_off_rounded
-                : Icons.shopping_bag_outlined,
-            size: 64,
-            color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-          ),
+          if (hasOrders)
+            Icon(
+              Icons.filter_list_off_rounded,
+              size: 64,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+            )
+          else
+            const EmptyCartArt(),
           const SizedBox(height: 16),
           Text(
             hasOrders
@@ -1121,7 +1123,6 @@ class _OrderGlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isBoost = data['type'] == 'boost';
     final status = data['status'] as String? ?? 'pending';
     final productName = data['productName'] as String? ?? context.tr('product');
     final productImage = data['productImage'] as String? ?? '';
@@ -1138,19 +1139,6 @@ class _OrderGlassCard extends StatelessWidget {
         ? DateFormat('dd MMM yyyy HH:mm').format(createdAt.toDate())
         : '';
     final productId = data['productId'] as String? ?? '';
-
-    if (isBoost) {
-      return _buildBoostCard(
-        context,
-        cs,
-        productImage,
-        productName,
-        price,
-        status,
-        docId,
-        dateStr,
-      );
-    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1271,189 +1259,6 @@ class _OrderGlassCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                ],
-              ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBoostCard(
-    BuildContext context,
-    ColorScheme cs,
-    String image,
-    String name,
-    double price,
-    String status,
-    String orderId,
-    String dateStr,
-  ) {
-    final tier = data['tier'] as String? ?? '';
-    final isCompleted = status == 'completed';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-        onTap: isSelectionMode
-            ? onToggleSelect
-            : isCompleted
-                ? () => context.push(AppRoutes.boostReceipt, extra: data)
-                : null,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            color: cs.boostGold.withValues(alpha: isSelected ? 0.12 : 0.06),
-            border: Border.all(
-              color: isSelected
-                  ? cs.primary
-                  : cs.boostGold.withValues(alpha: 0.2),
-              width: isSelected ? 1.5 : 1,
-            ),
-          ),
-          child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isSelectionMode)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Transform.scale(
-                          scale: 1.1,
-                          child: Checkbox(
-                            value: isSelected,
-                            onChanged: (_) => onToggleSelect(),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            activeColor: cs.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.rocket_launch_rounded,
-                          size: 18,
-                          color: cs.boostGold,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          context.tr('boost_product'),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: cs.boostGold,
-                          ),
-                        ),
-                        const Spacer(),
-                        _statusBadge(context, cs, status),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            color: cs.surfaceContainerHighest,
-                            child: image.isNotEmpty
-                                ? ProductCachedImage(
-                                    url: image,
-                                    width: 56,
-                                    height: 56,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Icon(
-                                    Icons.image,
-                                    color: cs.onSurfaceVariant.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: cs.onSurface,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              if (tier.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: cs.boostGold.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    tier,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: cs.boostGold,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'TZS ${_nf(price.toInt())}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                  color: cs.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isCompleted) ...[
-                    const Divider(height: 1, indent: 14, endIndent: 14),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-                      child: Row(
-                        children: [
-                          Icon(Icons.receipt_long_rounded,
-                              size: 16, color: cs.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            context.tr('view_receipt'),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: cs.primary,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.chevron_right,
-                              size: 18, color: cs.primary),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               ),
         ),

@@ -3,12 +3,6 @@ class AppConstants {
   static const String currency = 'TZS';
   static const String country = 'Tanzania';
 
-  static const List<Map<String, dynamic>> boostTiers = [
-    {'name': 'Bronze', 'price': 1500, 'days': 3},
-    {'name': 'Silver', 'price': 3000, 'days': 7},
-    {'name': 'Gold', 'price': 10000, 'days': 30},
-  ];
-
   static const double adRevenuePerView = 15;
   static const double sellerAdShare = 0.0;
   static const double platformAdShare = 1.0;

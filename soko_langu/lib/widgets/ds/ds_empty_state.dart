@@ -19,6 +19,10 @@ class DsEmptyState extends StatefulWidget {
   final Color? tint;
   final bool centered;
 
+  /// Animated illustration shown in place of the icon circle (see
+  /// `soko_animated_art.dart`). Null keeps the classic icon rendering.
+  final Widget? artwork;
+
   const DsEmptyState({
     super.key,
     required this.icon,
@@ -28,6 +32,7 @@ class DsEmptyState extends StatefulWidget {
     this.onAction,
     this.tint,
     this.centered = true,
+    this.artwork,
   });
 
   @override
@@ -78,15 +83,18 @@ class _DsEmptyStateState extends State<DsEmptyState>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    color: tint.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
+                if (widget.artwork != null)
+                  widget.artwork!
+                else
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: tint.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(widget.icon, size: 48, color: tint),
                   ),
-                  child: Icon(widget.icon, size: 48, color: tint),
-                ),
                 const SizedBox(height: AppSpacing.s5),
                 Text(
                   widget.title,

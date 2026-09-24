@@ -13,9 +13,6 @@ class AnalyticsService {
   CollectionReference get _productViews =>
       _firestore.collection('product_analytics');
 
-  CollectionReference get _boostImpressions =>
-      _firestore.collection('boost_analytics');
-
   // ── Track Product View ────────────────────────────────────────────────
 
   Future<void> trackProductView(String productId) async {
@@ -84,38 +81,6 @@ class AnalyticsService {
       });
     } catch (e) {
       // Silently fail — analytics should never block the UI
-    }
-  }
-
-  // ── Track Boost Impression ────────────────────────────────────────────
-
-  Future<void> trackBoostImpression(String productId) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      String? location;
-      if (user != null) {
-        final profileDoc = await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        if (profileDoc.exists) {
-          location = profileDoc.data()?['location'] as String?;
-        }
-      }
-
-      await _boostImpressions
-          .doc(productId)
-          .collection('impressions')
-          .add(
-            BoostImpressionRecord(
-              id: '',
-              productId: productId,
-              location: location,
-              timestamp: DateTime.now(),
-            ).toMap(),
-          );
-    } catch (e) {
-      // Silently fail
     }
   }
 
@@ -195,27 +160,6 @@ class AnalyticsService {
     if (age < 35) return '25-34';
     if (age < 50) return '35-49';
     return '50+';
-  }
-
-  // ── Get Boost Stats for Product ──────────────────────────────────────
-
-  Future<MapEntry<int, Map<String, int>>> getBoostStats(
-    String productId,
-  ) async {
-    int total = 0;
-    final locations = <String, int>{};
-    try {
-      final snap = await _boostImpressions
-          .doc(productId)
-          .collection('impressions')
-          .get();
-      total = snap.docs.length;
-      for (final doc in snap.docs) {
-        final loc = doc.data()['location'] as String? ?? 'unknown';
-        locations[loc] = (locations[loc] ?? 0) + 1;
-      }
-    } catch (_) {}
-    return MapEntry(total, locations);
   }
 
   // ── Track User Session ────────────────────────────────────────────────
@@ -314,8 +258,6 @@ class AnalyticsService {
         genderBreakdown: parseStringIntMap(result['genderBreakdown'] as Map<String, dynamic>?),
         locationBreakdown: parseStringIntMap(result['locationBreakdown'] as Map<String, dynamic>?),
         ageBreakdown: parseStringIntMap(result['ageBreakdown'] as Map<String, dynamic>?),
-        boostImpressions: (result['boostImpressions'] as num?)?.toInt() ?? 0,
-        boostLocationBreakdown: parseStringIntMap(result['boostLocationBreakdown'] as Map<String, dynamic>?),
         monthlyEarnings: (result['monthlyEarnings'] as num?)?.toDouble() ?? 0,
         totalOrders: (result['totalOrders'] as num?)?.toInt() ?? 0,
         successfulOrders: (result['successfulOrders'] as num?)?.toInt() ?? 0,
@@ -344,8 +286,6 @@ class AnalyticsService {
     final genderBreakdown = <String, int>{};
     final locationBreakdown = <String, int>{};
     final ageBreakdown = <String, int>{};
-    int boostImpressions = 0;
-    final boostLocations = <String, int>{};
     final List<TopProduct> topProducts = [];
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
@@ -381,7 +321,6 @@ class AnalyticsService {
                 .collection('views')
                 .where('age', isNotEqualTo: null)
                 .get(),
-            _boostImpressions.doc(pid).collection('impressions').get(),
             _productViews.doc(pid).collection('views').count().get(),
           ]);
 
@@ -411,16 +350,7 @@ class AnalyticsService {
             ageBreakdown[group] = (ageBreakdown[group] ?? 0) + 1;
           }
 
-          final bSnap = results[3] as QuerySnapshot;
-          boostImpressions += bSnap.docs.length;
-          for (final doc in bSnap.docs) {
-            final loc =
-                (doc.data() as Map<String, dynamic>)['location'] as String? ??
-                'unknown';
-            boostLocations[loc] = (boostLocations[loc] ?? 0) + 1;
-          }
-
-          final countSnap = results[4] as AggregateQuerySnapshot;
+          final countSnap = results[3] as AggregateQuerySnapshot;
           final viewCount = countSnap.count ?? 0;
 
           topProducts.add(
@@ -517,8 +447,6 @@ class AnalyticsService {
       genderBreakdown: genderBreakdown,
       locationBreakdown: locationBreakdown,
       ageBreakdown: ageBreakdown,
-      boostImpressions: boostImpressions,
-      boostLocationBreakdown: boostLocations,
       monthlyEarnings: monthlyEarnings,
       totalOrders: totalOrders,
       successfulOrders: successfulOrders,
@@ -662,7 +590,6 @@ Product views: ${analytics.totalProductViews}
 Male viewers: ${analytics.genderBreakdown['male'] ?? 0}
 Female viewers: ${analytics.genderBreakdown['female'] ?? 0}
 Top viewing location: ${analytics.topLocation}
-Boost impressions: ${analytics.boostImpressions}
 Top viewing age group: ${analytics.topAgeGroup}
 Earnings this month: TSh ${analytics.monthlyEarnings.toStringAsFixed(0)}
 Total orders: ${analytics.totalOrders}
@@ -694,7 +621,6 @@ Matazamio ya bidhaa: ${analytics.totalProductViews}
 Wanaume: ${analytics.genderBreakdown['male'] ?? 0}
 Wanawake: ${analytics.genderBreakdown['female'] ?? 0}
 Eneo linaloangalia sana: ${analytics.topLocation}
-Matazamio ya Boost: ${analytics.boostImpressions}
 Rika linaloangalia sana: ${analytics.topAgeGroup}
 Mapato mwezi huu: TSh ${analytics.monthlyEarnings.toStringAsFixed(0)}
 Order zote: ${analytics.totalOrders}

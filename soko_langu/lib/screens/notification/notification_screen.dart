@@ -245,8 +245,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
         }
         break;
       }
-      case 'boost':
-        break;
       case 'comment':
       case 'comment_reply': {
         final pid = rawData?['productId'] as String?;

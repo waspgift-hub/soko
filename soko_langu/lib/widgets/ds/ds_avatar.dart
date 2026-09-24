@@ -40,8 +40,6 @@ class DsAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final bg = backgroundColor ?? scheme.primary.withValues(alpha: 0.12);
-    final fg = scheme.primary;
 
     Widget child;
     if (imageUrl != null && imageUrl!.isNotEmpty) {

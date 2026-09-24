@@ -1,12 +1,15 @@
 // Firestore-only feed (Phase 4). The discovery feed the app renders is a
 // client-side stream of the `products` collection, so this endpoint keeps the
 // legacy `/api/v1/feed` contract but ranks product docs from Firestore instead
-// of the Postgres FeedPost table. Ranking mirrors the app: boosted first, then
-// recency, with the same clamp-to-0..1 rankItem scoring.
+// of the Postgres FeedPost table. Ranking mirrors the app: paid ads first,
+// then recency, with the same clamp-to-0..1 rankItem scoring.
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { rankItem } = require('./feed-ranking');
+const sponsoredService = require('../sponsored/sponsored-service');
 
-async function getFeed({ requesterId, cursor, limit = 15 }) {
+const AD_SLOTS = [1, 5];
+
+async function getFeed({ requesterId, cursor, limit = 15, ipAddress, userAgent }) {
   const db = getFirebaseFirestore();
   const take = Math.min(Math.max(1, Number(limit)), 50);
 
@@ -27,8 +30,8 @@ async function getFeed({ requesterId, cursor, limit = 15 }) {
     posts.push({ ...d, id: doc.id, createdAt });
   });
 
-  // Rank in memory (scale-up later with a cache/worker), mirroring the For You
-  // sort: boosted listings first, then newest.
+  // Ranking refers to the ad model now: ads win or lose on spend, not a
+  // legacy isBoosted boolean. Fall back to recency so the page always fills.
   const ranked = posts
     .map((p) => ({
       ...p,
@@ -42,7 +45,7 @@ async function getFeed({ requesterId, cursor, limit = 15 }) {
         createdAt: p.createdAt,
       }),
     }))
-    .sort((a, b) => Number(b.isBoosted || false) - Number(a.isBoosted || false) || b.viewCount - a.viewCount)
+    .sort((a, b) => b.viewCount - a.viewCount)
     .slice(0, take);
 
   // Cursor = the ranked window's last createdAt, so the next page resumes from
@@ -63,11 +66,62 @@ async function getFeed({ requesterId, cursor, limit = 15 }) {
       video: p.video || null,
       viewCount: p.viewCount || 0,
       soldCount: p.soldCount || 0,
-      isBoosted: Boolean(p.isBoosted),
       createdAt: p.createdAt,
     },
     rankScore: p.rankScore,
   }));
+
+  // Interleave product_feed/featured ads into the first page.
+  if (!cursor) {
+    try {
+      const feeds = await sponsoredService.getActivePlacements({
+        placement: 'product_feed',
+        limit: AD_SLOTS.length,
+        ipAddress,
+        userAgent,
+      });
+      const adItems = [];
+      const seen = new Set(items.map((i) => i.product.id));
+      for (const campaign of feeds || []) {
+        for (const placement of campaign.placements || []) {
+          const product = placement.product;
+          if (!product || seen.has(product.id)) continue;
+          seen.add(product.id);
+          adItems.push({
+            id: `ad-${campaign.id}`,
+            isSponsored: true,
+            sponsoredCampaign: { id: campaign.id },
+            product: {
+              id: product.id,
+              title: product.title,
+              price: product.price,
+              currency: product.currency || 'TZS',
+              images: [],
+              viewCount: 0,
+              soldCount: 0,
+              isAd: true,
+            },
+            rankScore: Infinity,
+          });
+        }
+      }
+      const merged = [];
+      let ai = 0;
+      for (let i = 0; i < items.length; i++) {
+        while (ai < adItems.length && AD_SLOTS.includes(merged.length)) {
+          merged.push(adItems[ai++]);
+        }
+        merged.push(items[i]);
+      }
+      while (ai < adItems.length && merged.length < take) {
+        merged.push(adItems[ai++]);
+      }
+      return { items: merged.slice(0, take), nextCursor: merged.length >= take ? nextCursor : null };
+    } catch (e) {
+      // Ads are an enhancement; never let them break the feed.
+      console.error('[Feed] ad slotting failed:', e.message);
+    }
+  }
 
   return { items, nextCursor };
 }

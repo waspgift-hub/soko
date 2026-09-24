@@ -7,7 +7,6 @@
 
 class NotificationLang {
   static const Map<String, _L> _titles = {
-    'Malipo ya Boost Yameshindikana': _L('Boost Payment Failed', '推广付款失败'),
     'Bidhaa Imesafirishwa!': _L('Product Shipped!', '商品已发货！'),
     '📦 Bidhaa Imesafirishwa!': _L('Product Shipped!', '商品已发货！'),
     'Mnunuzi Amechagua Usafirishaji!': _L('Buyer Chose Shipping!', '买家已选择配送！'),
@@ -17,7 +16,6 @@ class NotificationLang {
     'Umethibitisha Upokeaji': _L('Delivery Confirmed', '已确认收货'),
     'Deposit Imethibitishwa!': _L('Deposit Confirmed!', '存款已确认！'),
     'Deposit Imeshindikana': _L('Deposit Failed', '存款失败'),
-    '✅ Boost imewashwa!': _L('Boost Activated!', '推广已开启！'),
     'Umepata Mauzo!': _L('You Made a Sale!', '您有新的销售！'),
     'Malipo Yamekamilika!': _L('Payment Completed!', '付款已完成！'),
     'Malipo Yameshindikana': _L('Payment Failed', '付款失败'),
@@ -123,16 +121,6 @@ class NotificationLang {
   ];
 
   static final List<({String pattern, _Builder en, _Builder zh})> _bodyRules = [
-    // Boost
-    (pattern: r'^Boost ya (.+) haikukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$',
-      en: (m) => 'Your boost for ${m[1]} did not complete${m[2] != null ? ' because ${m[2]}' : ''}. Try again in the app.',
-      zh: (m) => '您的商品${m[1]}的推广未完成${m[2] != null ? '，因为${m[2]}' : ''}。请在应用中重试。'),
-    (pattern: r'^Bidhaa yako imepandishwa kwa daraja la (.+) kwa siku (\d+)\.$',
-      en: (m) => 'Your product has been boosted to ${m[1]} tier for ${m[2]} days.',
-      zh: (m) => '您的商品已升级至${m[1]}档，持续${m[2]}天。'),
-    (pattern: r'^Malipo ya Boost ya TZS (.+) yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi (.+)\.$',
-      en: (m) => 'Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.',
-      zh: (m) => '您的推广付款 TZS ${m[1]} 已成功！您的商品现在优先展示，截至 ${m[2]}。'),
     // Dispatch / transport
     (pattern: r'^(.+) imesafirishwa\. Thibitisha upokeaji ukishapata mzigo\.$',
       en: (m) => '${m[1]} has been shipped. Confirm receipt once you receive the goods.',

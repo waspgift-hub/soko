@@ -45,7 +45,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _phoneChanged = false;
   bool _otpSent = false;
   bool _otpSending = false;
-  bool _verifying = false;
   final _otpController = TextEditingController();
   List<MapEntry<TextEditingController, TextEditingController>> _paymentEntries =
       [];
@@ -305,15 +304,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _showError(context.tr('otp_invalid_length', 'OTP lazima iwe na nambari 6'));
       return false;
     }
-    setState(() => _verifying = true);
     try {
       final normalized = PhoneUtils.toE164(raw);
       final resp = await MesejiService().verifyOtp(normalized, otp);
-      if (mounted) setState(() => _verifying = false);
       return resp;
     } catch (e) {
       if (mounted) {
-        setState(() => _verifying = false);
         _showError(context.trError(e));
       }
       return false;

@@ -234,11 +234,11 @@ Widget _media(
               child: DsBadge(
                   label: widget.badgeLabel!, color: cs.primary),
             ),
-          if (widget.product.isBoosted)
+          if (widget.product.isSponsored)
             const Positioned(
               top: 8,
               right: 8,
-              child: DsBoostBadge(),
+              child: DsAdBadge(),
             ),
           if (images.length > 1)
             Positioned(

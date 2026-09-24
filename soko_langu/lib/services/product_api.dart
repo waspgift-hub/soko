@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/product_model.dart';
@@ -69,7 +69,7 @@ class ProductApiClient {
       if (res.statusCode != 200) {
         throw NetworkError(
           message: 'Product fetch failed: ${res.statusCode}',
-          userMessage: ErrorKeys.poorNetwork,
+          userMessage: translateHttpStatus(res.statusCode),
         );
       }
       final body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -96,7 +96,7 @@ class ProductApiClient {
     } catch (e) {
       throw NetworkError(
         message: 'Product fetch error: $e',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateError(e),
         originalError: e,
       );
     }
@@ -113,7 +113,7 @@ class ProductApiClient {
       if (res.statusCode != 200) {
         throw NetworkError(
           message: 'Product fetch failed: ${res.statusCode}',
-          userMessage: ErrorKeys.poorNetwork,
+          userMessage: translateHttpStatus(res.statusCode),
         );
       }
       final body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -125,7 +125,7 @@ class ProductApiClient {
     } catch (e) {
       throw NetworkError(
         message: 'Product fetch error: $e',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateError(e),
         originalError: e,
       );
     }
@@ -150,7 +150,7 @@ class ProductApiClient {
       if (res.statusCode != 200) {
         throw NetworkError(
           message: 'My products fetch failed: ${res.statusCode}',
-          userMessage: ErrorKeys.poorNetwork,
+          userMessage: translateHttpStatus(res.statusCode),
         );
       }
       final body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -162,7 +162,7 @@ class ProductApiClient {
     } catch (e) {
       throw NetworkError(
         message: 'My products fetch error: $e',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateError(e),
         originalError: e,
       );
     }
@@ -208,7 +208,7 @@ class ProductApiClient {
       if (res.statusCode != 200) {
         throw NetworkError(
           message: 'Categories fetch failed: ${res.statusCode}',
-          userMessage: ErrorKeys.poorNetwork,
+          userMessage: translateHttpStatus(res.statusCode),
         );
       }
       final body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -271,7 +271,7 @@ class ProductApiClient {
     } catch (e) {
       throw NetworkError(
         message: 'Categories fetch error: $e',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateError(e),
         originalError: e,
       );
     }
@@ -356,7 +356,7 @@ class ProductApiClient {
         } catch (_) {}
         throw NetworkError(
           message: '$path failed: ${res.statusCode} ${serverMessage ?? ''}',
-          userMessage: serverMessage ?? ErrorKeys.poorNetwork,
+          userMessage: serverMessage ?? translateHttpStatus(res.statusCode),
           originalError: Exception('HTTP ${res.statusCode}'),
         );
       }
@@ -367,7 +367,7 @@ class ProductApiClient {
     } catch (e) {
       throw NetworkError(
         message: '$path error: $e',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateError(e),
         originalError: e,
       );
     }
@@ -429,7 +429,7 @@ class ProductApiClient {
     if (id.isEmpty) {
       throw NetworkError(
         message: 'Create product returned no id',
-        userMessage: ErrorKeys.poorNetwork,
+        userMessage: translateError(e),
       );
     }
     return id;
