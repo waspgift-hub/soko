@@ -55,11 +55,11 @@ String getThumbnailUrl(String imageUrl, {int width = 300}) {
   return imageUrl;
 }
 
-void _sortByBoost(List<Product> products) {
+void _sortBySponsored(List<Product> products) {
   products.sort((a, b) {
-    final aBoosted = a.isBoostedValid ? 0 : 1;
-    final bBoosted = b.isBoostedValid ? 0 : 1;
-    final f = aBoosted.compareTo(bBoosted);
+    final aSponsored = a.isSponsored ? 0 : 1;
+    final bSponsored = b.isSponsored ? 0 : 1;
+    final f = aSponsored.compareTo(bSponsored);
     if (f != 0) return f;
     return b.createdAt.compareTo(a.createdAt);
   });
@@ -318,8 +318,8 @@ class ProductService {
       "rating": 0.0,
       "reviewCount": 0,
       "isActive": true,
-      // isFeatured/featuredUntil/isBoosted/boostedUntil/boostTier/soldCount are
-      // intentionally omitted: server owns them and rules reject them on create.
+      // Server-owned promotion fields are intentionally omitted:
+      // rules reject them on create and the server computes sponsored status.
       "sellerKycApproved": sellerKycApproved,
       "searchKeywords": searchKeywords,
       "barcode": barcode,
@@ -571,7 +571,7 @@ class ProductService {
     final products = snapshot.docs
         .map((doc) => Product.fromFirestore(doc))
         .toList();
-    _sortByBoost(products);
+    _sortBySponsored(products);
     final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
     return (products, lastDoc);
   }
@@ -588,7 +588,7 @@ class ProductService {
         .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
         .take(limit)
         .toList();
-    _sortByBoost(products);
+    _sortBySponsored(products);
     return products;
   }
 
@@ -655,55 +655,65 @@ class ProductService {
           .map((doc) => Product.fromFirestore(doc))
           .toList();
       products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      _sortByBoost(products);
+      _sortBySponsored(products);
       return products.take(limitAmt).toList();
     });
   }
 
-  Stream<List<Product>> getProductsByCategory(String category) {
+  Stream<List<Product>> getProductsByCategory(
+    String category, {
+    Set<String>? aliases,
+  }) {
     if (ApiConfig.kUseProductsApi) {
       // Legacy products tag categories by NAME; the API resolves the name to a
       // Postgres uuid and filters server-side, keeping parity with Firestore.
       return Stream.fromFuture(_api.fetchProductsByCategoryName(category));
     }
+    // whereIn reuses the same composite index as equality on this field.
+    final names = <String>{category, ...?aliases}.toList();
     return _db
         .collection("products")
-        .where("category", isEqualTo: category)
+        .where("category", whereIn: names)
         .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
-        .limit(50)
+        .limit(100)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
-          _sortByBoost(products);
+          _sortBySponsored(products);
           return products;
         });
   }
 
   Stream<List<Product>> getProductsByCategoryAndSubcategory(
     String category,
-    String subcategory,
-  ) {
+    String subcategory, {
+    Set<String>? categoryAliases,
+    Set<String>? subcategoryAliases,
+  }) {
     if (ApiConfig.kUseProductsApi) {
       return Stream.fromFuture(
         _api.fetchProductsByCategoryName(category, subcategory: subcategory),
       );
     }
+    final categories = <String>{category, ...?categoryAliases}.toList();
+    final subcategories =
+        <String>{subcategory, ...?subcategoryAliases}.toList();
     return _db
         .collection("products")
-        .where("category", isEqualTo: category)
-        .where("subcategory", isEqualTo: subcategory)
+        .where("category", whereIn: categories)
+        .where("subcategory", whereIn: subcategories)
         .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
-        .limit(50)
+        .limit(100)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
-          _sortByBoost(products);
+          _sortBySponsored(products);
           return products;
         });
   }
@@ -736,7 +746,7 @@ class ProductService {
             p.name.toLowerCase().contains(w) ||
             p.description.toLowerCase().contains(w)))
           .toList();
-      _sortByBoost(filtered);
+      _sortBySponsored(filtered);
       return filtered;
     });
   }
@@ -786,7 +796,7 @@ class ProductService {
             p.name.toLowerCase().contains(w) ||
             p.description.toLowerCase().contains(w)))
           .toList();
-      _sortByBoost(products);
+      _sortBySponsored(products);
     } catch (e) {
       debugPrint('searchProductsOnce error: $e');
     }
@@ -806,7 +816,7 @@ class ProductService {
                 .map((doc) => Product.fromFirestore(doc))
                 .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
                 .toList();
-            _sortByBoost(products);
+            _sortBySponsored(products);
             return products;
           });
     }
@@ -821,7 +831,7 @@ class ProductService {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
-          _sortByBoost(products);
+          _sortBySponsored(products);
           return products;
         });
   }
@@ -1089,38 +1099,27 @@ class ProductService {
 
   Stream<List<Product>> getFeaturedProducts() {
     if (ApiConfig.kUseProductsApi) {
-      // v1 is HTTP, not a stream: fetch once and keep the legacy post-filter
-      // (expired boost windows dropped, gold tiers first) so the carousel
-      // renders exactly like it did from Firestore.
+      // v1 is HTTP, not a stream: fetch once, keep the sponsored (ads) rows
+      // first; fall back to recent listings so the carousel never clears when
+      // no campaign is live.
       return Stream.fromFuture(() async {
-        final items = await _api.fetchFeatured(limit: 40);
-        final products = items.where((p) => p.isBoostedValid).toList();
-        products.sort((a, b) {
-          final tierOrder = (b.boostTier).compareTo(a.boostTier);
-          if (tierOrder != 0) return tierOrder;
-          return b.createdAt.compareTo(a.createdAt);
-        });
+        final res = await _api.fetchProducts(limit: 40);
+        var products = res.items.where((p) => p.isSponsored).toList();
+        if (products.isEmpty) {
+          products = res.items.take(20).toList();
+        }
         return products;
       }());
     }
     return _db
         .collection("products")
-        .where("isBoosted", isEqualTo: true)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
-        .map((snapshot) {
-      final products = snapshot.docs
-          .map((doc) => Product.fromFirestore(doc))
-          .where((p) => p.isBoostedValid)
-          .toList();
-      products.sort((a, b) {
-        final tierOrder = (b.boostTier).compareTo(a.boostTier);
-        if (tierOrder != 0) return tierOrder;
-        return b.createdAt.compareTo(a.createdAt);
-      });
-      return products;
-    });
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Product.fromFirestore(doc))
+            .toList());
   }
 
   Future<void> incrementViewCount(String productId) async {

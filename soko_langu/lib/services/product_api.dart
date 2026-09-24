@@ -131,14 +131,6 @@ class ProductApiClient {
     }
   }
 
-  /// Boosted products for the home "featured" carousel. Mirrors the legacy
-  /// Firestore read (`isBoosted == true`) via the server's snapshot filter;
-  /// callers must still drop rows whose boost window expired.
-  Future<List<Product>> fetchFeatured({int limit = 20}) async {
-    final res = await fetchProducts(boosted: true, limit: limit);
-    return res.items;
-  }
-
   /// The signed-in seller's own listings (drafts included). The endpoint
   /// authenticates via the Firebase ID token, same as the wallet/order bridges.
   Future<List<Product>> fetchMyProducts({int page = 1, int limit = 50}) async {
@@ -242,6 +234,7 @@ class ProductApiClient {
                 id: r.slug.isNotEmpty ? r.slug : r.id,
                 name: r.name,
                 nameSw: r.name,
+                image: r.iconUrl,
               ),
             );
       }
@@ -253,6 +246,7 @@ class ProductApiClient {
               name: r.name,
               nameSw: r.name,
               icon: r.iconUrl ?? CategoryIconNames.package,
+              image: r.iconUrl,
               subcategories: byParent[r.id] ?? const [],
               isActive: true,
               order: r.sortOrder,

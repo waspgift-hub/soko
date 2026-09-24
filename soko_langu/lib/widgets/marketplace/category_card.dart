@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../theme/app_dimens.dart';
 import '../ds/ds.dart';
+import 'category_image.dart';
 
-/// Category card with optional image or icon.
+/// Category card with image-first artwork and icon fallback.
 ///
-/// Shows a square tile with image/background and centered label underneath.
-/// Used in the home grid and category screens.
+/// Shows a square photo tile with centered label underneath. Used in the
+/// home grid and category screens.
 class CategoryCard extends StatelessWidget {
   final String name;
   final String? imageUrl;
@@ -42,16 +42,11 @@ class CategoryCard extends StatelessWidget {
                 border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
               ),
               clipBehavior: Clip.antiAlias,
-              child: imageUrl != null && imageUrl!.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: imageUrl!,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 128,
-                      memCacheHeight: 128,
-                      placeholder: (_, _) => Icon(icon, size: 28, color: cs.onSurfaceVariant),
-                      errorWidget: (_, _, _) => Icon(icon, size: 28, color: cs.onSurfaceVariant),
-                    )
-                  : Icon(icon, size: 28, color: cs.onSurfaceVariant),
+              child: CategoryImage(
+                imageUrl: imageUrl,
+                fallback: icon,
+                memCacheSize: 128,
+              ),
             ),
             const SizedBox(height: AppSpacing.s2),
             Text(

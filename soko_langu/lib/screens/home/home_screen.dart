@@ -14,6 +14,7 @@ import '../../providers/product_feed_provider.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/banner_rotator.dart';
+import '../../widgets/marketplace/category_card.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
 import '../../widgets/recently_viewed_row.dart';
@@ -574,42 +575,20 @@ class _HomeScreenState extends State<HomeScreen>
                       itemBuilder: (context, index) {
                         final cat = cats[index];
                         final config = AppConfig.of(context);
-                        return GestureDetector(
-                          onTap: () => context.push('${AppRoutes.categoryProducts}/${cat.name}', extra: cat),
-                          child: Container(
-                            width: 80,
-                            margin: const EdgeInsets.only(right: 14),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 64, height: 64,
-                                  decoration: BoxDecoration(
-                                    color: cs.surface,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(color: cs.outlineVariant),
-                                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
-                                  ),
-                                  child: Center(
-                                    child: Icon(
-                                      categoryIconFor(
-                                        icon: cat.icon,
-                                        slug: cat.id,
-                                        name: cat.name,
-                                      ),
-                                      size: 28,
-                                      color: cs.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  config.langCode == 'en' ? cat.name : cat.nameSw,
-                                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                        return Container(
+                          width: 80,
+                          margin: const EdgeInsets.only(right: 14),
+                          child: CategoryCard(
+                            name: config.langCode == 'en' ? cat.name : cat.nameSw,
+                            imageUrl: cat.displayImage,
+                            icon: categoryIconFor(
+                              icon: cat.icon,
+                              slug: cat.id,
+                              name: cat.name,
+                            ),
+                            onTap: () => context.push(
+                              '${AppRoutes.categoryProducts}/${cat.name}',
+                              extra: cat,
                             ),
                           ),
                         );

@@ -20,6 +20,14 @@ class CategoryIconNames {
   static const gift = 'gift';
   static const shoppingBag = 'shopping_bag';
   static const toys = 'toys';
+  static const devices = 'devices';
+  static const computer = 'computer';
+  static const kitchen = 'kitchen';
+  static const agriculture = 'agriculture';
+  static const solar = 'solar';
+  static const palette = 'palette';
+  static const pets = 'pets';
+  static const construction = 'construction';
 }
 
 /// Rounded solid Material icon for a category.
@@ -116,6 +124,134 @@ IconData? _iconForKey(String key) {
     case 'others':
     case 'other':
       return Icons.inventory_2_rounded;
+    case 'devices':
+    case 'tv':
+    case 'speaker':
+    case 'camera':
+    case 'router':
+      return Icons.devices_rounded;
+    case 'computers':
+    case 'computer':
+    case 'laptop':
+    case 'monitor':
+    case 'printer':
+    case 'keyboard':
+      return Icons.computer_rounded;
+    case 'kitchen':
+    case 'pots':
+    case 'blender':
+    case 'utensils':
+      return Icons.kitchen_rounded;
+    case 'agriculture':
+    case 'tractor':
+    case 'seeds':
+    case 'fertilizer':
+    case 'feeds':
+    case 'irrigation':
+      return Icons.agriculture_rounded;
+    case 'solar':
+    case 'panels':
+    case 'inverters':
+    case 'generator':
+      return Icons.solar_power_rounded;
+    case 'hobbies':
+    case 'palette':
+    case 'guitar':
+    case 'crafts':
+    case 'collectibles':
+      return Icons.palette_rounded;
+    case 'pets':
+    case 'dog':
+    case 'cat':
+    case 'bird':
+    case 'fish':
+    case 'petfood':
+      return Icons.pets_rounded;
+    case 'building':
+    case 'construction':
+    case 'cement':
+    case 'paint':
+    case 'plumbing':
+    case 'tiles':
+    case 'door':
+      return Icons.construction_rounded;
+    case 'vehicles':
+    case 'trucks':
+    case 'motorbike':
+    case 'tyre':
+    case 'parts':
+      return Icons.directions_car_rounded;
+    case 'novel':
+    case 'stationery':
+    case 'pencil':
+      return Icons.menu_book_rounded;
+    case 'bags':
+    case 'backpack':
+    case 'handbag':
+    case 'luggage':
+      return Icons.backpack_rounded;
+    case 'heels':
+    case 'sandals':
+      return Icons.ice_skating_rounded;
+    case 'dress':
+    case 'suits':
+    case 'tshirt':
+    case 'jeans':
+    case 'traditional':
+      return Icons.checkroom_rounded;
+    case 'necklace':
+    case 'ring':
+    case 'earrings':
+    case 'bracelet':
+      return Icons.diamond_rounded;
+    case 'makeup':
+    case 'hair':
+    case 'perfume':
+    case 'bath':
+    case 'hygiene':
+      return Icons.spa_rounded;
+    case 'sofa':
+    case 'bed':
+    case 'tables':
+    case 'wardrobe':
+    case 'bedding':
+    case 'lamp':
+      return Icons.chair_rounded;
+    case 'diapers':
+    case 'babycloth':
+    case 'babyfood':
+    case 'stroller':
+      return Icons.child_care_rounded;
+    case 'basketball':
+    case 'bicycle':
+    case 'camping':
+    case 'racket':
+      return Icons.sports_soccer_rounded;
+    case 'phone':
+    case 'cases':
+    case 'watch':
+    case 'earphones':
+    case 'charger':
+    case 'battery':
+    case 'storage':
+      return Icons.smartphone_rounded;
+    case 'tailoring':
+    case 'photo':
+    case 'cleaning':
+    case 'salon':
+    case 'transport':
+    case 'install':
+    case 'fundi':
+    case 'events':
+      return Icons.handyman_rounded;
+    case 'truck':
+    case 'oil':
+    case 'grains':
+    case 'spices':
+    case 'snacks':
+    case 'produce':
+    case 'dairy':
+      return Icons.local_grocery_store_rounded;
     default:
       return null;
   }

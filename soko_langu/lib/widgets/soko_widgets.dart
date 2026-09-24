@@ -9,6 +9,7 @@ export 'inputs/soko_dropdown.dart';
 export 'inputs/soko_price_input.dart';
 export 'inputs/soko_search_bar.dart';
 export 'marketplace/category_card.dart';
+export 'marketplace/category_image.dart';
 export 'marketplace/compact_product_card.dart';
 export 'marketplace/product_grid.dart';
 export 'marketplace/seller_card.dart';

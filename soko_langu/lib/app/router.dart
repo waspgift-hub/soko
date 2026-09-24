@@ -28,7 +28,6 @@ import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/wishlist_screen.dart';
 import '../screens/profile/my_ads_screen.dart';
 import '../screens/profile/seller_dashboard_screen.dart';
-import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
 import '../screens/profile/shop_customization_screen.dart';
@@ -43,7 +42,6 @@ import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_kyc_screen.dart';
 import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
-import '../screens/boost/boost_receipt_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
 import '../screens/orders/seller_dispatch_screen.dart';
 import '../screens/orders/seller_quote_screen.dart';
@@ -92,7 +90,6 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.sellerQuote,
   AppRoutes.sellerOrders,
   AppRoutes.myPurchases,
-  AppRoutes.productBoost,
   AppRoutes.notifications,
   AppRoutes.chats,
   AppRoutes.chat,
@@ -117,6 +114,35 @@ final List<String> _adminOnlyRoutes = [
   AppRoutes.adminKyc,
   AppRoutes.adminBroadcast,
 ];
+
+
+/// Reads key:value pairs (attributes preset) from a query param.
+Map<String, Set<String>>? _queryAttrMap(GoRouterState state) {
+  final raw = state.uri.queryParameters['attrs'];
+  if (raw == null || raw.isEmpty) return null;
+  final out = <String, Set<String>>{};
+  for (final part in raw.split(',')) {
+    final i = part.indexOf(':');
+    if (i <= 0) continue;
+    final key = part.substring(0, i).trim();
+    final value = part.substring(i + 1).trim();
+    if (key.isEmpty || value.isEmpty) continue;
+    out.putIfAbsent(key, () => <String>{}).add(value);
+  }
+  return out.isEmpty ? null : out;
+}
+
+/// Reads a comma-separated multi-value query param for pre-selection.
+Set<String>? _queryBrandSet(GoRouterState state, String key) {
+  final raw = state.uri.queryParameters[key];
+  if (raw == null || raw.isEmpty) return null;
+  final out = raw
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toSet();
+  return out.isEmpty ? null : out;
+}
 
 GoRouter buildRouter() {
   return GoRouter(
@@ -265,7 +291,15 @@ GoRouter buildRouter() {
       GoRoute(
         path: '${AppRoutes.categoryProducts}/:name',
         pageBuilder: (context, state) {
-          return _premiumPage(CategoryProductsScreen(category: state.extra as dynamic));
+          return _premiumPage(
+            CategoryProductsScreen(
+              category: state.extra as dynamic,
+              initialSubcategory: state.uri.queryParameters['sub'],
+              initialBrands: _queryBrandSet(state, 'brands'),
+              initialAttributes: _queryAttrMap(state),
+              initialFlags: _queryBrandSet(state, 'flags'),
+            ),
+          );
         },
       ),
       GoRoute(
@@ -376,14 +410,6 @@ GoRouter buildRouter() {
             unitPrice: unitPrice,
           ));
         },
-      ),
-      GoRoute(
-        path: AppRoutes.productBoost,
-        pageBuilder: (context, state) => _premiumPage(ProductBoostScreen(product: state.extra as dynamic)),
-      ),
-      GoRoute(
-        path: AppRoutes.boostReceipt,
-        pageBuilder: (context, state) => _premiumPage(BoostReceiptScreen(data: state.extra as Map<String, dynamic>? ?? const {})),
       ),
       GoRoute(
         path: AppRoutes.discovery,

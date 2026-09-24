@@ -17,7 +17,11 @@ import '../../main.dart';
 import '../../theme/app_colors.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
+import '../../data/marketplace_taxonomy.dart';
+import '../../models/discovery_filters.dart';
+import '../../services/search_intent.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/animations/soko_animated_art.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/soko_vibe_watermark.dart';
@@ -60,7 +64,7 @@ class _SearchScreenState extends State<SearchScreen>
   // Sort (G11): 'best' (server ranking) | 'price_asc' | 'price_desc'.
   String _sortKey = 'best';
 
-  // Initial/discovery state (no search yet): boosted-first listing + most-rated sections.
+  // Initial/discovery state (no search yet): sponsored-first listing + most-rated sections.
   List<SearchResult> _discoveryProducts = [];
   List<SearchResult> _mostRatedProducts = [];
   List<SearchResult> _mostRatedSellers = [];
@@ -127,7 +131,7 @@ class _SearchScreenState extends State<SearchScreen>
     try {
       // Use the v2 Postgres product API which returns sponsored placements
       // alongside each product (PUBLIC_SELECT includes the sponsoredCampaigns
-      // relation). This replaces the legacy Firestore boost-only discovery.
+      // relation). This replaces the legacy Firestore-only discovery.
       final products = await ProductApiClient().fetchProducts(limit: 30);
 
       final sponsored = products.items.where((p) => p.isSponsored).toList();
@@ -146,12 +150,6 @@ class _SearchScreenState extends State<SearchScreen>
       // Fallback to Firestore for the discovery view if the API is unreachable.
       try {
         final fs = FirebaseFirestore.instance;
-        final boostedSnap = await fs
-            .collection('products')
-            .where('isActive', isEqualTo: true)
-            .where('isBoosted', isEqualTo: true)
-            .limit(12)
-            .get();
         final recentSnap = await fs
             .collection('products')
             .where('isActive', isEqualTo: true)
@@ -159,32 +157,15 @@ class _SearchScreenState extends State<SearchScreen>
             .limit(30)
             .get();
 
-        final boosted = <Product>[];
         final normal = <SearchResult>[];
-        final seen = <String>{};
-
-        final boostedItems = boostedSnap.docs.map((d) => Product.fromFirestore(d)).toList()
-          ..removeWhere((p) => !p.isBoostedValid)
-          ..sort((a, b) => (b.boostedUntil ?? DateTime(0)).compareTo(a.boostedUntil ?? DateTime(0)));
-        for (final p in boostedItems.take(10)) {
-          boosted.add(p);
-          seen.add(p.id);
-        }
-
-        final recent = recentSnap.docs.map((d) => Product.fromFirestore(d)).toList();
-        for (final p in recent) {
-          if (seen.contains(p.id) || p.isBoostedValid) continue;
+        for (final p in recentSnap.docs.map((d) => Product.fromFirestore(d))) {
           normal.add(SearchResult.fromProduct(p));
-          seen.add(p.id);
           if (normal.length >= 20) break;
         }
 
         if (mounted) {
           setState(() {
-            _discoveryProducts = [
-              ...boosted.map((p) => SearchResult.fromProduct(p)),
-              ...normal,
-            ];
+            _discoveryProducts = normal;
             _loadingInitial = false;
           });
         }
@@ -572,67 +553,119 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildSuggestions(ColorScheme cs) {
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      itemCount: _suggestions.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
-      itemBuilder: (_, i) {
-        final s = _suggestions[i];
-        final IconData typeIcon;
-        final Color typeColor;
-        if (s.type == 'product') {
-          typeIcon = Icons.shopping_bag_outlined;
-          typeColor = cs.primary;
-        } else if (s.type == 'seller' || s.type == 'user') {
-          typeIcon = Icons.storefront_outlined;
-          typeColor = cs.secondary;
-        } else if (s.type == 'category') {
-          typeIcon = Icons.category_outlined;
-          typeColor = cs.tertiary;
-        } else {
-          typeIcon = Icons.search;
-          typeColor = cs.onSurfaceVariant;
-        }
-        return ListTile(
-          leading: s.image != null && s.image!.isNotEmpty
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: ProductCachedImage(
-                    url: s.image!,
-                    width: 36, height: 36, fit: BoxFit.cover,
-                  ),
-                )
-              : Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: typeColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(typeIcon, size: 18, color: typeColor),
+    final intent = parseSearchIntent(_searchCtrl.text);
+    return Column(
+      children: [
+        if (!intent.isEmpty) _IntentStrip(intent: intent, onOpen: _openIntent),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            itemCount: _suggestions.length,
+            separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
+            itemBuilder: (_, i) {
+              final s = _suggestions[i];
+              final IconData typeIcon;
+              final Color typeColor;
+              if (s.type == 'product') {
+                typeIcon = Icons.shopping_bag_outlined;
+                typeColor = cs.primary;
+              } else if (s.type == 'seller' || s.type == 'user') {
+                typeIcon = Icons.storefront_outlined;
+                typeColor = cs.secondary;
+              } else if (s.type == 'category') {
+                typeIcon = Icons.category_outlined;
+                typeColor = cs.tertiary;
+              } else {
+                typeIcon = Icons.search;
+                typeColor = cs.onSurfaceVariant;
+              }
+              return ListTile(
+                leading: s.image != null && s.image!.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: ProductCachedImage(
+                          url: s.image!,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(typeIcon, size: 18, color: typeColor),
+                      ),
+                title: Text(s.text, style: const TextStyle(fontSize: 14)),
+                subtitle: Row(
+                  children: [
+                    Icon(typeIcon, size: 11, color: typeColor),
+                    const SizedBox(width: 3),
+                    Text(
+                      context.tr(s.type),
+                      style: TextStyle(fontSize: 11, color: typeColor),
+                    ),
+                    if (s.price != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        '· ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-          title: Text(s.text, style: const TextStyle(fontSize: 14)),
-          subtitle: Row(
-            children: [
-              Icon(typeIcon, size: 11, color: typeColor),
-              const SizedBox(width: 3),
-              Text(
-                context.tr(s.type),
-                style: TextStyle(fontSize: 11, color: typeColor),
-              ),
-              if (s.price != null) ...[
-                const SizedBox(width: 6),
-                Text('· ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-              ],
-            ],
+                trailing: Icon(
+                  Icons.north_west,
+                  size: 16,
+                  color: cs.onSurfaceVariant,
+                ),
+                dense: true,
+                onTap: () => _onSuggestionTap(s),
+              );
+            },
           ),
-          trailing: Icon(Icons.north_west, size: 16, color: cs.onSurfaceVariant),
-          dense: true,
-          onTap: () => _onSuggestionTap(s),
-        );
-      },
+        ),
+      ],
     );
+  }
+
+  /// Opens the category page carrying the understood intent as presets.
+  void _openIntent(SearchIntent intent) {
+    var cat = intent.category;
+    if (cat == null && intent.brand != null) {
+      final want = intent.brand!.toLowerCase();
+      for (final c in kMarketplaceTaxonomy) {
+        if (c.brands.any((b) => b.name.toLowerCase() == want)) {
+          cat = c;
+          break;
+        }
+      }
+    }
+    if (cat == null) return;
+    final model = categoryFromTaxonomy(cat);
+    final params = <String>[];
+    if (intent.subcategory != null) {
+      params.add('sub=${Uri.encodeComponent(intent.subcategory!.name)}');
+    }
+    if (intent.brand != null) {
+      params.add('brands=${Uri.encodeComponent(intent.brand!)}');
+    }
+    if (intent.attributes.isNotEmpty) {
+      params.add(
+        'attrs=${Uri.encodeComponent(intent.attributes.entries.map((e) => "${e.key}:${e.value}").join(','))}',
+      );
+    }
+    if (intent.flags.isNotEmpty) {
+      params.add('flags=${intent.flags.join(',')}');
+    }
+    final qs = params.isEmpty ? '' : '?${params.join('&')}';
+    context.push('${AppRoutes.categoryProducts}/${model.name}$qs', extra: model);
   }
 
   Widget _buildResults(ColorScheme cs) {
@@ -958,7 +991,7 @@ class _SearchScreenState extends State<SearchScreen>
                             padding: const EdgeInsets.only(left: 4),
                             child: Icon(Icons.verified, size: 14, color: cs.primary),
                           ),
-                        if (r.isBoosted)
+                        if (r.isSponsored)
                           Container(
                             margin: const EdgeInsets.only(left: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1048,7 +1081,7 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            const EmptySearchArt(),
             const SizedBox(height: 16),
             Text(context.tr('no_results'), style: TextStyle(fontSize: 18, color: cs.onSurfaceVariant)),
             const SizedBox(height: 8),
@@ -1200,8 +1233,8 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildInitialState(ColorScheme cs) {
-    final boosted = _discoveryProducts.where((r) => r.isBoosted).toList();
-    final normal = _discoveryProducts.where((r) => !r.isBoosted).toList();
+    final sponsored = _discoveryProducts.where((r) => r.isSponsored).toList();
+    final normal = _discoveryProducts.where((r) => !r.isSponsored).toList();
     final hasContent = _mostRatedProducts.isNotEmpty ||
         _mostRatedSellers.isNotEmpty ||
         _discoveryProducts.isNotEmpty;
@@ -1237,10 +1270,10 @@ class _SearchScreenState extends State<SearchScreen>
           ),
           const SizedBox(height: 20),
         ],
-        if (boosted.isNotEmpty) ...[
+        if (sponsored.isNotEmpty) ...[
           _buildSectionHeader(cs, Icons.rocket_launch_rounded, context.tr('featured_products')),
           const SizedBox(height: 8),
-          ...boosted.map((r) => _buildResultCard(cs, r)),
+          ...sponsored.map((r) => _buildResultCard(cs, r)),
           const SizedBox(height: 12),
         ],
         if (normal.isNotEmpty) ...[
@@ -1402,6 +1435,55 @@ Icon(Icons.star, size: 13, color: cs.primary),
       kycVerified: r.kycApproved,
       onTap: () =>
           context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName),
+    );
+  }
+}
+
+/// Visual shortcut chips for the understood search intent. Tapping any
+/// chip opens the matching category page with the intent as presets.
+class _IntentStrip extends StatelessWidget {
+  final SearchIntent intent;
+  final ValueChanged<SearchIntent> onOpen;
+  const _IntentStrip({required this.intent, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final langEn = AppConfig.of(context).langCode == 'en';
+    final chips = <Widget>[];
+    void add(IconData icon, String label) {
+      chips.add(
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ActionChip(
+            avatar: Icon(icon, size: 16, color: cs.primary),
+            label: Text(label, style: const TextStyle(fontSize: 12)),
+            onPressed: () => onOpen(intent),
+          ),
+        ),
+      );
+    }
+
+    final cat = intent.category;
+    if (cat != null) add(Icons.category_outlined, langEn ? cat.name : cat.nameSw);
+    final sub = intent.subcategory;
+    if (sub != null) add(Icons.layers_rounded, langEn ? sub.name : sub.nameSw);
+    if (intent.brand != null) add(Icons.sell_rounded, intent.brand!);
+    intent.attributes.forEach((k, v) => add(Icons.tune_rounded, '$k: $v'));
+    for (final f in intent.flags) {
+      final def = popularFlagByKey(f);
+      add(
+        Icons.bolt_rounded,
+        def?.label ?? (def?.labelKey != null ? def!.labelKey! : f),
+      );
+    }
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        children: chips,
+      ),
     );
   }
 }
