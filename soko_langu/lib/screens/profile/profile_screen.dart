@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
@@ -259,13 +260,16 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppInsets.lg),
+                      const SizedBox(height: 14),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            _profile?.displayName.isNotEmpty == true ? _profile!.displayName : user?.displayName ?? context.tr('no_name'),
-                            style: TextStyle(fontSize: AppFontSize.xxl, fontWeight: FontWeight.w700, color: cs.onSurface, letterSpacing: -0.3),
+                          Flexible(
+                            child: Text(
+                              _profile?.displayName.isNotEmpty == true ? _profile!.displayName : user?.displayName ?? context.tr('no_name'),
+                              style: TextStyle(fontSize: AppFontSize.xxl, fontWeight: FontWeight.w700, color: cs.onSurface, letterSpacing: -0.3),
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           if (_profile?.kycApproved == true) ...[
                             const SizedBox(width: AppInsets.sm),
@@ -275,32 +279,32 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                       ),
                       if (_profile?.bio.isNotEmpty == true)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.xxl),
-                          child: Text(_profile!.bio, style: TextStyle(color: cs.onSurfaceVariant, fontSize: AppFontSize.md), textAlign: TextAlign.center),
-                        ),
-                      const SizedBox(height: AppInsets.xs),
-                      Text(user?.email ?? context.tr('no_email'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm)),
+                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.xxl, vertical: 6),
+                          child: Text(_profile!.bio, style: TextStyle(color: cs.onSurfaceVariant, fontSize: AppFontSize.md, height: 1.4), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        )
+                      else
+                        const SizedBox(height: 4),
+                      const SizedBox(height: 6),
+                      Text(user?.email ?? context.tr('no_email'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm), maxLines: 1, overflow: TextOverflow.ellipsis),
                       if (_profile?.phone.isNotEmpty == true) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          PhoneUtils.formatForDisplay(_profile!.phone),
-                          style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm),
-                        ),
+                        const SizedBox(height: 4),
+                        Text(PhoneUtils.formatForDisplay(_profile!.phone), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm)),
                       ],
-                      const SizedBox(height: AppInsets.lg),
-                      // Stats
+                      const SizedBox(height: 16),
+                      // Stats — even spacing, soft card
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: ProfileStat(
-                                count: _wishlistCount,
-                                label: context.tr('wishlist'),
-                                onTap: () => context.push(AppRoutes.wishlist),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          decoration: BoxDecoration(color: cs.surfaceSubtle, borderRadius: BorderRadius.circular(14), border: Border.all(color: cs.hairline)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: ProfileStat(count: _wishlistCount, label: context.tr('wishlist'), onTap: () => context.push(AppRoutes.wishlist)),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -367,7 +371,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),
       _ActionItem(Icons.favorite_rounded, context.tr('wishlist'), () => context.push(AppRoutes.wishlist)),
       _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
-      _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
       _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
       _ActionItem(Icons.auto_awesome_rounded, context.tr('ai_assistant'), () => context.push(AppRoutes.aiAssistant)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
@@ -377,37 +380,26 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     if (isAdmin) {
       actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
     }
-    final tileWidth = (MediaQuery.of(context).size.width - 32 - 20) / 3;
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: actions.map((item) {
-        return SizedBox(
-          width: tileWidth,
-          height: tileWidth,
-          child: GlassCard(
-            onTap: item.onTap,
-            padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
-            borderColor: cs.primary.withValues(alpha: 0.35),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(item.icon, color: cs.primary, size: 24),
-                ),
-                const SizedBox(height: AppInsets.sm),
-                Text(item.label, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurface, fontWeight: FontWeight.w500),
-                  textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.0,
+      ),
+      itemCount: actions.length,
+      itemBuilder: (context, i) {
+        final item = actions[i];
+        return GlassCard(
+          onTap: item.onTap,
+          padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
+          borderColor: cs.primary.withValues(alpha: 0.35),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(item.icon, color: cs.primary, size: 24)),
+            const SizedBox(height: AppInsets.sm),
+            Text(item.label, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurface, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ]),
         );
-      }).toList(),
+      },
     );
   }
 }

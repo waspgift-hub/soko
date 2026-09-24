@@ -4,7 +4,29 @@
     "details": [
       {
         "appID": "344682929526.com.sokolangu.app",
-        "paths": ["/magic-link*"]
+        "paths": [
+          "/product/*",
+          "/seller/*",
+          "/profile/*",
+          "/order/*",
+          "/otp/*",
+          "/category/*",
+          "/search*",
+          "/magic-link*"
+        ]
+      },
+      {
+        "appIDs": ["344682929526.com.sokolangu.app"],
+        "components": [
+          { "/": "/product/*", "comment": "Product deep link" },
+          { "/": "/seller/*", "comment": "Seller profile" },
+          { "/": "/profile/*", "comment": "User profile" },
+          { "/": "/order/*", "comment": "Order (auth required)" },
+          { "/": "/otp/*", "comment": "OTP action (auth, no secret)" },
+          { "/": "/category/*", "comment": "Category" },
+          { "/": "/search", "comment": "Search" },
+          { "/": "/magic-link/*", "comment": "Magic link auth" }
+        ]
       }
     ]
   }

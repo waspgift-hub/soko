@@ -11,6 +11,7 @@ import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
 import '../../app/app_transitions.dart';
 import '../../widgets/barcode_scanner_widget.dart';
+import '../../widgets/safe_dropdown.dart';
 import '../../constants/tanzania_districts.dart';
 
 class _VariantEntry {
@@ -28,8 +29,9 @@ class _VariantEntry {
 
 class AddProductScreen extends StatefulWidget {
   final Product? product;
+  final List<String>? initialMediaPaths;
 
-  const AddProductScreen({super.key, this.product});
+  const AddProductScreen({super.key, this.product, this.initialMediaPaths});
 
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -96,6 +98,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.initState();
     _loadCategories();
     if (_isEditing) _prefillFields();
+    _handleInitialSharedMedia();
   }
 
   void _prefillFields() {
@@ -124,6 +127,49 @@ class _AddProductScreenState extends State<AddProductScreen> {
       entry.priceCtrl.text = v.priceAdjustment?.toStringAsFixed(0) ?? '0';
       entry.stockCtrl.text = v.stock.toString();
       _variants.add(entry);
+    }
+  }
+
+  bool _sharedBannerSeen = false;
+
+  void _handleInitialSharedMedia() {
+    final paths = widget.initialMediaPaths;
+    if (paths == null || paths.isEmpty) {
+      // also check service pending (cold start via native)
+      return;
+    }
+    // Show banner once
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_sharedBannerSeen && mounted) {
+        _sharedBannerSeen = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('media_received', 'Media received — ready to sell on Soko Vibe')),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      }
+    });
+    // Attach images/videos — respect 5 image limit
+    for (final p in paths) {
+      final lower = p.toLowerCase();
+      final isVideo = lower.endsWith('.mp4') ||
+          lower.endsWith('.mov') ||
+          lower.endsWith('.avi') ||
+          lower.endsWith('.mkv') ||
+          lower.endsWith('.webm') ||
+          lower.endsWith('.3gp');
+      if (isVideo) {
+        if (_videoFile == null) _videoFile = XFile(p);
+      } else {
+        if (_newImages.length + _existingImages.length < 5) {
+          _newImages.add(XFile(p));
+          // decode size async
+          _decodeSize(XFile(p)).then((m) {
+            if (mounted) setState(() => _newMeta.add(m));
+          });
+        }
+      }
     }
   }
 
@@ -156,17 +202,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   void _updateSubcategories() {
+    final normalizedSelected = normalizeCategory(_selectedCategory);
     final category = _categories.isEmpty
         ? null
         : _categories.firstWhere(
-            (c) => c.name == _selectedCategory,
+            (c) => normalizeCategory(c.name) == normalizedSelected,
             orElse: () => _categories.first,
           );
     if (category == null) return;
     setState(() {
       _subcategories = category.subcategories;
-      if (_subcategories.isNotEmpty &&
-          !_subcategories.any((s) => s.name == _selectedSubcategory)) {
+      if (_subcategories.isNotEmpty && !_subcategories.any((s) => normalizeCategory(s.name) == normalizeCategory(_selectedSubcategory))) {
         _selectedSubcategory = _subcategories.first.name;
       }
     });
@@ -634,6 +680,48 @@ class _AddProductScreenState extends State<AddProductScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.initialMediaPaths != null && widget.initialMediaPaths!.isNotEmpty) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 18, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            context.tr('media_received_banner', 'Media received — Sell on Soko Vibe'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Sell on Soko Vibe',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    context.tr('sell_on_soko_hint', 'Jaza maelezo ya bidhaa kisha chapisha — picha/video tayari imeambatanishwa.'),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -968,102 +1056,58 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _selectedDistrict.isEmpty ? null : _selectedDistrict,
-                  decoration: InputDecoration(
-                    labelText: context.tr('district'),
-                    border: const OutlineInputBorder(),
-                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
-                  ),
-                  items: _allDistricts
-                      .map(
-                        (d) => DropdownMenuItem(
-                          value: d,
-                          child: Text(d, overflow: TextOverflow.ellipsis),
-                        ),
-                      )
-                      .toList(),
+                SafeDropdownFormField<String>(
+                  value: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+                  items: _allDistricts,
+                  labelText: context.tr('district'),
+                  hint: context.tr('district'),
+                  itemLabel: (d) => d,
+                  normalize: normalizeCategory,
                   onChanged: (value) => setState(() => _selectedDistrict = value ?? ''),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _selectedCategory,
-                  decoration: InputDecoration(
-                    labelText: context.tr('category'),
-                    border: const OutlineInputBorder(),
-                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
-                  ),
-                  items: _categories
-                      .map(
-                        (cat) => DropdownMenuItem(
-                          value: cat.name,
-                          child: Text(
-                            '${cat.nameSw} | ${cat.name}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
+                SafeDropdownFormField<String>(
+                  value: _selectedCategory,
+                  items: _categories.map((c) => c.name).toList(),
+                  labelText: context.tr('category'),
+                  hint: context.tr('category'),
+                  itemLabel: (name) {
+                    final cat = _categories.firstWhere((c) => c.name == name, orElse: () => _categories.first);
+                    return '${cat.nameSw} | ${cat.name}';
+                  },
+                  normalize: normalizeCategory,
+                  validator: (v) => v == null ? context.tr('enter_category') : null,
                   onChanged: (value) {
+                    if (value == null) return;
                     setState(() {
-                      _selectedCategory = value!;
+                      _selectedCategory = value;
                       _updateSubcategories();
                     });
                   },
                 ),
                 const SizedBox(height: 12),
                 if (_subcategories.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: _selectedSubcategory.isNotEmpty
-                        ? _selectedSubcategory
-                        : null,
-                    decoration: InputDecoration(
-                      labelText: context.tr('subcategory'),
-                      border: const OutlineInputBorder(),
-                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
-                    ),
-                    items: _subcategories
-                        .map(
-                          (sub) => DropdownMenuItem(
-                            value: sub.name,
-                            child: Text(
-                              '${sub.nameSw} | ${sub.name}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setState(() => _selectedSubcategory = value!),
+                  SafeDropdownFormField<String>(
+                    value: _selectedSubcategory.isNotEmpty ? _selectedSubcategory : null,
+                    items: _subcategories.map((s) => s.name).toList(),
+                    labelText: context.tr('subcategory'),
+                    hint: context.tr('subcategory'),
+                    itemLabel: (name) {
+                      final sub = _subcategories.firstWhere((s) => s.name == name, orElse: () => _subcategories.first);
+                      return '${sub.nameSw} | ${sub.name}';
+                    },
+                    normalize: normalizeCategory,
+                    onChanged: (value) => setState(() => _selectedSubcategory = value ?? ''),
                   ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _selectedCondition,
-                  decoration: InputDecoration(
-                    labelText: context.tr('condition'),
-                    border: const OutlineInputBorder(),
-                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: 'new',
-                      child: Text(context.tr('new')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'used',
-                      child: Text(context.tr('used')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'refurbished',
-                      child: Text(context.tr('refurbished')),
-                    ),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _selectedCondition = value!),
+                SafeDropdownFormField<String>(
+                  value: _selectedCondition,
+                  items: const ['new', 'used', 'refurbished'],
+                  labelText: context.tr('condition'),
+                  hint: context.tr('condition'),
+                  itemLabel: (v) => context.tr(v),
+                  normalize: normalizeCategory,
+                  onChanged: (value) => setState(() => _selectedCondition = value ?? 'new'),
                 ),
                 const SizedBox(height: 12),
                 Row(

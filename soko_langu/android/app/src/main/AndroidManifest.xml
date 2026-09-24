@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -52,29 +53,60 @@
                     android:host="sokonimoko-8c171-a8d14.web.app"
                     android:pathPrefix="/magic-link" />
             </intent-filter>
-            <!-- Android App Links: open the app for product/seller deep links.
-                 Both hosts are verified independently; the apex host verifies
-                 only once sokovibe.co.tz serves valid TLS + assetlinks.json. -->
+            <!-- Android App Links: Soko Vibe universal links.
+                 Verified via https://www.sokovibe.co.tz/.well-known/assetlinks.json
+                 using release SHA-256 38:1F:25:93:81:F2:F3:49:DD:B8:13:E7:BB:D1:FD:C4:2A:BF:78:A2:3B:BC:FB:FE:65:D9:B6:B4:E2:0C:AF:77.
+                 Both apex and www hosts are declared; www is canonical. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="www.sokovibe.co.tz"
-                    android:pathPrefix="/product" />
-                <data
-                    android:scheme="https"
-                    android:host="www.sokovibe.co.tz"
-                    android:pathPrefix="/seller" />
-                <data
-                    android:scheme="https"
-                    android:host="sokovibe.co.tz"
-                    android:pathPrefix="/product" />
-                <data
-                    android:scheme="https"
-                    android:host="sokovibe.co.tz"
-                    android:pathPrefix="/seller" />
+                <!-- www.sokovibe.co.tz — canonical -->
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/product" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/seller" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/profile" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/order" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/otp" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/category" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/search" />
+                <!-- apex sokovibe.co.tz (302 to www) — still declared for verification -->
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/product" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/seller" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/profile" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/order" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/otp" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/category" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/search" />
+                <!-- http fallback (let system upgrade to https) -->
+                <data android:scheme="http" android:host="www.sokovibe.co.tz" android:pathPrefix="/product" />
+                <data android:scheme="http" android:host="www.sokovibe.co.tz" android:pathPrefix="/seller" />
+            </intent-filter>
+            <!-- Gallery → Share → Soko Vibe (Sell on Soko Vibe).
+                 Appears in the system share sheet for images and videos. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
             <!-- Deep link for pinned chat shortcuts on home screen -->
             <intent-filter>

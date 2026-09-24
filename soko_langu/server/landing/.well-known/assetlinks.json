@@ -1,14 +1,12 @@
 [
   {
-    "relation": [
-      "delegate_permission/common.handle_all_urls"
-    ],
+    "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
       "package_name": "com.sokolangu.app",
       "sha256_cert_fingerprints": [
-        "381F259381F2F349DDB813E7BBD1FDC42ABF78A23BBCFBFE65D9B6B4E20CAF77",
-        "4D0D74A02A3DEFEBC50EE84B22826A1E149EF02F57306ECDC318E80E19E91F2F"
+        "38:1F:25:93:81:F2:F3:49:DD:B8:13:E7:BB:D1:FD:C4:2A:BF:78:A2:3B:BC:FB:FE:65:D9:B6:B4:E2:0C:AF:77",
+        "4D:0D:74:A0:2A:3D:EF:EB:C5:0E:E8:4B:22:82:6A:1E:14:9E:F0:2F:57:30:6E:CD:C3:18:E8:0E:19:E9:1F:2F"
       ]
     }
   }

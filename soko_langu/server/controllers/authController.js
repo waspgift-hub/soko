@@ -65,7 +65,7 @@ module.exports = function ({ admin, db }) {
       });
 
       const message = `OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
-      const langCode = ['sw', 'en', 'zh'].includes(req.body.langCode) ? req.body.langCode : 'sw';
+      const langCode = ['sw', 'en'].includes(req.body.langCode) ? req.body.langCode : 'sw';
       const sent = await sendSms(cleanPhone, smsSafeForGateway(langCode, message));
 
       await db.collection('otp_codes').doc(cleanPhone).update({
@@ -129,7 +129,7 @@ module.exports = function ({ admin, db }) {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      const lang = ['sw', 'en', 'zh'].includes(langCode) ? langCode : 'sw';
+      const lang = ['sw', 'en'].includes(langCode) ? langCode : 'sw';
       const copy = localizeEmailOtp(lang);
 
       const subject = copy.subject;

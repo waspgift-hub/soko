@@ -189,22 +189,20 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               ],
             )
           : AppBar(
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(context.tr('messages', 'Messages')),
-                  Text(
-                    context.tr('messages_subtitle',
-                        'Stay connected with buyers and sellers'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.normal,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurfaceVariant,
+              titleSpacing: 16,
+              title: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('messages', 'Messages'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.tr('messages_subtitle', 'Stay connected with buyers and sellers'),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.8), letterSpacing: 0.1),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               backgroundColor: Colors.transparent,
               elevation: 0,
@@ -213,7 +211,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         children: [
           if (!_selectMode)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
               child: TextField(
                 onChanged: (v) => setState(() => _searchQuery = v),
                 decoration: InputDecoration(
@@ -233,8 +231,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
           if (!_selectMode)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
               child: Row(
                 children: [
                   _buildTabChip(context, context.tr('all', 'All'), 0),

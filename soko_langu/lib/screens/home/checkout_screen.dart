@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../../widgets/product_cached_image.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../constants/tanzania_districts.dart';
+import '../../widgets/safe_dropdown.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
@@ -574,8 +575,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       child: Column(
         children: [
-          DropdownButtonFormField<String>(
-            initialValue: _selectedRegion,
+          SafeDropdownFormField<String>(
+            value: _selectedRegion,
+            items: kRegions,
+            labelText: context.tr('select_region'),
+            hint: context.tr('select_region'),
+            itemLabel: (r) => r,
+            normalize: normalizeCategory,
             decoration: InputDecoration(
               hintText: context.tr('select_region'),
               border: InputBorder.none,
@@ -585,9 +591,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               fillColor: cs.surface.withValues(alpha: 0.5),
               isDense: true,
             ),
-            items: kRegions
-                .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                .toList(),
             onChanged: (v) {
               setState(() {
                 _selectedRegion = v;
@@ -597,8 +600,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             },
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedDistrict,
+          SafeDropdownFormField<String>(
+            value: _selectedDistrict,
+            items: _selectedRegion == null ? const <String>[] : (kRegionDistricts[_selectedRegion] ?? const <String>[]),
+            labelText: context.tr('district_hint'),
+            hint: context.tr('district_hint'),
+            itemLabel: (d) => d,
+            normalize: normalizeCategory,
             decoration: InputDecoration(
               hintText: context.tr('district_hint'),
               border: InputBorder.none,
@@ -608,11 +616,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               fillColor: cs.surface.withValues(alpha: 0.5),
               isDense: true,
             ),
-            items: (_selectedRegion == null
-                    ? const <String>[]
-                    : (kRegionDistricts[_selectedRegion] ?? const <String>[]))
-                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                .toList(),
             onChanged: (v) {
               setState(() {
                 _selectedDistrict = v;
@@ -623,8 +626,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           if (_selectedDistrict != null &&
               (kDistrictWards[_selectedDistrict]?.isNotEmpty ?? false)) ...[
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedWard,
+            SafeDropdownFormField<String>(
+              value: _selectedWard,
+              items: kDistrictWards[_selectedDistrict]!,
+              labelText: context.tr('ward_hint'),
+              hint: context.tr('ward_hint'),
+              itemLabel: (w) => w,
+              normalize: normalizeCategory,
               decoration: InputDecoration(
                 hintText: context.tr('ward_hint'),
                 border: InputBorder.none,
@@ -634,9 +642,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 fillColor: cs.surface.withValues(alpha: 0.5),
                 isDense: true,
               ),
-              items: kDistrictWards[_selectedDistrict]!
-                  .map((w) => DropdownMenuItem(value: w, child: Text(w)))
-                  .toList(),
               onChanged: (v) => setState(() => _selectedWard = v),
             ),
           ],

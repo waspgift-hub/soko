@@ -15,7 +15,7 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String notificationPreferences = '/notification-preferences';
   static const String settings = '/settings';
-  static const String shopCustomization = '/shop-customization';
+
   static const String publicProfile = '/public-profile';
   static const String search = '/search';
   static const String category = '/category';
@@ -61,4 +61,10 @@ class AppRoutes {
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';
+
+  // Deep-link / share routes (aliases that map to canonical screens)
+  static const String userProfileAlias = '/profile';
+  static const String order = '/order';
+  static const String otp = '/otp';
+  static const String userSearch = '/user-search';
 }

@@ -20,6 +20,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/call_seller_button.dart';
+import '../../services/share_service.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -72,6 +73,26 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       appBar: AppBar(
         title: Text(widget.userName),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () async {
+              // Prefer username if available from profile stream; fallback to uid
+              final snap = await UserService().getProfile(widget.userId);
+              final uname = snap?.username ?? '';
+              if (uname.isNotEmpty) {
+                await ShareService.instance.shareProfile(
+                  userId: widget.userId,
+                  displayName: widget.userName,
+                  username: uname,
+                );
+              } else {
+                await ShareService.instance.shareSeller(
+                  sellerId: widget.userId,
+                  sellerName: widget.userName.isNotEmpty ? widget.userName : 'Muuzaji',
+                );
+              }
+            },
+          ),
           if (!_isMyProfile) ...[
             IconButton(
               icon: Icon(

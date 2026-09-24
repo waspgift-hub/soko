@@ -284,10 +284,14 @@ class UserService {
   }
 
   Future<void> saveProfile(UserProfile profile) async {
+    final m = profile.toMap();
+    // keep case-insensitive indexes for search
+    m['usernameLower'] = profile.username.toLowerCase();
+    m['displayNameLower'] = profile.displayName.toLowerCase();
     if (profile.uid == _auth.currentUser?.uid) {
-      await _updateSelf(profile.toMap());
+      await _updateSelf(m);
     }
-    await _db.collection('users').doc(profile.uid).set(profile.toMap(), SetOptions(merge: true));
+    await _db.collection('users').doc(profile.uid).set(m, SetOptions(merge: true));
   }
 
   /// Persists the user's in-app language to their profile doc so the server
@@ -427,31 +431,45 @@ class UserService {
   }
 
   Future<List<UserProfile>> searchUsers(String query) async {
-    var q = query.trim().toLowerCase();
+    var raw = query.trim();
+    if (raw.startsWith('@')) raw = raw.substring(1);
+    var q = raw.toLowerCase();
     if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return [];
     final results = <String, UserProfile>{};
-    try {
-      final nameSnap = await _db
-          .collection('users')
-          .where('displayName', isGreaterThanOrEqualTo: q)
-          .where('displayName', isLessThan: '$q\uf8ff')
-          .limit(20)
-          .get();
-      for (final doc in nameSnap.docs) {
-        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
-      }
-      final usernameSnap = await _db
-          .collection('users')
-          .where('username', isGreaterThanOrEqualTo: q)
-          .where('username', isLessThan: '$q\uf8ff')
-          .limit(20)
-          .get();
-      for (final doc in usernameSnap.docs) {
-        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
-      }
-    } catch (_) {
-      return [];
+    // Try structured indexes first (usernameLower, etc.), fall back to legacy fields
+    Future<void> tryQuery(String field) async {
+      try {
+        final snap = await _db
+            .collection('users')
+            .where(field, isGreaterThanOrEqualTo: q)
+            .where(field, isLessThan: '$q\uf8ff')
+            .limit(20)
+            .get();
+        for (final doc in snap.docs) {
+          results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
+        }
+      } catch (_) {}
+    }
+
+    await tryQuery('usernameLower');
+    await tryQuery('username');
+    // displayName is stored with original casing; try lower variant if exists
+    await tryQuery('displayNameLower');
+    // last resort: brute scan for displayName containing q (limited)
+    if (results.isEmpty) {
+      try {
+        final snap = await _db.collection('users').limit(50).get();
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final dn = (data['displayName'] ?? '').toString().toLowerCase();
+          final un = (data['username'] ?? data['usernameLower'] ?? '').toString().toLowerCase();
+          if (dn.contains(q) || un.contains(q)) {
+            results[doc.id] = UserProfile.fromMap(doc.id, data);
+            if (results.length >= 20) break;
+          }
+        }
+      } catch (_) {}
     }
     return results.values.toList();
   }
@@ -470,6 +488,13 @@ class UserService {
       if (_storefrontAllowedFields.contains(entry.key)) {
         update[entry.key] = entry.value;
       }
+    }
+    // keep lower-case indexes in sync
+    if (update.containsKey('username')) {
+      update['usernameLower'] = (update['username'] as String).toLowerCase();
+    }
+    if (update.containsKey('displayName')) {
+      update['displayNameLower'] = (update['displayName'] as String).toLowerCase();
     }
     if (update.isEmpty) return;
     if (uid == _auth.currentUser?.uid) {

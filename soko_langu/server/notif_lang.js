@@ -1,6 +1,6 @@
 // Server-side notice & SMS localization.
 //
-// The app lets users pick sw / en / zh in-app, and every push notification and
+// The app lets users pick sw / en in-app, and every push notification and
 // SMS is generated on the server as a Swahili template with values already
 // interpolated. OneSignal picks the heading language from the device locale,
 // which does NOT match the user's in-app choice, so we localize the final
@@ -8,46 +8,40 @@
 //
 // Titles are static so we translate them by exact match. Bodies are
 // interpolated at the call site, so we match the Swahili template with a
-// regex and rebuild the English/Chinese sentence from the captured values.
+// regex and rebuild the English sentence from the captured values.
 //
-// Policy: one message is ONE language. Each rule carries an `en` and a `zh`
-// build. The zh branch never transparently falls back to en — it has its own
+// Policy: one message is ONE language. Each rule carries an `en`
+// build.
 // string. Unmatched bodies keep the original Swahili (the last-resort single
 // language), so a message is never half-translated.
 
-// ─── Body templates (Swahili → en + zh) ────────────────────────────────
+// ─── Body templates (Swahili → en) ────────────────────────────────
 const bodyRules = [
   // ═══ Boost ═══
   {
     re: /^Boost ya (.+) haikukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$/,
     en: (m) => `Your boost for ${m[1]} did not complete${m[2] ? ` because ${m[2]}` : ''}. Try again in the app.`,
-    zh: (m) => `您的商品${m[1]}的推广未完成${m[2] ? `，因为${m[2]}` : ''}。请在应用中重试。`,
   },
   {
     re: /^Bidhaa yako imepandishwa kwa daraja la (.+) kwa siku (\d+)\.$/,
-    en: (m) => `Your product has been boosted to ${m[1]} tier for ${m[2]} days.`,
-    zh: (m) => `您的商品已升级至${m[1]}档，持续${m[2]}天。`,
+    en: (m) => `Your product has been boosted to ${m[1]} tier for ${m[2]} days.`
   },
   {
     re: /^Malipo ya Boost ya TZS (.+) yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi (.+)\.$/,
-    en: (m) => `Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.`,
-    zh: (m) => `您的推广付款 TZS ${m[1]} 已成功！您的商品现在优先展示，截至 ${m[2]}。`,
+    en: (m) => `Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.`
   },
   // ═══ Dispatch / transport ═══
   {
     re: /^(.+) imesafirishwa\. Thibitisha upokeaji ukishapata mzigo\.$/,
-    en: (m) => `${m[1]} has been shipped. Confirm receipt once you receive the goods.`,
-    zh: (m) => `${m[1]} 已发货。收到货物后请确认收货。`,
+    en: (m) => `${m[1]} has been shipped. Confirm receipt once you receive the goods.`
   },
   {
     re: /^(.+) imesafirishwa\. Angalia proof of delivery na thibitisha upokeaji\.$/,
-    en: (m) => `${m[1]} has been shipped. Check the proof of delivery and confirm receipt.`,
-    zh: (m) => `${m[1]} 已发货。请查看交货凭证并确认收货。`,
+    en: (m) => `${m[1]} has been shipped. Check the proof of delivery and confirm receipt.`
   },
   {
     re: /^(.+) limetumwa — fuatilia usafirishaji kwenye app\.$/,
-    en: (m) => `${m[1]} has been dispatched — track the shipment in the app.`,
-    zh: (m) => `${m[1]} 已发出 — 请在应用中跟踪物流。`,
+    en: (m) => `${m[1]} has been dispatched — track the shipment in the app.`
   },
   {
     re: /^(.+) ameweka taarifa za usafirishaji( kwa Oda #(.+))?\. (Tumia hizo taarifa kutuma bidhaa|Fungua app na tuma bidhaa)\.$/,
@@ -55,225 +49,180 @@ const bodyRules = [
       const ord = m[3] ? ` for order #${m[3]}` : '';
       const act = m[2] && m[3] ? 'Open the app and send the product.' : 'Use them to send the product.';
       return `${m[1]} has entered shipping details${ord}. ${act}`;
-    },
-    zh: (m) => {
-      const ord = m[3] ? `（订单号 #${m[3]}）` : '';
-      const act = m[2] && m[3] ? '请在应用中发货。' : '请使用这些信息发货。';
-      return `${m[1]} 已填写配送信息${ord}。${act}`;
-    },
+    }
   },
   // ═══ Payout / escrow release ═══
   {
     re: /^TZS (.+) zimetumwa kwa simu yako \(fee TZS (.+)\)\.$/,
-    en: (m) => `TZS ${m[1]} has been sent to your phone (fee TZS ${m[2]}).`,
-    zh: (m) => `TZS ${m[1]} 已发送到您的手机（手续费 TZS ${m[2]}）。`,
+    en: (m) => `TZS ${m[1]} has been sent to your phone (fee TZS ${m[2]}).`
   },
   {
     // index.js:2170 stores this variant (with "Fee ya ... imekatwa" wording)
     // in the Firestore in-app copy while the push uses the "(fee)" form above.
     re: /^(.+) — TZS (.+) zimetumwa kwa simu yako\. Fee ya TZS (.+) imekatwa\.$/,
-    en: (m) => `${m[1]} — TZS ${m[2]} has been sent to your phone. A fee of TZS ${m[3]} was deducted.`,
-    zh: (m) => `${m[1]} — TZS ${m[2]} 已发送到您的手机。已扣除 TZS ${m[3]} 的手续费。`,
+    en: (m) => `${m[1]} — TZS ${m[2]} has been sent to your phone. A fee of TZS ${m[3]} was deducted.`
   },
   {
     re: /^TZS (.+) zimetumwa kwenye mobile money yako\.$/,
-    en: (m) => `TZS ${m[1]} has been sent to your mobile money.`,
-    zh: (m) => `TZS ${m[1]} 已发送到您的手机钱包。`,
+    en: (m) => `TZS ${m[1]} has been sent to your mobile money.`
   },
   {
     re: /^TZS (.+) hazikutumwa\. Pesa zimerudishwa kwenye pochi yako\. Jaribu tena\.$/,
-    en: (m) => `TZS ${m[1]} was not sent. The money has been returned to your wallet. Try again.`,
-    zh: (m) => `TZS ${m[1]} 未能发送。款项已退回您的钱包。请重试。`,
+    en: (m) => `TZS ${m[1]} was not sent. The money has been returned to your wallet. Try again.`
   },
   {
     re: /^TZS (.+) zinaandaliwa kutuma kwa (.+)\.$/,
-    en: (m) => `TZS ${m[1]} is being prepared to send to ${m[2]}.`,
-    zh: (m) => `正在准备向${m[2]}发送 TZS ${m[1]}。`,
+    en: (m) => `TZS ${m[1]} is being prepared to send to ${m[2]}.`
   },
   {
     re: /^(.+) — TZS (.+) zimewekwa salio lako\.$/,
-    en: (m) => `${m[1]} — TZS ${m[2]} has been added to your balance.`,
-    zh: (m) => `${m[1]} — 已向您的余额增加 TZS ${m[2]}。`,
+    en: (m) => `${m[1]} — TZS ${m[2]} has been added to your balance.`
   },
   {
     re: /^(.+) — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji\.$/,
-    en: (m) => `${m[1]} — the escrow period has ended and the money has been released to the seller.`,
-    zh: (m) => `${m[1]} — 托管期已结束，款项已释放给卖家。`,
+    en: (m) => `${m[1]} — the escrow period has ended and the money has been released to the seller.`
   },
   {
     re: /^(.+) escrow imefunguliwa baada ya muda wake\. TZS (.+) zimewekwa kwenye salio lako\.$/,
-    en: (m) => `${m[1]} escrow was auto-released after its period. TZS ${m[2]} has been added to your balance.`,
-    zh: (m) => `${m[1]} 的托管已到期自动释放。已向您的余额增加 TZS ${m[2]}。`,
+    en: (m) => `${m[1]} escrow was auto-released after its period. TZS ${m[2]} has been added to your balance.`
   },
   {
     re: /^Muda wa escrow ya (.+) umeisha\. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda\.$/,
-    en: (m) => `The escrow period for ${m[1]} has ended. The money was released to the seller because you did not confirm receipt in time.`,
-    zh: (m) => `${m[1]} 的托管期已结束。由于您未及时确认收货，款项已释放给卖家。`,
+    en: (m) => `The escrow period for ${m[1]} has ended. The money was released to the seller because you did not confirm receipt in time.`
   },
   {
     re: /^Mnunuzi amethibitisha upokeaji wa (.+)\. TZS (.+) zimewekwa kwenye salio lako\.$/,
-    en: (m) => `The buyer confirmed receipt of ${m[1]}. TZS ${m[2]} has been added to your balance.`,
-    zh: (m) => `买家已确认收到${m[1]}。已向您的余额增加 TZS ${m[2]}。`,
+    en: (m) => `The buyer confirmed receipt of ${m[1]}. TZS ${m[2]} has been added to your balance.`
   },
   {
     re: /^Umethibitisha kuwa umepokea (.+)\. Pesa zimefunguliwa kwa muuzaji\.$/,
-    en: (m) => `You confirmed receipt of ${m[1]}. The money has been released to the seller.`,
-    zh: (m) => `您已确认收到${m[1]}。款项已释放给卖家。`,
+    en: (m) => `You confirmed receipt of ${m[1]}. The money has been released to the seller.`
   },
   // ═══ Delivery confirmed ═══
   {
     re: /^(.+) — asante kwa kununua ndani ya SokoVibe!$/,
-    en: (m) => `${m[1]} — thank you for buying on SokoVibe!`,
-    zh: (m) => `${m[1]} — 感谢您在 SokoVibe 购物！`,
+    en: (m) => `${m[1]} — thank you for buying on SokoVibe!`
   },
   // ═══ Deposit ═══
   {
     re: /^TZS (.+) zimeongezwa kwenye pochi yako\.$/,
-    en: (m) => `TZS ${m[1]} has been added to your wallet.`,
-    zh: (m) => `已向您的钱包增加 TZS ${m[1]}。`,
+    en: (m) => `TZS ${m[1]} has been added to your wallet.`
   },
   {
     re: /^Malipo ya TZS (.+) hayakukamilika\. Sababu: (.+)$/,
-    en: (m) => `Your TZS ${m[1]} payment did not complete because ${m[2]}`,
-    zh: (m) => `您的 TZS ${m[1]} 付款未完成，因为${m[2]}`,
+    en: (m) => `Your TZS ${m[1]} payment did not complete because ${m[2]}`
   },
   // ═══ Order / payment ═══
   {
     re: /^(.+) imeuzwa\. TZS (.+) zimewekwa escrow\.$/,
-    en: (m) => `${m[1]} has been sold. TZS ${m[2]} has been placed in escrow.`,
-    zh: (m) => `${m[1]} 已售出。TZS ${m[2]} 已放入托管。`,
+    en: (m) => `${m[1]} has been sold. TZS ${m[2]} has been placed in escrow.`
   },
   {
     re: /^(.+) imeuzwa\. TZS (.+) imewekwa escrow\.$/,
-    en: (m) => `${m[1]} has been sold. TZS ${m[2]} has been placed in escrow.`,
-    zh: (m) => `${m[1]} 已售出。TZS ${m[2]} 已放入托管。`,
+    en: (m) => `${m[1]} has been sold. TZS ${m[2]} has been placed in escrow.`
   },
   {
     re: /^Malipo ya (.+) yamepokelewa\.$/,
-    en: (m) => `Payment for ${m[1]} has been received.`,
-    zh: (m) => `${m[1]} 的付款已收到。`,
+    en: (m) => `Payment for ${m[1]} has been received.`
   },
   {
     re: /^Malipo ya (.+) yamepokelewa na kuwekwa escrow salama\.$/,
-    en: (m) => `Payment for ${m[1]} has been received and safely placed in escrow.`,
-    zh: (m) => `${m[1]} 的付款已收到并安全放入托管。`,
+    en: (m) => `Payment for ${m[1]} has been received and safely placed in escrow.`
   },
   {
     re: /^Malipo ya (.+) yamepokelewa na kuwekwa escrow salama\. Thibitisha upokeaji ili muuzaji apate hela zake\.$/,
-    en: (m) => `Payment for ${m[1]} has been received and safely placed in escrow. Confirm receipt so the seller gets their money.`,
-    zh: (m) => `${m[1]} 的付款已收到并安全放入托管。请确认收货，卖家才能收到款项。`,
+    en: (m) => `Payment for ${m[1]} has been received and safely placed in escrow. Confirm receipt so the seller gets their money.`
   },
   {
     re: /^Malipo ya (.+) yamepokelewa\. Thibitisha upokeaji ili muuzaji apate hela zake\.$/,
-    en: (m) => `Payment for ${m[1]} has been received. Confirm receipt so the seller gets their money.`,
-    zh: (m) => `${m[1]} 的付款已收到。请确认收货，卖家才能收到款项。`,
+    en: (m) => `Payment for ${m[1]} has been received. Confirm receipt so the seller gets their money.`
   },
   {
     re: /^Malipo ya (.+) hayakukamilika\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Payment for ${m[1]} did not complete. Try again in the app.`,
-    zh: (m) => `${m[1]} 的付款未完成。请在应用中重试。`,
+    en: (m) => `Payment for ${m[1]} did not complete. Try again in the app.`
   },
   // listener.js variants
   {
     re: /^Malipo ya (.+) hayakukamilika\. Fungua app ili ujaribu tena\.$/,
-    en: (m) => `Payment for ${m[1]} did not complete. Open the app to try again.`,
-    zh: (m) => `${m[1]} 的付款未完成。请打开应用重试。`,
+    en: (m) => `Payment for ${m[1]} did not complete. Open the app to try again.`
   },
   {
     re: /^Malipo ya (.+) hayakukamilika\. Jaribu tena au wasiliana nasi\. Sababu: (.+)$/,
-    en: (m) => `Payment for ${m[1]} did not complete because ${m[2]}. Try again or contact us.`,
-    zh: (m) => `${m[1]} 的付款未完成，因为${m[2]}。请重试或联系我们。`,
+    en: (m) => `Payment for ${m[1]} did not complete because ${m[2]}. Try again or contact us.`
   },
   {
     re: /^Fedha za (.+) zimerudishwa kwenye akaunti yako\.$/,
-    en: (m) => `Your funds for ${m[1]} have been returned to your account.`,
-    zh: (m) => `您的${m[1]}款项已退回您的账户。`,
+    en: (m) => `Your funds for ${m[1]} have been returned to your account.`
   },
   // ═══ Refund / cancel / dispute ═══
   {
     re: /^TZS (.+) zimerudishwa kwa (.+)\. Ada ya TZS (.+) imekatwa kwa gharama za payout\.$/,
-    en: (m) => `TZS ${m[1]} has been refunded to you for ${m[2]}. A fee of TZS ${m[3]} was deducted for payout costs.`,
-    zh: (m) => `已向您退还${m[2]}的 TZS ${m[1]}。已扣除 TZS ${m[3]} 的支付手续费。`,
+    en: (m) => `TZS ${m[1]} has been refunded to you for ${m[2]}. A fee of TZS ${m[3]} was deducted for payout costs.`
   },
   {
     re: /^(.+) imeghairiwa na mnunuzi\. Pesa zimetolewa kwenye pendingEscrow yako\.$/,
-    en: (m) => `${m[1]} was cancelled by the buyer. The money has been removed from your pending escrow.`,
-    zh: (m) => `${m[1]} 已被买家取消。款项已从您的待处理托管中移出。`,
+    en: (m) => `${m[1]} was cancelled by the buyer. The money has been removed from your pending escrow.`
   },
   {
     re: /^Mnunuzi amefungua mgogoro kwa (.+)\. Tafadhali wasilisha ushahidi wako\.$/,
-    en: (m) => `The buyer opened a dispute for ${m[1]}. Please submit your evidence.`,
-    zh: (m) => `买家就${m[1]}发起了争议。请提交您的证据。`,
+    en: (m) => `The buyer opened a dispute for ${m[1]}. Please submit your evidence.`
   },
   {
     re: /^Tumepokea mgogoro wako kwa (.+)\. Admin atakagua na kutoa uamuzi\.$/,
-    en: (m) => `We received your dispute for ${m[1]}. An admin will review and decide.`,
-    zh: (m) => `我们已收到您对${m[1]}的争议。管理员将进行审核并作出裁决。`,
+    en: (m) => `We received your dispute for ${m[1]}. An admin will review and decide.`
   },
   {
     // note is optional — index.js emits `muuzaji. ${note || ''}`, which leaves
     // a trailing space when the note is empty.
     re: /^Admin ameamua pesa zitolewe kwa muuzaji\. ?(.+)?$/,
-    en: (m) => `The admin ruled that the money be released to the seller.${m[1] ? ` ${m[1]}` : ''}`,
-    zh: (m) => `管理员裁定款项将释放给卖家。${m[1] ? m[1] : ''}`,
+    en: (m) => `The admin ruled that the money be released to the seller.${m[1] ? ` ${m[1]}` : ''}`
   },
   {
     re: /^Admin ameamua pesa zikutolee\. ?(.+)?$/,
-    en: (m) => `The admin ruled that the money be released to you.${m[1] ? ` ${m[1]}` : ''}`,
-    zh: (m) => `管理员裁定款项将释放给您。${m[1] ? m[1] : ''}`,
+    en: (m) => `The admin ruled that the money be released to you.${m[1] ? ` ${m[1]}` : ''}`
   },
   {
     re: /^Refund kamili ya TZS (.+) kwa (.+) imetumwa kwa namba yako\.$/,
-    en: (m) => `A full refund of TZS ${m[1]} for ${m[2]} has been sent to your number.`,
-    zh: (m) => `针对${m[2]}的 TZS ${m[1]} 全额退款已发送到您的号码。`,
+    en: (m) => `A full refund of TZS ${m[1]} for ${m[2]} has been sent to your number.`
   },
   {
     re: /^(.+) imerefundiwa mnunuzi\. Pesa zimetolewa kwenye pendingEscrow yako\.(.*)$/,
-    en: (m) => `${m[1]} has been refunded to the buyer. The money has been removed from your pending escrow.${m[2] ? m[2] : ''}`,
-    zh: (m) => `${m[1]} 已退还给买家。款项已从您的待处理托管中移出。${m[2] ? m[2] : ''}`,
+    en: (m) => `${m[1]} has been refunded to the buyer. The money has been removed from your pending escrow.${m[2] ? m[2] : ''}`
   },
   {
     re: /^Ada ya gateway imetozwa kwenye akaunti yako\.$/,
-    en: (m) => `A gateway fee has been charged to your account.`,
-    zh: (m) => `已向您的账户收取网关费用。`,
+    en: (m) => `A gateway fee has been charged to your account.`
   },
   // ═══ KYC ═══
   {
     re: /^(.+) ametuma KYC yake\. Tafadhali kagua\.$/,
-    en: (m) => `${m[1]} submitted their KYC. Please review it.`,
-    zh: (m) => `${m[1]} 提交了 KYC。请审核。`,
+    en: (m) => `${m[1]} submitted their KYC. Please review it.`
   },
   {
     re: /^KYC yako imewasilishwa\. Subiri ukaguzi wa admin\. Utapata taarifa ikikubaliwa\.$/,
-    en: (m) => `Your KYC has been submitted. Wait for the admin review. You will be notified once approved.`,
-    zh: (m) => `您的 KYC 已提交。请等待管理员审核。通过后您将收到通知。`,
+    en: (m) => `Your KYC has been submitted. Wait for the admin review. You will be notified once approved.`
   },
   {
     re: /^KYC yako imekataliwa\. Sababu: (.+)\. Wasilisha tena baada ya kurekebisha\.$/,
-    en: (m) => `Your KYC was rejected because ${m[1]}. Resubmit after correcting it.`,
-    zh: (m) => `您的 KYC 被拒绝，因为${m[1]}。请修改后重新提交。`,
+    en: (m) => `Your KYC was rejected because ${m[1]}. Resubmit after correcting it.`
   },
   {
     re: /^KYC yako imefutwa na admin\. Sababu: (.+)\. Tuma tena KYC yako\.$/,
-    en: (m) => `Your KYC was revoked by an admin because ${m[1]}. Submit your KYC again.`,
-    zh: (m) => `您的 KYC 已被管理员撤销，因为${m[1]}。请重新提交 KYC。`,
+    en: (m) => `Your KYC was revoked by an admin because ${m[1]}. Submit your KYC again.`
   },
   // ═══ Account ═══
   {
     re: /^Unaonywa \((\d+)\/3\): (.+)\. Ukiingia makosa 3, akaunti itasimamishwa kabisa\.$/,
-    en: (m) => `Warning (${m[1]}/3): ${m[2]}. After 3 violations your account will be fully suspended.`,
-    zh: (m) => `警告（${m[1]}/3）：${m[2]}。累计3次违规后，您的账户将被完全停用。`,
+    en: (m) => `Warning (${m[1]}/3): ${m[2]}. After 3 violations your account will be fully suspended.`
   },
   // ═══ Flash sale ═══
   {
     re: /^(.+) inauzwa TSh (.+) pekee \(-(\d+)%\)\.$/,
-    en: (m) => `${m[1]} is selling for only TSh ${m[2]} (-${m[3]}%).`,
-    zh: (m) => `${m[1]} 仅售 TSh ${m[2]}（-${m[3]}%）。`,
+    en: (m) => `${m[1]} is selling for only TSh ${m[2]} (-${m[3]}%).`
   },
   {
     re: /^(.+) sasa TSh (.+) pekee!$/,
-    en: (m) => `${m[1]} is now only TSh ${m[2]}!`,
-    zh: (m) => `${m[1]} 现在仅售 TSh ${m[2]}！`,
+    en: (m) => `${m[1]} is now only TSh ${m[2]}!`
   },
   // ═══ Orders (create/transition) ═══
   {
@@ -281,36 +230,27 @@ const bodyRules = [
     en: (m) => {
       const loc = m[3] ? m[3].replace(/^\. Eneo: /, '. Location: ') : '';
       return `${m[1]} placed an order for ${m[2]}${loc}. Set the shipping cost now.`;
-    },
-    zh: (m) => {
-      const zloc = m[3] ? m[3].replace(/^\. Eneo: /, '。地点：') : '';
-      return `${m[1]} 为${m[2]}下了订单${zloc}。请立即设置运费。`;
-    },
+    }
   },
   {
     re: /^Agizo lako la (.+) limewasilishwa kwa muuzaji\.$/,
-    en: (m) => `Your order for ${m[1]} has been submitted to the seller.`,
-    zh: (m) => `您对${m[1]}的订单已提交给卖家。`,
+    en: (m) => `Your order for ${m[1]} has been submitted to the seller.`
   },
   {
     re: /^Agizo lako la (.+) limewasilishwa kwa muuzaji\. Utapokea taarifa ya gharama ya usafirishaji hivi karibuni\.$/,
-    en: (m) => `Your order for ${m[1]} has been submitted to the seller. You will receive the shipping cost shortly.`,
-    zh: (m) => `您对${m[1]}的订单已提交给卖家。您将很快收到运费通知。`,
+    en: (m) => `Your order for ${m[1]} has been submitted to the seller. You will receive the shipping cost shortly.`
   },
   {
     re: /^Muuzaji ameweka gharama ya usafirishaji( la TZS (.+))?\. Lipa sasa\.$/,
     en: (m) => `The seller set the shipping cost${m[2] ? ` of TZS ${m[2]}` : ''}. Pay now.`,
-    zh: (m) => `卖家已设置运费${m[2] ? `（TZS ${m[2]}）` : ''}。请立即付款。`,
   },
   {
     re: /^Muuzaji ameweka gharama ya usafirishaji( la TZS (.+))?\. Lipa sasa ili agizo litumwe\.$/,
     en: (m) => `The seller set the shipping cost${m[2] ? ` of TZS ${m[2]}` : ''}. Pay now so the order is sent.`,
-    zh: (m) => `卖家已设置运费${m[2] ? `（TZS ${m[2]}）` : ''}。请立即付款以便发货。`,
   },
   {
     re: /^Quote yako ya usafirishaji ya TZS (.+) imetumwa kwa (.+)\.$/,
-    en: (m) => `Your shipping quote of TZS ${m[1]} was sent to ${m[2]}.`,
-    zh: (m) => `您 TZS ${m[1]} 的运费报价已发送给${m[2]}。`,
+    en: (m) => `Your shipping quote of TZS ${m[1]} was sent to ${m[2]}.`
   },
 ];
 
@@ -318,156 +258,136 @@ const bodyRules = [
 const staticBody = {
   'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.': {
     en: 'You are approved to sell products. You can now add new products.',
-    zh: '您已获准销售商品。您现在可以上架新商品。',
   },
   'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.': {
     en: 'Your account has been suspended. Contact support for more details.',
-    zh: '您的账户已被停用。请联系客服了解更多详情。',
   },
   'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.': {
     en: 'Your account has been restored. You can continue using Soko Vibe.',
-    zh: '您的账户已恢复。您可以继续使用 Soko Vibe。',
   },
   'Umefikia maonyo 3 na akaunti yako imefungwa kwa kukiuka sera. Wasiliana na msaada.': {
     en: 'You have reached 3 warnings and your account has been blocked for violating policy. Contact support.',
-    zh: '您已达到3次警告，由于违反政策您的账户已被封禁。请联系客服。',
   },
 };
 
 const titleTo = {
-  'Malipo ya Boost Yameshindikana': { en: 'Boost Payment Failed', zh: '推广付款失败' },
-  'Bidhaa Imesafirishwa!': { en: 'Product Shipped!', zh: '商品已发货！' },
-  '📦 Bidhaa Imesafirishwa!': { en: 'Product Shipped!', zh: '商品已发货！' },
-  'Mnunuzi Amechagua Usafirishaji!': { en: 'Buyer Chose Shipping!', zh: '买家已选择配送！' },
-  '🚚 Mnunuzi Amechagua Usafirishaji!': { en: 'Buyer Chose Shipping!', zh: '买家已选择配送！' },
-  'Pesa Zimetumwa Moja kwa Moja!': { en: 'Money Sent Directly!', zh: '款项已直接发送！' },
-  'Escrow Imefunguliwa!': { en: 'Escrow Released!', zh: '托管已释放！' },
-  'Umethibitisha Upokeaji': { en: 'Delivery Confirmed', zh: '已确认收货' },
-  'Deposit Imethibitishwa!': { en: 'Deposit Confirmed!', zh: '存款已确认！' },
-  'Deposit Imeshindikana': { en: 'Deposit Failed', zh: '存款失败' },
-  '✅ Boost imewashwa!': { en: 'Boost Activated!', zh: '推广已开启！' },
-  'Umepata Mauzo!': { en: 'You Made a Sale!', zh: '您有新的销售！' },
-  'Malipo Yamekamilika!': { en: 'Payment Completed!', zh: '付款已完成！' },
-  'Malipo Yameshindikana': { en: 'Payment Failed', zh: '付款失败' },
-  'Admin Amefungua Escrow!': { en: 'Admin Released Escrow!', zh: '管理员已释放托管！' },
-  '💰 Pesa Zimerudishwa': { en: 'Money Refunded', zh: '款项已退还' },
-  '❌ Oda Imeghairiwa': { en: 'Order Cancelled', zh: '订单已取消' },
-  '⚖️ Mgogoro Umefunguliwa': { en: 'Dispute Opened', zh: '争议已开启' },
-  '⚖️ Uamuzi wa Mgogoro': { en: 'Dispute Resolution', zh: '争议裁决' },
-  '💰 Pesa Zimerudishwa Kamili': { en: 'Full Refund Issued', zh: '已全额退款' },
-  '❌ Mgogoro Umekamilika': { en: 'Dispute Closed', zh: '争议已结束' },
-  'KYC Mpya Imewasilishwa': { en: 'New KYC Submitted', zh: '新 KYC 已提交' },
-  'KYC Imekubaliwa!': { en: 'KYC Approved!', zh: 'KYC 已通过！' },
-  'KYC Imekataliwa': { en: 'KYC Rejected', zh: 'KYC 被拒绝' },
-  'KYC Imewasilishwa': { en: 'KYC Submitted', zh: 'KYC 已提交' },
-  'KYC Imefutwa': { en: 'KYC Revoked', zh: 'KYC 被撤销' },
-  '💰 Utoaji wa Pesa Umeanzishwa': { en: 'Withdrawal Started', zh: '提现已开始' },
-  'Akaunti Yako Imesitishwa': { en: 'Your Account Was Suspended', zh: '您的账户已被停用' },
-  'Akaunti Yako Imerejeshwa': { en: 'Your Account Was Restored', zh: '您的账户已恢复' },
-  'Escrow Imefunguliwa Kiotomatiki': { en: 'Escrow Auto-Released', zh: '托管已自动释放' },
-  'Payout imefanikiwa!': { en: 'Payout Successful!', zh: '支付成功！' },
-  '❌ Utoaji wa Pesa Umeshindwa': { en: 'Withdrawal Failed', zh: '提现失败' },
-  'Agizo Jipya Limewasilishwa!': { en: 'New Order Submitted!', zh: '新订单已提交！' },
-  'Agizo Limewasilishwa!': { en: 'Order Submitted!', zh: '订单已提交！' },
-  'Gharama ya Usafirishaji Imewekwa!': { en: 'Shipping Cost Set!', zh: '运费已设置！' },
-  'Quote Imetumwa!': { en: 'Quote Sent!', zh: '报价已发送！' },
-  'Agizo Limetumwa!': { en: 'Order Dispatched!', zh: '订单已发货！' },
-  'Flash Sale Yako Imeanzishwa!': { en: 'Your Flash Sale Is Live!', zh: '您的闪购已上线！' },
-  'Fedha Zimerudishwa': { en: 'Funds Returned', zh: '款项已退回' },
-  'Bidhaa Mpya ya Moto! 🔥': { en: 'Hot New Product! 🔥', zh: '火爆新品！🔥' },
-  'Payment Received – Escrow Held': { en: 'Payment Received – Escrow Held', zh: '已收到付款 — 托管中' },
-  'Akaunti Yako Imefungwa': { en: 'Your Account Was Blocked', zh: '您的账户已被封禁' },
-  '🚩 Ripoti Mpya Imewasilishwa': { en: 'New Report Submitted', zh: '新举报已提交' },
-  '⚖️ Mgogoro Mpya Unahitaji Uamuzi': { en: 'New Dispute Needs Decision', zh: '新争议需要裁决' },
-  'Tangaza Bidhaa Zako!': { en: 'Promote Your Products!', zh: '推广您的商品！' },
+  'Malipo ya Boost Yameshindikana': { en: 'Boost Payment Failed' },
+  'Bidhaa Imesafirishwa!': { en: 'Product Shipped!' },
+  '📦 Bidhaa Imesafirishwa!': { en: 'Product Shipped!' },
+  'Mnunuzi Amechagua Usafirishaji!': { en: 'Buyer Chose Shipping!' },
+  '🚚 Mnunuzi Amechagua Usafirishaji!': { en: 'Buyer Chose Shipping!' },
+  'Pesa Zimetumwa Moja kwa Moja!': { en: 'Money Sent Directly!' },
+  'Escrow Imefunguliwa!': { en: 'Escrow Released!' },
+  'Umethibitisha Upokeaji': { en: 'Delivery Confirmed' },
+  'Deposit Imethibitishwa!': { en: 'Deposit Confirmed!' },
+  'Deposit Imeshindikana': { en: 'Deposit Failed' },
+  '✅ Boost imewashwa!': { en: 'Boost Activated!' },
+  'Umepata Mauzo!': { en: 'You Made a Sale!' },
+  'Malipo Yamekamilika!': { en: 'Payment Completed!' },
+  'Malipo Yameshindikana': { en: 'Payment Failed' },
+  'Admin Amefungua Escrow!': { en: 'Admin Released Escrow!' },
+  '💰 Pesa Zimerudishwa': { en: 'Money Refunded' },
+  '❌ Oda Imeghairiwa': { en: 'Order Cancelled' },
+  '⚖️ Mgogoro Umefunguliwa': { en: 'Dispute Opened' },
+  '⚖️ Uamuzi wa Mgogoro': { en: 'Dispute Resolution' },
+  '💰 Pesa Zimerudishwa Kamili': { en: 'Full Refund Issued' },
+  '❌ Mgogoro Umekamilika': { en: 'Dispute Closed' },
+  'KYC Mpya Imewasilishwa': { en: 'New KYC Submitted' },
+  'KYC Imekubaliwa!': { en: 'KYC Approved!' },
+  'KYC Imekataliwa': { en: 'KYC Rejected' },
+  'KYC Imewasilishwa': { en: 'KYC Submitted' },
+  'KYC Imefutwa': { en: 'KYC Revoked' },
+  '💰 Utoaji wa Pesa Umeanzishwa': { en: 'Withdrawal Started' },
+  'Akaunti Yako Imesitishwa': { en: 'Your Account Was Suspended' },
+  'Akaunti Yako Imerejeshwa': { en: 'Your Account Was Restored' },
+  'Escrow Imefunguliwa Kiotomatiki': { en: 'Escrow Auto-Released' },
+  'Payout imefanikiwa!': { en: 'Payout Successful!' },
+  '❌ Utoaji wa Pesa Umeshindwa': { en: 'Withdrawal Failed' },
+  'Agizo Jipya Limewasilishwa!': { en: 'New Order Submitted!' },
+  'Agizo Limewasilishwa!': { en: 'Order Submitted!' },
+  'Gharama ya Usafirishaji Imewekwa!': { en: 'Shipping Cost Set!' },
+  'Quote Imetumwa!': { en: 'Quote Sent!' },
+  'Agizo Limetumwa!': { en: 'Order Dispatched!' },
+  'Flash Sale Yako Imeanzishwa!': { en: 'Your Flash Sale Is Live!' },
+  'Fedha Zimerudishwa': { en: 'Funds Returned' },
+  'Bidhaa Mpya ya Moto! 🔥': { en: 'Hot New Product! 🔥' },
+  'Payment Received – Escrow Held': { en: 'Payment Received – Escrow Held' },
+  'Akaunti Yako Imefungwa': { en: 'Your Account Was Blocked' },
+  '🚩 Ripoti Mpya Imewasilishwa': { en: 'New Report Submitted' },
+  '⚖️ Mgogoro Mpya Unahitaji Uamuzi': { en: 'New Dispute Needs Decision' },
+  'Tangaza Bidhaa Zako!': { en: 'Promote Your Products!' },
 };
 
 // Dynamic titles that need value interpolation (exact-match above can't cover).
 const titlePatterns = [
   {
     re: /^Onyo (\d+)\/3 — Sera ya Soko Vibe$/,
-    en: (m) => `Warning ${m[1]}/3 — Soko Vibe Policy`,
-    zh: (m) => `警告 ${m[1]}/3 — Soko Vibe 政策`,
+    en: (m) => `Warning ${m[1]}/3 — Soko Vibe Policy`
   },
   {
     re: /^Bidhaa Mpya katika (.+)!$/,
-    en: (m) => `New Product in ${m[1]}!`,
-    zh: (m) => `${m[1]}的新品！`,
+    en: (m) => `New Product in ${m[1]}!`
   },
   {
     re: /^⚡ Flash Sale! -(\d+)%$/,
-    en: (m) => `Flash Sale! -${m[1]}%`,
-    zh: (m) => `闪购特惠！-${m[1]}%`,
+    en: (m) => `Flash Sale! -${m[1]}%`
   },
 ];
 
-// ─── SMS templates (Swahili → en + zh) ────────────────────────────────
+// ─── SMS templates (Swahili → en) ────────────────────────────────
 const smsRules = [
   {
     re: /^Malipo ya TZS (.+) kwa Oda #(.+) yamepokelewa na kuwekwa salama Escrow\. Muuzaji anajiandaa kutuma mzigo wako\.$/,
-    en: (m) => `Your payment of TZS ${m[1]} for Order #${m[2]} has been received and safely held in escrow. The seller is preparing to send your goods.`,
-    zh: (m) => `您订单 #${m[2]} 的 TZS ${m[1]} 付款已收到并安全托管。卖家正在准备发货。`,
+    en: (m) => `Your payment of TZS ${m[1]} for Order #${m[2]} has been received and safely held in escrow. The seller is preparing to send your goods.`
   },
   {
     re: /^Oda #(.+) imelipiwa! Fedha ipo salama Escrow\. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app\.$/,
-    en: (m) => `Order #${m[1]} has been paid! The money is safely held in escrow. Please complete dispatch and fill in the bus receipt in the app.`,
-    zh: (m) => `订单 #${m[1]} 已付款！款项已安全托管。请在应用中完成发货并填写巴士收据。`,
+    en: (m) => `Order #${m[1]} has been paid! The money is safely held in escrow. Please complete dispatch and fill in the bus receipt in the app.`
   },
   {
     re: /^Mzigo wa Oda #(.+) umesafirishwa kupitia basi la (.+) \((.+)\)\. Fungua app kuona risiti yako ya kidijitali\.$/,
-    en: (m) => `Your order #${m[1]} has been shipped via bus ${m[2]} (${m[3]}). Open the app to see your digital receipt.`,
-    zh: (m) => `您的订单 #${m[1]} 已通过巴士 ${m[2]}（${m[3]}）发货。请打开应用查看您的电子收据。`,
+    en: (m) => `Your order #${m[1]} has been shipped via bus ${m[2]} (${m[3]}). Open the app to see your digital receipt.`
   },
   {
     re: /^Mteja amethibitisha kupokea mzigo #(.+)\. TZS (.+) zimetolewa Escrow na kuwekwa kwenye pochi yako\.$/,
-    en: (m) => `The customer confirmed receiving shipment #${m[1]}. TZS ${m[2]} has been released from escrow into your wallet.`,
-    zh: (m) => `客户已确认收到货物 #${m[1]}。TZS ${m[2]} 已从托管释放到您的钱包。`,
+    en: (m) => `The customer confirmed receiving shipment #${m[1]}. TZS ${m[2]} has been released from escrow into your wallet.`
   },
   {
     re: /^Malipo ya (.+) hayakukamilika\. Tafadhali fungua app na ujaribu tena\.$/,
-    en: (m) => `Your payment for ${m[1]} did not complete. Please open the app and try again.`,
-    zh: (m) => `您对${m[1]}的付款未完成。请打开应用重试。`,
+    en: (m) => `Your payment for ${m[1]} did not complete. Please open the app and try again.`
   },
   {
     re: /^Malipo ya (.+) hayakukamilika\. Tafadhali jaribu tena kwenye app\. Sababu: (.+)$/,
-    en: (m) => `Your payment for ${m[1]} did not complete because ${m[2]}. Please try again in the app.`,
-    zh: (m) => `您对${m[1]}的付款未完成，因为${m[2]}。请在应用中重试。`,
+    en: (m) => `Your payment for ${m[1]} did not complete because ${m[2]}. Please try again in the app.`
   },
   {
     re: /^Fedha za (.+) \(Oda #(.+)\) zimerudishwa kwenye akaunti yako\.$/,
-    en: (m) => `Your funds for ${m[1]} (Order #${m[2]}) have been returned to your account.`,
-    zh: (m) => `您${m[1]}（订单 #${m[2]}）的款项已退回您的账户。`,
+    en: (m) => `Your funds for ${m[1]} (Order #${m[2]}) have been returned to your account.`
   },
   {
     re: /^Malipo ya Boost ya TZS (.+) hayakukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$/,
     en: (m) => `Your boost payment of TZS ${m[1]} did not complete${m[2] ? ` because ${m[2]}` : ''}. Try again in the app.`,
-    zh: (m) => `您的推广付款 TZS ${m[1]} 未完成${m[2] ? `，因为${m[2]}` : ''}。请在应用中重试。`,
   },
   {
     re: /^Malipo ya TZS (.+) hayakukamilika\. Sababu: (.+)\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Your payment of TZS ${m[1]} did not complete because ${m[2]}. Try again in the app.`,
-    zh: (m) => `您的 TZS ${m[1]} 付款未完成，因为${m[2]}。请在应用中重试。`,
+    en: (m) => `Your payment of TZS ${m[1]} did not complete because ${m[2]}. Try again in the app.`
   },
   {
     re: /^TZS (.+) zimetumwa kwa simu yako kwa mauzo ya (.+) \(fee TZS (.+)\)\.$/,
-    en: (m) => `TZS ${m[1]} has been sent to your phone for the sale of ${m[2]} (fee TZS ${m[3]}).`,
-    zh: (m) => `已就${m[2]}的销售向您的手机发送 TZS ${m[1]}（手续费 TZS ${m[3]}）。`,
+    en: (m) => `TZS ${m[1]} has been sent to your phone for the sale of ${m[2]} (fee TZS ${m[3]}).`
   },
   {
     re: /^Malipo ya Boost ya TZS (.+) yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi (.+)\.$/,
-    en: (m) => `Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.`,
-    zh: (m) => `您的推广付款 TZS ${m[1]} 已成功！您的商品现在优先展示，截至 ${m[2]}。`,
+    en: (m) => `Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.`
   },
   {
     re: /^OTP yako ni (.+)\. Inaisha kwa dakika 10\.$/,
-    en: (m) => `Your OTP is ${m[1]}. It expires in 10 minutes.`,
-    zh: (m) => `您的验证码是 ${m[1]}，10分钟内有效。`,
+    en: (m) => `Your OTP is ${m[1]}. It expires in 10 minutes.`
   },
   {
     // Bulk promotional broadcast (send_promo_sms.js default).
     re: /^Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia\. Kila agizo linalolipwa linakusaidia kukua\. Pakia Soko Vibe leo!$/,
-    en: (m) => `Advertise your products at an affordable price and sell more! Spread the word to friends and family. Every paid order helps you grow. Download Soko Vibe today!`,
-    zh: (m) => `以实惠的价格推广您的商品，卖出更多！向亲友传播这个消息。每一笔已付款的订单都能帮您成长。立即下载 Soko Vibe！`,
+    en: (m) => `Advertise your products at an affordable price and sell more! Spread the word to friends and family. Every paid order helps you grow. Download Soko Vibe today!`
   },
 ];
 
@@ -514,24 +434,16 @@ function localizeNotif(lang, title, body) {
 // language gets a clean copy instead.
 function localizeDefaultReason(lang, reason) {
   const map = {
-    'Payment failed': { sw: 'Malipo yameshindikana', en: 'Payment failed', zh: '付款失败' },
-    'payment failed': { sw: 'malipo yameshindikana', en: 'payment failed', zh: '付款失败' },
+    'Payment failed': { sw: 'Malipo yameshindikana', en: 'Payment failed' },
+    'payment failed': { sw: 'malipo yameshindikana', en: 'payment failed' },
   };
-  const txn = (sw, en, zh) => ({ sw, en, zh });
+  const txn = (sw, en) => ({ sw, en });
   const lc = String(reason || '').toLowerCase();
   if (/(daily|per day).{0,30}(api|payment|transaction|request|collect|payout).{0,20}limit|limit.{0,20}reached|limit.{0,20}exceeded/.test(lc)) {
-    return txn(
-      'kikomo cha malipo cha ClickPesa kimefikiwa kwa siku. Jaribu tena baadaye.',
-      'A ClickPesa daily payment limit was reached. Try again later.',
-      '已达到 ClickPesa 每日支付限额。请稍后再试。'
-    )[lang] || reason;
+    return txn('kikomo cha malipo cha ClickPesa kimefikiwa kwa siku. Jaribu tena baadaye.', 'A ClickPesa daily payment limit was reached. Try again later.')[lang] || reason;
   }
   if (/complete.{0,10}kyc|kyc.{0,20}(required|verification)|verify.{0,20}(your|merchant|business|account)/.test(lc)) {
-    return txn(
-      'Kuna kikomo cha akaunti ya malipo ya jukwaa (ClickPesa). Wasiliana na msaada wa Soko Vibe.',
-      'The platform payment account (ClickPesa) has a limit. Contact Soko Vibe support.',
-      '平台支付账户（ClickPesa）有额度限制。请联系 Soko Vibe 客服。'
-    )[lang] || reason;
+    return txn('Kuna kikomo cha akaunti ya malipo ya jukwaa (ClickPesa). Wasiliana na msaada wa Soko Vibe.', 'The platform payment account (ClickPesa) has a limit. Contact Soko Vibe support.')[lang] || reason;
   }
   const entry = map[reason];
   if (!entry || lang === 'sw') return reason;
@@ -551,7 +463,7 @@ function localizeSms(lang, message) {
 
 // GSM-7 is the 7-bit charset SMS gateways (Meseji, Notify Africa) encode to a
 // single 160-char segment. Any character outside it — CJK, emoji, Cyrillic —
-// is rewritten to `?` before delivery, so a Chinese SMS arrives as `?????`.
+// is rewritten to `?` before delivery.
 // Keep the handful of GSM-7 non-ASCII chars that some templates use.
 const GSM7_EXTRA = new Set(['@', '£', '$', '¥', 'è', 'é', 'ù', 'ì', 'ò', 'Ç', 'Ø', 'ø', 'Å', 'å', 'Δ', 'Φ', 'Γ', 'Λ', 'Ω', 'Π', 'Ψ', 'Σ', 'Θ', 'Ξ', 'Æ', 'æ', 'ß', 'É', 'Ä', 'Ö', 'Ñ', 'Ü', '§', '¿', 'ä', 'ö', 'ñ', 'ü', 'à', '^', '{', '}', '[', ']', '~', '|', '€']);
 
@@ -582,12 +494,6 @@ const emailOtpCopy = {
     heading: 'Soko Vibe — Email Verification',
     body: 'Your OTP is:',
     expires: 'Expires in 10 minutes. Do not share it with anyone.',
-  },
-  zh: {
-    subject: 'Soko Vibe — 您的验证码',
-    heading: 'Soko Vibe — 邮箱验证',
-    body: '您的验证码是：',
-    expires: '10 分钟内有效。请勿与他人分享。',
   },
 };
 

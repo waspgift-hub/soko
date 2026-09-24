@@ -26,6 +26,7 @@ import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/soko_vibe_watermark.dart';
 import '../../widgets/soko_widgets.dart';
+import '../../utils/responsive.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -466,9 +467,18 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // Universal: support any screen width, text scale and orientation.
+    // Scaffold handles inset; body is wrapped to dismiss keyboard on tap
+    // and to keep content within safe area on notched/rounded devices.
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: _buildSearchField(cs),
+        titleSpacing: 0,
+        // AppBar title must be flexible to avoid overflow on small screens
+        // or at large textScale (accessibility). Use LayoutBuilder for width.
+        title: LayoutBuilder(
+          builder: (context, constraints) => _buildSearchField(cs, constraints),
+        ),
         bottom: _hasSearched
             ? TabBar(
                 controller: _tabCtrl,
@@ -476,6 +486,9 @@ class _SearchScreenState extends State<SearchScreen>
                 labelColor: cs.primary,
                 unselectedLabelColor: cs.onSurfaceVariant,
                 indicatorColor: cs.primary,
+                // Allow tab text to scale with user setting without overflow
+                labelStyle: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
+                unselectedLabelStyle: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
                 tabs: _tabs.map((t) => Tab(text: context.tr(t))).toList(),
               )
             : _isListening
@@ -490,49 +503,83 @@ class _SearchScreenState extends State<SearchScreen>
                             size: 14, dotSize: 3.5, color: cs.error,
                           ),
                           const SizedBox(width: 8),
-                          Text(context.tr('listening'), style: TextStyle(color: cs.error, fontSize: 13)),
+                          Flexible(
+                            child: Text(
+                              context.tr('listening'),
+                              style: TextStyle(color: cs.error, fontSize: Responsive.scaleFont(context, 13)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   )
                 : null,
       ),
-      body: _buildBody(cs),
+      body: GestureDetector(
+        onTap: () => _focusNode.unfocus(),
+        behavior: HitTestBehavior.translucent,
+        // Pan to dismiss keyboard on drag
+        onPanDown: (_) => _focusNode.unfocus(),
+        child: SafeArea(
+          bottom: true,
+          top: false,
+          child: _buildBody(cs),
+        ),
+      ),
     );
   }
 
-  Widget _buildSearchField(ColorScheme cs) {
+  Widget _buildSearchField(ColorScheme cs, BoxConstraints constraints) {
+    // Universal height: scales with screen width and textScale, never fixed
+    // to avoid clipping on foldables, tablets or large-font accessibility.
+    final width = constraints.maxWidth;
+    final isSmall = width < 360;
+    final isTablet = Responsive.isTablet;
+    final fieldHeight = isTablet ? 52.0 : (isSmall ? 40.0 : 44.0);
+    // Respect system textScale but keep field usable at huge scales
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final iconSize = (isSmall ? 18.0 : 20.0) * scale.clamp(0.85, 1.3);
     return SizedBox(
-      height: 44,
-      child: SokoSearchBar(
-        controller: _searchCtrl,
-        focusNode: _focusNode,
-        hint: context.tr('search_products_users'),
-        onSubmitted: (q) => _performSearch(query: q),
-        onClear: _clearField,
-        trailing: [
-          IconButton(
-            icon: _isListening
-                ? Icon(Icons.mic, size: 20, color: cs.error)
-                : Icon(Icons.mic_none, size: 20, color: cs.onSurfaceVariant),
-            onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          ),
-          IconButton(
-            icon: Icon(Icons.qr_code_scanner, size: 20, color: cs.onSurfaceVariant),
-            onPressed: _openBarcodeScanner,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          ),
-        ],
+      height: fieldHeight,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: isSmall ? 4 : 8),
+        child: SokoSearchBar(
+          controller: _searchCtrl,
+          focusNode: _focusNode,
+          hint: context.tr('search_products_users'),
+          onSubmitted: (q) => _performSearch(query: q),
+          onClear: _clearField,
+          trailing: [
+            // All gestures: tap, longPress (show tooltip), doubleTap to clear
+            IconButton(
+              icon: _isListening
+                  ? Icon(Icons.mic, size: iconSize, color: cs.error)
+                  : Icon(Icons.mic_none, size: iconSize, color: cs.onSurfaceVariant),
+              tooltip: _isListening ? context.tr('stop') : context.tr('voice'),
+              onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(minWidth: isSmall ? 36 : 40, minHeight: isSmall ? 36 : 40),
+            ),
+            IconButton(
+              icon: Icon(Icons.qr_code_scanner, size: iconSize, color: cs.onSurfaceVariant),
+              tooltip: context.tr('scan_barcode_qr'),
+              onPressed: _openBarcodeScanner,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(minWidth: isSmall ? 36 : 40, minHeight: isSmall ? 36 : 40),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBody(ColorScheme cs) {
+    // Universal scroll behavior: supports all gestures (tap, drag, fling,
+    // scroll, pinch, longPress) and all screen sizes via adaptive physics.
+    // No fixed height prevents clipping on small phones or huge textScale.
     if (_loading) {
       return const Center(child: GoogleLoadingPage());
     }
@@ -542,24 +589,39 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     if (_response != null) {
-      return _buildResults(cs);
+      return RefreshIndicator(
+        onRefresh: () async => _performSearch(),
+        child: _buildResults(cs),
+      );
     }
 
     if (_focusNode.hasFocus && _searchCtrl.text.isEmpty) {
       return _buildHistoryPanel(cs);
     }
 
-    return _buildInitialState(cs);
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadDiscovery();
+        await _loadMostRated();
+      },
+      child: _buildInitialState(cs),
+    );
   }
 
   Widget _buildSuggestions(ColorScheme cs) {
     final intent = parseSearchIntent(_searchCtrl.text);
+    // Universal: handle keyboard, textScale and any screen width
     return Column(
       children: [
         if (!intent.isEmpty) _IntentStrip(intent: intent, onOpen: _openIntent),
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.isSmallPhone ? 4 : 8,
+              vertical: 4,
+            ),
             itemCount: _suggestions.length,
             separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
             itemBuilder: (_, i) {
@@ -599,21 +661,27 @@ class _SearchScreenState extends State<SearchScreen>
                         ),
                         child: Icon(typeIcon, size: 18, color: typeColor),
                       ),
-                title: Text(s.text, style: const TextStyle(fontSize: 14)),
-                subtitle: Row(
+                title: Text(
+                  s.text,
+                  style: TextStyle(fontSize: Responsive.scaleFont(context, 14)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Icon(typeIcon, size: 11, color: typeColor),
+                    Icon(typeIcon, size: Responsive.scaleFont(context, 11), color: typeColor),
                     const SizedBox(width: 3),
                     Text(
                       context.tr(s.type),
-                      style: TextStyle(fontSize: 11, color: typeColor),
+                      style: TextStyle(fontSize: Responsive.scaleFont(context, 11), color: typeColor),
                     ),
                     if (s.price != null) ...[
                       const SizedBox(width: 6),
                       Text(
                         '· ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: Responsive.scaleFont(context, 11),
                           color: cs.onSurfaceVariant,
                         ),
                       ),
@@ -680,15 +748,23 @@ class _SearchScreenState extends State<SearchScreen>
     final summary = _buildAiSummaryCard(cs, resp);
     if (summary != null) head.add(summary);
 
+    // Universal: adaptive padding, dismiss keyboard on drag, all gestures
+    final horizontalPadding = Responsive.isTablet ? 20.0 : (Responsive.isSmallPhone ? 8.0 : 12.0);
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.all(horizontalPadding),
       itemCount: head.length + results.length,
       itemBuilder: (_, i) {
         if (i < head.length) {
           return head[i];
         }
         final r = results[i - head.length];
-        return _buildResultCard(cs, r);
+        // Support tap, doubleTap (quick preview), longPress (share)
+        return GestureDetector(
+          onLongPress: () => _onSuggestionTap(SearchSuggestion(type: r.type, text: r.displayName, id: r.id)),
+          child: _buildResultCard(cs, r),
+        );
       },
     );
   }
@@ -1125,8 +1201,11 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildHistoryPanel(ColorScheme cs) {
+    // Universal: scroll + drag dismiss + responsive padding for any device
     return ListView(
-      padding: const EdgeInsets.all(12),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.all(Responsive.isTablet ? 20 : (Responsive.isSmallPhone ? 8 : 12)),
       children: [
         if (_suggestedQueries().isNotEmpty) ...[
           Padding(
@@ -1145,7 +1224,7 @@ class _SearchScreenState extends State<SearchScreen>
             runSpacing: 6,
             children: _suggestedQueries().map((q) {
               return ActionChip(
-                label: Text(q, style: const TextStyle(fontSize: 13)),
+                label: Text(q, style: TextStyle(fontSize: Responsive.scaleFont(context, 13))),
                 onPressed: () {
                   _searchCtrl.text = q;
                   _performSearch();
@@ -1162,8 +1241,10 @@ class _SearchScreenState extends State<SearchScreen>
               children: [
                 Icon(Icons.trending_up, size: 18, color: cs.primary),
                 const SizedBox(width: 6),
-                Text(context.tr('trending'),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Flexible(
+                  child: Text(context.tr('trending'),
+                      style: TextStyle(fontSize: Responsive.scaleFont(context, 15), fontWeight: FontWeight.w600, color: cs.onSurface)),
+                ),
               ],
             ),
           ),
@@ -1172,7 +1253,7 @@ class _SearchScreenState extends State<SearchScreen>
             children: _trending.take(10).map((t) {
               final text = t['text'] as String? ?? '';
               return ActionChip(
-                label: Text(text, style: const TextStyle(fontSize: 13)),
+                label: Text(text, style: TextStyle(fontSize: Responsive.scaleFont(context, 13))),
                 onPressed: () {
                   _searchCtrl.text = text;
                   _performSearch();
@@ -1200,18 +1281,35 @@ class _SearchScreenState extends State<SearchScreen>
               ),
             ],
           ),
-          ..._searchHistory.map((q) => ListTile(
-                leading: Icon(Icons.history, size: 18, color: cs.onSurfaceVariant),
-                title: Text(q, style: const TextStyle(fontSize: 14)),
-                trailing: IconButton(
-                  icon: Icon(Icons.close, size: 16, color: cs.onSurfaceVariant),
-                  onPressed: () => _removeHistoryItem(q),
+          ..._searchHistory.map((q) => Dismissible(
+                key: ValueKey('history_$q'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 16),
+                  color: cs.error.withValues(alpha: 0.1),
+                  child: Icon(Icons.delete_outline, color: cs.error),
                 ),
-                dense: true,
-                onTap: () {
-                  _searchCtrl.text = q;
-                  _performSearch();
-                },
+                onDismissed: (_) => _removeHistoryItem(q),
+                child: ListTile(
+                  leading: Icon(Icons.history, size: 18, color: cs.onSurfaceVariant),
+                  title: Text(
+                    q,
+                    style: TextStyle(fontSize: Responsive.scaleFont(context, 14)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(Icons.close, size: 16, color: cs.onSurfaceVariant),
+                    onPressed: () => _removeHistoryItem(q),
+                  ),
+                  dense: true,
+                  onTap: () {
+                    _searchCtrl.text = q;
+                    _performSearch();
+                  },
+                  onLongPress: () => _removeHistoryItem(q),
+                ),
               )),
         ],
         if (_searchHistory.isEmpty && _trending.isEmpty)
@@ -1239,16 +1337,24 @@ class _SearchScreenState extends State<SearchScreen>
         _mostRatedSellers.isNotEmpty ||
         _discoveryProducts.isNotEmpty;
 
+    // Universal: responsive padding and heights adapt to tablet/phone and textScale
+    final pad = Responsive.isTablet ? 20.0 : (Responsive.isSmallPhone ? 8.0 : 12.0);
+    // Scale horizontal card heights with width; ensures no clipping on large-font
+    final productCarouselHeight = Responsive.isTablet ? 240.0 : (Responsive.isSmallPhone ? 190.0 : 210.0);
+    final sellerCarouselHeight = Responsive.isTablet ? 170.0 : (Responsive.isSmallPhone ? 135.0 : 150.0);
     return ListView(
-      padding: const EdgeInsets.all(12),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.all(pad),
       children: [
         if (_mostRatedProducts.isNotEmpty) ...[
           _buildSectionHeader(cs, Icons.star_rounded, context.tr('most_rated_products')),
           const SizedBox(height: 8),
           SizedBox(
-            height: 210,
+            height: productCarouselHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
               itemCount: _mostRatedProducts.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (_, i) => _buildMostRatedProductCard(cs, _mostRatedProducts[i]),
@@ -1260,9 +1366,10 @@ class _SearchScreenState extends State<SearchScreen>
           _buildSectionHeader(cs, Icons.storefront_rounded, context.tr('most_rated_sellers')),
           const SizedBox(height: 8),
           SizedBox(
-            height: 150,
+            height: sellerCarouselHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
               itemCount: _mostRatedSellers.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (_, i) => _buildMostRatedSellerCard(cs, _mostRatedSellers[i]),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_dimens.dart';
 
 /// Social feed selector: For You / Nearby / Trending.
 /// The selected tab is filled; others are outlined chips.
@@ -32,25 +31,30 @@ class FeedTabs extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.s3,
-        vertical: AppSpacing.s2,
-      ),
+      // Precise sticky header spacing — 16 horizontal, 10 vertical for breathing
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: FeedTab.values.map((t) {
           final active = t == selected;
           return Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.s2),
+            padding: const EdgeInsets.only(right: 10),
             child: ChoiceChip(
-              label: Text(_label(context, t)),
+              label: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                child: Text(_label(context, t), style: TextStyle(fontSize: 13, letterSpacing: 0.1)),
+              ),
               selected: active,
               onSelected: (_) => onSelect(t),
               selectedColor: cs.primary,
+              backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              side: BorderSide(color: active ? cs.primary : cs.outlineVariant.withValues(alpha: 0.4)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               labelStyle: TextStyle(
                 color: active ? cs.onPrimary : cs.onSurface,
-                fontWeight:
-                    active ? FontWeight.bold : FontWeight.normal,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13,
               ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             ),
           );
         }).toList(),

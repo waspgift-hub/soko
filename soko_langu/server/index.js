@@ -1524,7 +1524,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     const message = `OTP yako ni ${otp}. Inaisha kwa dakika 5.`;
     // send-otp runs pre-auth, so the app tells us its language via langCode
     // (defaults to Swahili for clients that don't send it).
-    const langCode = ['sw', 'en', 'zh'].includes(req.body.langCode) ? req.body.langCode : 'sw';
+    const langCode = ['sw', 'en'].includes(req.body.langCode) ? req.body.langCode : 'sw';
     const sent = await sendSms(cleanPhone, smsSafeForGateway(langCode, message));
 
     // Save send status to the same OTP document for debugging
@@ -1598,7 +1598,7 @@ app.post('/api/auth/send-email-otp', otpEmailRateLimit, async (req, res) => {
     });
 
     // Pre-auth, so the app tells us its language via langCode (same as send-otp).
-    const lang = ['sw', 'en', 'zh'].includes(langCode) ? langCode : 'sw';
+    const lang = ['sw', 'en'].includes(langCode) ? langCode : 'sw';
     const copy = localizeEmailOtp(lang);
 
     // SMTP directly to the address (unlike sendEmailSmtp, the email may
@@ -6963,7 +6963,7 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
       try {
         // Group recipients by their in-app language and send a localized bulk
         // push per group. The Swahili title/body are server templates; without
-        // this split an en/zh user would receive the raw Swahili copy.
+        // this split an en user would receive the raw Swahili copy.
         const langBuckets = new Map();
         let lastPushId = null;
         while (true) {
@@ -6976,7 +6976,7 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
             // The creator gets a dedicated confirmation push below, so skip
             // them here to avoid a duplicate broadcast to the seller.
             if (doc.id && doc.id !== sellerId) {
-              const lang = (doc.data()?.langCode === 'en' || doc.data()?.langCode === 'zh') ? doc.data().langCode : 'sw';
+              const lang = doc.data()?.langCode === 'en' ? 'en' : 'sw';
               if (!langBuckets.has(lang)) langBuckets.set(lang, []);
               langBuckets.get(lang).push(doc.id);
             }
@@ -7694,7 +7694,7 @@ app.post('/api/user/language', asyncHandler(async (req, res) => {
   const auth = await requireUser(req, res);
   if (!auth.ok) return;
   const { langCode } = req.body || {};
-  if (!['sw', 'en', 'zh'].includes(langCode)) {
+  if (!['sw', 'en'].includes(langCode)) {
     return res.status(400).json({ error: 'Invalid langCode' });
   }
   await db.collection('users').doc(auth.uid).set({ langCode }, { merge: true });
@@ -7711,7 +7711,7 @@ app.post('/api/user/sms-language', asyncHandler(async (req, res) => {
   const auth = await requireUser(req, res);
   if (!auth.ok) return;
   const { smsLangCode } = req.body || {};
-  if (!['sw', 'en', 'zh'].includes(smsLangCode)) {
+  if (!['sw', 'en'].includes(smsLangCode)) {
     return res.status(400).json({ error: 'Invalid smsLangCode' });
   }
   await db.collection('users').doc(auth.uid).set({ smsLangCode }, { merge: true });

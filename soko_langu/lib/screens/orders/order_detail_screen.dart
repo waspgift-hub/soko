@@ -27,6 +27,7 @@ import '../../widgets/trust_passport_card.dart';
 import '../../widgets/raise_dispute_dialog.dart';
 import '../../utils/phone_utils.dart';
 import '../../utils/rate_limiter.dart';
+import '../../services/share_service.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String docId;
@@ -687,7 +688,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             ),
           ),
           const Spacer(),
-          const SizedBox(width: 48),
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(Icons.share_outlined, size: 16, color: cs.primary),
+            ),
+            onPressed: () => ShareService.instance.shareOrder(orderId: widget.docId),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
     );

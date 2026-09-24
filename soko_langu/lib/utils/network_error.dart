@@ -45,7 +45,7 @@ class ErrorKeys {
 String translateHttpStatus(int statusCode, {String? serverMessage}) {
   switch (statusCode) {
     case 401:
-      return ErrorKeys.sessionExpired Assemblies;
+      return ErrorKeys.sessionExpired;
     case 403:
       return ErrorKeys.noPermission;
     case 404:

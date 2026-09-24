@@ -1,21 +1,37 @@
 {
   "applinks": {
+    "apps": [],
     "details": [
       {
-        "appIDs": [
-          "REPLACE_WITH_ACTUAL_IOS_TEAM_ID.com.example.sokoLangu"
-        ],
+        "appID": "344682929526.com.sokolangu.app",
+        "comment": "Soko Vibe — bundle com.sokolangu.app (iOS Team ID placeholder, update when Apple Developer Team ID is known)",
+        "paths": [
+          "/product/*",
+          "/seller/*",
+          "/profile/*",
+          "/order/*",
+          "/otp/*",
+          "/category/*",
+          "/search*",
+          "/magic-link*"
+        ]
+      },
+      {
+        "appIDs": ["344682929526.com.sokolangu.app"],
         "components": [
-          {
-            "/": "/product/*",
-            "comment": "Matches https://www.sokovibe.co.tz/product/{id}"
-          },
-          {
-            "/": "/seller/*",
-            "comment": "Matches https://www.sokovibe.co.tz/seller/{id}"
-          }
+          { "/": "/product/*" },
+          { "/": "/seller/*" },
+          { "/": "/profile/*" },
+          { "/": "/order/*" },
+          { "/": "/otp/*" },
+          { "/": "/category/*" },
+          { "/": "/search" },
+          { "/": "/magic-link/*" }
         ]
       }
     ]
+  },
+  "webcredentials": {
+    "apps": ["344682929526.com.sokolangu.app"]
   }
 }

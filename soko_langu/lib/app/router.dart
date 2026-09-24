@@ -30,7 +30,6 @@ import '../screens/profile/my_ads_screen.dart';
 import '../screens/profile/seller_dashboard_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
-import '../screens/profile/shop_customization_screen.dart';
 import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
@@ -64,10 +63,13 @@ import '../screens/sponsored/sponsored_performance_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
+import '../screens/profile/shop_customization_screen.dart';
 import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 import '../repositories/product_repository.dart'; // Added for V3 API loading
+import '../screens/search/user_search_screen.dart';
+import '../services/username_service.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -98,6 +100,8 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.createFlashSale,
   AppRoutes.receipt,
   AppRoutes.orderDetail,
+  AppRoutes.order, // web alias /order/:id
+  AppRoutes.otp, // web alias /otp/:id
   AppRoutes.report,
   AppRoutes.buyerRequests,
   AppRoutes.postBuyerRequest,
@@ -330,7 +334,21 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.addProduct,
         pageBuilder: (context, state) {
-          return _premiumPage(AddProductScreen(product: state.extra as dynamic));
+          final extra = state.extra;
+          if (extra is Map<String, dynamic> && extra.containsKey('sharedMedia')) {
+            final media = extra['sharedMedia'];
+            final paths = media is List ? media.map((e) => e.toString()).toList() : <String>[];
+            final product = extra['product'];
+            return _premiumPage(AddProductScreen(
+              product: product is Product ? product : null,
+              initialMediaPaths: paths,
+            ));
+          }
+          // legacy: extra is Product directly or map with product key
+          if (extra is Map && extra['product'] is Product) {
+            return _premiumPage(AddProductScreen(product: extra['product'] as Product));
+          }
+          return _premiumPage(AddProductScreen(product: extra is Product ? extra : null));
         },
       ),
       GoRoute(
@@ -529,11 +547,74 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const TermsOfServiceScreen()),
       ),
       GoRoute(
-        path: AppRoutes.shopCustomization,
-        pageBuilder: (context, state) => _premiumPage(const ShopCustomizationScreen()),
+        path: AppRoutes.userSearch,
+        pageBuilder: (context, state) => _premiumPage(const UserSearchScreen()),
+      ),
+      // Web deep-link aliases
+      GoRoute(
+        path: '${AppRoutes.order}/:orderId',
+        redirect: (context, state) {
+          final id = state.pathParameters['orderId'] ?? '';
+          return '${AppRoutes.orderDetail}/$id';
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.otp}/:orderId',
+        redirect: (context, state) {
+          final id = state.pathParameters['orderId'] ?? '';
+          // OTP link never carries code — just order context
+          return '${AppRoutes.orderDetail}/$id';
+        },
+      ),
+      GoRoute(
+        path: '/seller/:userId',
+        pageBuilder: (context, state) {
+          final raw = state.pathParameters['userId']!;
+          return _premiumPage(_UsernameAwareProfile(raw: raw));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.userProfileAlias}/:userId',
+        pageBuilder: (context, state) {
+          final raw = state.pathParameters['userId']!;
+          return _premiumPage(_UsernameAwareProfile(raw: raw));
+        },
+      ),
+      GoRoute(
+        path: '/category/:name',
+        redirect: (context, state) {
+          final name = state.pathParameters['name'] ?? '';
+          return '${AppRoutes.categoryProducts}/${Uri.encodeComponent(name)}';
+        },
       ),
     ],
   );
+}
+
+class _UsernameAwareProfile extends StatefulWidget {
+  final String raw;
+  const _UsernameAwareProfile({required this.raw});
+  @override
+  State<_UsernameAwareProfile> createState() => _UsernameAwareProfileState();
+}
+
+class _UsernameAwareProfileState extends State<_UsernameAwareProfile> {
+  late final Future<String?> _uidFuture =
+      UsernameService.instance.resolveToUid(widget.raw);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _uidFuture,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        final uid = snap.data ?? widget.raw;
+        return PublicProfileScreen(userId: uid, userName: widget.raw);
+      },
+    );
+  }
 }
 
 class _MissingRouteData extends StatelessWidget {

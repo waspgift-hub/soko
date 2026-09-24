@@ -22,6 +22,7 @@ import '../../widgets/trending_carousel.dart';
 import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/app_colors.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
@@ -561,10 +562,50 @@ class _HomeScreenState extends State<HomeScreen>
                   stream: _categoryStream,
                   builder: (context, snapshot) {
                     final cats = snapshot.data ?? [];
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return SizedBox(
+                        height: 130,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                          itemCount: 6,
+                          separatorBuilder: (_, __) => const SizedBox(width: 12),
+                          itemBuilder: (_, __) => Container(
+                            width: 92,
+                            decoration: BoxDecoration(
+                              color: cs.surfaceVariant.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: cs.brandBorder),
+                            ),
+                            child: const DsSkeleton(),
+                          ),
+                        ),
+                      );
+                    }
                     if (cats.isEmpty) {
-                      return Center(
-                        child: Text(context.tr('no_categories'),
-                          style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
+                      return Container(
+                        height: 130,
+                        margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: cs.brandBorder),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
+                                child: Icon(Icons.category_outlined, color: cs.primary, size: 22),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(context.tr('no_categories'), style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 4),
+                              Text(context.tr('categories_coming_soon'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 11)),
+                            ],
+                          ),
                         ),
                       );
                     }

@@ -276,6 +276,10 @@ app.use(express.static(landingDir, {
 // tags — map the root one to the brand favicon instead of serving a 404.
 app.get('/favicon.ico', (req, res) => res.redirect('/assets/favicon.ico'));
 
+// Web fallback routes for deep links (must be before static so /product/:id serves HTML)
+const fallbackRouter = require('./modules/sharing/fallback-routes');
+app.use('/', fallbackRouter);
+
 // Routes
 app.use('/health', healthRouter);
 app.use('/api/v1/auth', authRouter);

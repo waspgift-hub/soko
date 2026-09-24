@@ -944,41 +944,51 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             )
           : null,
       appBar: AppBar(
-        title: Text(_isSelectionMode
-            ? '${_selectedIds.length} ${context.tr('selected')}'
-            : context.tr('my_purchases')),
+        title: Text(
+          _isSelectionMode ? '${_selectedIds.length} ${context.tr('selected')}' : context.tr('my_purchases'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+        ),
         centerTitle: true,
+        titleSpacing: 0,
         leading: _isSelectionMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => setState(() {
-                  _isSelectionMode = false;
-                  _selectedIds.clear();
-                }),
-              )
+            ? IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() {_isSelectionMode=false; _selectedIds.clear();}))
             : null,
         actions: _isSelectionMode
             ? [
-                TextButton(
-                  onPressed: _currentDocs.isEmpty || _selectedIds.length == _currentDocs.length
-                      ? () => setState(() => _selectedIds.clear())
-                      : () => setState(() => _selectedIds.addAll(_currentDocs.map((d) => d.id))),
-                  child: Text(_currentDocs.isNotEmpty && _selectedIds.length == _currentDocs.length
-                      ? context.tr('deselect_all')
-                      : context.tr('select_all')),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: TextButton(
+                    onPressed: _currentDocs.isEmpty || _selectedIds.length == _currentDocs.length
+                        ? () => setState(() => _selectedIds.clear())
+                        : () => setState(() => _selectedIds.addAll(_currentDocs.map((d) => d.id))),
+                    child: Text(_currentDocs.isNotEmpty && _selectedIds.length == _currentDocs.length ? context.tr('deselect_all') : context.tr('select_all'), style: const TextStyle(fontSize: 13)),
+                  ),
                 ),
               ]
             : [
-                TextButton.icon(
-                  onPressed: () => setState(() => _isSelectionMode = true),
-                  icon: const Icon(Icons.checklist, size: 18),
-                  label: Text(context.tr('select')),
-                ),
-                TextButton.icon(
-                  onPressed: () => context.go(AppRoutes.home),
-                  icon: const Icon(Icons.storefront_outlined, size: 18),
-                  label: Text(context.tr('home')),
-                ),
+                // Use icon-only on small phones to prevent overlap; label collapses
+                LayoutBuilder(builder: (ctx, c) {
+                  final isNarrow = MediaQuery.of(context).size.width < 380;
+                  return Row(mainAxisSize: MainAxisSize.min, children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12), visualDensity: VisualDensity.compact),
+                      onPressed: () => setState(() => _isSelectionMode = true),
+                      icon: const Icon(Icons.checklist, size: 18),
+                      label: isNarrow ? const SizedBox.shrink() : Text(context.tr('select'), style: const TextStyle(fontSize: 13)),
+                    ),
+                    if (isNarrow)
+                      IconButton(tooltip: context.tr('home'), icon: const Icon(Icons.storefront_outlined, size: 20), onPressed: () => context.go(AppRoutes.home))
+                    else
+                      TextButton.icon(
+                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), visualDensity: VisualDensity.compact),
+                        onPressed: () => context.go(AppRoutes.home),
+                        icon: const Icon(Icons.storefront_outlined, size: 18),
+                        label: Text(context.tr('home'), style: const TextStyle(fontSize: 13)),
+                      ),
+                    const SizedBox(width: 4),
+                  ]);
+                }),
               ],
       ),
       body: StreamBuilder<QuerySnapshot>(

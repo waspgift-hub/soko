@@ -6,7 +6,7 @@ const schemas = {
   // Auth schemas
   sendOtp: z.object({
     phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
-    langCode: z.enum(['sw', 'en', 'zh']).optional(),
+    langCode: z.enum(['sw', 'en']).optional(),
   }),
 
   verifyOtp: z.object({

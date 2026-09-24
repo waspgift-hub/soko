@@ -15,23 +15,51 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "soko_lang/video_query"
     private var pendingRoute: String? = null
+    private var initialSharePaths: List<String>? = null
+    private var shareEventSink: EventChannel.EventSink? = null
+    private var pendingSharePaths: List<String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannels()
         pendingRoute = intent?.getStringExtra("route")
+        // Capture Gallery share that launched the app
+        val sharePaths = extractSharePaths(intent)
+        if (!sharePaths.isNullOrEmpty()) {
+            initialSharePaths = sharePaths
+            pendingSharePaths = sharePaths
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        val route = intent.getStringExtra("route") ?: return
-        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-            MethodChannel(messenger, "soko_lang/navigate").invokeMethod("navigate", route)
+        // Chat shortcut route
+        intent.getStringExtra("route")?.let { route ->
+            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                MethodChannel(messenger, "soko_lang/navigate").invokeMethod("navigate", route)
+            }
+        }
+        // Gallery share while app is alive — push via EventChannel if ready, else hold
+        val sharePaths = extractSharePaths(intent)
+        if (!sharePaths.isNullOrEmpty()) {
+            if (shareEventSink != null) {
+                shareEventSink?.success(sharePaths)
+            } else {
+                pendingSharePaths = sharePaths
+                // also try method channel fallback after engine ready
+                flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "soko/share_receive").invokeMethod("onMediaShared", sharePaths)
+                }
+            }
+        } else {
+            // also handle deep link data for App Links separately via app_links plugin
+            // (app_links handles it, we just keep route handling for shortcut)
         }
     }
 
@@ -111,6 +139,33 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+        // Share receive channels — gallery → Soko Vibe
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "soko/share_receive").setMethodCallHandler { call, result ->
+            if (call.method == "getInitialMedia") {
+                result.success(initialSharePaths)
+                // keep pendingSharePaths until flutter consumes, then clear via clearPending
+                initialSharePaths = null
+            } else if (call.method == "clearPending") {
+                pendingSharePaths = null
+                result.success(true)
+            } else {
+                result.notImplemented()
+            }
+        }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "soko/share_receive_stream").setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    shareEventSink = events
+                    pendingSharePaths?.let { paths ->
+                        events?.success(paths)
+                        pendingSharePaths = null
+                    }
+                }
+                override fun onCancel(arguments: Any?) {
+                    shareEventSink = null
+                }
+            }
+        )
         handleIntent(intent)
         pendingRoute?.let { route ->
             MethodChannel(
@@ -127,6 +182,84 @@ class MainActivity : FlutterActivity() {
             val receiverId = uri.lastPathSegment ?: return
             val receiverName = uri.getQueryParameter("name") ?: ""
             pendingRoute = "/chat/$receiverId"
+        }
+    }
+
+    private fun extractSharePaths(intent: Intent?): List<String>? {
+        if (intent == null) return null
+        val action = intent.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return null
+        val type = intent.type ?: ""
+        // Accept image/*, video/* and mixed *.*
+        if (!type.startsWith("image/") && !type.startsWith("video/") && type != "*/*" && !type.startsWith("application/")) {
+            // Still allow if extras contain streams — some galleries send text/* with images
+            if (intent.getParcelableExtra<android.os.Parcelable>(Intent.EXTRA_STREAM) == null &&
+                intent.getParcelableArrayListExtra<android.os.Parcelable>(Intent.EXTRA_STREAM) == null) return null
+        }
+        val out = mutableListOf<String>()
+        try {
+            if (action == Intent.ACTION_SEND) {
+                val uri = intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM) ?: return null
+                copyUriToCache(uri)?.let { out.add(it) }
+            } else {
+                val uris = intent.getParcelableArrayListExtra<android.net.Uri>(Intent.EXTRA_STREAM) ?: return null
+                for (uri in uris) {
+                    if (out.size >= 5) break
+                    copyUriToCache(uri)?.let { out.add(it) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ShareReceive", "extractSharePaths failed: ${e.message}", e)
+        }
+        if (out.isEmpty()) return null
+        Log.d("ShareReceive", "extracted ${out.size} share paths")
+        return out
+    }
+
+    private fun copyUriToCache(uri: android.net.Uri): String? {
+        return try {
+            val resolver = contentResolver
+            val mime = resolver.getType(uri) ?: ""
+            // Validate MIME — only image/video allowed
+            if (!mime.startsWith("image/") && !mime.startsWith("video/") && mime != "application/octet-stream") {
+                // Some file managers send empty mime — allow but validate extension later in Dart
+            }
+            val input = resolver.openInputStream(uri) ?: return null
+            // Determine extension from mime or uri
+            val ext = when {
+                mime == "image/jpeg" -> "jpg"
+                mime == "image/png" -> "png"
+                mime == "image/webp" -> "webp"
+                mime == "image/heic" -> "heic"
+                mime == "video/mp4" -> "mp4"
+                mime == "video/quicktime" -> "mov"
+                mime == "video/3gpp" -> "3gp"
+                else -> {
+                    val name = uri.lastPathSegment ?: ""
+                    val dot = name.lastIndexOf('.')
+                    if (dot >= 0 && dot < name.length - 1) name.substring(dot + 1).lowercase() else "tmp"
+                }
+            }
+            val isVideo = mime.startsWith("video/")
+            val prefix = if (isVideo) "share_vid_" else "share_img_"
+            val cacheFile = java.io.File.createTempFile(prefix, ".$ext", cacheDir)
+            input.use { ins ->
+                cacheFile.outputStream().use { out -> ins.copyTo(out) }
+            }
+            // Size guard: 100MB video, 20MB image
+            val max = if (isVideo) 100L * 1024 * 1024 else 20L * 1024 * 1024
+            if (cacheFile.length() > max) {
+                cacheFile.delete()
+                return null
+            }
+            if (cacheFile.length() == 0L) {
+                cacheFile.delete()
+                return null
+            }
+            cacheFile.absolutePath
+        } catch (e: Exception) {
+            Log.e("ShareReceive", "copyUriToCache failed for $uri: ${e.message}", e)
+            null
         }
     }
 

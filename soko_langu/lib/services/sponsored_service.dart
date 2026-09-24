@@ -33,7 +33,17 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/campaigns')).replace(queryParameters: params);
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaigns: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      // 404 SELLER_PROFILE_NOT_FOUND is a business code — surface it directly
+      // instead of the generic error_not_found translation.
+      final userMessage = isBusinessCode
+          ? serverMessage
+          : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch campaigns: ${res.statusCode} $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return [];
@@ -47,7 +57,15 @@ class SponsoredService {
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode == 404) return null;
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaign: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode
+          ? serverMessage
+          : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch campaign: ${res.statusCode} $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return null;
@@ -106,8 +124,13 @@ class SponsoredService {
       }),
     );
     if (res.statusCode >= 400) {
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to update campaign', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: serverMessage,
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     return SponsoredCampaign.fromApi(body['data'] as Map<String, dynamic>);
@@ -118,8 +141,13 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/campaigns/$id/pause'));
     final res = await _http.post(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to pause campaign', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: serverMessage,
+        userMessage: userMessage,
+      );
     }
   }
 
@@ -128,8 +156,13 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/campaigns/$id/resume'));
     final res = await _http.post(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to resume campaign', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: serverMessage,
+        userMessage: userMessage,
+      );
     }
   }
 
@@ -138,8 +171,13 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/campaigns/$id/cancel'));
     final res = await _http.post(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to cancel campaign', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: serverMessage,
+        userMessage: userMessage,
+      );
     }
   }
 
@@ -156,8 +194,13 @@ class SponsoredService {
       body: jsonEncode({'phone': phone, 'paymentMethod': paymentMethod}),
     );
     if (res.statusCode >= 400) {
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to initiate payment', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: serverMessage,
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     return body['data'] as Map<String, dynamic>;
@@ -170,8 +213,13 @@ class SponsoredService {
     );
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      throw NetworkError(message: body['error'] ?? 'Failed to fetch metrics', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: serverMessage,
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return null;
@@ -183,7 +231,15 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/budget-tiers'));
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch budget tiers', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode
+          ? serverMessage
+          : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch budget tiers: $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic>) return [];
@@ -217,7 +273,13 @@ class SponsoredService {
         .replace(queryParameters: {'days': '$days'});
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch admin metrics: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch admin metrics: $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     final data = body is Map<String, dynamic> && body['data'] is Map<String, dynamic>
@@ -239,7 +301,13 @@ class SponsoredService {
     });
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaigns: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch campaigns: $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return [];
@@ -253,7 +321,13 @@ class SponsoredService {
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode == 404) return null;
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch campaign: ${res.statusCode}', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch campaign: $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map<String, dynamic> || body['data'] is! Map<String, dynamic>) return null;
@@ -293,7 +367,13 @@ class SponsoredService {
     final uri = Uri.parse(ApiConfig.v1('/sponsored/admin/settings'));
     final res = await _http.get(uri, headers: await _authHeaders());
     if (res.statusCode >= 400) {
-      throw NetworkError(message: 'Failed to fetch settings', userMessage: translateHttpStatus(res.statusCode));
+      final serverMessage = _tryError(res.body);
+      final isBusinessCode = serverMessage != 'Request failed' && serverMessage.contains('_');
+      final userMessage = isBusinessCode ? serverMessage : translateHttpStatus(res.statusCode, serverMessage: serverMessage != 'Request failed' ? serverMessage : null);
+      throw NetworkError(
+        message: 'Failed to fetch settings: $serverMessage',
+        userMessage: userMessage,
+      );
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     final data = body is Map<String, dynamic> && body['data'] is Map<String, dynamic>

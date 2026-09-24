@@ -1,7 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'localizations/zh_translations.dart';
-
 class LocalizationService {
   static const String _languageKey = 'language_code';
   static const String _currencyKey = 'currency';
@@ -9,7 +7,6 @@ class LocalizationService {
   static const Map<String, String> supportedLanguages = {
     'sw': 'Kiswahili',
     'en': 'English',
-    'zh': '中文',
   };
 
   static const Map<String, Map<String, String>> supportedCurrencies = {
@@ -237,8 +234,6 @@ class LocalizationService {
       'app_locked': 'App Imefungwa',
       'enter_pin_unlock': 'Weka namba ya siri ili kufungua',
       'or_use': 'au tumia',
-      'customize_shop': 'Tengeneza Duka',
-      'shop_customization': 'Tengeneza Duka Lako',
       'shop_banner': 'Bhana ya Duka',
       'shop_banner_hint': 'Pakia picha ya bhana kwa duka lako',
       'shop_accent_color': 'Rangi ya Duka',
@@ -654,7 +649,6 @@ class LocalizationService {
       'open_whatsapp': 'Fungua WhatsApp',
       'add_product_first': 'Weka bidhaa kwanza',
       'seller_earnings': 'Mapato ya Muuzaji',
-      'customize_shop_subtitle': 'Ongeza bhana na ubinafsishe duka lako',
       'boost_dialog_title': 'Angazia Bidhaa',
       'choose_product_boost': 'Chagua bidhaa kuangazia',
       'admin_platform_earnings': 'Admin - Mapato ya Jemala',
@@ -2929,8 +2923,6 @@ class LocalizationService {
       'received_orders': 'Orders I Received',
       'order_history': 'Order History',
       'received': 'Received',
-      'customize_shop': 'Customize Shop',
-      'shop_customization': 'Customize Your Shop',
       'shop_banner': 'Shop Banner',
       'shop_banner_hint': 'Upload a banner image for your shop',
       'shop_accent_color': 'Accent Color',
@@ -3327,7 +3319,6 @@ class LocalizationService {
       'open_whatsapp': 'Open WhatsApp',
       'add_product_first': 'Add a product first',
       'seller_earnings': 'Seller Earnings',
-      'customize_shop_subtitle': 'Add banner & customize your shop',
       'boost_dialog_title': 'Boost a Product',
       'choose_product_boost': 'Choose a product to boost',
       'admin_platform_earnings': 'Admin - Platform Earnings',
@@ -4986,7 +4977,6 @@ class LocalizationService {
       'withdrawal_processing': 'Processing...',
       'yes_delete': 'Yes, Delete',
     },
-    ...zhTranslations,
   };
 
   Future<String> getLanguage() async {

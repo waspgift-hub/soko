@@ -162,10 +162,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
       ),
       body: Column(
         children: [
-          FeedTabs(
-            selected: _tab,
-            onSelect: (t) => setState(() => _tab = t),
+          // Sticky header with precise spacing — prevents cramped chips
+          Container(
+            color: Theme.of(context).colorScheme.surface,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: FeedTabs(selected: _tab, onSelect: (t) => setState(() => _tab = t)),
           ),
+          Container(height: 1, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.08)),
           Expanded(
             child: StreamBuilder<List<Product>>(
               stream: _productService.getProducts(),

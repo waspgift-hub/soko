@@ -50,6 +50,27 @@ class _SponsoredDashboardScreenState extends State<SponsoredDashboardScreen> {
     }
   }
 
+  Widget _buildErrorState(BuildContext context) {
+    final raw = _error.toString();
+    // SELLER_PROFILE_NOT_FOUND means the user has not created a seller
+    // profile yet — guide them to seller setup instead of a generic retry.
+    if (raw.contains('SELLER_PROFILE_NOT_FOUND')) {
+      return Center(
+        child: DsEmptyState(
+          icon: Icons.storefront_outlined,
+          title: context.trError(_error),
+          body: 'Fungua wasifu wa muuzaji kwanza ili kuunda kampeni.',
+          actionLabel: context.tr('seller_dashboard'),
+          onAction: () => context.push(AppRoutes.sellerDashboard),
+        ),
+      );
+    }
+    return SokoVibeErrorState(
+      message: context.trError(_error),
+      onRetry: _loadCampaigns,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -85,10 +106,7 @@ class _SponsoredDashboardScreenState extends State<SponsoredDashboardScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? SokoVibeErrorState(
-                      message: context.trError(_error),
-                      onRetry: _loadCampaigns,
-                    )
+                  ? _buildErrorState(context)
                   : _buildContent(cs, nf),
         ),
       ),

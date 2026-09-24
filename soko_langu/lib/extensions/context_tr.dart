@@ -13,7 +13,7 @@ extension ContextTr on BuildContext {
 
   /// Renders a user-facing error in the app language. [translateError]
   /// produces a translation key, which is resolved here against the app's
-  /// current language so Swahili/English/Chinese each see their own text.
+  /// current language so Swahili/English each see their own text.
   String trError(dynamic error) {
     final config = AppConfig.of(this);
     final key = translateError(error);

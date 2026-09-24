@@ -22,7 +22,7 @@ function cleanPhone(phone) {
 async function sendOtp(req, res) {
   try {
     const { phone } = req.body;
-    const langCode = ['sw', 'en', 'zh'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
+    const langCode = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
     const clean = cleanPhone(phone);
     const otp = crypto.randomInt(100000, 1000000).toString();
 
@@ -30,9 +30,7 @@ async function sendOtp(req, res) {
 
     const message = langCode === 'en'
       ? `Your OTP is ${otp}. It expires in 5 minutes.`
-      : langCode === 'zh'
-        ? `您的验证码是${otp}，5分钟内有效。`
-        : `OTP yako ni ${otp}. Inaisha kwa dakika 5.`;
+      : `OTP yako ni ${otp}. Inaisha kwa dakika 5.`;
     const sent = await sendSms(clean, message);
     if (!sent) {
       console.error('[AUTH] send-otp SMS failed for', clean);
@@ -95,13 +93,13 @@ async function sendEmailOtp(req, res) {
       return res.status(400).json({ error: 'Valid email required' });
     }
     const cleanEmail = email.trim().toLowerCase();
-    const lang = ['sw', 'en', 'zh'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
+    const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
     const otp = crypto.randomInt(100000, 1000000).toString();
 
     await saveOtp(`email:${cleanEmail}`, hashOtp(otp), OTP_TTL_SECONDS);
 
-    const subject = lang === 'en' ? 'Your login code' : lang === 'zh' ? '您的登录验证码' : 'Namba yako ya kuingia';
-    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">Soko Vibe</h2><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${lang === 'en' ? 'Expires in 5 minutes.' : lang === 'zh' ? '5分钟内有效。' : 'Inaisha kwa dakika 5.'}</p></body></html>`;
+    const subject = lang === 'en' ? 'Your login code' : 'Namba yako ya kuingia';
+    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">Soko Vibe</h2><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${lang === 'en' ? 'Expires in 5 minutes.' : 'Inaisha kwa dakika 5.'}</p></body></html>`;
     const sent = await sendMail(cleanEmail, subject, html);
     if (!sent) {
       return res.status(502).json({ error: 'auth_otp_send_failed' });

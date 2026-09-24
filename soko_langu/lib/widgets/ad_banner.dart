@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../extensions/context_tr.dart';
 import '../services/api_config.dart';
+import '../theme/app_colors.dart';
 
 class AdBanner extends StatefulWidget {
   const AdBanner({super.key});
@@ -76,36 +77,43 @@ class _AdBannerState extends State<AdBanner> {
     if (!_shouldShow) {
       return const SizedBox(height: 1);
     }
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 50,
+      height: 72,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.tertiaryContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [cs.brandPrimary.withValues(alpha: 0.14), cs.brandPrimary.withValues(alpha: 0.04)],
         ),
+        border: Border.all(color: cs.brandPrimary.withValues(alpha: 0.18)),
+        boxShadow: [BoxShadow(color: cs.brandPrimary.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4))],
       ),
-      child: Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.ad_units,
-              size: 16,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              context.tr('ad'),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+      child: Row(
+        children: [
+          const SizedBox(width: 14),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: cs.brandPrimary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.campaign_rounded, size: 20, color: cs.brandPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(context.tr('sponsored'), style: TextStyle(color: cs.brandPrimary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+              const SizedBox(height: 2),
+              Text(context.tr('sponsored_desc_fallback'), style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(color: cs.brandPrimary, borderRadius: BorderRadius.circular(20)),
+            child: Text(context.tr('view'), style: TextStyle(color: cs.surface, fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(width: 14),
+        ],
       ),
     );
   }

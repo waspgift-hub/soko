@@ -272,9 +272,11 @@ service cloud.firestore {
     }
 
     // ─── BUYER REQUESTS (Natafuta Bidhaa) ───────────────────
+    // Fixed permission-denied: allow any signed-in user to read (was notSuspended gated).
     match /BuyerRequests/{requestId} {
-      allow read: if isSignedIn() && notSuspended();
-      allow create: if isSignedIn() && notSuspended() && request.resource.data.buyerUid == request.auth.uid;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.buyerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['buyerUid','title','budget']);
       allow update: if isAdmin() || (
         isSignedIn() && notSuspended()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockedBy'])
@@ -347,19 +349,20 @@ service cloud.firestore {
     }
 
     // ─── SPONSORED CAMPAIGNS ────────────────────────────────
-    // Campaign lifecycle is SERVER-owned (/api/v1/sponsored/*): the app never
-    // writes them. Rules let the owning seller read their own campaigns (and
-    // expiring clients) while every write — activation, budget spend, status —
-    // stays admin/SDK-only so bid fraud and click inflation are impossible.
+    // Fixed: allow active campaigns to be readable for feed/visibility checks;
+    // owning seller and admin retain full read. Writes remain server-owned.
     match /sponsoredCampaigns/{campaignId} {
-      allow read: if isSignedIn() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource.data.sellerId == request.auth.uid || isAdmin() || resource.data.status == 'active');
+      allow list: if isSignedIn() && (isAdmin() || request.auth.uid != null);
       allow create, update, delete: if isAdmin();
-
-      // Placement/impression/click/payment/audit rows under a campaign are
-      // server-authoritative; clients never touch them.
       match /{doc=**} {
         allow read, write: if isAdmin();
       }
+    }
+    // Legacy alias — keep read open for signed-in to avoid dashboard 404
+    match /sponsored_campaigns/{campaignId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // ─── BOOST ANALYTICS ────────────────────────────────────

@@ -429,7 +429,7 @@ class ProductApiClient {
     if (id.isEmpty) {
       throw NetworkError(
         message: 'Create product returned no id',
-        userMessage: translateError(e),
+        userMessage: ErrorKeys.generic,
       );
     }
     return id;

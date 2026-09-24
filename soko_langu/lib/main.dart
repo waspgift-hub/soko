@@ -44,6 +44,7 @@ import 'services/balance_privacy_service.dart';
 import 'services/interstitial_ad_service.dart';
 import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
+import 'services/receive_share_service.dart';
 import 'services/security_service.dart';
 import 'services/server_keep_alive.dart';
 import 'theme/theme_manager.dart';
@@ -235,19 +236,35 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     );
     WidgetsBinding.instance.addObserver(this);
     themeManager.addListener(_onThemeChange);
+    app_state.appStateNotifier.addListener(_onAppStateAuthChange);
     _initApp();
     _setupNavigateChannel();
     _setupDeepLinks();
+    _setupShareReceive();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
+    app_state.appStateNotifier.removeListener(_onAppStateAuthChange);
     _productFeedProvider.dispose();
     _networkState.dispose();
     _navigateChannel?.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  void _onAppStateAuthChange() {
+    if (app_state.appStateNotifier.isAuthenticated) {
+      // resume any private deep link that was held for auth
+      DeepLinkService.instance.consumePendingAfterAuth();
+      // also auto-open share composer if media is pending
+      if (ReceiveShareService.instance.hasPending) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openSellComposer();
+        });
+      }
+    }
   }
 
   void _setupNavigateChannel() {
@@ -281,6 +298,50 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       if (!mounted) return;
       appRouter.go(location);
     });
+  }
+
+  void _setupShareReceive() {
+    if (kIsWeb) return;
+    ReceiveShareService.instance.onMediaReceived = _onShareMedia;
+    unawaited(ReceiveShareService.instance.init());
+  }
+
+  void _onShareMedia(List<String> paths) {
+    if (paths.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final isAuth = FirebaseAuth.instance.currentUser != null;
+      if (!isAuth) {
+        // preserve media via service (already persisted) and go to login;
+        // after login, _consumePendingShareMedia will run via auth listener
+        appRouter.go('/login');
+        // also listen for auth change to auto-open composer
+        // the login screen's success will trigger appStateNotifier -> flush via _initApp's pending?
+        // we wire via a one-time listener on auth state
+        FirebaseAuth.instance.authStateChanges().first.then((user) {
+          if (user != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _openSellComposer();
+            });
+          }
+        });
+        return;
+      }
+      _openSellComposer();
+    });
+  }
+
+  void _openSellComposer() {
+    final paths = ReceiveShareService.instance.consumePending();
+    // fallback to pendingPaths if consume returned empty but paths were passed
+    final toUse = paths.isEmpty ? ReceiveShareService.instance.pendingPaths : paths;
+    if (toUse.isEmpty) return;
+    // Navigate to add-product with shared media
+    final extra = <String, dynamic>{'sharedMedia': toUse};
+    // Use GoRouter push with extra — AddProductScreen reads via state.extra or service
+    // Since AddProductScreen currently reads initialMediaPaths via widget param,
+    // we pass via extra map and let router builder handle it.
+    appRouter.push('/add-product', extra: extra);
   }
 
   // -----------------------------------------------------------------------
@@ -635,7 +696,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
             debugShowCheckedModeBanner: false,
             title: 'Soko Vibe',
             locale: Locale(_langCode),
-            supportedLocales: const [Locale('en'), Locale('sw'), Locale('zh')],
+            supportedLocales: const [Locale('en'), Locale('sw')],
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
