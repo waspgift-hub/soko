@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
+import '../../theme/neumorphic.dart';
 import 'animated_press.dart';
 
 enum DsCardElevation { flat, low, medium }
@@ -34,34 +35,27 @@ class DsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isDark = scheme.brightness == Brightness.dark;
-    final elevated = onTap != null || elevation != DsCardElevation.flat;
+    // Raised surfaces sit flush with the panel base color so the dual
+    // neumorphic shadows (white top-left, gray bottom-right) stay visible.
+    final base = color ?? Neu.base(scheme.brightness);
+    final depth = switch (elevation) {
+      DsCardElevation.flat => 0.0,
+      DsCardElevation.low => 3.0,
+      DsCardElevation.medium => 6.0,
+    };
+    final elevated = onTap != null || depth > 0;
 
     final card = DecoratedBox(
       decoration: BoxDecoration(
-        color: color ?? scheme.cardBase,
+        color: base,
         borderRadius: BorderRadius.circular(radius),
-        border: border ??
-            Border.all(color: scheme.brandBorder, width: 0.5),
-        boxShadow: elevated
-            ? [
-                BoxShadow(
-                  color: scheme.brandTextPrimary.withValues(
-                    alpha: switch (elevation) {
-                      DsCardElevation.flat => 0,
-                      DsCardElevation.low => isDark ? 0.08 : 0.06,
-                      DsCardElevation.medium => isDark ? 0.15 : 0.10,
-                    },
-                  ),
-                  blurRadius: switch (elevation) {
-                    DsCardElevation.flat => 0,
-                    DsCardElevation.low => 8,
-                    DsCardElevation.medium => 20,
-                  },
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
+        // Raised cards drop the hairline — a border would fight the extruded
+        // shadow; only flat list surfaces keep an edge.
+        border: depth > 0
+            ? null
+            : border ??
+                Border.all(color: scheme.brandBorder, width: 0.5),
+        boxShadow: elevated ? Neu.raised(depth, scheme.brightness) : null,
       ),
       child: Padding(padding: padding, child: child),
     );

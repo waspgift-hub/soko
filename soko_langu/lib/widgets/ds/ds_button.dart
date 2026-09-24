@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/neumorphic.dart';
 import '../soko_vibe_loading.dart';
 import 'animated_press.dart';
 
@@ -67,35 +68,42 @@ class DsButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final disabled = !_enabled;
 
-    final (Color fill, Color fg, BorderSide side) = switch (variant) {
-      // Primary stays the #00C853 commerce CTA (black-on-green 9.4:1). The
-      // black/white "authority" control lives in the Elevated/FilledButton
-      // theme; green is reserved for marketplace buy/sell/pay actions.
-      DsButtonVariant.primary => (
-          scheme.primary,
-          scheme.onPrimary,
-          BorderSide.none,
-        ),
-      // Secondary = outlined neutral (spec: not green); quiet third-tier
-      // actions are linear/stripped so green never reads as a "selectable"
-      // state outside commerce.
+    // Primary stays the #00C853 commerce CTA; secondary/tonal switch to the
+    // panel base so the neumorphic shadows share the canvas tone. Tonal reads
+    // as a pressed/recessed control, ghost keeps no chrome.
+    final (Color fill, Color fg) = switch (variant) {
+      DsButtonVariant.primary => (scheme.primary, scheme.onPrimary),
       DsButtonVariant.secondary => (
-          Colors.transparent,
+          Neu.base(scheme.brightness),
           scheme.onSurface,
-          BorderSide(color: scheme.outlineVariant, width: 1.5),
         ),
       DsButtonVariant.tonal => (
-          scheme.surfaceContainerHighest,
+          Neu.insetBase(scheme.brightness),
           scheme.onSurface,
-          BorderSide.none,
         ),
-      DsButtonVariant.ghost => (
-          Colors.transparent,
-          scheme.onSurfaceVariant,
-          BorderSide.none,
-        ),
-      DsButtonVariant.danger => (scheme.error, scheme.onError, BorderSide.none),
+      DsButtonVariant.ghost => (Colors.transparent, scheme.onSurfaceVariant),
+      DsButtonVariant.danger => (scheme.error, scheme.onError),
     };
+
+    late final BoxDecoration decoration;
+    if (variant == DsButtonVariant.ghost || disabled) {
+      decoration = BoxDecoration(
+        color: disabled ? fill.withValues(alpha: 0.38) : fill,
+        borderRadius: BorderRadius.circular(_radius),
+      );
+    } else if (variant == DsButtonVariant.tonal) {
+      decoration = Neu.inset(_radius, scheme.brightness);
+    } else {
+      final isHue = variant == DsButtonVariant.primary ||
+          variant == DsButtonVariant.danger;
+      decoration = BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(_radius),
+        boxShadow: isHue
+            ? Neu.raisedHue(3, fill)
+            : Neu.raised(3, scheme.brightness),
+      );
+    }
 
     final labelStyle = TextStyle(
       fontSize: _fontSize,
@@ -108,13 +116,7 @@ class DsButton extends StatelessWidget {
       height: _resolvedHeight,
       width: fullWidth ? double.infinity : null,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: disabled ? fill.withValues(alpha: 0.38) : fill,
-          borderRadius: BorderRadius.circular(_radius),
-          border: side == BorderSide.none
-              ? null
-              : Border.fromBorderSide(side),
-        ),
+        decoration: decoration,
         child: Padding(
           padding: padding,
           child: Row(

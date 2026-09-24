@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_dimens.dart';
+import '../../theme/neumorphic.dart';
 
 /// Premium rounded search field used by every search surface.
 ///
@@ -7,7 +8,11 @@ import '../../theme/app_dimens.dart';
 /// Optional [trailing] actions (voice, barcode, filters) render as 40dp icon
 /// buttons that never push the field out of bounds. When a [controller] and
 /// [onClear] are set, a clear button appears only while the field has text.
-class SokoSearchBar extends StatelessWidget {
+///
+/// The field is recessed (neumorphic groove); the groove's top-left edge
+/// recolors to primary green while focused so the active state stays obvious
+/// without adding a heavy outline.
+class SokoSearchBar extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final String hint;
@@ -36,55 +41,84 @@ class SokoSearchBar extends StatelessWidget {
   });
 
   @override
+  State<SokoSearchBar> createState() => _SokoSearchBarState();
+}
+
+class _SokoSearchBarState extends State<SokoSearchBar> {
+  FocusNode? _internalFocus;
+  bool _focused = false;
+
+  FocusNode get _focus => widget.focusNode ?? (_internalFocus ??= FocusNode());
+
+  @override
+  void dispose() {
+    _internalFocus?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final trailingCount = (trailing?.length ?? 0) + (onFilter != null ? 1 : 0) + (onClear != null ? 1 : 0);
+    final trailingCount = (widget.trailing?.length ?? 0) +
+        (widget.onFilter != null ? 1 : 0) +
+        (widget.onClear != null ? 1 : 0);
     final suffix = trailingCount > 0
         ? _SuffixRow(
-            trailing: trailing,
-            onFilter: onFilter,
-            filterActive: filterActive,
-            onClear: onClear,
-            controller: controller,
+            trailing: widget.trailing,
+            onFilter: widget.onFilter,
+            filterActive: widget.filterActive,
+            onClear: widget.onClear,
+            controller: widget.controller,
             filterButton: _filterButton(context, cs),
           )
         : null;
 
     return Semantics(
       textField: true,
-      label: semanticsLabel ?? (hint.isEmpty ? null : hint),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        autofocus: autofocus,
-        onChanged: onChanged,
-        onSubmitted: onSubmitted,
-        textInputAction: TextInputAction.search,
-        style: TextStyle(fontSize: AppFontSize.md, color: cs.onSurface),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: hint,
-          hintStyle: TextStyle(fontSize: AppFontSize.md, color: cs.onSurfaceVariant),
-          prefixIcon: Icon(Icons.search_rounded, size: 20, color: cs.onSurfaceVariant),
-          suffixIconConstraints: trailingCount > 0
-              ? const BoxConstraints(minWidth: 0, minHeight: 0)
-              : null,
-          suffixIcon: suffix,
-          filled: true,
-          fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3, vertical: 8),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.4)),
+      label: widget.semanticsLabel ??
+          (widget.hint.isEmpty ? null : widget.hint),
+      child: Focus(
+        focusNode: _focus,
+        onFocusChange: (v) {
+          if (v != _focused) setState(() => _focused = v);
+        },
+        child: DecoratedBox(
+          decoration: Neu.inset(
+            AppRadius.lg,
+            cs.brightness,
+            accent: _focused ? cs.primary : null,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            borderSide: BorderSide(color: cs.primary, width: 1.5),
-          ),
-          disabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.25)),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focus,
+            autofocus: widget.autofocus,
+            onChanged: widget.onChanged,
+            onSubmitted: widget.onSubmitted,
+            textInputAction: TextInputAction.search,
+            style: TextStyle(fontSize: AppFontSize.md, color: cs.onSurface),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: widget.hint,
+              hintStyle: TextStyle(
+                fontSize: AppFontSize.md,
+                color: cs.onSurfaceVariant,
+              ),
+              prefixIcon: Icon(
+                Icons.search_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
+              suffixIconConstraints: trailingCount > 0
+                  ? const BoxConstraints(minWidth: 0, minHeight: 0)
+                  : null,
+              suffixIcon: suffix,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.s3,
+                vertical: 8,
+              ),
+            ),
           ),
         ),
       ),
@@ -93,7 +127,7 @@ class SokoSearchBar extends StatelessWidget {
 
   Widget _filterButton(BuildContext context, ColorScheme cs) {
     return IconButton(
-      onPressed: onFilter,
+      onPressed: widget.onFilter,
       visualDensity: VisualDensity.compact,
       constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       padding: EdgeInsets.zero,
@@ -101,7 +135,7 @@ class SokoSearchBar extends StatelessWidget {
       icon: Icon(
         Icons.tune_rounded,
         size: 20,
-        color: filterActive ? cs.primary : cs.onSurfaceVariant,
+        color: widget.filterActive ? cs.primary : cs.onSurfaceVariant,
       ),
     );
   }

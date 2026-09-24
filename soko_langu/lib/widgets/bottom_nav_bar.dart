@@ -13,6 +13,7 @@ import '../models/chat_room.dart';
 import '../app/app_transitions.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
+import '../theme/neumorphic.dart';
 import '../utils/responsive.dart';
 import 'auth_wall.dart';
 
@@ -148,16 +149,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlassNavBar(ColorScheme cs) {
-    final isDark = cs.brightness == Brightness.dark;
-    final navBg = isDark
-        ? const Color(0xFF121212).withValues(alpha: 0.85)
-        : const Color(0xFFFFFFFF).withValues(alpha: 0.88);
-    final navBorder = isDark
-        ? const Color(0x2AFFFFFF)
-        : const Color(0x08000000);
-    // Lift the bar above the Android gesture/navigation bar (edge-to-edge
-    // is enforced at targetSdk 36); MediaQuery.padding.bottom is 0 on
-    // legacy devices, so this is safe on both.
+    // The floating pill is carved from the canvas: raised neumorphic base with
+    // the dual shadow pair instead of a hairline border (a border would fight
+    // the extrude). Selected tabs recess back into the groove.
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
@@ -167,16 +161,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           height: 72,
           child: Container(
             decoration: BoxDecoration(
-              color: navBg,
+              color: Neu.base(cs.brightness),
               borderRadius: BorderRadius.circular(40),
-              border: Border.all(color: navBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              boxShadow: Neu.raised(5, cs.brightness),
             ),
             child: Row(
               children: [
@@ -234,12 +221,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? cs.primary.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(24),
-            ),
+            decoration: isSelected
+                ? Neu.inset(24, cs.brightness,
+                    fill: cs.primary.withValues(alpha: 0.06))
+                : BoxDecoration(borderRadius: BorderRadius.circular(24)),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -324,12 +309,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? cs.primary.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(24),
-            ),
+            decoration: isSelected
+                ? Neu.inset(24, cs.brightness,
+                    fill: cs.primary.withValues(alpha: 0.06))
+                : BoxDecoration(borderRadius: BorderRadius.circular(24)),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -393,13 +376,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   color: cs.primary,
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
+                  // Tinted dual shadow so the green FAB extruded from the pill.
+                  boxShadow: Neu.raisedHue(4, cs.primary),
                 ),
                 child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 26),
               ),
