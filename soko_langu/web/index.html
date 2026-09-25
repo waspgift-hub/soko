@@ -10,9 +10,6 @@
 
     For more details:
     * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
   -->
   <base href="$FLUTTER_BASE_HREF">
 
@@ -51,19 +48,26 @@
     <div class="spinner"></div>
   </div>
   <script>
-    // hide the splash once the first Flutter frame is on screen; 4s fallback
-    var splash = function () { var el = document.getElementById('loading'); if (el) el.style.display = 'none'; };
+    // Register the app-shell service worker. It caches static Flutter shell
+    // files only; application/API data remains network-only.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js', { scope: './' })
+          .catch(function (error) {
+            console.warn('Soko Vibe service worker registration failed:', error);
+          });
+      });
+    }
+
+    // Hide the splash once the first Flutter frame is on screen; 4s fallback.
+    var splash = function () {
+      var el = document.getElementById('loading');
+      if (el) el.style.display = 'none';
+    };
     window.addEventListener('flutter-first-frame', splash);
     window.setTimeout(splash, 4000);
   </script>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
