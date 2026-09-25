@@ -165,13 +165,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       backgroundColor: cs.surface,
       body: PremiumScaffold(
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
-            ),
-          ),
+          decoration: BoxDecoration(color: cs.surface),
           child: SafeArea(
           top: false,
           bottom: false,
@@ -184,10 +178,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
+                    color: cs.surfaceContainerLow,
+                    border: Border(
+                      bottom: BorderSide(color: cs.outlineVariant),
                     ),
                   ),
                   padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 24, bottom: 24),
@@ -199,11 +192,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                             width: 104, height: 104,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
+                              color: cs.surfaceContainerHighest,
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(3),
@@ -377,7 +366,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     if (isAdmin) {
       actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
     }
-    final tileWidth = (MediaQuery.of(context).size.width - 32 - 20) / 3;
+    final width = MediaQuery.of(context).size.width;
+    final columns = width >= 900 ? 4 : 3;
+    final tileWidth = (width - 32 - ((columns - 1) * 10)) / columns;
     return Wrap(
       spacing: 10,
       runSpacing: 10,
