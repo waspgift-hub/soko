@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../extensions/context_tr.dart';
