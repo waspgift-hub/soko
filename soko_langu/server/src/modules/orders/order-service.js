@@ -116,10 +116,9 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
     }
 
     const shippingFee = order.shippingFee || 0n;
-    const subtotal = Number(order.productPrice);
     
     // V3 Rule: Platform commission is calculated server-side
-    const { commission, totalAmount } = computeSellerParity(subtotal, shippingFee);
+    const { commission, totalAmount } = computeSellerParity(order.productPrice, shippingFee);
 
     const updated = await tx.order.update({
       where: { id: orderId },
@@ -218,7 +217,8 @@ async function submitShippingQuote(args) {
   return submitQuote(args);
 }
 
-async function markDispatched({ orderId, actorId, shippingMethod, courierName, trackingNumber, estimatedDelivery }) {
+async function markDispatched({ orderId, actorId, sellerId, shippingMethod, courierName, trackingNumber, estimatedDelivery }) {
+  actorId = sellerId || actorId;
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
@@ -247,16 +247,16 @@ async function markDispatched({ orderId, actorId, shippingMethod, courierName, t
   });
 }
 
-async function markDelivered({ orderId, actorId }) {
+async function markDelivered({ orderId, actorId, role = 'seller' }) {
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
-    if (order.buyerId !== actorId && order.sellerId !== actorId) {
-      throw httpError(403, 'FORBIDDEN');
-    }
+    const isSeller = role === 'seller' && order.sellerId === actorId;
+    const isPrivileged = role === 'admin' || role === 'courier';
+    if (!isSeller && !isPrivileged) throw httpError(403, 'FORBIDDEN');
 
-    const actor = actorId === order.buyerId ? 'buyer' : 'seller';
+    const actor = role === 'courier' ? 'courier' : role === 'admin' ? 'admin' : 'seller';
     const machine = new OrderStateMachine(order.status);
     machine.transition(ORDER_STATES.INSPECTION_PERIOD, {
       actor,
