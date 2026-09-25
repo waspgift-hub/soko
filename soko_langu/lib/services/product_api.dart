@@ -47,7 +47,7 @@ class ProductApiClient {
         'page': '$page',
         'limit': '$limit',
         if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
-        'categoryId': ?categoryId,
+        if (categoryId != null && categoryId.trim().isNotEmpty) 'categoryId': categoryId.trim(),
         if (subcategory != null && subcategory.trim().isNotEmpty)
           'subcategory': subcategory.trim(),
         if (sellerId != null && sellerId.trim().isNotEmpty)
