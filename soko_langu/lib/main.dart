@@ -42,7 +42,6 @@ import 'services/interstitial_ad_service.dart';
 import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/security_service.dart';
-import 'services/server_keep_alive.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
@@ -568,9 +567,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     // AI assistant
     AiService.initialize(GroqService());
 
-    // Payments backend lives on a Render free-tier box that sleeps after idle;
-    // keep it warm while the app is open so the first payment isn't a cold start.
-    ServerKeepAlive.instance.start();
   }
 
   // -----------------------------------------------------------------------
