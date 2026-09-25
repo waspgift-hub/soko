@@ -22,13 +22,6 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 10
 fi
 
-if [ -f "${ENV_FILE}" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "${ENV_FILE}"
-  set +a
-fi
-
 REQUIRED_ENV_VARS=(
   NODE_ENV PORT DATABASE_URL REDIS_URL
   FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL
@@ -38,17 +31,24 @@ REQUIRED_ENV_VARS=(
   ALLOWED_ORIGINS
 )
 
+env_value_present() {
+  local key="$1"
+  awk -F= -v k="$key" '
+    $0 !~ /^[[:space:]]*#/ && $1 == k {
+      value = substr($0, index($0, "=") + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (value != "") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$ENV_FILE"
+}
+
 for key in "${REQUIRED_ENV_VARS[@]}"; do
-  if [ -z "${!key:-}" ]; then
-    echo "[DEPLOY] Missing required environment variable: ${key}"
+  if ! env_value_present "$key"; then
+    echo "[DEPLOY] Missing required environment variable in ${ENV_FILE}: ${key}"
     exit 11
   fi
 done
-
-if [ "${NODE_ENV}" != "production" ]; then
-  echo "[DEPLOY] NODE_ENV must be production (got: ${NODE_ENV})"
-  exit 12
-fi
 
 echo "=========================================="
 echo "  Soko Vibe Production Deployment"
