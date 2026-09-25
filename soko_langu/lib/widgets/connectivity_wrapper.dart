@@ -1,133 +1,217 @@
 import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../services/api_config.dart';
-import '../widgets/soko_vibe_loading.dart';
-import '../extensions/context_tr.dart';
 
+import '../extensions/context_tr.dart';
+import '../services/api_config.dart';
+
+/// App-wide network status surface.
+/// Network loss never freezes the marketplace; server-dependent actions can
+/// fail normally while already-rendered UI stays usable.
 class ConnectivityWrapper extends StatefulWidget {
   final Widget child;
-  const ConnectivityWrapper({super.key, required this.child});
+
+  const ConnectivityWrapper({
+    super.key,
+    required this.child,
+  });
 
   @override
   State<ConnectivityWrapper> createState() => _ConnectivityWrapperState();
 }
 
 class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
-  bool _offline = false;
-  bool _initialized = false;
-  Timer? _retryTimer;
-  int _retryCount = 0;
+  StreamSubscription<List<ConnectivityResult>>? _subscription;
+  Timer? _healthDebounce;
+  bool _hasNetwork = true;
+  bool _serverReachable = true;
+  bool _checking = false;
+
+  bool get _offline => !_hasNetwork || !_serverReachable;
 
   @override
   void initState() {
     super.initState();
-    _checkServer();
+    _listenToConnectivity();
+    unawaited(_refreshNetworkState());
   }
 
-  Future<void> _checkServer() async {
-    final reachable = await _isServerReachable();
-    if (!mounted) return;
-    setState(() {
-      _offline = !reachable;
-      _initialized = true;
-    });
-    if (!reachable) {
-      _startRetryTimer();
-    } else {
-      _retryTimer?.cancel();
-      _retryCount = 0;
-    }
-  }
+  void _listenToConnectivity() {
+    _subscription = Connectivity().onConnectivityChanged.listen((results) {
+      final connected =
+          results.any((result) => result != ConnectivityResult.none);
 
-  void _startRetryTimer() {
-    _retryTimer?.cancel();
-    _//retryTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      final reachable = await _isServerReachable();
       if (!mounted) return;
-      if (reachable) {
-        _retryTimer?.cancel();
-        setState(() {
-          _offline = false;
-          _retryCount = 0;
-        });
+      setState(() => _hasNetwork = connected);
+
+      if (connected) {
+        _scheduleHealthCheck();
       } else {
-        setState(() {
-          _retryCount++;
-        });
+        _healthDebounce?.cancel();
+        setState(() => _serverReachable = false);
       }
     });
   }
 
-  Future<bool> _isServerReachable() async {
+  Future<void> _refreshNetworkState() async {
     try {
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/health'),
-      ).timeout(const Duration(seconds: 5));
-      return resp.statusCode < 600;
+      final results = await Connectivity().checkConnectivity();
+      final connected =
+          results.any((result) => result != ConnectivityResult.none);
+
+      if (!mounted) return;
+      setState(() => _hasNetwork = connected);
+
+      if (connected) {
+        await _checkServer();
+      } else {
+        setState(() => _serverReachable = false);
+      }
     } catch (_) {
-      return false;
+      // Advisory only.
     }
   }
 
-  String _getDynamicMessage() {
-    if (_retryCount == 0) {
-      return context.tr('connection_lost', 'Connection lost. Reconnecting...');
-    } else if (_retryCount < 3) {
-      return context.tr('still_connecting', 'Still trying to connect...');
-    } else if (_//retryCount < 6) {
-      return context.tr('network_unstable', 'Network unstable. Please check your settings.');
-    } else {
-      return context.tr('connection_timeout', 'Connection timeout. We are still trying...');
+  void _scheduleHealthCheck() {
+    _healthDebounce?.cancel();
+    _healthDebounce = Timer(
+      const Duration(milliseconds: 500),
+      () => unawaited(_checkServer()),
+    );
+  }
+
+  Future<void> _checkServer() async {
+    if (!mounted || !_hasNetwork || _checking) return;
+
+    setState(() => _checking = true);
+
+    try {
+      final response = await http
+          .get(Uri.parse('${ApiConfig.baseUrl}/health'))
+          .timeout(const Duration(seconds: 5));
+
+      if (!mounted) return;
+      setState(() {
+        _serverReachable =
+            response.statusCode >= 200 && response.statusCode < 500;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _serverReachable = false);
+    } finally {
+      if (mounted) setState(() => _checking = false);
     }
   }
 
   @override
   void dispose() {
-    _retryTimer?.cancel();
+    _healthDebounce?.cancel();
+    _subscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_initialized || !_offline) return widget.child;
+    final cs = Theme.of(context).colorScheme;
 
     return Stack(
+      fit: StackFit.expand,
       children: [
-        AbsorbPointer(
-          child: Opacity(
-            opacity: 0.6, 
-            child: widget.child,
-          ),
-        ),
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SokoVibeLoading(size: 60),
-              const SizedBox(height: 16),
-              Text(
-                _getDynamicMessage(),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.primary,
-                  letterSpacing: 0.5,
+        widget.child,
+        IgnorePointer(
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            offset: _offline ? Offset.zero : const Offset(0, -1.2),
+            child: SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: _NetworkBanner(
+                  checking: _checking,
+                  hasNetwork: _hasNetwork,
+                  colorScheme: cs,
+                  onRetry: _checkServer,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                context.tr('please_stay_on_screen', 'Please stay on this screen'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _NetworkBanner extends StatelessWidget {
+  final bool checking;
+  final bool hasNetwork;
+  final ColorScheme colorScheme;
+  final VoidCallback onRetry;
+
+  const _NetworkBanner({
+    required this.checking,
+    required this.hasNetwork,
+    required this.colorScheme,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.inverseSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (checking)
+            SizedBox(
+              width: 15,
+              height: 15,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.8,
+                color: colorScheme.onInverseSurface,
+              ),
+            )
+          else
+            Icon(
+              hasNetwork ? Icons.cloud_off_outlined : Icons.wifi_off_rounded,
+              size: 17,
+              color: colorScheme.onInverseSurface,
+            ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              hasNetwork
+                  ? context.tr(
+                      'server_unavailable',
+                      'Network is available, but Soko Vibe is temporarily unavailable.',
+                    )
+                  : context.tr(
+                      'connection_lost',
+                      'You are offline. Some actions need an internet connection.',
+                    ),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onInverseSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          if (hasNetwork)
+            TextButton(
+              onPressed: onRetry,
+              child: Text(context.tr('retry', 'Retry')),
+            ),
+        ],
+      ),
     );
   }
 }
