@@ -41,18 +41,14 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
   const prisma = getPrisma();
   const wallet = await getWallet(sellerId);
 
-  const account = await prisma.ledgerAccount.findFirst({
-    where: { userId: sellerId, accountName: 'USER_WALLET' },
-  });
-
   const [ledger, total] = await Promise.all([
-    prisma.ledgerEntry.findMany({
-      where: { accountId: account?.id },
+    prisma.walletLedgerEntry.findMany({
+      where: { walletId: wallet.id },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.ledgerEntry.count({ where: { accountId: account?.id } }),
+    prisma.walletLedgerEntry.count({ where: { walletId: wallet.id } }),
   ]);
 
   return {
@@ -114,7 +110,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
       });
 
       await ledgerService.updateWalletBalance({
-        userId: sellerId,
+        sellerId,
         amount: -amount,
         type: ledgerService.LEDGER_TYPES.WITHDRAWAL_DEBITED,
         referenceType: 'withdrawal',
@@ -227,8 +223,8 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
 
   try {
     return await db.$transaction(async (tx) => {
-      const prior = await tx.ledgerEntry.findFirst({
-        where: { referenceType: 'legacy_balance', referenceId: sellerId },
+      const prior = await tx.walletLedgerEntry.findUnique({
+        where: { idempotencyKey: `legacy_balance_${sellerId}` },
       });
       if (prior) return { alreadyMigrated: true, sellerId };
 
