@@ -73,7 +73,7 @@ class WalletApiClient {
           headers: await _headers(contentType: true),
           body: jsonEncode({
             'amount': amount,
-            'phoneNumber': ?phoneNumber,
+            if (phoneNumber != null && phoneNumber.trim().isNotEmpty) 'phoneNumber': phoneNumber.trim(),
           }),
         )
         .timeout(const Duration(seconds: 15));
