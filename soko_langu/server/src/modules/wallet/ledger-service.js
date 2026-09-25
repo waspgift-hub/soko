@@ -1,5 +1,11 @@
 const { getPrisma } = require('../../config/database');
 
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 /**
  * Financial Ledger Service (V3 Implementation)
  * 
@@ -46,10 +52,13 @@ async function updateWalletBalance({
     if (!idempotencyKey) throw httpError(400, 'IDEMPOTENCY_KEY_REQUIRED');
 
     // 2. Fetch/Create Wallet
-    let wallet = await tx.wallet.findUnique({ where: { sellerId: sellerId || userId } });
+    const sid = sellerId || userId;
+    if (!sid) throw httpError(400, 'SELLER_ID_REQUIRED');
+
+    let wallet = await tx.wallet.findUnique({ where: { sellerId: sid } });
 
     if (!wallet) {
-      wallet = await tx.wallet.create({ data: { sellerId: sellerId || userId } });
+      wallet = await tx.wallet.create({ data: { sellerId: sid } });
     }
 
     // 3. Calculate with exact BigInt arithmetic; TZS must never pass through JS Number.
