@@ -111,11 +111,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
       height: 180,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [cs.primary.withValues(alpha: 0.05), cs.surfaceContainerLow],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: cs.surfaceContainerLow,
       ),
       child: Center(
         child: Column(
