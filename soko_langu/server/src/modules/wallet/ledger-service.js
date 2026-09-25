@@ -38,7 +38,12 @@ async function updateWalletBalance({
     const existingEntry = await tx.walletLedgerEntry.findUnique({
       where: { idempotencyKey },
     });
-    if (existingEntry) return existingEntry;
+    if (existingEntry) {
+      const existingWallet = await tx.wallet.findUnique({ where: { id: existingEntry.walletId } });
+      return { wallet: existingWallet, entry: existingEntry, alreadyApplied: true };
+    }
+
+    if (!idempotencyKey) throw httpError(400, 'IDEMPOTENCY_KEY_REQUIRED');
 
     // 2. Fetch/Create Wallet
     let wallet = await tx.wallet.findUnique({ where: { sellerId: sellerId || userId } });
@@ -47,23 +52,24 @@ async function updateWalletBalance({
       wallet = await tx.wallet.create({ data: { sellerId: sellerId || userId } });
     }
 
-    // 3. Calculate new balance
-    const newBalance = Number(wallet.availableBalance) + Number(amount);
-    if (newBalance < 0) {
-      throw new Error(`Insufficient funds in wallet for user ${userId}`);
+    // 3. Calculate with exact BigInt arithmetic; TZS must never pass through JS Number.
+    const delta = BigInt(amount);
+    const newBalance = wallet.availableBalance + delta;
+    if (newBalance < 0n) {
+      throw new Error(`Insufficient funds in wallet for seller ${sellerId || userId}`);
     }
 
     // 4. Update Wallet
     const updatedWallet = await tx.wallet.update({
       where: { id: wallet.id },
-      data: { availableBalance: newBalance, updatedAt: new Date() },
+      data: { availableBalance: newBalance },
     });
 
     const entry = await tx.walletLedgerEntry.create({
       data: {
         walletId: wallet.id,
         type,
-        amount: BigInt(amount),
+        amount: delta,
         balanceAfter: updatedWallet.availableBalance,
         referenceType: referenceType || null,
         referenceId: referenceId || null,
@@ -75,7 +81,6 @@ async function updateWalletBalance({
     return { wallet: updatedWallet, entry };
   };
   return providedTx ? work(providedTx) : prisma.$transaction(work);
-  });
 }
 
 /**
