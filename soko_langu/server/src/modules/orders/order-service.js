@@ -109,12 +109,12 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
 
     // V3 Guard: Enforce State Transition
     const osm = new OrderStateMachine(order.status);
-    if (!osm.canTransition(ORDER_STATES.PENDING_PAYMENT)) {
+    if (!osm.canTransition(ORDER_STATES.AWAITING_ESCROW_PAYMENT)) {
       throw new Error(`INVALID_STATE_TRANSITION: Cannot approve quote for order in state ${order.status}`);
     }
 
-    const shippingFee = order.shippingCost || 0;
-    const subtotal = Number(order.subtotal);
+    const shippingFee = order.shippingFee || 0n;
+    const subtotal = Number(order.productPrice);
     
     // V3 Rule: Platform commission is calculated server-side
     const { commission, totalAmount } = computeSellerParity(subtotal, shippingFee);
@@ -122,11 +122,10 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {
-        status: ORDER_STATES.PENDING_PAYMENT,
-        shippingCost: shippingFee,
-        platformFee: commission,
-        total: totalAmount,
-        escrowAmount: totalAmount, // Full amount held in escrow
+        status: ORDER_STATES.AWAITING_ESCROW_PAYMENT,
+        shippingFee: BigInt(shippingFee),
+        platformCommission: BigInt(commission),
+        totalAmount: BigInt(totalAmount),
       },
     });
 
@@ -152,16 +151,16 @@ async function initiatePayment({ orderId, buyerId, provider }) {
       data: {
         orderId,
         provider,
-        amount: order.total, // Strictly use server-calculated total
+        amount: order.totalAmount, // Strictly use server-calculated total
         currency: order.currency,
         status: 'pending',
-        idempotencyKey: `pay_${orderId}_${Date.now()}`,
+        idempotencyKey: `pay_${orderId}`,
       },
     });
 
     await tx.order.update({
       where: { id: orderId },
-      data: { status: ORDER_STATES.PAYMENT_PROCESSING },
+      data: { status: ORDER_STATES.PAYMENT_PROCESSING, statusChangedBy: buyerId },
     });
 
     return payment;
@@ -172,84 +171,116 @@ async function initiatePayment({ orderId, buyerId, provider }) {
  * V3 Webhook Handler with Ledger Writes
  * Logic: Payment success -> Ledger Entry -> Order state: ESCROW_HELD
  */
-async function verifyPayment({ paymentId, providerPaymentId }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const payment = await tx.payment.findUnique({
-      where: { id: paymentId },
-      include: { order: true },
-    });
-
-    if (!payment || payment.status !== 'pending') {
-      throw new Error('PAYMENT_NOT_FOUND_OR_PROCESSED');
-    }
-
-    // 1. Update Payment status
-    const updatedPayment = await tx.payment.update({
-      where: { id: paymentId },
-      data: { status: 'completed', providerTransId: providerPaymentId, confirmedAt: new Date() },
-    });
-
-    // 2. Move Order to ESCROW_HELD
-    const updatedOrder = await tx.order.update({
-      where: { id: payment.orderId },
-      data: { status: ORDER_STATES.ESCROW_HELD },
-    });
-
-    // 3. Financial Truth: Create Ledger Entry for the Escrow Pool
-    // We assume an internal account 'ESCROW_POOL' exists
-    const escrowAccount = await tx.ledgerAccount.findFirst({
-      where: { accountName: 'ESCROW_POOL' },
-    });
-
-    if (escrowAccount) {
-      await tx.ledgerEntry.create({
-        data: {
-          accountId: escrowAccount.id,
-          transactionId: payment.id,
-          direction: 'CREDIT',
-          amount: payment.amount,
-          referenceType: 'ORDER_PAYMENT',
-          referenceId: payment.orderId,
-        },
-      });
-    }
-
-    return { payment: updatedPayment, order: updatedOrder };
+async function verifyPayment({ paymentId, providerPaymentId, orderReference }) {
+  const { confirmCollection } = require('../payments/payment-service');
+  return confirmCollection({
+    paymentId,
+    providerPaymentId,
+    orderReference,
+    force: false,
   });
 }
 
-async function completeOrder({ orderId, actorId, method }) {
+async function completeOrder({ orderId, actorId = 'system', method = 'AUTO_RELEASE' }) {
   const prisma = getPrisma();
-  
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw new Error('ORDER_NOT_FOUND');
 
-    if (![ORDER_STATES.DELIVERY_CONFIRMED, ORDER_STATES.OTP_PENDING].includes(order.status)) {
-      throw new Error('INVALID_STATE_FOR_COMPLETION');
+    if ([ORDER_STATES.COMPLETED, ORDER_STATES.WALLET_CREDITED, ORDER_STATES.PAYOUT_PENDING, ORDER_STATES.PAYOUT_COMPLETE].includes(order.status)) {
+      return order;
     }
 
-    // 1. Update Order to COMPLETED
-    const updatedOrder = await tx.order.update({
+    const eligible = method === 'AUTO_RELEASE'
+      ? [ORDER_STATES.DELIVERED, ORDER_STATES.INSPECTION_PERIOD, ORDER_STATES.OTP_PENDING, ORDER_STATES.DELIVERY_CONFIRMED]
+      : [ORDER_STATES.OTP_PENDING, ORDER_STATES.INSPECTION_PERIOD, ORDER_STATES.DELIVERY_CONFIRMED];
+
+    if (!eligible.includes(order.status)) throw new Error('INVALID_STATE_FOR_COMPLETION');
+
+    const updated = await tx.order.update({
       where: { id: orderId },
-      data: { status: ORDER_STATES.COMPLETED, updatedAt: new Date() },
+      data: {
+        status: ORDER_STATES.COMPLETED,
+        completedAt: new Date(),
+        statusChangedBy: actorId,
+      },
     });
 
-    // 2. Ledger Settlement: Escrow Pool -> Seller Wallet
-    const sellerEntitlement = Number(order.total) - Number(order.platformFee);
-    
-    // Use the new ledger-service for atomic update
-    await settleEscrowToSeller({
-      orderId: order.id,
-      sellerId: order.sellerId,
-      amount: sellerEntitlement,
-      idempotencyKey: `settle_${order.id}`,
-    });
-
-    return updatedOrder;
+    await releaseEscrowAndSettle(tx, order);
+    await syncLegacyOrderStatus({ ...order, ...updated });
+    return updated;
   });
+}
+
+async function submitShippingQuote(args) {
+  return submitQuote(args);
+}
+
+async function markDispatched({ orderId, actorId, shippingMethod, courierName, trackingNumber, estimatedDelivery }) {
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+    if (order.sellerId !== actorId) throw httpError(403, 'FORBIDDEN');
+
+    const machine = new OrderStateMachine(order.status);
+    machine.transition(ORDER_STATES.DISPATCHED, {
+      actor: 'seller',
+      actorId,
+      reason: 'Seller dispatched order',
+    });
+
+    return tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: ORDER_STATES.DISPATCHED,
+        shippingMethod: shippingMethod || null,
+        courierName: courierName || null,
+        trackingNumber: trackingNumber || null,
+        estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : null,
+        dispatchedAt: new Date(),
+        statusChangedBy: actorId,
+      },
+    });
+  });
+}
+
+async function markDelivered({ orderId, actorId }) {
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+    if (order.buyerId !== actorId && order.sellerId !== actorId) {
+      throw httpError(403, 'FORBIDDEN');
+    }
+
+    const actor = actorId === order.buyerId ? 'buyer' : 'seller';
+    const machine = new OrderStateMachine(order.status);
+    machine.transition(ORDER_STATES.DELIVERED, {
+      actor,
+      actorId,
+      reason: 'Delivery marked delivered',
+    });
+
+    return tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: ORDER_STATES.INSPECTION_PERIOD,
+        deliveredAt: new Date(),
+        statusChangedBy: actorId,
+      },
+    });
+  });
+}
+
+async function cancelOrder({ orderId, actorId, role = 'buyer', reason }) {
+  const { refundOnCancel } = require('../refunds/refund-service');
+  return refundOnCancel({ orderId, actorId, role, reason });
+}
+
+async function disputeOrder({ orderId, filedBy, role, reason, description }) {
+  const { fileDispute } = require('../disputes/dispute-service');
+  return fileDispute({ orderId, filedBy, role, reason, description });
 }
 
 module.exports = {
