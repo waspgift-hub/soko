@@ -8,7 +8,6 @@ import '../../services/rating_service.dart';
 import '../../models/product_model.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/glass_container.dart'; // ignore: unused_import
 import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
