@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Color;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:ui' show Color;
 
 class LocalNotificationService {
   static final LocalNotificationService _instance =
