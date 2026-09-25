@@ -150,6 +150,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget _buildGlassNavBar(ColorScheme cs) {
     final navBg = cs.surfaceContainerLow;
     final navBorder = cs.outlineVariant.withValues(alpha: 0.65);
+    final isDark = cs.brightness == Brightness.dark;
     // Lift the bar above the Android gesture/navigation bar (edge-to-edge
     // is enforced at targetSdk 36); MediaQuery.padding.bottom is 0 on
     // legacy devices, so this is safe on both.
@@ -168,8 +169,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+                  blurRadius: 18,
+                  offset: const Offset(0, 7),
                 ),
               ],
             ),
