@@ -22,32 +22,29 @@ const LEDGER_TYPES = {
  * Updates the wallet balance and creates a ledger entry in a single transaction.
  */
 async function updateWalletBalance({
+  sellerId,
   userId,
-  amount, // Positive for credit, negative for debit
+  amount,
   type,
   referenceType,
   referenceId,
   idempotencyKey,
   description,
+  tx: providedTx,
 }) {
   const prisma = getPrisma();
-
-  return prisma.$transaction(async (tx) => {
+  const work = async (tx) => {
     // 1. Idempotency Check
-    const existingEntry = await tx.ledgerEntry.findUnique({
-      where: { id: idempotencyKey }, // Using the idempotency key as the entry ID for simplicity
+    const existingEntry = await tx.walletLedgerEntry.findUnique({
+      where: { idempotencyKey },
     });
     if (existingEntry) return existingEntry;
 
     // 2. Fetch/Create Wallet
-    let wallet = await tx.wallet.findUnique({
-      where: { ownerId: userId },
-    });
+    let wallet = await tx.wallet.findUnique({ where: { sellerId: sellerId || userId } });
 
     if (!wallet) {
-      wallet = await tx.wallet.create({
-        data: { ownerId: userId, availableBalance: 0 },
-      });
+      wallet = await tx.wallet.create({ data: { sellerId: sellerId || userId } });
     }
 
     // 3. Calculate new balance
@@ -62,32 +59,22 @@ async function updateWalletBalance({
       data: { availableBalance: newBalance, updatedAt: new Date() },
     });
 
-    // 5. Create Ledger Entry
-    // We need a LedgerAccount for the user
-    let account = await tx.ledgerAccount.findFirst({
-      where: { userId, accountName: 'USER_WALLET' },
-    });
-
-    if (!account) {
-      account = await tx.ledgerAccount.create({
-        data: { userId, accountName: 'USER_WALLET', type: 'ASSET' },
-      });
-    }
-
-    const entry = await tx.ledgerEntry.create({
+    const entry = await tx.walletLedgerEntry.create({
       data: {
-        id: idempotencyKey,
-        accountId: account.id,
-        transactionId: referenceId,
-        direction: amount > 0 ? 'CREDIT' : 'DEBIT',
-        amount: Math.abs(amount),
-        referenceType,
-        referenceId,
-        createdAt: new Date(),
+        walletId: wallet.id,
+        type,
+        amount: BigInt(amount),
+        balanceAfter: updatedWallet.availableBalance,
+        referenceType: referenceType || null,
+        referenceId: referenceId || null,
+        idempotencyKey,
+        description: description || null,
       },
     });
 
     return { wallet: updatedWallet, entry };
+  };
+  return providedTx ? work(providedTx) : prisma.$transaction(work);
   });
 }
 
@@ -95,42 +82,16 @@ async function updateWalletBalance({
  * Escrow Settlement
  * Moves funds from Escrow account to Seller Wallet.
  */
-async function settleEscrowToSeller({
-  orderId,
-  sellerId,
-  amount,
-  idempotencyKey,
-}) {
-  const prisma = getPrisma();
-
-  return prisma.$transaction(async (tx) => {
-    // 1. Debit from Escrow Pool (Internal Account)
-    const escrowAccount = await tx.ledgerAccount.findFirst({
-      where: { accountName: 'ESCROW_POOL' },
-    });
-
-    if (!escrowAccount) throw new Error('Escrow pool account not found');
-
-    await tx.ledgerEntry.create({
-      data: {
-        accountId: escrowAccount.id,
-        transactionId: orderId,
-        direction: 'DEBIT',
-        amount,
-        referenceType: 'SETTLEMENT',
-        referenceId: orderId,
-      },
-    });
-
-    // 2. Credit to Seller Wallet
-    return updateWalletBalance({
-      userId: sellerId,
-      amount,
-      type: LEDGER_TYPES.SETTLEMENT_CREDITED,
-      referenceType: 'SETTLEMENT',
-      referenceId: orderId,
-      idempotencyKey,
-    });
+async function settleEscrowToSeller({ orderId, sellerId, amount, idempotencyKey = `settlement_${orderId}`, tx }) {
+  return updateWalletBalance({
+    sellerId,
+    amount: BigInt(amount),
+    type: LEDGER_TYPES.SETTLEMENT_CREDITED,
+    referenceType: 'order',
+    referenceId: orderId,
+    idempotencyKey,
+    description: 'Order settlement from escrow release',
+    tx,
   });
 }
 
