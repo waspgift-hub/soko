@@ -116,7 +116,7 @@ async function confirmCollection({
         result = { status: 'ALREADY_IN_ESCROW', order };
         return;
       }
-      if (![ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
+      if (![ORDER_STATES.PAYMENT_PENDING, ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
@@ -132,16 +132,32 @@ async function confirmCollection({
         }
       }
 
+      if (amount != null && !sameAmount(payment.amount, amount)) {
+        throw httpError(400, 'AMOUNT_MISMATCH');
+      }
+
+      // A unique payment/escrow relation plus the surrounding DB transaction
+      // makes the webhook idempotent even when ClickPesa retries delivery.
+      const existingHold = await tx.escrowHold.findUnique({
+        where: { paymentId: payment.id },
+      });
+      if (existingHold) {
+        const currentOrder = await tx.order.findUnique({ where: { id: order.id } });
+        result = { status: 'ALREADY_IN_ESCROW', order: currentOrder, escrowHold: existingHold };
+        return;
+      }
+
+      const verifiedAt = new Date();
       await tx.payment.update({
         where: { id: payment.id },
         data: {
           status: 'completed',
           providerPaymentId: providerPaymentId || payment.providerReference,
-          verifiedAt: new Date(),
+          verifiedAt,
+          webhookReceivedAt: verifiedAt,
         },
       });
 
-      // Create escrow hold
       const escrowHold = await tx.escrowHold.create({
         data: {
           orderId: order.id,
@@ -159,24 +175,22 @@ async function confirmCollection({
 
       const updatedOrder = await tx.order.update({
         where: { id: order.id },
-        data: { status: ORDER_STATES.ESCROW_HELD, paidAt: new Date() },
-      });
-
-      // Ledger: buyer -> escrow
-      const escrowAccount = await tx.ledgerAccount.findFirst({
-        where: { accountName: 'ESCROW_POOL' },
-      });
-
-      if (!escrowAccount) throw new Error('ESCROW_POOL_ACCOUNT_MISSING');
-
-      await tx.ledgerEntry.create({
         data: {
-          accountId: escrowAccount.id,
-          transactionId: payment.id,
-          direction: 'CREDIT',
+          status: ORDER_STATES.ESCROW_HELD,
+          paidAt: verifiedAt,
+          statusChangedAt: verifiedAt,
+        },
+      });
+
+      // Current production schema records held funds through EscrowHold and
+      // EscrowTransaction. There is no legacy LedgerAccount/LedgerEntry model
+      // in this Prisma database.
+      await tx.escrowTransaction.create({
+        data: {
+          escrowHoldId: escrowHold.id,
+          type: 'PAYMENT_RECEIVED',
           amount: payment.amount,
-          referenceType: 'ORDER_PAYMENT',
-          referenceId: payment.orderId,
+          referenceId: payment.id,
         },
       });
 
