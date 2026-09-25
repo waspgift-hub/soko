@@ -1,38 +1,45 @@
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../main.dart';
-import '../../extensions/context_tr.dart';
-import '../../models/category_model.dart';
-import '../../models/product_model.dart';
-import '../../services/product_service.dart';
-import '../../services/flash_sale_service.dart';
-import '../../models/flash_sale_model.dart';
-import '../../widgets/product_card.dart';
+
 import '../../app/routes.dart';
+import '../../extensions/context_tr.dart';
+import '../../main.dart';
+import '../../models/category_model.dart';
+import '../../models/flash_sale_model.dart';
+import '../../models/product_model.dart';
+import '../../services/flash_sale_service.dart';
+import '../../services/product_service.dart';
 import '../../theme/app_dimens.dart';
-import '../../widgets/google_loading.dart';
-import '../../widgets/ad_banner.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/ad_banner.dart';
+import '../../widgets/google_loading.dart';
+import '../../widgets/product_card.dart';
 
 class CategoryProductsScreen extends StatefulWidget {
   final Category category;
-  const CategoryProductsScreen({super.key, required this.category});
+
+  const CategoryProductsScreen({
+    super.key,
+    required this.category,
+  });
 
   @override
-  State<CategoryProductsScreen> createState() => _CategoryProductsScreenState();
+  State<CategoryProductsScreen> createState() =>
+      _CategoryProductsScreenState();
 }
 
 class _CategoryProductsScreenState extends State<CategoryProductsScreen>
     with WidgetsBindingObserver {
-
   final _productService = ProductService();
   final _flashSaleService = FlashSaleService();
+
   String? _selectedSubcategory;
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
-  int _flashRefreshKey = 0;
-
+  int _refreshKey = 0;
 
   @override
   void initState() {
@@ -43,14 +50,15 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
 
   void _subscribeFlashSales() {
     _flashSub?.cancel();
-    final now = DateTime.now();
-    _flashSub = _flashSaleService.getActiveFlashSalesMapAtNow(now).listen(
-      (map) {
-        if (mounted) setState(() => _flashSales = map);
-      },
-    );
+    _flashSub = _flashSaleService
+        .getActiveFlashSalesMapAtNow(DateTime.now())
+        .listen(
+          (map) {
+            if (mounted) setState(() => _flashSales = map);
+          },
+          onError: (_) {},
+        );
   }
-
 
   @override
   void dispose() {
@@ -62,90 +70,89 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      setState(() => _flashRefreshKey++);
+      setState(() => _refreshKey++);
       _subscribeFlashSales();
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final hasSubcategories = widget.category.subcategories.isNotEmpty;
+    final cs = Theme.of(context).colorScheme;
+    final config = AppConfig.of(context);
+    final title =
+        config.langCode == 'en' ? widget.category.name : widget.category.nameSw;
+    final subtitle =
+        config.langCode == 'en' ? widget.category.nameSw : widget.category.name;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        titleSpacing: 0,
+        title: Row(
           children: [
-            Text(widget.category.nameSw, style: const TextStyle(fontSize: 16)),
-            Text(
-              widget.category.name,
-              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                categoryIconFor(widget.category.icon),
+                color: cs.primary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
       bottomNavigationBar: const AdBanner(),
       body: SafeArea(
+        bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (hasSubcategories) _buildSubcategoryChips(),
-            Expanded(child: _buildProductsGrid()),
+            if (widget.category.subcategories.isNotEmpty)
+              _SubcategoryBar(
+                category: widget.category,
+                selected: _selectedSubcategory,
+                onSelected: (value) =>
+                    setState(() => _selectedSubcategory = value),
+              ),
+            Expanded(
+              child: KeyedSubtree(
+                key: ValueKey(
+                  '${_selectedSubcategory ?? 'all'}-$_refreshKey',
+                ),
+                child: _buildProductsGrid(),
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSubcategoryChips() {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: widget.category.subcategories.length + 1,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Container(
-              margin: const EdgeInsets.only(right: 8, top: 10, bottom: 10),
-              child: ChoiceChip(
-                label: Text(
-                  _selectedSubcategory == null ? '✓' : context.tr('all'),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                selected: _selectedSubcategory == null,
-                onSelected: (_) => setState(() => _selectedSubcategory = null),
-              ),
-            );
-          }
-          final sub = widget.category.subcategories[index - 1];
-          final isSelected = _selectedSubcategory == sub.name;
-          final config = AppConfig.of(context);
-          return Container(
-            margin: const EdgeInsets.only(right: 8, top: 10, bottom: 10),
-            child: ChoiceChip(
-              label: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    config.langCode == 'en' ? sub.name : sub.nameSw,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  if (isSelected) const SizedBox(width: 4),
-                  if (isSelected)
-                    Text(
-                      '✓',
-                      style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                ],
-              ),
-              selected: isSelected,
-              onSelected: (_) =>
-                  setState(() => _selectedSubcategory = sub.name),
-            ),
-          );
-        },
       ),
     );
   }
@@ -164,60 +171,160 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const GoogleLoadingPage();
         }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).padding.bottom + 20,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.shopping_bag_outlined,
-                    size: 64,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    context.tr('no_products_category'),
-                    style: TextStyle(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
+
+        final products = snapshot.data ?? [];
+        if (products.isEmpty) {
+          return _EmptyCategoryProducts(category: widget.category);
         }
 
-        final products = snapshot.data!;
-        return GridView.builder(
-          padding: const EdgeInsets.all(AppInsets.md),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: Responsive.gridColumns(context),
-            crossAxisSpacing: AppInsets.md,
-            mainAxisSpacing: AppInsets.md,
-            childAspectRatio: Responsive.cardAspectRatio(context),
-          ),
-          itemCount: products.length,
-          itemBuilder: (context, index) {
-            return ProductCard(
-              product: products[index],
-              flashSale: _flashSales[products[index].id],
-              onTap: () => context.push(
-                '${AppRoutes.productDetail}/${products[index].id}',
-                extra: products[index],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 1200
+                ? 5
+                : constraints.maxWidth >= 900
+                    ? 4
+                    : Responsive.gridColumns(context);
+
+            return GridView.builder(
+              padding: const EdgeInsets.fromLTRB(
+                AppInsets.lg,
+                AppInsets.md,
+                AppInsets.lg,
+                AppInsets.xxl,
               ),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: AppInsets.md,
+                mainAxisSpacing: AppInsets.md,
+                childAspectRatio: 0.70,
+              ),
+              itemCount: products.length,
+              itemBuilder: (context, index) {
+                final product = products[index];
+                return ProductCard(
+                  product: product,
+                  flashSale: _flashSales[product.id],
+                  onTap: () => context.push(
+                    '${AppRoutes.productDetail}/${product.id}',
+                    extra: product,
+                  ),
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+}
+
+class _SubcategoryBar extends StatelessWidget {
+  final Category category;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  const _SubcategoryBar({
+    required this.category,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final config = AppConfig.of(context);
+
+    return Container(
+      height: 70,
+      padding: const EdgeInsets.only(top: 9, bottom: 9),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+        scrollDirection: Axis.horizontal,
+        itemCount: category.subcategories.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final isAll = index == 0;
+          final sub = isAll ? null : category.subcategories[index - 1];
+          final value = sub?.name;
+          final selectedNow = selected == value;
+          final label = isAll
+              ? context.tr('all')
+              : config.langCode == 'en'
+                  ? sub!.name
+                  : sub!.nameSw;
+
+          return ChoiceChip(
+            selected: selectedNow,
+            onSelected: (_) => onSelected(value),
+            avatar: Icon(
+              isAll
+                  ? Icons.grid_view_rounded
+                  : Icons.arrow_forward_rounded,
+              size: 15,
+              color: selectedNow ? cs.onPrimary : cs.onSurfaceVariant,
+            ),
+            label: Text(label),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyCategoryProducts extends StatelessWidget {
+  final Category category;
+
+  const _EmptyCategoryProducts({
+    required this.category,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final config = AppConfig.of(context);
+    final name =
+        config.langCode == 'en' ? category.name : category.nameSw;
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppInsets.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(
+                categoryIconFor(category.icon),
+                size: 36,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              context.tr('no_products_category'),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
