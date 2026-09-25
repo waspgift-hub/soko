@@ -265,9 +265,9 @@ class _HomeScreenState extends State<HomeScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0.12), cs.primary.withValues(alpha: 0.04)]),
+            color: cs.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.20)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -454,8 +454,11 @@ class _HomeScreenState extends State<HomeScreen>
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
-              // Animated gradient line at top
-              const AnimatedGradientLine(height: 3),
+              const SizedBox(height: AppInsets.sm),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                child: Divider(color: cs.outlineVariant, height: 1),
+              ),
               const SizedBox(height: AppInsets.md),
               // Premium search bar
               Padding(
@@ -465,14 +468,7 @@ class _HomeScreenState extends State<HomeScreen>
                     color: cs.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.2 : 0.05),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+                                      ),
                   child: TextField(
                     controller: _searchCtrl,
                     readOnly: true,
