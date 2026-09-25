@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'app_transitions.dart';
 import '../models/product_model.dart';
+import '../models/category_model.dart';
 import '../screens/auth/auth_gate.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
@@ -65,6 +66,7 @@ import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 import '../repositories/product_repository.dart'; // Added for V3 API loading
+import '../services/category_service.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -256,7 +258,15 @@ GoRouter buildRouter() {
       GoRoute(
         path: '${AppRoutes.categoryProducts}/:name',
         pageBuilder: (context, state) {
-          return _premiumPage(CategoryProductsScreen(category: state.extra as dynamic));
+          final extra = state.extra;
+          if (extra is Category) {
+            return _premiumPage(CategoryProductsScreen(category: extra));
+          }
+          return _premiumPage(
+            _CategoryProductsLoader(
+              categoryName: state.pathParameters['name'] ?? '',
+            ),
+          );
         },
       ),
       GoRoute(
@@ -461,6 +471,56 @@ GoRouter buildRouter() {
       ),
     ],
   );
+}
+
+class _CategoryProductsLoader extends StatefulWidget {
+  const _CategoryProductsLoader({required this.categoryName});
+
+  final String categoryName;
+
+  @override
+  State<_CategoryProductsLoader> createState() => _CategoryProductsLoaderState();
+}
+
+class _CategoryProductsLoaderState extends State<_CategoryProductsLoader> {
+  late final Future<Category?> _future = _load();
+
+  Future<Category?> _load() async {
+    try {
+      final categories = await CategoryService().getCategories().first;
+      final target = widget.categoryName.trim().toLowerCase();
+      for (final category in categories) {
+        if (category.name.trim().toLowerCase() == target ||
+            category.nameSw.trim().toLowerCase() == target ||
+            category.id.trim().toLowerCase() == target) {
+          return category;
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Category Load Error: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Category?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final category = snapshot.data;
+        if (category != null) {
+          return CategoryProductsScreen(category: category);
+        }
+        return const _MissingRouteData();
+      },
+    );
+  }
 }
 
 class _MissingRouteData extends StatelessWidget {

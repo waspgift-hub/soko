@@ -64,6 +64,8 @@ class NotificationService {
     }
   }
 
+  Future<void> refreshUnreadCount() => _syncBadge();
+
   Future<void> initialize() async {
     try {
       if (!await isEnabled()) {
@@ -83,6 +85,7 @@ class NotificationService {
       // Initialize local notifications first for heads-up display
       await LocalNotificationService().initialize();
       LocalNotificationService.onTap = _handleLocalTap;
+      await LocalNotificationService().consumePendingTap();
 
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
@@ -90,9 +93,9 @@ class NotificationService {
       final perm = await OneSignal.Notifications.requestPermission(true);
       debugPrint('[OS] permission result: $perm');
       _pushDenied = !perm;
-      if (_pushDenied) {
-        // Push denied — mirror in-app notifications as heads-up via Firestore
-        // so critical events are still visible without push permission.
+      if (_pushDenied && !ApiConfig.kUseNotificationsApi) {
+        // Legacy fallback only. The migrated Postgres inbox must not be read
+        // from Firestore because it would silently miss current notifications.
         _startFirestoreFallback();
       } else {
         _fallbackSub?.cancel();
@@ -145,7 +148,7 @@ class NotificationService {
             if (user.email != null && user.email!.isNotEmpty) {
               OneSignal.User.addEmail(user.email!);
             }
-            if (_pushDenied) _startFirestoreFallback();
+            if (_pushDenied && !ApiConfig.kUseNotificationsApi) _startFirestoreFallback();
           } else {
             await OneSignal.logout();
             _fallbackSub?.cancel();

@@ -232,15 +232,8 @@ class OrderStatusBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.2),
-            color.withValues(alpha: 0.07),
-            cs.surface.withValues(alpha: 0.9),
-          ],
-        ),
+        color: cs.surfaceContainerLow,
+
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: color.withValues(alpha: 0.25)),
         boxShadow: [

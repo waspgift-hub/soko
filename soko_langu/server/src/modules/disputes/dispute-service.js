@@ -26,11 +26,11 @@ async function fileDispute({ orderId, filedBy, reason, description, role }) {
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+      const order = await tx.order.findUnique({ where: { id: orderId }, include: { seller: { select: { userId: true } } } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
       const isBuyer = order.buyerId === filedBy;
-      const isSeller = order.sellerId === filedBy;
+      const isSeller = order.seller?.userId === filedBy;
       if (!isBuyer && !isSeller) throw httpError(403, 'FORBIDDEN');
 
       // Validate reason belongs to the filer's allowed list

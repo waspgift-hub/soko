@@ -364,20 +364,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       height: 190,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [cs.primary.withValues(alpha: 0.18), cs.tertiary.withValues(alpha: 0.08)],
-        ),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Stack(
         children: [
@@ -400,14 +389,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    cs.surface.withValues(alpha: 0.85),
-                    cs.surface.withValues(alpha: 0.2),
-                  ],
-                ),
+                color: cs.surface.withValues(alpha: 0.54),
               ),
             ),
           ),

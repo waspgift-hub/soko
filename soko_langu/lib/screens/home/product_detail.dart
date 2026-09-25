@@ -226,9 +226,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (product.images.isNotEmpty)
-                Container(
+                SizedBox(
                   width: double.infinity,
-                  height: MediaQuery.of(context).size.width,
+                  height: (MediaQuery.of(context).size.width).clamp(280.0, 620.0),
                   child: Stack(
                     children: [
                       Hero(
@@ -264,23 +264,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           },
                         ),
                       ),
-                      // Bottom gradient overlay
+                      // Minimal image legibility scrim; the UI does not rely on
+                      // a large decorative gradient.
                       Positioned(
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        height: 80,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.5),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
+                        height: 44,
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.16),
                         ),
                       ),
                       // Dot indicators

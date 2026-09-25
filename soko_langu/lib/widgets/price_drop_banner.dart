@@ -88,11 +88,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.error.withValues(alpha: 0.9), cs.error.withValues(alpha: 0.7)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: cs.error,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,11 +134,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
   Widget _buildRightPanel(List<Map<String, dynamic>> drops, ColorScheme cs) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.error.withValues(alpha: 0.08), cs.surface],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
+        color: cs.surfaceContainerLow,
       ),
       child: Column(
         children: [

@@ -86,7 +86,7 @@ class ApiConfig {
   /// the media CDN edge). Objects live at `<r2PublicUrl>/<kind>/<key>`.
   /// Since `kUseMediaApi` stays OFF until the R2 media backfill, this base is
   /// unused by current production flows.
-  static const String r2PublicUrl = 'https://media.soko-vibe.co.tz';
+  static const String r2PublicUrl = 'https://media.sokovibe.co.tz';
 
   /// Phase D user-profile bridge switch: when true, the current user's profile
   /// read/write (/api/v1/users/me) and other users' public profiles

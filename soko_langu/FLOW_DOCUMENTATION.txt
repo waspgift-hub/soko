@@ -104,7 +104,7 @@ File: lib/main.dart (601 lines)
    - _initBackgroundServices: Crashlytics/Perf/AppCheck/AdMob/SecurityService/
      notificationService/ExchangeRateService/AiService.initialize(GroqService())
 8. App overlays (in build):
-   GradientBackground -> PremiumBackground -> ConnectivityWrapper ->
+   PremiumBackground -> ConnectivityWrapper ->
    MaintenanceGate -> AppLockOverlay -> TransactionStatusWatcher -> AgeGateDialog.
 9. AppConfig InheritedWidget propagates langCode + currencyCode (locales: en/sw/zh).
 
@@ -576,7 +576,7 @@ Files: lib/screens/kyc/kyc_screen.dart, lib/services/kyc_service.dart
 - Receipts: receipt_pdf_service.dart (/receipt) - PDF + printing.
 - App lock: app_lock_service.dart, app_lock_overlay.dart.
 - Maintenance gate + connectivity wrapper (network_sensitive_wrapper.dart).
-- Premium/glass UI widgets: glassmorphism_card, premium_background, etc.
+- Premium UI widgets: premium_background and shared design-system components.
 - Boost receipt card: boost_receipt_card.dart.
 
 ================================================================================

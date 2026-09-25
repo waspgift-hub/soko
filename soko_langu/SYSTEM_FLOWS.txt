@@ -86,7 +86,6 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   - Hive (local cache), shared_preferences
   - google_mobile_ads (AdMob: banner, interstitial, rewarded)
   - google_maps + geocoding + geolocator
-  - audio_service + just_audio (sauti/muziki)
   - image_picker, file_picker, mobile_scanner, qr, pdf/printing (receipt)
   - webview_flutter, share_plus, url_launcher, permission_handler
 

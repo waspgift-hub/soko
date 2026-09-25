@@ -129,7 +129,7 @@ const orderController = {
     const userId = req.user.id;
 
     const prisma = getPrisma();
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { seller: { select: { id: true, userId: true } } } });
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
@@ -174,6 +174,7 @@ const orderController = {
     const order = await orderService.markDispatched({
       orderId,
       sellerId,
+      actorId: sellerId,
       courierName,
       trackingNumber,
     });
@@ -186,7 +187,10 @@ const orderController = {
     const actorId = req.user.id;
 
     const prisma = getPrisma();
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { seller: { select: { id: true, userId: true } } },
+    });
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
@@ -204,7 +208,8 @@ const orderController = {
 
     const updatedOrder = await orderService.markDelivered({
       orderId,
-      actorId,
+      actorId: isSeller ? order.seller.id : actorId,
+      role: isSeller ? 'seller' : isAdmin ? 'admin' : 'courier',
     });
 
     res.json({ success: true, data: updatedOrder });
@@ -230,11 +235,18 @@ const orderController = {
     const actorId = req.user.id;
     const { reason } = req.body;
 
-    const order = await orderService.cancelOrder({
-      orderId,
-      actorId,
-      reason,
+    const prisma = getPrisma();
+    const current = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { seller: { select: { userId: true } } },
     });
+    if (!current) return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
+    const role = current.buyerId === actorId ? 'buyer'
+      : current.seller?.userId === actorId ? 'seller'
+      : ['admin', 'super_admin'].includes(req.user.role) ? 'admin'
+      : null;
+    if (!role) return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    const order = await orderService.cancelOrder({ orderId, actorId, role, reason });
 
     res.json({ success: true, data: order });
   }),
@@ -244,9 +256,21 @@ const orderController = {
     const filedBy = req.user.id;
     const { reason, description } = req.body;
 
+    const prisma = getPrisma();
+    const current = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { seller: { select: { userId: true } } },
+    });
+    if (!current) return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
+    const role = current.buyerId === filedBy ? 'buyer'
+      : current.seller?.userId === filedBy ? 'seller'
+      : ['admin', 'super_admin'].includes(req.user.role) ? 'admin'
+      : null;
+    if (!role) return res.status(403).json({ success: false, error: 'FORBIDDEN' });
     const dispute = await orderService.disputeOrder({
       orderId,
       filedBy,
+      role,
       reason,
       description,
     });

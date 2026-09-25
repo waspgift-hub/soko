@@ -111,27 +111,6 @@
         <meta-data
             android:name="com.onesignal.NotificationAccentColor.default"
             android:resource="@color/notification_accent" />
-        <!-- audio_service notification channel ID for persistent media playback -->
-        <meta-data
-            android:name="android.media.metadata.NOTIFICATION_CHANNEL_ID"
-            android:value="com.soko_vibe.music" />
-        <service android:name="com.ryanheise.audioservice.AudioService"
-            android:foregroundServiceType="mediaPlayback"
-            android:exported="true"
-            android:stopWithTask="false">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
-            </intent-filter>
-        </service>
-        <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
-        </receiver>
         <receiver
             android:name=".SokoVibeWidgetProvider"
             android:label="Soko Dashboard"

@@ -143,7 +143,7 @@ final String unit;
       boostedUntil != null &&
       DateTime.now().isBefore(boostedUntil!);
 
-  static const String _r2PublicBase = 'https://media.soko-vibe.co.tz';
+  static const String _r2PublicBase = 'https://media.sokovibe.co.tz';
 
   /// Builds a [Product] from the v2 server DTO served by `/api/v1/products`.
   ///

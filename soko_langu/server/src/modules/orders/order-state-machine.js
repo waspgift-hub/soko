@@ -1,141 +1,228 @@
 /**
- * Canonical Order State Machine (V3 Alignment)
- * 
- * This module defines the authoritative state transitions for Soko Vibe orders.
- * It prevents invalid state jumps and enforces financial rules per state.
+ * Canonical Soko Vibe order state machine.
+ *
+ * Database truth uses lowercase strings. Constants retain descriptive names so
+ * calling code stays readable, while every persisted state uses one vocabulary.
+ *
+ * Financial invariant: no client may move money by changing order status.
+ * Money movement is performed only by payment/escrow/refund services.
  */
 
-const ORDER_STATES = {
-  DRAFT: 'DRAFT',
-  PENDING_PAYMENT: 'PENDING_PAYMENT',
-  PAYMENT_PROCESSING: 'PAYMENT_PROCESSING',
-  PAID: 'PAID',
-  ESCROW_HELD: 'ESCROW_HELD',
-  SELLER_ACCEPTED: 'SELLER_ACCEPTED',
-  DISPATCH_READY: 'DISPATCH_READY',
-  DISPATCHED: 'DISPATCHED',
-  IN_TRANSIT: 'IN_TRANSIT',
-  ARRIVED: 'ARRIVED',
-  DELIVERED: 'DELIVERED',
-  DELIVERY_CONFIRMED: 'DELIVERY_CONFIRMED',
-  COMPLETED: 'COMPLETED',
-  PAYMENT_FAILED: 'PAYMENT_FAILED',
-  CANCELLED: 'CANCELLED',
-  REFUND_PENDING: 'REFUND_PENDING',
-  REFUNDED: 'REFUNDED',
-  DISPUTED: 'DISPUTED',
-  EXPIRED: 'EXPIRED',
-};
+const ORDER_STATES = Object.freeze({
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  ADDRESS_REQUIRED: 'address_required',
+  PENDING_SHIPPING_FEE: 'pending_shipping_fee',
+  SHIPPING_FEE_SUBMITTED: 'shipping_fee_submitted',
+  SHIPPING_FEE_REVIEW: 'shipping_fee_review',
+  AWAITING_ESCROW_PAYMENT: 'awaiting_escrow_payment',
+  PAYMENT_PENDING: 'payment_pending',
+  PAYMENT_PROCESSING: 'payment_processing',
+  PAID: 'paid',
+  ESCROW_HELD: 'in_escrow',
+  IN_ESCROW: 'in_escrow',
+  SELLER_ACCEPTED: 'seller_accepted',
+  DISPATCH_READY: 'ready_to_dispatch',
+  READY_TO_DISPATCH: 'ready_to_dispatch',
+  DISPATCHED: 'dispatched',
+  IN_TRANSIT: 'in_transit',
+  OUT_FOR_DELIVERY: 'out_for_delivery',
+  DELIVERY_ATTEMPTED: 'delivery_attempted',
+  ARRIVED: 'arrived',
+  DELIVERED: 'delivered',
+  INSPECTION_PERIOD: 'inspection_period',
+  OTP_PENDING: 'otp_pending',
+  DELIVERY_CONFIRMED: 'delivery_confirmed',
+  COMPLETED: 'completed',
+  WALLET_CREDITED: 'wallet_credited',
+  PAYOUT_PENDING: 'payout_pending',
+  PAYOUT_COMPLETE: 'payout_complete',
+  PAYMENT_FAILED: 'failed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  REFUND_PENDING: 'refund_pending',
+  REFUNDED: 'refunded',
+  DISPUTED: 'disputed',
+  EXPIRED: 'expired',
+});
 
-const STATE_TRANSITIONS = {
-  [ORDER_STATES.DRAFT]: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.CANCELLED, ORDER_STATES.EXPIRED],
-  [ORDER_STATES.PENDING_PAYMENT]: [ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.CANCELLED, ORDER_STATES.EXPIRED],
-  [ORDER_STATES.PAYMENT_PROCESSING]: [ORDER_STATES.PAID, ORDER_STATES.PAYMENT_FAILED, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.PAID]: [ORDER_STATES.ESCROW_HELD, ORDER_STATES.REFUND_PENDING, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.ESCROW_HELD]: [ORDER_STATES.SELLER_ACCEPTED, ORDER_STATES.DISPUTED, ORDER_STATES.REFUND_PENDING, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.SELLER_ACCEPTED]: [ORDER_STATES.DISPATCH_READY, ORDER_STATES.DISPUTED, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.DISPATCH_READY]: [ORDER_STATES.DISPATCHED, ORDER_STATES.DISPUTED, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.DISPATCHED]: [ORDER_STATES.IN_TRANSIT, ORDER_STATES.DISPUTED],
-  [ORDER_STATES.IN_TRANSIT]: [ORDER_STATES.ARRIVED, ORDER_STATES.DISPUTED],
-  [ORDER_STATES.ARRIVED]: [ORDER_STATES.DELIVERED, ORDER_STATES.DISPUTED],
-  [ORDER_STATES.DELIVERED]: [ORDER_STATES.DELIVERY_CONFIRMED, ORDER_STATES.DISPUTED],
-  [ORDER_STATES.DELIVERY_CONFIRMED]: [ORDER_STATES.COMPLETED, ORDER_STATES.DISPUTED],
-  [ORDER_STATES.COMPLETED]: [ORDER_STATES.DISPUTED],
-  [ORDER_STATES.PAYMENT_FAILED]: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.DISPUTED]: [ORDER_STATES.COMPLETED, ORDER_STATES.REFUND_PENDING, ORDER_STATES.CANCELLED],
-  [ORDER_STATES.REFUND_PENDING]: [ORDER_STATES.REFUNDED, ORDER_STATES.ESCROW_HELD],
-  [ORDER_STATES.REFUNDED]: [],
-  [ORDER_STATES.CANCELLED]: [],
-  [ORDER_STATES.EXPIRED]: [],
-};
+const STATE_TRANSITIONS = Object.freeze({
+  draft: ['published', 'address_required', 'cancelled', 'expired'],
+  published: ['address_required', 'pending_shipping_fee', 'cancelled', 'expired'],
+  address_required: ['pending_shipping_fee', 'cancelled'],
+  pending_shipping_fee: ['shipping_fee_submitted', 'cancelled', 'expired'],
+  shipping_fee_submitted: ['shipping_fee_review', 'awaiting_escrow_payment', 'cancelled'],
+  shipping_fee_review: ['awaiting_escrow_payment', 'pending_shipping_fee', 'cancelled'],
+  awaiting_escrow_payment: ['payment_pending', 'payment_processing', 'cancelled', 'expired', 'failed'],
+  payment_pending: ['payment_processing', 'in_escrow', 'cancelled', 'expired', 'failed'],
+  payment_processing: ['paid', 'in_escrow', 'cancelled', 'failed'],
+  paid: ['in_escrow', 'cancelled', 'refund_pending'],
+  in_escrow: ['seller_accepted', 'ready_to_dispatch', 'disputed', 'refund_pending', 'cancelled'],
+  seller_accepted: ['ready_to_dispatch', 'disputed', 'cancelled'],
+  ready_to_dispatch: ['dispatched', 'disputed', 'refund_pending', 'cancelled'],
+  dispatched: ['in_transit', 'delivered', 'disputed'],
+  in_transit: ['out_for_delivery', 'arrived', 'delivery_attempted', 'delivered', 'disputed'],
+  out_for_delivery: ['delivery_attempted', 'arrived', 'delivered', 'disputed'],
+  delivery_attempted: ['out_for_delivery', 'arrived', 'delivered', 'disputed'],
+  arrived: ['delivered', 'disputed'],
+  delivered: ['inspection_period', 'delivery_confirmed', 'disputed'],
+  inspection_period: ['otp_pending', 'delivery_confirmed', 'completed', 'disputed', 'refund_pending'],
+  otp_pending: ['completed', 'disputed', 'refund_pending'],
+  delivery_confirmed: ['completed', 'disputed'],
+  completed: ['wallet_credited', 'disputed'],
+  wallet_credited: ['payout_pending', 'completed'],
+  payout_pending: ['payout_complete'],
+  payout_complete: [],
+  failed: ['payment_pending', 'cancelled'],
+  cancelled: [],
+  refund_pending: ['refunded', 'in_escrow'],
+  refunded: [],
+  disputed: ['completed', 'refund_pending', 'cancelled'],
+  expired: [],
+});
 
-const STATE_FINANCIAL_RULES = {
-  [ORDER_STATES.DRAFT]: 'NO_MOVEMENT',
-  [ORDER_STATES.PENDING_PAYMENT]: 'NO_MOVEMENT',
-  [ORDER_STATES.PAYMENT_PROCESSING]: 'NO_MOVEMENT',
-  [ORDER_STATES.PAID]: 'FUNDS_AT_GATEWAY',
-  [ORDER_STATES.ESCROW_HELD]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.SELLER_ACCEPTED]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.DISPATCH_READY]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.DISPATCHED]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.IN_TRANSIT]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.ARRIVED]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.DELIVERED]: 'FUNDS_PROTECTED_IN_ESCROW',
-  [ORDER_STATES.DELIVERY_CONFIRMED]: 'SETTLEMENT_AUTHORIZED',
-  [ORDER_STATES.COMPLETED]: 'SETTLEMENT_AUTHORIZED',
-  [ORDER_STATES.PAYMENT_FAILED]: 'NO_MOVEMENT',
-  [ORDER_STATES.CANCELLED]: 'REFUND_IF_PAID',
-  [ORDER_STATES.REFUND_PENDING]: 'FUNDS_PROTECTED',
-  [ORDER_STATES.REFUNDED]: 'FUNDS_RETURNED',
-  [ORDER_STATES.DISPUTED]: 'FUNDS_LOCKED',
-  [ORDER_STATES.EXPIRED]: 'REFUND_IF_PAID',
-};
+const STATE_FINANCIAL_RULES = Object.freeze({
+  draft: 'NO_FINANCIAL_MOVEMENT',
+  published: 'NO_FINANCIAL_MOVEMENT',
+  address_required: 'NO_FINANCIAL_MOVEMENT',
+  pending_shipping_fee: 'NO_FINANCIAL_MOVEMENT',
+  shipping_fee_submitted: 'NO_FINANCIAL_MOVEMENT',
+  shipping_fee_review: 'NO_FINANCIAL_MOVEMENT',
+  awaiting_escrow_payment: 'NO_FINANCIAL_MOVEMENT',
+  payment_pending: 'NO_FINANCIAL_MOVEMENT',
+  payment_processing: 'FUNDS_AT_PROVIDER',
+  paid: 'FUNDS_CAPTURED',
+  in_escrow: 'FUNDS_PROTECTED_IN_ESCROW',
+  seller_accepted: 'FUNDS_PROTECTED_IN_ESCROW',
+  ready_to_dispatch: 'FUNDS_PROTECTED_IN_ESCROW',
+  dispatched: 'FUNDS_PROTECTED_IN_ESCROW',
+  in_transit: 'FUNDS_PROTECTED_IN_ESCROW',
+  out_for_delivery: 'FUNDS_PROTECTED_IN_ESCROW',
+  delivery_attempted: 'FUNDS_PROTECTED_IN_ESCROW',
+  arrived: 'FUNDS_PROTECTED_IN_ESCROW',
+  delivered: 'FUNDS_PROTECTED_IN_ESCROW',
+  inspection_period: 'FUNDS_PROTECTED_IN_ESCROW',
+  otp_pending: 'FUNDS_PROTECTED_IN_ESCROW',
+  delivery_confirmed: 'SETTLEMENT_AUTHORIZED',
+  completed: 'SETTLEMENT_AUTHORIZED',
+  wallet_credited: 'SETTLED_TO_WALLET',
+  payout_pending: 'PAYOUT_PROCESSING',
+  payout_complete: 'FUNDS_DISBURSED',
+  failed: 'NO_FINANCIAL_MOVEMENT',
+  cancelled: 'REFUND_IF_PAID',
+  refund_pending: 'FUNDS_PROTECTED_OR_REFUNDING',
+  refunded: 'FUNDS_RETURNED',
+  disputed: 'FUNDS_LOCKED',
+  expired: 'REFUND_IF_PAID',
+});
 
-const TRANSITION_ACTORS = {
-  [ORDER_STATES.PENDING_PAYMENT]: ['buyer', 'system'],
-  [ORDER_STATES.PAYMENT_PROCESSING]: ['system'],
-  [ORDER_STATES.PAID]: ['system'],
-  [ORDER_STATES.ESCROW_HELD]: ['system'],
-  [ORDER_STATES.SELLER_ACCEPTED]: ['seller'],
-  [ORDER_STATES.DISPATCH_READY]: ['seller', 'system'],
-  [ORDER_STATES.DISPATCHED]: ['seller'],
-  [ORDER_STATES.IN_TRANSIT]: ['system', 'courier'],
-  [ORDER_STATES.ARRIVED]: ['system', 'courier'],
-  [ORDER_STATES.DELIVERED]: ['system', 'courier'],
-  [ORDER_STATES.DELIVERY_CONFIRMED]: ['buyer', 'system'],
-  [ORDER_STATES.COMPLETED]: ['system'],
-  [ORDER_STATES.PAYMENT_FAILED]: ['system'],
-  [ORDER_STATES.CANCELLED]: ['buyer', 'seller', 'admin'],
-  [ORDER_STATES.DISPUTED]: ['buyer', 'seller', 'admin'],
-  [ORDER_STATES.REFUND_PENDING]: ['admin', 'system'],
-  [ORDER_STATES.REFUNDED]: ['system'],
-  [ORDER_STATES.EXPIRED]: ['system'],
-};
+const TRANSITION_ACTORS = Object.freeze({
+  published: ['buyer', 'system'],
+  address_required: ['buyer', 'system'],
+  pending_shipping_fee: ['seller', 'system', 'admin'],
+  shipping_fee_submitted: ['seller'],
+  shipping_fee_review: ['seller', 'system'],
+  awaiting_escrow_payment: ['buyer', 'admin', 'system'],
+  payment_pending: ['buyer', 'system'],
+  payment_processing: ['system', 'buyer'],
+  paid: ['system'],
+  in_escrow: ['system'],
+  seller_accepted: ['seller', 'system'],
+  ready_to_dispatch: ['seller', 'system', 'admin'],
+  dispatched: ['seller'],
+  in_transit: ['courier', 'system', 'seller'],
+  out_for_delivery: ['courier', 'system'],
+  delivery_attempted: ['courier', 'system'],
+  arrived: ['courier', 'system'],
+  delivered: ['courier', 'seller', 'system'],
+  inspection_period: ['buyer', 'system'],
+  otp_pending: ['buyer', 'system'],
+  delivery_confirmed: ['buyer', 'system'],
+  completed: ['system', 'admin'],
+  wallet_credited: ['system'],
+  payout_pending: ['system', 'admin'],
+  payout_complete: ['system', 'admin'],
+  failed: ['system'],
+  cancelled: ['buyer', 'seller', 'admin', 'system'],
+  refund_pending: ['admin', 'system'],
+  refunded: ['system', 'admin'],
+  disputed: ['buyer', 'seller', 'admin'],
+  expired: ['system'],
+});
+
+const VALID_STATES = new Set(Object.values(ORDER_STATES));
 
 class OrderStateMachine {
-  constructor(state) {
-    this.state = state || ORDER_STATES.DRAFT;
+  constructor(state = ORDER_STATES.DRAFT) {
+    this.state = normalizeState(state);
+    this.history = [];
   }
 
   canTransition(toState) {
-    const allowed = STATE_TRANSITIONS[this.state] || [];
-    return allowed.includes(toState);
+    const target = normalizeState(toState);
+    return (STATE_TRANSITIONS[this.state] || []).includes(target);
   }
 
-  transition(toState, { actor, reason } = {}) {
-    if (!this.canTransition(toState)) {
-      throw new Error(`Invalid order transition: ${this.state} -> ${toState}`);
+  transition(toState, { actor, actorId, reason } = {}) {
+    const from = this.state;
+    const target = normalizeState(toState);
+
+    if (!this.canTransition(target)) {
+      throw new Error(`Invalid order transition: ${from} -> ${target}`);
     }
 
-    const allowedActors = TRANSITION_ACTORS[toState] || [];
+    const allowedActors = TRANSITION_ACTORS[target] || [];
     if (actor && !allowedActors.includes(actor)) {
-      throw new Error(`Actor ${actor} cannot transition to ${toState}`);
+      throw new Error(`Actor ${actor} cannot transition to ${target}`);
     }
 
-    this.state = toState;
-    return {
-      from: this.state, // This is now the new state
-      to: toState,
-      financialRule: STATE_FINANCIAL_RULES[toState],
-      actor,
-      reason,
+    this.state = target;
+    const event = {
+      from,
+      to: target,
+      financialRule: STATE_FINANCIAL_RULES[target],
+      actor: actor || null,
+      actorId: actorId || null,
+      reason: reason || null,
       timestamp: new Date().toISOString(),
     };
+    this.history.push(event);
+    return event;
+  }
+
+  getFinancialRule() {
+    return STATE_FINANCIAL_RULES[this.state];
   }
 
   static getFinancialRule(state) {
-    return STATE_FINANCIAL_RULES[state];
+    return STATE_FINANCIAL_RULES[normalizeState(state)];
   }
 
   static canReleaseFunds(state) {
-    return STATE_FINANCIAL_RULES[state] === 'SETTLEMENT_AUTHORIZED';
+    return ['delivery_confirmed', 'completed'].includes(normalizeState(state));
   }
+
+  static isProtectedState(state) {
+    return ['disputed', 'refund_pending'].includes(normalizeState(state));
+  }
+
+  static isValidState(state) {
+    return VALID_STATES.has(normalizeState(state));
+  }
+}
+
+function normalizeState(value) {
+  const raw = String(value || '').trim();
+  if (VALID_STATES.has(raw)) return raw;
+  const lower = raw.toLowerCase();
+  if (VALID_STATES.has(lower)) return lower;
+  return raw;
 }
 
 module.exports = {
   ORDER_STATES,
-  OrderStateMachine,
   STATE_TRANSITIONS,
   STATE_FINANCIAL_RULES,
   TRANSITION_ACTORS,
+  OrderStateMachine,
 };

@@ -1,88 +1,114 @@
 #!/bin/bash
-# Soko Vibe - Deployment Script
-# Usage: ./deploy.sh [commit_hash]
+# Soko Vibe - Production deployment
+# Run from the VPS after the repository and .env.production are configured:
+#   ./deploy/scripts/deploy.sh
+#
+# The script is intentionally non-destructive: it keeps Postgres/Redis volumes,
+# runs Prisma migrations before the API is switched to the new image, and then
+# verifies the local health endpoint.
 
 set -euo pipefail
 
-APP_DIR="/opt/sokovibe"
-COMMIT="${1:-HEAD}"
-HEALTH_URL="http://localhost:3000/health"
-HEALTH_TIMEOUT=30
+APP_DIR="${APP_DIR:-/opt/sokovibe}"
+ENV_FILE="${ENV_FILE:-.env.production}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:3000/health}"
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-36}"
 ROLLBACK_VERSION=""
 
-echo "=========================================="
-echo "  Soko Vibe Deployment"
-echo "  Commit: ${COMMIT}"
-echo "  Time: $(date)"
-echo "=========================================="
-
 cd "${APP_DIR}"
 
-# Save current version for rollback
+if [ ! -f "${ENV_FILE}" ]; then
+  echo "[DEPLOY] Missing ${ENV_FILE}"
+  exit 10
+fi
+
+REQUIRED_ENV_VARS=(
+  NODE_ENV PORT DATABASE_URL REDIS_URL
+  FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL
+  R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
+  CLICKPESA_API_KEY CLICKPESA_API_SECRET
+  ADMIN_SECRET WEBHOOK_SECRET ENCRYPTION_KEY
+  ALLOWED_ORIGINS
+)
+
+env_value_present() {
+  local key="$1"
+  awk -F= -v k="$key" '
+    $0 !~ /^[[:space:]]*#/ && $1 == k {
+      value = substr($0, index($0, "=") + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (value != "") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$ENV_FILE"
+}
+
+for key in "${REQUIRED_ENV_VARS[@]}"; do
+  if ! env_value_present "$key"; then
+    echo "[DEPLOY] Missing required environment variable in ${ENV_FILE}: ${key}"
+    exit 11
+  fi
+done
+
+echo "=========================================="
+echo "  Soko Vibe Production Deployment"
+echo "  Commit: ${GIT_COMMIT:-current}"
+echo "  Time:   $(date -Is)"
+echo "=========================================="
+
 if [ -f .current_version ]; then
-  ROLLBACK_VERSION=$(cat .current_version)
-  echo "[DEPLOY] Rollback version saved: ${ROLLBACK_VERSION}"
+  ROLLBACK_VERSION=$(cat .current_version || true)
 fi
 
-# 1. Pull latest code
-echo "[DEPLOY] Pulling code..."
-git fetch origin
-git checkout "${COMMIT}"
+echo "[DEPLOY] Pulling latest main..."
+git fetch --prune origin
+git checkout main
+git pull --ff-only origin main
 
-# 2. Install dependencies
-echo "[DEPLOY] Installing dependencies..."
-cd soko_langu/server
-npm ci --omit=dev
+CURRENT_VERSION=$(git rev-parse --short HEAD)
+echo "[DEPLOY] Version: ${CURRENT_VERSION}"
 
-# 3. Run database migrations
-echo "[DEPLOY] Running migrations..."
-if [ -f "prisma/schema.prisma" ]; then
-  npx prisma migrate deploy
-fi
+echo "[DEPLOY] Validating Docker Compose configuration..."
+docker compose --env-file "${ENV_FILE}" config >/dev/null
 
-# 4. Build and restart services
-echo "[DEPLOY] Restarting services..."
-cd "${APP_DIR}"
-docker compose down --timeout 30
-docker compose up -d --build
+echo "[DEPLOY] Building production images..."
+docker compose --env-file "${ENV_FILE}" build --pull api worker
 
-# 5. Wait for health check
-echo "[DEPLOY] Waiting for health check..."
+echo "[DEPLOY] Starting database and Redis..."
+docker compose --env-file "${ENV_FILE}" up -d postgres redis
+
+echo "[DEPLOY] Applying Prisma migrations..."
+docker compose --env-file "${ENV_FILE}" run --rm api npx prisma migrate deploy
+
+echo "[DEPLOY] Starting API, worker and Nginx..."
+docker compose --env-file "${ENV_FILE}" up -d --remove-orphans api worker nginx
+
+echo "[DEPLOY] Waiting for API health..."
 ATTEMPTS=0
-MAX_ATTEMPTS=30
-
-while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-  if curl -sf "${HEALTH_URL}" > /dev/null 2>&1; then
-    echo "[DEPLOY] Health check passed!"
-    echo "${COMMIT}" > .current_version
-    echo "[DEPLOY] Deployment complete!"
+while [ "${ATTEMPTS}" -lt "${MAX_ATTEMPTS}" ]; do
+  if curl -fsS "${HEALTH_URL}" >/dev/null 2>&1; then
+    echo "[DEPLOY] Health check passed."
+    printf '%s\n' "$(git rev-parse HEAD)" > .current_version
+    echo "[DEPLOY] Production deployment complete: ${CURRENT_VERSION}"
     exit 0
   fi
-  
   ATTEMPTS=$((ATTEMPTS + 1))
-  echo "[DEPLOY] Attempt ${ATTEMPTS}/${MAX_ATTEMPTS}..."
   sleep 2
 done
 
-# 6. Health check failed - rollback
-echo "[DEPLOY] ERROR: Health check failed after ${MAX_ATTEMPTS} attempts!"
+echo "[DEPLOY] ERROR: health check failed."
 
+echo "[DEPLOY] Recent API logs:"
+docker compose --env-file "${ENV_FILE}" logs --tail=80 api || true
+
+# Application rollback is offered only when a previous version is known.
+# Database migrations are forward-only: restore DB from backup before rolling
+# back across a schema-breaking migration.
 if [ -n "${ROLLBACK_VERSION}" ]; then
-  echo "[DEPLOY] Rolling back to ${ROLLBACK_VERSION}..."
+  echo "[DEPLOY] Rolling application containers back to ${ROLLBACK_VERSION}..."
   git checkout "${ROLLBACK_VERSION}"
-  docker compose down --timeout 30
-  docker compose up -d --build
-  
-  # Verify rollback
-  sleep 5
-  if curl -sf "${HEALTH_URL}" > /dev/null 2>&1; then
-    echo "[DEPLOY] Rollback successful!"
-    exit 1
-  else
-    echo "[DEPLOY] CRITICAL: Rollback also failed!"
-    exit 2
-  fi
-else
-  echo "[DEPLOY] No rollback version available"
-  exit 1
+  docker compose --env-file "${ENV_FILE}" build api worker
+  docker compose --env-file "${ENV_FILE}" up -d --remove-orphans api worker nginx
 fi
+
+exit 1

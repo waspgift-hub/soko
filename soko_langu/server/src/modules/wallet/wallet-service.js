@@ -41,18 +41,14 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
   const prisma = getPrisma();
   const wallet = await getWallet(sellerId);
 
-  const account = await prisma.ledgerAccount.findFirst({
-    where: { userId: sellerId, accountName: 'USER_WALLET' },
-  });
-
   const [ledger, total] = await Promise.all([
-    prisma.ledgerEntry.findMany({
-      where: { accountId: account?.id },
+    prisma.walletLedgerEntry.findMany({
+      where: { walletId: wallet.id },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.ledgerEntry.count({ where: { accountId: account?.id } }),
+    prisma.walletLedgerEntry.count({ where: { walletId: wallet.id } }),
   ]);
 
   return {
@@ -114,13 +110,14 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
       });
 
       await ledgerService.updateWalletBalance({
-        userId: sellerId,
+        sellerId,
         amount: -amount,
         type: ledgerService.LEDGER_TYPES.WITHDRAWAL_DEBITED,
         referenceType: 'withdrawal',
         referenceId: withdrawal.id,
         idempotencyKey: `ledger_withdrawal_${withdrawal.id}`,
         description: 'Seller withdrawal',
+        tx,
       });
 
       // We must fetch the updated wallet state to return it
@@ -227,8 +224,8 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
 
   try {
     return await db.$transaction(async (tx) => {
-      const prior = await tx.ledgerEntry.findFirst({
-        where: { referenceType: 'legacy_balance', referenceId: sellerId },
+      const prior = await tx.walletLedgerEntry.findUnique({
+        where: { idempotencyKey: `legacy_balance_${sellerId}` },
       });
       if (prior) return { alreadyMigrated: true, sellerId };
 
@@ -240,15 +237,17 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
         referenceId: sellerId,
         idempotencyKey: `legacy_balance_${sellerId}`,
         description: 'Firestore sellerBalance migrated at wallet cutover',
+        tx,
       });
 
-      await tx.wallet.update({
-        where: { sellerId },
-        data: {
-          totalWithdrawn: { increment: withdrawn },
-          totalEarned: { increment: amt + withdrawn },
-        },
-      });
+      // updateWalletBalance already increments totalEarned by the migrated
+      // amount. Only preserve the historical withdrawn total here.
+      if (withdrawn > 0) {
+        await tx.wallet.update({
+          where: { sellerId },
+          data: { totalWithdrawn: { increment: withdrawn } },
+        });
+      }
 
       return { alreadyMigrated: false, sellerId, amount: amt };
     });

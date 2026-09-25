@@ -67,15 +67,15 @@ ThemeData buildDarkTheme(Color seed) {
     onError: Color(0xFFFFFFFF),
     errorContainer: Color(0xFF8C1D18),
     onErrorContainer: Color(0xFFFFDAD6),
-    surface: Color(0xFF0B0B0B),
+    surface: Color(0xFF0B141A),
     onSurface: Color(0xFFFFFFFF),
-    surfaceDim: Color(0xFF0B0B0B),
-    surfaceBright: Color(0xFF1E1E1E),
-    surfaceContainerLowest: Color(0xFF070707),
-    surfaceContainerLow: Color(0xFF121212),
-    surfaceContainer: Color(0xFF161616),
-    surfaceContainerHigh: Color(0xFF1C1C1C),
-    surfaceContainerHighest: Color(0xFF232323),
+    surfaceDim: Color(0xFF091116),
+    surfaceBright: Color(0xFF1A252C),
+    surfaceContainerLowest: Color(0xFF070F13),
+    surfaceContainerLow: Color(0xFF101B21),
+    surfaceContainer: Color(0xFF142128),
+    surfaceContainerHigh: Color(0xFF1A2A32),
+    surfaceContainerHighest: Color(0xFF21323B),
     onSurfaceVariant: Color(0xFFA7A7A7),
     outline: Color(0xFF8E8E93),
     outlineVariant: Color(0xFF292929),
@@ -151,9 +151,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121212).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+      backgroundColor: scheme.surfaceContainerLow,
       indicatorColor: scheme.primary.withValues(alpha: 0.15),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
@@ -180,13 +178,11 @@ ThemeData _buildTheme(ColorScheme scheme) {
       }),
       elevation: 0,
       shadowColor: Colors.transparent,
-      height: 64,
+      height: 68,
     ),
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121212).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+      backgroundColor: scheme.surfaceContainerLow,
       selectedItemColor: scheme.primary,
       unselectedItemColor: scheme.onSurface.withValues(alpha: 0.45),
       type: BottomNavigationBarType.fixed,
@@ -209,7 +205,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         foregroundColor: isDark ? Colors.black : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -228,7 +224,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         foregroundColor: isDark ? Colors.black : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -244,7 +240,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         side: BorderSide(color: scheme.outlineVariant),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -267,11 +263,11 @@ ThemeData _buildTheme(ColorScheme scheme) {
       filled: true,
       fillColor: isDark ? scheme.surfaceContainerLow : const Color(0xFFF7F7F7),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
       enabledBorder: OutlineInputBorder(

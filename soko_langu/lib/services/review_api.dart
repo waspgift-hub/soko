@@ -136,7 +136,7 @@ class ReviewApiClient {
             'productId': productId,
             'rating': rating,
             'comment': comment,
-            'sellerId': ?sellerId,
+            if (sellerId != null && sellerId.trim().isNotEmpty) 'sellerId': sellerId.trim(),
           }),
         )
         .timeout(const Duration(seconds: 15));

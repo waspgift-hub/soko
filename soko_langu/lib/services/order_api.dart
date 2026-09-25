@@ -39,7 +39,7 @@ class OrderApiClient {
     final params = <String, String>{
       'page': '$page',
       'limit': '$limit',
-      'status': ?status,
+      if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
     };
     final uri = Uri.parse(ApiConfig.v1('/orders')).replace(queryParameters: params);
     final res = await _http
@@ -98,7 +98,7 @@ class OrderApiClient {
           body: jsonEncode({
             'amount': amount,
             'estimatedDays': estimatedDays,
-            'notes': ?notes,
+            if (notes != null) 'notes': notes,
           }),
         )
         .timeout(const Duration(seconds: 15));

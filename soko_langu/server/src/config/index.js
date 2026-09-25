@@ -12,7 +12,9 @@ const config = {
   
   // Database
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://sokovibe:password@localhost:5432/sokovibe',
+    // Never fall back to a real-looking production credential. Local development
+    // may use the documented localhost default; production must provide DATABASE_URL.
+    url: process.env.DATABASE_URL || (process.env.NODE_ENV === 'production' ? undefined : 'postgresql://sokovibe:password@localhost:5432/sokovibe'),
     // Optional Postgres read replica (Render offers native read replicas). When
     // set, hot catalog reads route to it; fall back to primary if unset.
     replicaUrl: process.env.DATABASE_URL_REPLICA || '',
@@ -32,7 +34,7 @@ const config = {
     bucketVideos: process.env.R2_BUCKET_VIDEOS || 'soko-vibe-videos',
     bucketThumbnails: process.env.R2_BUCKET_THUMBNAILS || 'soko-vibe-thumbnails',
     bucketBackups: process.env.R2_BUCKET_BACKUPS || 'soko-vibe-backups',
-    publicUrl: process.env.R2_PUBLIC_URL || 'https://media.soko-vibe.co.tz',
+    publicUrl: process.env.R2_PUBLIC_URL || 'https://media.sokovibe.co.tz',
   },
   
   // Payment (ClickPesa)
@@ -89,9 +91,9 @@ const config = {
   
   // Business
   business: {
-    // Product-owner rule: Soko Vibe charges NO platform fee; only ClickPesa's
-    // own charges apply (collected/deducted by ClickPesa outside our ledger).
-    platformCommissionPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT) || 0,
+    // Current platform economics: 3.5% commission on product value.
+    // Override explicitly with PLATFORM_COMMISSION_PERCENT when needed.
+    platformCommissionPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT) || 3.5,
     escrowAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
     maxDailySaleAmount: parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000,
   },
@@ -105,6 +107,8 @@ const config = {
     workerInProcess: process.env.FINANCE_WORKER_IN_PROCESS !== 'false',
     paymentExpireMs: (parseInt(process.env.FINANCE_PAYMENT_EXPIRE_MS) || 24 * 3600) * 1000,
     autoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    // Compatibility alias for deployments still using the 14-day protection setting.
+    inspectionAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
     withdrawalAutoProcessMs: (parseInt(process.env.FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN) || 15) * 60 * 1000,
     withdrawalStuckMs: (parseInt(process.env.FINANCE_WITHDRAWAL_STUCK_HOURS) || 48) * 3600 * 1000,
     reconciliationWindowMs: (parseInt(process.env.FINANCE_RECONCILIATION_WINDOW_HOURS) || 24) * 3600 * 1000,
@@ -113,9 +117,9 @@ const config = {
   
   // URLs
   urls: {
-    app: process.env.APP_URL || 'https://api.soko-vibe.co.tz',
-    frontend: process.env.FRONTEND_URL || 'https://soko-vibe.co.tz',
-    admin: process.env.ADMIN_URL || 'https://admin.soko-vibe.co.tz',
+    app: process.env.APP_URL || 'https://api.sokovibe.co.tz',
+    frontend: process.env.FRONTEND_URL || 'https://www.sokovibe.co.tz',
+    admin: process.env.ADMIN_URL || 'https://admin.sokovibe.co.tz',
   },
 
   // Deep-link store destinations. Left empty on purpose: the app is not yet

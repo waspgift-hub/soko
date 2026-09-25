@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Solid theme-aware background — black in dark mode, white in light mode.
+/// Shared app surface. Uses the active Material 3 surface token so every screen
+/// inherits the same background in light and dark themes.
 class PremiumBackground extends StatelessWidget {
   final Widget child;
 
@@ -11,9 +12,8 @@ class PremiumBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      color: isDark ? Colors.black : Colors.white,
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
       child: child,
     );
   }

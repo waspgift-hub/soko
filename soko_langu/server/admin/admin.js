@@ -268,7 +268,7 @@ new MutationObserver((muts) => {
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
-function secret() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (_) { return ''; } }
+function secret() { try { return sessionStorage.getItem(SECRET_KEY) || ''; } catch (_) { return ''; } }
 async function api(path, opts = {}) {
   const s = secret();
   if (!s) throw new Error('Ingia kwanza');
@@ -289,7 +289,7 @@ async function api(path, opts = {}) {
   }
   let j = null; try { j = await r.json(); } catch (_) {}
   if (r.status === 401) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    try { sessionStorage.removeItem(SECRET_KEY); } catch (_) {}
     showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
     throw new Error((j && j.error) || 'Haijaidhinishwa');
   }
@@ -2430,7 +2430,7 @@ async function trySecretLogin() {
   if (!v) { $('authErr').textContent = 'Andika ADMIN_SECRET.'; return; }
   $('authErr').textContent = '';
   $('secSave').disabled = true;
-  try { localStorage.setItem(SECRET_KEY, v); } catch (_) {}
+  try { sessionStorage.setItem(SECRET_KEY, v); } catch (_) {}
   try {
     await getJSON('/api/v1/admin/dashboard');
     $('meName').textContent = 'ADMIN_SECRET';

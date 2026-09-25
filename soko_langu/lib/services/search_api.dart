@@ -31,9 +31,9 @@ class SearchApiClient {
       'q': query.trim(),
       'page': '$page',
       'limit': '$limit',
-      'sort': ?sort,
-      'minPrice': ?minPrice?.toString(),
-      'maxPrice': ?maxPrice?.toString(),
+      if (sort != null && sort.trim().isNotEmpty) 'sort': sort.trim(),
+      if (minPrice != null) 'minPrice': minPrice.toString(),
+      if (maxPrice != null) 'maxPrice': maxPrice.toString(),
     };
     try {
       final uri = Uri.parse(

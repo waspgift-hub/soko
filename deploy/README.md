@@ -8,7 +8,7 @@ This document contains the complete deployment guide for Soko Vibe's production 
 INTERNET -> CLOUDFLARE EDGE (DNS + WAF + TLS)
               |
               v
-       api.soko-vibe.co.tz
+       api.sokovibe.co.tz
               |
               v
        NGINX (reverse proxy + TLS)
@@ -34,10 +34,10 @@ INTERNET -> CLOUDFLARE EDGE (DNS + WAF + TLS)
 
 | Domain | Purpose | Target |
 |--------|---------|--------|
-| `soko-vibe.co.tz` | Public website / landing | Cloudflare Pages / Landing |
-| `api.soko-vibe.co.tz` | Node.js API | Nginx -> API container |
-| `media.soko-vibe.co.tz` | Media CDN | Cloudflare -> R2 |
-| `admin.soko-vibe.co.tz` | Admin panel | Nginx -> Admin container |
+| `www.sokovibe.co.tz` | Public website / landing | Cloudflare Pages / Landing |
+| `api.sokovibe.co.tz` | Node.js API | Nginx -> API container |
+| `media.sokovibe.co.tz` | Media CDN | Cloudflare -> R2 |
+| `admin.sokovibe.co.tz` | Admin panel | Nginx -> Admin container |
 
 ## Initial Server Setup (Ubuntu 22.04 LTS)
 
@@ -108,7 +108,7 @@ snap install --classic certbot
 ln -s /snap/bin/certbot /usr/bin/certbot
 
 # Get certificates
-certbot certonly --standalone -d api.soko-vibe.co.tz -d admin.soko-vibe.co.tz
+certbot certonly --standalone -d api.sokovibe.co.tz -d admin.sokovibe.co.tz
 
 # Set up auto-renewal
 certbot renew --dry-run
@@ -125,7 +125,7 @@ certbot renew --dry-run
 
 ### R2 Buckets
 1. Create in Cloudflare Dashboard: Images, Videos, Thumbnails, Backups
-2. Set `media.soko-vibe.co.tz` as custom domain for public buckets
+2. Set `media.sokovibe.co.tz` as custom domain for public buckets
 3. Get Access Keys for S3-compatible API
 
 ### WAF Rules
@@ -181,7 +181,7 @@ GET /health
 Returns status, database, redis, and memory health.
 
 ### Alerts (via UptimeRobot or similar)
-- Poll `https://api.soko-vibe.co.tz/health` every 5 minutes
+- Poll `https://api.sokovibe.co.tz/health` every 5 minutes
 - Alert on 503 status
 
 ## Database Schema & Migrations

@@ -350,7 +350,7 @@ function boosted(p) {
    the Firestore `norm()` above stays only as the degraded fallback. Mirrors the
    app's Product.fromApi mapping (media -> images, snapshot legacy fields). */
 
-const SV_MEDIA_BASE = 'https://media.soko-vibe.co.tz';
+const SV_MEDIA_BASE = 'https://media.sokovibe.co.tz';
 
 function shopMediaUrl(key) {
   const s = String(key == null ? '' : key).trim();

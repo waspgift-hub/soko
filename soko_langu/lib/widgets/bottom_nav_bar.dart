@@ -148,13 +148,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlassNavBar(ColorScheme cs) {
+    final navBg = cs.surfaceContainerLow;
+    final navBorder = cs.outlineVariant.withValues(alpha: 0.65);
     final isDark = cs.brightness == Brightness.dark;
-    final navBg = isDark
-        ? const Color(0xFF121212).withValues(alpha: 0.85)
-        : const Color(0xFFFFFFFF).withValues(alpha: 0.88);
-    final navBorder = isDark
-        ? const Color(0x2AFFFFFF)
-        : const Color(0x08000000);
     // Lift the bar above the Android gesture/navigation bar (edge-to-edge
     // is enforced at targetSdk 36); MediaQuery.padding.bottom is 0 on
     // legacy devices, so this is safe on both.
@@ -168,13 +164,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           child: Container(
             decoration: BoxDecoration(
               color: navBg,
-              borderRadius: BorderRadius.circular(40),
+              borderRadius: BorderRadius.circular(28),
               border: Border.all(color: navBorder),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+                  blurRadius: 18,
+                  offset: const Offset(0, 7),
                 ),
               ],
             ),
@@ -236,9 +232,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             decoration: BoxDecoration(
               color: isSelected
-                  ? cs.primary.withValues(alpha: 0.15)
+                  ? cs.primary.withValues(alpha: 0.10)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
