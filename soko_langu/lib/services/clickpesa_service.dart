@@ -57,7 +57,7 @@ class ClickPesaService {
             'deliveryType': deliveryType,
             'paymentMethod': paymentMethod,
             'shippingCost': shippingCost,
-            'existingTransactionId': ?existingTransactionId,
+            if (existingTransactionId != null && existingTransactionId.trim().isNotEmpty) 'existingTransactionId': existingTransactionId.trim(),
           }),
         ).timeout(_initAttemptTimeouts[attempt]);
 
