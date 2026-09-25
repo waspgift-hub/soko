@@ -18,8 +18,8 @@ WORKDIR /app
 # ============================================================
 FROM base AS deps
 
-COPY package*.json ./
-COPY prisma ./prisma
+COPY soko_langu/server/package*.json ./
+COPY soko_langu/server/prisma ./prisma
 RUN npm ci && npx prisma generate
 
 # ============================================================
@@ -35,9 +35,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy application source and prisma schema/migrations
-COPY package*.json ./
-COPY prisma ./prisma
-COPY src ./src
+COPY soko_langu/server/package*.json ./
+COPY soko_langu/server/prisma ./prisma
+COPY soko_langu/server/src ./src
 
 EXPOSE 3000
 
