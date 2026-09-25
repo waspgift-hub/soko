@@ -151,9 +151,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121212).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+      backgroundColor: scheme.surfaceContainerLow,
       indicatorColor: scheme.primary.withValues(alpha: 0.15),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
@@ -184,9 +182,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121212).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+      backgroundColor: scheme.surfaceContainerLow,
       selectedItemColor: scheme.primary,
       unselectedItemColor: scheme.onSurface.withValues(alpha: 0.45),
       type: BottomNavigationBarType.fixed,
@@ -209,7 +205,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         foregroundColor: isDark ? Colors.black : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -228,7 +224,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         foregroundColor: isDark ? Colors.black : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -244,7 +240,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         side: BorderSide(color: scheme.outlineVariant),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -267,11 +263,11 @@ ThemeData _buildTheme(ColorScheme scheme) {
       filled: true,
       fillColor: isDark ? scheme.surfaceContainerLow : const Color(0xFFF7F7F7),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
       enabledBorder: OutlineInputBorder(
