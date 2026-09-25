@@ -145,7 +145,9 @@ service cloud.firestore {
         resource.data.sellerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      // Orders are created by the trusted server/Cloud Functions only. Clients may
+      // read their own orders and perform the narrowly-scoped updates below.
+      allow create: if false;
       // Order lifecycle (status, escrow release, dispatch proof, OTP gen) is
       // SERVER-OWNED via /api/orders/*. Clients may only soft-delete their own
       // row or, for sellers, persist a previously missing shipping cost.
@@ -179,7 +181,9 @@ service cloud.firestore {
         resource.data.sellerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      // Transaction mirrors are server-owned. Allowing clients to create them would
+      // let a buyer manufacture a fake payment/transaction record.
+      allow create: if false;
       // Server owns status/amount mutations (webhook, escrow, orders transition).
       // Clients may only soft-delete their own row or, for sellers, persist a
       // previously missing shipping cost before dispatching.
