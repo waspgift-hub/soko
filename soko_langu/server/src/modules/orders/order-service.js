@@ -25,6 +25,12 @@ function generateOrderNumber() {
   return `SV${y}${m}${d}${random}`;
 }
 
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 /**
  * Phase 2: Server-Authoritative Order Creation
  * Logic: Calculate totals based on DB product price, not client-provided amount.
