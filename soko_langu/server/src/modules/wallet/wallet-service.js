@@ -117,6 +117,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
         referenceId: withdrawal.id,
         idempotencyKey: `ledger_withdrawal_${withdrawal.id}`,
         description: 'Seller withdrawal',
+        tx,
       });
 
       // We must fetch the updated wallet state to return it
@@ -236,6 +237,7 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
         referenceId: sellerId,
         idempotencyKey: `legacy_balance_${sellerId}`,
         description: 'Firestore sellerBalance migrated at wallet cutover',
+        tx,
       });
 
       await tx.wallet.update({
