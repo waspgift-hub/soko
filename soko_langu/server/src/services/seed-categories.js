@@ -2,18 +2,19 @@
 const { getPrisma } = require('../config/database');
 
 const DEFAULTS = [
-  'Fashion',
   'Electronics',
-  'Phones',
-  'Computers',
-  'Beauty',
-  'Home',
-  'Vehicles',
+  'Phones & Tablets',
+  'Fashion',
+  'Home & Living',
+  'Beauty & Personal Care',
+  'Vehicles & Parts',
   'Agriculture',
-  'Food',
-  'Services',
-  'Accessories',
-  'Other',
+  'Food & Groceries',
+  'Sports & Outdoors',
+  'Baby & Kids',
+  'Business & Office',
+  'Hardware & Tools',
+  'Other Products',
 ];
 
 async function seedCategories() {
