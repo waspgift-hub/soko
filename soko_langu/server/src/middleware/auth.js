@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { getFirebaseAuth } = require('../config/firebase');
 const { getPrisma } = require('../config/database');
 const { recordUserActivity } = require('../services/activity');
@@ -152,11 +153,20 @@ function requireActive(req, res, next) {
   next();
 }
 
-// Verify admin secret or admin role
+// Verify admin secret or Firebase admin role.
+// Secret comparison is timing-safe and fails closed when ADMIN_SECRET is missing.
+function validAdminSecret(candidate) {
+  const expected = config.security.adminSecret;
+  if (!candidate || !expected) return false;
+  const a = Buffer.from(String(candidate));
+  const b = Buffer.from(String(expected));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 async function verifyAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
-  
-  if (secret && secret === config.security.adminSecret) {
+
+  if (validAdminSecret(secret)) {
     req.isAdmin = true;
     return next();
   }
