@@ -3,7 +3,7 @@
 // x-admin-secret or Firestore isAdmin flag.
 const { getFirebaseAuth } = require('../../config/firebase');
 const { getFirebaseFirestore } = require('../../config/firebase');
-const config = require('../../config');
+const { verifyAdminSecret } = require('../../../middlewares/security');
 
 function db() {
   return getFirebaseFirestore();
@@ -33,7 +33,7 @@ async function requireUser(req, res) {
 
 async function requireAdmin(req, res) {
   const secret = req.headers['x-admin-secret'];
-  if (secret && config.security.adminSecret && secret === config.security.adminSecret) {
+  if (verifyAdminSecret(secret)) {
     return { ok: true, uid: 'admin-secret' };
   }
   const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
