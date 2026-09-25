@@ -107,6 +107,8 @@ const config = {
     workerInProcess: process.env.FINANCE_WORKER_IN_PROCESS !== 'false',
     paymentExpireMs: (parseInt(process.env.FINANCE_PAYMENT_EXPIRE_MS) || 24 * 3600) * 1000,
     autoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    // Compatibility alias for deployments still using the 14-day protection setting.
+    inspectionAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
     withdrawalAutoProcessMs: (parseInt(process.env.FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN) || 15) * 60 * 1000,
     withdrawalStuckMs: (parseInt(process.env.FINANCE_WITHDRAWAL_STUCK_HOURS) || 48) * 3600 * 1000,
     reconciliationWindowMs: (parseInt(process.env.FINANCE_RECONCILIATION_WINDOW_HOURS) || 24) * 3600 * 1000,
