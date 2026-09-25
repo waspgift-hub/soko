@@ -240,13 +240,14 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
         tx,
       });
 
-      await tx.wallet.update({
-        where: { sellerId },
-        data: {
-          totalWithdrawn: { increment: withdrawn },
-          totalEarned: { increment: amt + withdrawn },
-        },
-      });
+      // updateWalletBalance already increments totalEarned by the migrated
+      // amount. Only preserve the historical withdrawn total here.
+      if (withdrawn > 0) {
+        await tx.wallet.update({
+          where: { sellerId },
+          data: { totalWithdrawn: { increment: withdrawn } },
+        });
+      }
 
       return { alreadyMigrated: false, sellerId, amount: amt };
     });
