@@ -41,7 +41,7 @@ const PUBLIC_SELECT = {
 };
 
 function buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerProfileId, ids }) {
-  const where = { status: 'published', deletedAt: null };
+  const where = { status: 'published', deletedAt: null, category: { is: { isActive: true } } };
   if (categoryId) where.categoryId = categoryId;
   if (sellerProfileId) where.sellerId = sellerProfileId;
   if (minPrice != null || maxPrice != null) {
@@ -116,8 +116,9 @@ async function categoryName(id) {
   if (!id) return null;
   const category = await getReadPrisma().category.findUnique({
     where: { id },
-    select: { name: true },
+    select: { name: true, isActive: true },
   });
+  if (category && !category.isActive) throw httpError(400, 'CATEGORY_INACTIVE');
   return category?.name ?? null;
 }
 
@@ -336,6 +337,7 @@ async function getProduct(idOrSlug) {
       ...(isUuid ? { OR: [{ id: idOrSlug }, { slug: idOrSlug }] } : { slug: idOrSlug }),
       status: 'published',
       deletedAt: null,
+      category: { is: { isActive: true } },
     },
     select: {
       ...PUBLIC_SELECT,
