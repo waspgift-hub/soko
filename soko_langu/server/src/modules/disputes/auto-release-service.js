@@ -17,14 +17,14 @@ const REQUIRED_SAFEGUARDS = [
 async function evaluateAutoRelease(tx, orderId) {
   const order = await tx.order.findUnique({
     where: { id: orderId },
-    include: { dispute: true, escrowHold: true },
+    include: { disputes: true, escrowHold: true },
   });
   if (!order) return { canRelease: false, missingSafeguards: ['ORDER_NOT_FOUND'] };
 
   const missing = [];
 
   // 1. No active dispute
-  const hasActiveDispute = (order.dispute || []).some((d) => d.status === 'open');
+  const hasActiveDispute = (order.disputes || []).some((d) => d.status === 'open');
   if (hasActiveDispute) missing.push('NO_ACTIVE_DISPUTE');
 
   // 2. Verified delivery
