@@ -251,7 +251,7 @@ class ProductApiClient {
               id: r.id,
               name: r.name,
               nameSw: r.name,
-              icon: r.iconUrl ?? '📦',
+              icon: r.iconUrl ?? 'other',
               subcategories: byParent[r.id] ?? const [],
               isActive: true,
               order: r.sortOrder,
