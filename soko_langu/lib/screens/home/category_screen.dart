@@ -61,8 +61,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         actions: [
           IconButton(
             tooltip: context.tr('search'),
-            onPressed: () => _searchController.text = '',
-            icon: const Icon(Icons.search_rounded),
+              icon: const Icon(Icons.search_rounded),
           ),
         ],
       ),
@@ -135,7 +134,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                   ? category.nameSw
                                   : category.name,
                               icon: categoryIconFor(category.icon),
-                              imageUrl: category.image,
                               subcategoryCount:
                                   category.subcategories.length,
                               onTap: () => context.push(
@@ -242,7 +240,6 @@ class _CategoryCard extends StatefulWidget {
   final String name;
   final String secondaryName;
   final IconData icon;
-  final String? imageUrl;
   final int subcategoryCount;
   final VoidCallback onTap;
 
@@ -252,7 +249,6 @@ class _CategoryCard extends StatefulWidget {
     required this.icon,
     required this.subcategoryCount,
     required this.onTap,
-    this.imageUrl,
   });
 
   @override
