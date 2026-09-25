@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { getPrisma } = require('../../config/database');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
 const { releaseEscrowAndSettle } = require('../handover/handover-service');
@@ -19,8 +20,8 @@ function generateOrderNumber() {
   const date = new Date();
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const random = Math.floor(1000 + Math.random() * 9000);
+  const d = String(date.getDate() + 1).padStart(2, '0');
+  const random = crypto.randomBytes(4).toString('hex').toUpperCase();
   return `SV${y}${m}${d}${random}`;
 }
 
@@ -35,7 +36,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     const product = await tx.product.findUnique({
       where: { id: productId },
       include: {
-        seller: { select: { id: true, storeName: true, sellerStatus: true } },
+        seller: { select: { id: true, userId: true, storeName: true, sellerStatus: true } },
         category: { select: { id: true, name: true, isActive: true } },
         media: { select: { r2Key: true, thumbnailR2Key: true, type: true }, orderBy: { sortOrder: 'asc' }, take: 4 },
       },
@@ -44,8 +45,11 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     if (!product) throw new Error('PRODUCT_NOT_FOUND');
     if (product.status !== 'published' || product.deletedAt) throw new Error('PRODUCT_NOT_AVAILABLE');
     if (!product.category?.isActive) throw new Error('CATEGORY_INACTIVE');
-    if (product.stock < quantity) throw new Error('INSUFFICIENT_STOCK');
-    if (product.sellerId === buyerId) throw new Error('CANNOT_BUY_OWN_PRODUCT');
+    if (product.seller?.sellerStatus && product.seller.sellerStatus !== 'active') throw new Error('SELLER_NOT_ACTIVE');
+    const qty = Number(quantity);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 1000) throw new Error('INVALID_QUANTITY');
+    if (product.stock < qty) throw new Error('INSUFFICIENT_STOCK');
+    if (product.seller?.userId === buyerId) throw new Error('CANNOT_BUY_OWN_PRODUCT');
 
     const address = await tx.address.findUnique({
       where: { id: addressId },
@@ -54,8 +58,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     if (!address || address.userId !== buyerId) throw new Error('INVALID_ADDRESS');
 
     // Server-authoritative calculation
-    const subtotal = Number(product.price) * quantity;
-
+    const qty = Number(quantity);
     const order = await tx.order.create({
       data: {
         orderNumber: generateOrderNumber(),
@@ -66,7 +69,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
           productId: product.id,
           title: product.title,
           unitPrice: String(product.price),
-          quantity,
+          quantity: qty,
           currency: product.currency,
           condition: product.condition,
           media: product.media.map((m) => ({ r2Key: m.r2Key, thumbnailR2Key: m.thumbnailR2Key, type: m.type })),
@@ -80,7 +83,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
           region: address.region || '',
           country: address.country || 'TZ',
         },
-        productPrice: BigInt(product.price) * BigInt(quantity),
+        productPrice: BigInt(product.price) * BigInt(qty),
         shippingFee: 0n,
         platformCommission: 0n,
         totalAmount: BigInt(product.price) * BigInt(quantity),
@@ -256,7 +259,7 @@ async function markDelivered({ orderId, actorId }) {
 
     const actor = actorId === order.buyerId ? 'buyer' : 'seller';
     const machine = new OrderStateMachine(order.status);
-    machine.transition(ORDER_STATES.DELIVERED, {
+    machine.transition(ORDER_STATES.INSPECTION_PERIOD, {
       actor,
       actorId,
       reason: 'Delivery marked delivered',
@@ -284,10 +287,15 @@ async function disputeOrder({ orderId, filedBy, role, reason, description }) {
 }
 
 module.exports = {
-  DEFAULT_TIMERS,
+  DEFAULT_TIMERS: { ...DEFAULT_TIMERS, OTP_TTL_MS: 30 * 60 * 1000 },
   createOrder,
   approveShippingQuote,
   initiatePayment,
   verifyPayment,
   completeOrder,
+  submitShippingQuote,
+  markDispatched,
+  markDelivered,
+  cancelOrder,
+  disputeOrder,
 };
