@@ -1,16 +1,17 @@
-import 'package:flutter/material.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../models/product_model.dart';
+
 import '../../models/flash_sale_model.dart';
+import '../../models/product_model.dart';
 import '../../services/deep_link_service.dart';
 import '../../services/localization_service.dart';
 import '../../services/product_service.dart';
 import '../../services/soko_cache_manager.dart';
 import '../extensions/context_tr.dart';
-import '../theme/app_colors.dart';
-import 'soko_vibe_watermark.dart';
 import 'ds/ds.dart';
+import 'soko_vibe_watermark.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -18,237 +19,301 @@ class ProductCard extends StatelessWidget {
   final FlashSale? flashSale;
   final VoidCallback? onShare;
 
-  const ProductCard({super.key, required this.product, required this.onTap, this.flashSale, this.onShare});
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onTap,
+    this.flashSale,
+    this.onShare,
+  });
 
   void _shareProduct(BuildContext context) {
-    final shareAction = onShare ?? () {
-      final price =
-          '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
-      final text =
-          '${product.name}\n'
-          '${context.trParams('share_price_line', {'price': price})}\n'
-          '${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(product.id)}';
-      SharePlus.instance.share(ShareParams(text: text));
-    };
+    final shareAction = onShare ??
+        () {
+          final price =
+              '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
+          final text = '${product.name}\n'
+              '${context.trParams('share_price_line', {'price': price})}\n'
+              '${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(product.id)}';
+          SharePlus.instance.share(ShareParams(text: text));
+        };
     shareAction();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardWidth = constraints.maxWidth;
-        final scale = (cardWidth / 170).clamp(0.8, 1.4);
-        final nameSize = (14 * scale).clamp(12.0, 18.0);
-        final priceSize = (13 * scale).clamp(12.0, 17.0);
-        final smallSize = (11 * scale).clamp(10.0, 14.0);
-        final badgeSize = (10 * scale).clamp(9.0, 13.0);
-        final padding = (8.0 * scale).clamp(6.0, 12.0);
-        const radius = 15.0;
-
-        Widget card = Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.25 : 0.05),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
-                  child: product.images.isNotEmpty
-                      ? Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Hero(
-                              tag: 'product-img-${product.id}',
-                              child: CachedNetworkImage(
-                                imageUrl: getThumbnailUrl(product.images.first),
-                                cacheManager: SokoCacheManager(),
-                                memCacheWidth: 360,
-                                memCacheHeight: 360,
-                                fit: BoxFit.cover,
-                                fadeInDuration: const Duration(milliseconds: 300),
-                                fadeOutDuration: const Duration(milliseconds: 100),
-                                placeholder: (context, url) => Container(
-                                  color: cs.surfaceContainerLow,
-                                  child: const DsSkeleton(),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: cs.surfaceContainerLow,
-                                  child: Icon(Icons.image_outlined, size: 40, color: cs.onSurfaceVariant),
-                                ),
-                              ),
-                            ),
-                            _buildSellerBadge(context, badgeSize, cs),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Material(
-                                color: Colors.black.withValues(alpha: 0.30),
-                                borderRadius: BorderRadius.circular(999),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: () => _shareProduct(context),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: Icon(Icons.share_outlined, size: 18, color: cs.surface),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 6,
-                              left: 6,
-                              child: IgnorePointer(
-                                child: SokoVibeWatermark(),
-                              ),
-                            ),
-                            if (flashSale != null)
-                              Positioned(
-                                top: 8, right: 8,
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 3 * scale),
-                                  decoration: BoxDecoration(
-                                    color: cs.error,
-                                    borderRadius: BorderRadius.circular(10),
-                                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 6)],
-                                  ),
-                                  child: Text('-${flashSale!.discountPercent.toStringAsFixed(0)}%',
-                                    style: TextStyle(color: cs.surface, fontSize: badgeSize, fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        )
-                      : Center(child: Icon(Icons.image_outlined, size: 40, color: cs.onSurface.withValues(alpha: 0.6))),
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.all(padding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: nameSize, color: cs.onSurface),
-                          ),
-                        ),
-                        if (product.sellerKycApproved) ...[
-                          SizedBox(width: 2 * scale),
-                          Icon(Icons.verified, size: 14 * scale, color: cs.successGreen),
-                        ],
-                      ],
-                    ),
-                    SizedBox(height: 4 * scale),
-                    if (flashSale != null)
-                      DsPrice(
-                        price: flashSale!.salePrice,
-                        oldPrice: flashSale!.originalPrice,
-                        color: cs.error,
-                        size: priceSize,
-                        weight: FontWeight.w700,
-                      )
-                    else
-                      DsPrice(
-                        price: product.price,
-                        color: cs.primary,
-                        size: priceSize,
-                        weight: FontWeight.w700,
-                      ),
-                    SizedBox(height: 4 * scale),
-                    if (product.condition == 'new')
-                      Row(
-                        children: [
-                          Text('  ·  ${context.tr('new')}',
-                            style: TextStyle(fontSize: smallSize, color: cs.successGreen, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    if (product.rating > 0) ...[
-                      SizedBox(height: 2 * scale),
-                      Row(
-                        children: [
-                          Icon(Icons.star_rounded, size: 13 * scale, color: cs.trendingOrange),
-                          SizedBox(width: 2 * scale),
-                          Text("${product.rating.toStringAsFixed(1)} (${product.reviewCount})",
-                            style: TextStyle(fontSize: smallSize, color: cs.onSurface.withValues(alpha: 0.5)),
-                          ),
-                          const Spacer(),
-                          if (product.soldCount > 0)
-                            Text('${product.soldCount} ${context.tr('sold')}',
-                              style: TextStyle(fontSize: smallSize * 0.9, color: cs.onSurface.withValues(alpha: 0.4)),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-
-        final displayPrice = flashSale?.salePrice ?? product.price;
-final semanticsLabel = [
-          product.name,
-          context.formatPrice(displayPrice),
-          if (product.rating > 0)
-            '${product.rating.toStringAsFixed(1)} ${context.tr('rating')}',
-        ].join(', ');
+        final width = constraints.maxWidth;
+        final imageHeight = (width * 0.88).clamp(132.0, 250.0);
+        final compact = width < 170;
 
         return Semantics(
           button: true,
-          label: semanticsLabel,
+          label: [
+            product.name,
+            context.formatPrice(flashSale?.salePrice ?? product.price),
+            if (product.rating > 0)
+              '${product.rating.toStringAsFixed(1)} ${context.tr('rating')}',
+          ].join(', '),
           onTap: onTap,
           child: AnimatedPress(
             onTap: onTap,
-            pressedScale: 0.98,
-            child: card,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSellerBadge(BuildContext context, double badgeSize, ColorScheme cs) {
-    return Stack(
-      children: [
-        if (product.isFeaturedValid)
-          Positioned(
-            top: 8, left: 8,
+            pressedScale: 0.985,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [cs.trendingOrange, cs.trendingOrange.withValues(alpha: 0.7)]),
-                borderRadius: BorderRadius.circular(10),
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: cs.outlineVariant),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.verified, size: badgeSize, color: cs.surface),
-                  const SizedBox(width: 3),
-                  Text(context.tr('featured'),
-                    style: TextStyle(color: cs.surface, fontSize: 9, fontWeight: FontWeight.bold),
+                  SizedBox(
+                    height: imageHeight,
+                    width: double.infinity,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (product.images.isNotEmpty)
+                          Hero(
+                            tag: 'product-img-${product.id}',
+                            child: CachedNetworkImage(
+                              imageUrl: getThumbnailUrl(product.images.first),
+                              cacheManager: SokoCacheManager(),
+                              memCacheWidth: 480,
+                              memCacheHeight: 480,
+                              fit: BoxFit.cover,
+                              fadeInDuration:
+                                  const Duration(milliseconds: 180),
+                              placeholder: (_, __) => const DsSkeleton(),
+                              errorWidget: (_, __, ___) => Container(
+                                color: cs.surfaceContainerHigh,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  color: cs.onSurfaceVariant,
+                                  size: 34,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            color: cs.surfaceContainerLow,
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: cs.onSurfaceVariant,
+                              size: 34,
+                            ),
+                          ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Material(
+                            color: Colors.black.withValues(alpha: 0.42),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              onTap: () => _shareProduct(context),
+                              customBorder: const CircleBorder(),
+                              child: const Padding(
+                                padding: EdgeInsets.all(9),
+                                child: Icon(
+                                  Icons.ios_share_rounded,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 8,
+                          bottom: 8,
+                          child: IgnorePointer(
+                            child: SokoVibeWatermark(),
+                          ),
+                        ),
+                        if (product.isFeaturedValid)
+                          Positioned(
+                            left: 8,
+                            top: 8,
+                            child: _Pill(
+                              icon: Icons.verified_rounded,
+                              label: context.tr('featured'),
+                              background: cs.primary,
+                              foreground: cs.onPrimary,
+                            ),
+                          ),
+                        if (flashSale != null)
+                          Positioned(
+                            left: 8,
+                            top: product.isFeaturedValid ? 41 : 8,
+                            child: _Pill(
+                              icon: Icons.local_offer_outlined,
+                              label:
+                                  '-${flashSale!.discountPercent.toStringAsFixed(0)}%',
+                              background: cs.error,
+                              foreground: cs.onError,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 9 : 11,
+                      10,
+                      compact ? 9 : 11,
+                      11,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontSize: compact ? 12 : 13.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: flashSale != null
+                                  ? DsPrice(
+                                      price: flashSale!.salePrice,
+                                      oldPrice: flashSale!.originalPrice,
+                                      color: cs.error,
+                                      size: compact ? 12.5 : 15,
+                                      weight: FontWeight.w800,
+                                    )
+                                  : DsPrice(
+                                      price: product.price,
+                                      color: cs.primary,
+                                      size: compact ? 12.5 : 15,
+                                      weight: FontWeight.w800,
+                                    ),
+                            ),
+                            if (product.sellerKycApproved)
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 16,
+                                color: cs.primary,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            if (product.rating > 0) ...[
+                              Icon(Icons.star_rounded,
+                                  size: 14, color: cs.onSurface),
+                              const SizedBox(width: 3),
+                              Text(
+                                product.rating.toStringAsFixed(1),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '(${product.reviewCount})',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(color: cs.onSurfaceVariant),
+                              ),
+                            ],
+                            if (product.condition == 'new') ...[
+                              const Spacer(),
+                              Text(
+                                context.tr('new'),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(color: cs.primary),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (product.location.isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Icon(Icons.location_on_outlined,
+                                  size: 13, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  product.location,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(color: cs.onSurfaceVariant),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-      ],
+        );
+      },
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  const _Pill({
+    required this.icon,
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: foreground, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ).copyWith(color: foreground),
+          ),
+        ],
+      ),
     );
   }
 }
