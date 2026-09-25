@@ -20,7 +20,7 @@ function generateOrderNumber() {
   const date = new Date();
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
   const random = crypto.randomBytes(4).toString('hex').toUpperCase();
   return `SV${y}${m}${d}${random}`;
 }
@@ -58,7 +58,6 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     if (!address || address.userId !== buyerId) throw new Error('INVALID_ADDRESS');
 
     // Server-authoritative calculation
-    const qty = Number(quantity);
     const order = await tx.order.create({
       data: {
         orderNumber: generateOrderNumber(),
@@ -86,7 +85,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
         productPrice: BigInt(product.price) * BigInt(qty),
         shippingFee: 0n,
         platformCommission: 0n,
-        totalAmount: BigInt(product.price) * BigInt(quantity),
+        totalAmount: BigInt(product.price) * BigInt(qty),
         currency: product.currency,
         placedAt: new Date(),
         statusChangedBy: buyerId,
