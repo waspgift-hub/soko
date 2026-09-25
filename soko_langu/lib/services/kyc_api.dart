@@ -80,8 +80,8 @@ class KycApiClient {
             'fullName': fullName,
             'idType': idType,
             'idNumber': idNumber,
-            'idImageUrl': ?idImageUrl,
-            'selfieUrl': ?selfieUrl,
+            if (idImageUrl != null) 'idImageUrl': idImageUrl,
+            if (selfieUrl != null) 'selfieUrl': selfieUrl,
           }),
         )
         .timeout(const Duration(seconds: 15));
