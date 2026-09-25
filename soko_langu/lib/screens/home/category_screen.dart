@@ -58,12 +58,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(context.tr('categories')),
-        actions: [
-          IconButton(
-            tooltip: context.tr('search'),
-              icon: const Icon(Icons.search_rounded),
-          ),
-        ],
+
       ),
       body: SafeArea(
         bottom: false,
@@ -137,7 +132,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               subcategoryCount:
                                   category.subcategories.length,
                               onTap: () => context.push(
-                                '\${AppRoutes.categoryProducts}/\${category.name}',
+                                '${AppRoutes.categoryProducts}/${category.name}',
                                 extra: category,
                               ),
                             );
@@ -212,7 +207,7 @@ class _CategoryIntro extends StatelessWidget {
                     child: Center(
                       widthFactor: 1,
                       child: Text(
-                        '\$count',
+                        '$count',
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 12,
@@ -362,7 +357,7 @@ class _CategoryCardState extends State<_CategoryCard> {
                       ),
                       const Spacer(),
                       Text(
-                        '\${widget.subcategoryCount}',
+                        '${widget.subcategoryCount}',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
                               color: cs.primary,
                               fontWeight: FontWeight.w700,
