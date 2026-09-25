@@ -1,6 +1,7 @@
 const { getPrisma } = require('../../config/database');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
-const { updateWalletBalance, settleEscrowToSeller } = require('../wallet/ledger-service');
+const { releaseEscrowAndSettle } = require('../handover/handover-service');
+const { submitQuote } = require('../shipping/shipping-quote-service');
 const { computeSellerParity } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
@@ -33,12 +34,18 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
   return prisma.$transaction(async (tx) => {
     const product = await tx.product.findUnique({
       where: { id: productId },
-      include: { seller: true },
+      include: {
+        seller: { select: { id: true, storeName: true, sellerStatus: true } },
+        category: { select: { id: true, name: true, isActive: true } },
+        media: { select: { r2Key: true, thumbnailR2Key: true, type: true }, orderBy: { sortOrder: 'asc' }, take: 4 },
+      },
     });
 
     if (!product) throw new Error('PRODUCT_NOT_FOUND');
-    if (product.status !== 'ACTIVE') throw new Error('PRODUCT_NOT_AVAILABLE');
+    if (product.status !== 'published' || product.deletedAt) throw new Error('PRODUCT_NOT_AVAILABLE');
+    if (!product.category?.isActive) throw new Error('CATEGORY_INACTIVE');
     if (product.stock < quantity) throw new Error('INSUFFICIENT_STOCK');
+    if (product.sellerId === buyerId) throw new Error('CANNOT_BUY_OWN_PRODUCT');
 
     const address = await tx.address.findUnique({
       where: { id: addressId },
@@ -51,28 +58,35 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
 
     const order = await tx.order.create({
       data: {
-        id: generateOrderNumber(), // Using as ID for simplicity if mapped to String @id
+        orderNumber: generateOrderNumber(),
         buyerId,
         sellerId: product.sellerId,
-        status: ORDER_STATES.DRAFT,
-        subtotal,
-        total: subtotal, // Initial total; will be updated with shipping/fees
+        status: ORDER_STATES.PENDING_SHIPPING_FEE,
+        productSnapshot: {
+          productId: product.id,
+          title: product.title,
+          unitPrice: String(product.price),
+          quantity,
+          currency: product.currency,
+          condition: product.condition,
+          media: product.media.map((m) => ({ r2Key: m.r2Key, thumbnailR2Key: m.thumbnailR2Key, type: m.type })),
+        },
+        shippingAddressSnapshot: {
+          fullName: address.fullName || '',
+          phone: address.phone || '',
+          addressLine1: address.addressLine1,
+          addressLine2: address.addressLine2 || '',
+          city: address.city || '',
+          region: address.region || '',
+          country: address.country || 'TZ',
+        },
+        productPrice: BigInt(product.price) * BigInt(quantity),
+        shippingFee: 0n,
+        platformCommission: 0n,
+        totalAmount: BigInt(product.price) * BigInt(quantity),
         currency: product.currency,
-        shippingAddress: {
-          fullName: address.fullName,
-          phone: address.phone,
-          line1: address.addressLine1,
-          city: address.city,
-        },
-        items: {
-          create: {
-            productId: product.id,
-            sellerId: product.sellerId,
-            titleSnapshot: product.title,
-            priceSnapshot: product.price,
-            quantity,
-          },
-        },
+        placedAt: new Date(),
+        statusChangedBy: buyerId,
       },
     });
 
