@@ -296,6 +296,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   Future<void> _onResume() async {
     await AppLockService.instance.onResume();
     _trackSession();
+
+    // Foreground resync is the reliable mobile lifecycle point. Critical
+    // payment/escrow jobs stay server-side; this keeps the UI current without
+    // pretending a Dart timer is a persistent background daemon.
+    unawaited(notificationService.refreshUnreadCount());
+    unawaited(ExchangeRateService().initialize());
+
     if (mounted) setState(() {});
   }
 
