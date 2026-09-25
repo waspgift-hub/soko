@@ -587,7 +587,13 @@ class _HomeScreenState extends State<HomeScreen>
                                     border: Border.all(color: cs.outlineVariant),
                                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
                                   ),
-                                  child: Center(child: Text(cat.icon, style: const TextStyle(fontSize: 28))),
+                                  child: Center(
+                                    child: Icon(
+                                      categoryIconFor(cat.icon),
+                                      size: 27,
+                                      color: cs.primary,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
