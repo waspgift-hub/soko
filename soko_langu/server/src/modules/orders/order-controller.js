@@ -187,7 +187,10 @@ const orderController = {
     const actorId = req.user.id;
 
     const prisma = getPrisma();
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { seller: { select: { id: true, userId: true } } },
+    });
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
