@@ -198,6 +198,18 @@ async function completeOrder({ orderId, actorId = 'system', method = 'AUTO_RELEA
 
     if (!eligible.includes(order.status)) throw new Error('INVALID_STATE_FOR_COMPLETION');
 
+    if (method === 'AUTO_RELEASE') {
+      const { evaluateAutoRelease } = require('../disputes/auto-release-service');
+      const guard = await evaluateAutoRelease(tx, orderId);
+      if (!guard.canRelease) {
+        return {
+          status: 'BLOCKED',
+          missingSafeguards: guard.missingSafeguards,
+          order,
+        };
+      }
+    }
+
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {
