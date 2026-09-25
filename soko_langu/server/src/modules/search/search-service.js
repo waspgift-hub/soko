@@ -9,6 +9,8 @@ async function searchProducts({ query, categoryId, minPrice, maxPrice, sort, pag
 
   const where = {
     status: 'published',
+    deletedAt: null,
+    category: { is: { isActive: true } },
     ...(query ? {
       OR: [
         { title: { contains: query, mode: 'insensitive' } },
