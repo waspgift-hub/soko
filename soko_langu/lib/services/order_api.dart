@@ -98,7 +98,7 @@ class OrderApiClient {
           body: jsonEncode({
             'amount': amount,
             'estimatedDays': estimatedDays,
-            'notes': ?notes,
+            if (notes != null) 'notes': notes,
           }),
         )
         .timeout(const Duration(seconds: 15));
