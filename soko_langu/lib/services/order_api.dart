@@ -39,7 +39,7 @@ class OrderApiClient {
     final params = <String, String>{
       'page': '$page',
       'limit': '$limit',
-      'status': ?status,
+      if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
     };
     final uri = Uri.parse(ApiConfig.v1('/orders')).replace(queryParameters: params);
     final res = await _http
