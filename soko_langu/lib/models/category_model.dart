@@ -37,7 +37,7 @@ class Category {
       id: doc.id,
       name: data['name'] ?? '',
       nameSw: data['nameSw'] ?? '',
-      icon: data['icon'] ?? '📦',
+      icon: data['icon'] ?? 'other',
       image: data['image'],
       subcategories: subs,
       isActive: data['isActive'] ?? true,
