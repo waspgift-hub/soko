@@ -2,8 +2,8 @@ const { getPrisma } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { generateOtp, hashOtp, verifyOtp, generateQrPayload } = require('./otp-generator');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
-const { DEFAULT_TIMERS } = require('../orders/order-service');
 const { ensureWallet } = require('../wallet/wallet-service');
+const DEFAULT_OTP_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Issue a new OTP credential for an order (active handover).
@@ -35,7 +35,7 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
       const { hash, salt } = hashOtp(otp);
       const ttl = process.env.HANDOVER_OTP_TTL_MS
         ? Number(process.env.HANDOVER_OTP_TTL_MS)
-        : DEFAULT_TIMERS.OTP_TTL_MS || 30 * 60 * 1000;
+        : DEFAULT_OTP_TTL_MS;
 
       const expiresAt = new Date(Date.now() + ttl);
       const credential = await tx.otpCredential.create({
@@ -137,16 +137,7 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
         data: { status: ORDER_STATES.COMPLETED, completedAt: new Date() },
       });
 
-      // V3 Ledger Settlement: Escrow Pool -> Seller Wallet
-      const sellerEntitlement = Number(order.total) - Number(order.platformFee);
-      
-      // Use the V3 ledger-service for atomic, double-entry updates
-      const { entry } = await settleEscrowToSeller({
-        orderId: order.id,
-        sellerId: order.sellerId,
-        amount: sellerEntitlement,
-        idempotencyKey: `settle_${order.id}`,
-      });
+      await releaseEscrowAndSettle(tx, order);
 
       // Create receipt
       await tx.receipt.create({
@@ -154,12 +145,12 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
           orderId,
           purchaserId: order.buyerId,
           sellerId: order.sellerId,
-          amount: order.total,
+          amount: order.totalAmount,
           currency: order.currency,
         },
       });
 
-      return { status: 'COMPLETED', order: updatedOrder, ledgerEntry: entry };
+      return { status: 'COMPLETED', order: updatedOrder };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`complete:${orderId}`);
