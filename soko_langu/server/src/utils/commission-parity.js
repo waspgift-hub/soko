@@ -1,14 +1,16 @@
-// Commission parity with the product owner's economics: Soko Vibe charges no
-// platform fee and no pass-through on orders — the buyer pays price + shipping
-// in full to the escrow and the seller nets price + shipping in full. Whatever
-// ClickPesa charges (USSD push at collection, payout fee at payout) is deducted
-// by ClickPesa itself, outside Soko Vibe's ledger, so our escrow total always
-// equals the seller entitlement exactly.
+// Central commission calculation used by order pricing and seller settlement.
+// Current Soko Vibe product rule: 3.5% platform commission on product value.
+// Shipping is passed through to the seller and is not commissionable.
+// BigInt arithmetic keeps TZS calculations exact.
 function computeSellerParity(productPrice, shippingFee = 0n) {
   const p = BigInt(productPrice);
   const s = BigInt(shippingFee);
-  const commission = 0n;
+  if (p < 0n || s < 0n) throw new Error('INVALID_ORDER_AMOUNT');
+
+  // 3.5% = 35/1000. Add 500 before integer division for nearest-TZS rounding.
+  const commission = (p * 35n + 500n) / 1000n;
   const totalAmount = p + s;
+
   return {
     commission,
     totalAmount,
