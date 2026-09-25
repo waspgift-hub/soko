@@ -85,6 +85,7 @@ class NotificationService {
       // Initialize local notifications first for heads-up display
       await LocalNotificationService().initialize();
       LocalNotificationService.onTap = _handleLocalTap;
+      await LocalNotificationService().consumePendingTap();
 
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
