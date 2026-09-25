@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
