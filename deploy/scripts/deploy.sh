@@ -22,6 +22,34 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 10
 fi
 
+if [ -f "${ENV_FILE}" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "${ENV_FILE}"
+  set +a
+fi
+
+REQUIRED_ENV_VARS=(
+  NODE_ENV PORT DATABASE_URL REDIS_URL
+  FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL
+  R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
+  CLICKPESA_API_KEY CLICKPESA_API_SECRET
+  ADMIN_SECRET WEBHOOK_SECRET ENCRYPTION_KEY
+  ALLOWED_ORIGINS
+)
+
+for key in "${REQUIRED_ENV_VARS[@]}"; do
+  if [ -z "${!key:-}" ]; then
+    echo "[DEPLOY] Missing required environment variable: ${key}"
+    exit 11
+  fi
+done
+
+if [ "${NODE_ENV}" != "production" ]; then
+  echo "[DEPLOY] NODE_ENV must be production (got: ${NODE_ENV})"
+  exit 12
+fi
+
 echo "=========================================="
 echo "  Soko Vibe Production Deployment"
 echo "  Commit: ${GIT_COMMIT:-current}"
