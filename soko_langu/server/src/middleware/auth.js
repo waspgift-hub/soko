@@ -183,18 +183,46 @@ async function verifyAdmin(req, res, next) {
   next();
 }
 
-// The single admin gate: x-admin-secret only. No Firebase path — the panel
-// and all admin tooling authenticate with the shared secret, so there is
-// exactly one login method on backend and UI alike.
-function authenticateAdmin(req, res, next) {
+// Admin gate. The browser panel may use the shared secret, while native/admin
+// clients can use a Firebase ID token belonging to an active admin account.
+// This keeps ADMIN_SECRET out of the Flutter application.
+async function authenticateAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
-
-  if (secret && secret === config.security.adminSecret) {
+  if (validAdminSecret(secret)) {
     req.isAdmin = true;
     return next();
   }
 
-  return res.status(401).json({ error: 'AUTH_REQUIRED' });
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+  }
+
+  try {
+    const auth = getFirebaseAuth();
+    if (!auth) return res.status(503).json({ error: 'AUTH_SERVICE_UNAVAILABLE' });
+    const decoded = await auth.verifyIdToken(authHeader.slice(7));
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({
+      where: { firebaseUid: decoded.uid },
+      select: { id: true, firebaseUid: true, email: true, role: true, accountStatus: true },
+    });
+    if (!user || !['admin', 'super_admin'].includes(user.role)) {
+      return res.status(403).json({ error: 'ADMIN_REQUIRED' });
+    }
+    if (user.accountStatus !== 'active') {
+      return res.status(403).json({ error: 'ACCOUNT_NOT_ACTIVE' });
+    }
+    req.firebaseUid = decoded.uid;
+    req.user = user;
+    req.isAdmin = true;
+    recordUserActivity(user.id);
+    return next();
+  } catch (error) {
+    if (error.code === 'auth/id-token-expired') return res.status(401).json({ error: 'TOKEN_EXPIRED' });
+    if (error.code === 'auth/id-token-revoked') return res.status(401).json({ error: 'TOKEN_REVOKED' });
+    return res.status(401).json({ error: 'INVALID_TOKEN' });
+  }
 }
 
 // Active-account gate that also passes secret-authenticated admin calls,
