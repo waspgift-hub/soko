@@ -27,7 +27,7 @@ test('syncLegacyOrderStatus no-ops when no Firestore is configured', async () =>
   assert.ok(true);
 });
 
-test('syncLegacyOrderStatus leaves pure-v2 orders untouched', async () => {
+test('syncLegacyOrderStatus creates a presentation mirror for v2 orders', async () => {
   const writes = [];
   const db = {
     collection() {
@@ -43,7 +43,7 @@ test('syncLegacyOrderStatus leaves pure-v2 orders untouched', async () => {
   };
   const sync = buildSyncLegacyOrderStatus(db);
   await sync({ id: 'or-pure-v2', status: 'completed' });
-  assert.strictEqual(writes.length, 0);
+  assert.strictEqual(writes.length, 2);
 });
 
 test('syncLegacyOrderStatus updates existing mirror docs with the legacy status', async () => {
