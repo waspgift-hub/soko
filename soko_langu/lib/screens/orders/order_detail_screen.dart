@@ -103,7 +103,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _isLoading = false);
     });
-    if (status == 'quoted') {
+    if (canonicalStatusOf(status) == OrderStatus.awaitingPayment) {
       _fetchGatewayFee();
     }
   }
@@ -1817,7 +1817,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
     }
 
-    if (status == 'quoted' && isBuyer) {
+    if (canonicalStatusOf(status) == OrderStatus.awaitingPayment && isBuyer) {
       final shipping = _quotedShippingCost;
       final price = _quotedProductPrice;
       final platformFee = _quotedPlatformFee;
