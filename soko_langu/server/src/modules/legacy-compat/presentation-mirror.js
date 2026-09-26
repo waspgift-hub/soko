@@ -25,11 +25,25 @@ function buildSyncLegacyOrderStatus(db) {
   return async function syncFromDb(order) {
     try {
       if (!db) return;
-      // Only touch docs that already exist — mirroring is for app/web orders
-      // that were mirrored at creation, never for pure-v2 orders.
-      const snapshot = await db.collection('orders').doc(order.id).get();
-      if (!snapshot.exists) return;
-      const patch = { status: legacyStatusOf(order.status), updatedAt: FieldValue.serverTimestamp() };
+      // The current Flutter seller/buyer surfaces still stream Firestore.
+      // Create a presentation document for every v1 order so the UI and the
+      // authoritative Postgres lifecycle cannot diverge during the bridge.
+      const patch = {
+        status: legacyStatusOf(order.status),
+        orderId: order.id,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        productPrice: Number(order.productPrice || 0),
+        shippingCost: Number(order.shippingFee || 0),
+        platformFee: Number(order.platformCommission || 0),
+        totalAmount: Number(order.totalAmount || 0),
+        productName: order.productSnapshot?.title || '',
+        productImage: order.productSnapshot?.imageUrl || '',
+        buyerName: order.buyer?.displayName || '',
+        sellerName: order.seller?.storeName || '',
+        shippingQuote: order.shippingQuoteSnapshot || null,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
       await db.collection('orders').doc(order.id).set(patch, { merge: true });
       await db.collection('transactions').doc(order.id).set(patch, { merge: true });
     } catch (e) {
