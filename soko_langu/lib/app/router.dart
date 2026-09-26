@@ -64,7 +64,7 @@ import '../screens/legal/terms_of_service_screen.dart';
 import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
-import '../repositories/product_repository.dart'; // Added for V3 API loading
+import '../repositories/product_repository.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -493,12 +493,9 @@ class _ProductDetailLoaderState extends State<_ProductDetailLoader> {
     try {
       // V3 Alignment: Use ProductRepository (API) instead of direct Firestore call
       // This ensures the user sees the authoritative price and stock from Postgres.
-      final repository = ProductRepository(
-        apiClient: ProductApiClient(), // Injected or provided via Provider
-        cache: LocalCacheService(),
-      );
-      
-      return await repository.getProductById(widget.productId);
+      final repository = ProductRepository();
+      final result = await repository.getProduct(widget.productId);
+      return result.data;
     } catch (e) {
       debugPrint('DeepLink Product Load Error: $e');
       return null;

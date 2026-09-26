@@ -1,248 +1,214 @@
 const { getPrisma } = require('../../config/database');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
-const { updateWalletBalance, settleEscrowToSeller } = require('../wallet/ledger-service');
 const { computeSellerParity } = require('../../utils/commission-parity');
+const shippingQuoteService = require('../shipping/shipping-quote-service');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
-// Default timers (configurable)
-const DEFAULT_TIMERS = {
+const DEFAULT_TIMERS = Object.freeze({
   SHIPPING_QUOTE_HOURS: 24,
   BUYER_PAYMENT_HOURS: 24,
   SELLER_DISPATCH_HOURS: 48,
   INSPECTION_MINUTES: 30,
   INSPECTION_MAX_HOURS: 24,
   AUTO_RELEASE_DAYS: 14,
-};
+  OTP_TTL_MS: 30 * 60 * 1000,
+});
 
 function generateOrderNumber() {
-  const date = new Date();
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const d = new Date();
   const random = Math.floor(1000 + Math.random() * 9000);
-  return `SV${y}${m}${d}${random}`;
+  return `SV${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}${random}`;
 }
 
-/**
- * Phase 2: Server-Authoritative Order Creation
- * Logic: Calculate totals based on DB product price, not client-provided amount.
- */
+function money(v) {
+  const n = Number(v);
+  if (!Number.isSafeInteger(n) || n < 0) throw new Error('INVALID_MONEY');
+  return BigInt(n);
+}
+
 async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
   const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const product = await tx.product.findUnique({
-      where: { id: productId },
-      include: { seller: true },
-    });
-
+  const order = await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUnique({ where: { id: productId }, include: { seller: true } });
     if (!product) throw new Error('PRODUCT_NOT_FOUND');
     if (product.status !== 'ACTIVE') throw new Error('PRODUCT_NOT_AVAILABLE');
-    if (product.stock < quantity) throw new Error('INSUFFICIENT_STOCK');
+    if (!Number.isInteger(quantity) || quantity < 1 || product.stock < quantity) throw new Error('INSUFFICIENT_STOCK');
+    if (product.sellerId === buyerId) throw new Error('CANNOT_BUY_OWN_PRODUCT');
 
-    const address = await tx.address.findUnique({
-      where: { id: addressId },
-    });
-
+    const address = await tx.address.findUnique({ where: { id: addressId } });
     if (!address || address.userId !== buyerId) throw new Error('INVALID_ADDRESS');
 
-    // Server-authoritative calculation
-    const subtotal = Number(product.price) * quantity;
-
+    const unitPrice = BigInt(product.price);
+    const productTotal = unitPrice * BigInt(quantity);
     const order = await tx.order.create({
       data: {
-        id: generateOrderNumber(), // Using as ID for simplicity if mapped to String @id
+        orderNumber: generateOrderNumber(),
         buyerId,
         sellerId: product.sellerId,
-        status: ORDER_STATES.DRAFT,
-        subtotal,
-        total: subtotal, // Initial total; will be updated with shipping/fees
-        currency: product.currency,
-        shippingAddress: {
+        status: ORDER_STATES.AWAITING_SELLER_SHIPPING,
+        productSnapshot: {
+          title: product.title,
+          imageUrl: Array.isArray(product.snapshot?.images) ? product.snapshot.images[0] : (product.snapshot?.image || null),
+          unitPrice: unitPrice.toString(),
+          quantity,
+        },
+        shippingAddressSnapshot: {
           fullName: address.fullName,
           phone: address.phone,
           line1: address.addressLine1,
+          line2: address.addressLine2,
           city: address.city,
+          region: address.region,
+          country: address.country,
+          postalCode: address.postalCode,
+          latitude: address.latitude?.toString?.(),
+          longitude: address.longitude?.toString?.(),
         },
+        productPrice: productTotal,
+        shippingFee: 0n,
+        platformCommission: 0n,
+        totalAmount: productTotal,
+        placedAt: new Date(),
         items: {
           create: {
             productId: product.id,
-            sellerId: product.sellerId,
-            titleSnapshot: product.title,
-            priceSnapshot: product.price,
             quantity,
+            unitPrice,
+            totalPrice: productTotal,
+            snapshot: { title: product.title, price: unitPrice.toString() },
           },
         },
       },
+      include: { items: true, buyer: true, seller: true },
     });
-
-    // V3 Transition: DRAFT -> PENDING_PAYMENT (if no shipping quote needed) 
-    // or keep as DRAFT until shipping is sorted.
     return order;
   });
+  await syncLegacyOrderStatus(order);
+  return order;
 }
 
-/**
- * Server-Authoritative Total Calculation
- * Logic: Final amount = subtotal + shipping + platformFee - discount
- */
-async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new Error('ORDER_NOT_FOUND');
-
-    // V3 Guard: Enforce State Transition
-    const osm = new OrderStateMachine(order.status);
-    if (!osm.canTransition(ORDER_STATES.PENDING_PAYMENT)) {
-      throw new Error(`INVALID_STATE_TRANSITION: Cannot approve quote for order in state ${order.status}`);
-    }
-
-    const shippingFee = order.shippingCost || 0;
-    const subtotal = Number(order.subtotal);
-    
-    // V3 Rule: Platform commission is calculated server-side
-    const { commission, totalAmount } = computeSellerParity(subtotal, shippingFee);
-
-    const updated = await tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: ORDER_STATES.PENDING_PAYMENT,
-        shippingCost: shippingFee,
-        platformFee: commission,
-        total: totalAmount,
-        escrowAmount: totalAmount, // Full amount held in escrow
-      },
-    });
-
-    return updated;
+async function submitShippingQuote(args) {
+  return shippingQuoteService.submitQuote(args).then(async (result) => {
+    const prisma = getPrisma();
+    const order = await prisma.order.findUnique({ where: { id: result.orderId } });
+    if (order) await syncLegacyOrderStatus(order);
+    return result;
   });
 }
 
-async function initiatePayment({ orderId, buyerId, provider }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new Error('ORDER_NOT_FOUND');
-    if (order.buyerId !== buyerId) throw new Error('FORBIDDEN');
-
-    // V3 Guard: Enforce State Transition
-    const osm = new OrderStateMachine(order.status);
-    if (!osm.canTransition(ORDER_STATES.PAYMENT_PROCESSING)) {
-      throw new Error(`INVALID_STATE_TRANSITION: Cannot pay for order in state ${order.status}`);
-    }
-
-    const payment = await tx.payment.create({
-      data: {
-        orderId,
-        provider,
-        amount: order.total, // Strictly use server-calculated total
-        currency: order.currency,
-        status: 'pending',
-        idempotencyKey: `pay_${orderId}_${Date.now()}`,
-      },
-    });
-
-    await tx.order.update({
-      where: { id: orderId },
-      data: { status: ORDER_STATES.PAYMENT_PROCESSING },
-    });
-
-    return payment;
-  });
+async function approveShippingQuote({ orderId, approvedBy }) {
+  const result = await shippingQuoteService.approveQuote({ orderId, approvedBy });
+  await syncLegacyOrderStatus(result);
+  return result;
 }
 
-/**
- * V3 Webhook Handler with Ledger Writes
- * Logic: Payment success -> Ledger Entry -> Order state: ESCROW_HELD
- */
-async function verifyPayment({ paymentId, providerPaymentId }) {
-  const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
-    const payment = await tx.payment.findUnique({
-      where: { id: paymentId },
-      include: { order: true },
-    });
-
-    if (!payment || payment.status !== 'pending') {
-      throw new Error('PAYMENT_NOT_FOUND_OR_PROCESSED');
-    }
-
-    // 1. Update Payment status
-    const updatedPayment = await tx.payment.update({
-      where: { id: paymentId },
-      data: { status: 'completed', providerTransId: providerPaymentId, confirmedAt: new Date() },
-    });
-
-    // 2. Move Order to ESCROW_HELD
-    const updatedOrder = await tx.order.update({
-      where: { id: payment.orderId },
-      data: { status: ORDER_STATES.ESCROW_HELD },
-    });
-
-    // 3. Financial Truth: Create Ledger Entry for the Escrow Pool
-    // We assume an internal account 'ESCROW_POOL' exists
-    const escrowAccount = await tx.ledgerAccount.findFirst({
-      where: { accountName: 'ESCROW_POOL' },
-    });
-
-    if (escrowAccount) {
-      await tx.ledgerEntry.create({
-        data: {
-          accountId: escrowAccount.id,
-          transactionId: payment.id,
-          direction: 'CREDIT',
-          amount: payment.amount,
-          referenceType: 'ORDER_PAYMENT',
-          referenceId: payment.orderId,
-        },
-      });
-    }
-
-    return { payment: updatedPayment, order: updatedOrder };
-  });
+async function initiatePayment({ orderId, buyerId, provider, amount, phoneNumber }) {
+  const paymentService = require('../payments/payment-service');
+  return paymentService.initiatePayment({ orderId, buyerId, provider, amount, phoneNumber });
 }
 
-async function completeOrder({ orderId, actorId, method }) {
+async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
   const prisma = getPrisma();
-  
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error('ORDER_NOT_FOUND');
+  if (order.sellerId !== sellerId) throw new Error('FORBIDDEN');
+
+  const machine = new OrderStateMachine(order.status);
+  machine.transition(ORDER_STATES.DISPATCHED, { actor: 'seller', reason: 'Seller dispatched order' });
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: ORDER_STATES.DISPATCHED,
+      courierName,
+      trackingNumber,
+      dispatchedAt: new Date(),
+      statusChangedBy: sellerId,
+      statusChangedAt: new Date(),
+    },
+  });
+  await syncLegacyOrderStatus(updated);
+  return updated;
+}
+
+async function markDelivered({ orderId, actorId }) {
+  const prisma = getPrisma();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error('ORDER_NOT_FOUND');
+
+  const machine = new OrderStateMachine(order.status);
+  machine.transition(ORDER_STATES.DELIVERED_PENDING_CONFIRMATION, {
+    actor: 'courier',
+    reason: 'Delivery recorded',
+  });
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: ORDER_STATES.DELIVERED_PENDING_CONFIRMATION,
+      deliveredAt: new Date(),
+      statusChangedBy: actorId,
+      statusChangedAt: new Date(),
+    },
+  });
+  await syncLegacyOrderStatus(updated);
+  return updated;
+}
+
+async function cancelOrder({ orderId, actorId, reason }) {
+  const refundService = require('../refunds/refund-service');
+  const prisma = getPrisma();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error('ORDER_NOT_FOUND');
+  const isBuyer = order.buyerId === actorId;
+  const profile = await prisma.sellerProfile.findUnique({ where: { userId: actorId } });
+  const isSeller = profile?.id === order.sellerId;
+  if (!isBuyer && !isSeller) throw new Error('FORBIDDEN');
+
+  const canonicalStatus = OrderStateMachine.canonicalize(order.status);
+  const escrowCancellationStates = new Set([
+    ORDER_STATES.PAID_IN_ESCROW,
+    ORDER_STATES.READY_FOR_DISPATCH,
+  ]);
+  if (escrowCancellationStates.has(canonicalStatus)) {
+    if (!isBuyer) { const err = new Error('FORBIDDEN'); err.status = 403; throw err; }
+    return refundService.refundOnCancel({ orderId, actorId, role: 'buyer', reason });
+  }
+
+  const machine = new OrderStateMachine(order.status);
+  machine.transition(ORDER_STATES.CANCELLED, { actor: isBuyer ? 'buyer' : 'seller', reason });
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: { status: ORDER_STATES.CANCELLED, cancelledAt: new Date(), statusChangedBy: actorId, statusChangedAt: new Date() },
+  });
+  await syncLegacyOrderStatus(updated);
+  return updated;
+}
+
+async function disputeOrder({ orderId, filedBy, reason, description }) {
+  const prisma = getPrisma();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error('ORDER_NOT_FOUND');
+  const profile = await prisma.sellerProfile.findUnique({ where: { userId: filedBy } });
+  const isParty = order.buyerId === filedBy || profile?.id === order.sellerId;
+  if (!isParty) throw new Error('FORBIDDEN');
+  const machine = new OrderStateMachine(order.status);
+  machine.transition(ORDER_STATES.DISPUTED, { actor: order.buyerId === filedBy ? 'buyer' : 'seller', reason });
   return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new Error('ORDER_NOT_FOUND');
-
-    if (![ORDER_STATES.DELIVERY_CONFIRMED, ORDER_STATES.OTP_PENDING].includes(order.status)) {
-      throw new Error('INVALID_STATE_FOR_COMPLETION');
-    }
-
-    // 1. Update Order to COMPLETED
-    const updatedOrder = await tx.order.update({
-      where: { id: orderId },
-      data: { status: ORDER_STATES.COMPLETED, updatedAt: new Date() },
-    });
-
-    // 2. Ledger Settlement: Escrow Pool -> Seller Wallet
-    const sellerEntitlement = Number(order.total) - Number(order.platformFee);
-    
-    // Use the new ledger-service for atomic update
-    await settleEscrowToSeller({
-      orderId: order.id,
-      sellerId: order.sellerId,
-      amount: sellerEntitlement,
-      idempotencyKey: `settle_${order.id}`,
-    });
-
-    return updatedOrder;
+    const dispute = await tx.dispute.create({ data: { orderId, filedBy, reason, description, status: 'open' } });
+    await tx.order.update({ where: { id: orderId }, data: { status: ORDER_STATES.DISPUTED, statusChangedBy: filedBy, statusChangedAt: new Date() } });
+    return dispute;
   });
 }
 
 module.exports = {
   DEFAULT_TIMERS,
   createOrder,
+  submitShippingQuote,
   approveShippingQuote,
   initiatePayment,
-  verifyPayment,
-  completeOrder,
+  markDispatched,
+  markDelivered,
+  cancelOrder,
+  disputeOrder,
 };

@@ -14,7 +14,7 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
       const order = await tx.order.findUnique({ where: { id: orderId }, include: { seller: true } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.sellerId !== sellerId) throw httpError(403, 'FORBIDDEN');
-      if (order.status !== ORDER_STATES.PENDING_SHIPPING_FEE) {
+      if (order.status !== ORDER_STATES.AWAITING_SELLER_SHIPPING) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
@@ -33,11 +33,9 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         : 'submitted';
 
       // If in review, the order moves to SHIPPING_FEE_REVIEW so admin must act.
-      const nextState = quoteStatus === 'review_required'
-        ? ORDER_STATES.SHIPPING_FEE_REVIEW
-        : quoteStatus === 'blocked'
-          ? ORDER_STATES.PENDING_SHIPPING_FEE // stays put; seller must revise
-          : ORDER_STATES.SHIPPING_FEE_SUBMITTED;
+      const nextState = quoteStatus === 'blocked'
+        ? ORDER_STATES.AWAITING_SELLER_SHIPPING
+        : ORDER_STATES.AWAITING_PAYMENT;
 
       const machine = new OrderStateMachine(order.status);
       machine.transition(nextState, {
@@ -89,12 +87,12 @@ async function approveQuote({ orderId, approvedBy }) {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
-      if (![ORDER_STATES.SHIPPING_FEE_SUBMITTED, ORDER_STATES.SHIPPING_FEE_REVIEW].includes(order.status)) {
+      if (order.status !== ORDER_STATES.AWAITING_PAYMENT) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {
+      machine.transition(ORDER_STATES.AWAITING_PAYMENT, {
         actor: 'admin',
         actorId: approvedBy,
         reason: 'Quote approved',
@@ -105,7 +103,7 @@ async function approveQuote({ orderId, approvedBy }) {
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: {
-          status: ORDER_STATES.AWAITING_ESCROW_PAYMENT,
+          status: ORDER_STATES.AWAITING_PAYMENT,
           platformCommission,
           totalAmount: order.productPrice + order.shippingFee,
           statusChangedBy: approvedBy,
@@ -133,12 +131,12 @@ async function blockQuote({ orderId, blockedBy, reason }) {
     return await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
-      if (order.status !== ORDER_STATES.SHIPPING_FEE_REVIEW) {
+      if (order.status !== ORDER_STATES.AWAITING_PAYMENT) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.PENDING_SHIPPING_FEE, {
+      machine.transition(ORDER_STATES.AWAITING_SELLER_SHIPPING, {
         actor: 'admin',
         actorId: blockedBy,
         reason: reason || 'Quote blocked, awaiting revision',
@@ -147,7 +145,7 @@ async function blockQuote({ orderId, blockedBy, reason }) {
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: {
-          status: ORDER_STATES.PENDING_SHIPPING_FEE,
+          status: ORDER_STATES.AWAITING_SELLER_SHIPPING,
           statusChangedBy: blockedBy,
         },
       });

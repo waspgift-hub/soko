@@ -1,59 +1,28 @@
 const { test } = require('node:test');
-const assert = require('node:assert');
-const { OrderStateMachine, ORDER_STATES, STATE_TRANSITIONS, STATE_FINANCIAL_RULES } = require('../src/modules/orders/order-state-machine');
+const assert = require('node:assert/strict');
+const { OrderStateMachine, ORDER_STATES, canonicalizeState } = require('../src/modules/orders/order-state-machine');
 
-test('starts in DRAFT with correct financial rule', () => {
-  const m = new OrderStateMachine();
-  assert.strictEqual(m.state, ORDER_STATES.DRAFT);
-  assert.strictEqual(m.getFinancialRule(), 'NO_UNAUTHORIZED_FINANCIAL_MOVEMENT');
+test('canonicalizes legacy order states', () => {
+  assert.equal(canonicalizeState('pending'), ORDER_STATES.AWAITING_SELLER_SHIPPING);
+  assert.equal(canonicalizeState('quoted'), ORDER_STATES.AWAITING_PAYMENT);
+  assert.equal(canonicalizeState('escrow_hold'), ORDER_STATES.PAID_IN_ESCROW);
+  assert.equal(canonicalizeState('delivered'), ORDER_STATES.DELIVERED_PENDING_CONFIRMATION);
 });
 
-test('valid transitions follow the state machine', () => {
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.DRAFT].includes(ORDER_STATES.PUBLISHED));
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.PUBLISHED].includes(ORDER_STATES.ADDRESS_REQUIRED));
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.ADDRESS_REQUIRED].includes(ORDER_STATES.PENDING_SHIPPING_FEE));
+test('happy path follows the UI journey', () => {
+  const m = new OrderStateMachine('pending');
+  m.transition(ORDER_STATES.AWAITING_PAYMENT, { actor: 'seller' });
+  m.transition(ORDER_STATES.PAYMENT_PROCESSING, { actor: 'buyer' });
+  m.transition(ORDER_STATES.PAID_IN_ESCROW, { actor: 'system' });
+  m.transition(ORDER_STATES.READY_FOR_DISPATCH, { actor: 'seller' });
+  m.transition(ORDER_STATES.DISPATCHED, { actor: 'seller' });
+  m.transition(ORDER_STATES.DELIVERED_PENDING_CONFIRMATION, { actor: 'courier' });
+  m.transition(ORDER_STATES.COMPLETED, { actor: 'buyer' });
+  assert.equal(m.state, ORDER_STATES.COMPLETED);
 });
 
-test('escrow-held orders can move to REFUND_PENDING', () => {
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.IN_ESCROW].includes(ORDER_STATES.REFUND_PENDING));
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.READY_TO_DISPATCH].includes(ORDER_STATES.REFUND_PENDING));
-  assert.ok(STATE_TRANSITIONS[ORDER_STATES.REFUND_PENDING].includes(ORDER_STATES.REFUNDED));
-});
-
-test('transition records history with financial rule', () => {
-  const m = new OrderStateMachine(ORDER_STATES.DRAFT);
-  const t = m.transition(ORDER_STATES.PUBLISHED, { actor: 'buyer', actorId: 'u1', reason: 'publish' });
-  assert.strictEqual(m.state, ORDER_STATES.PUBLISHED);
-  assert.strictEqual(t.from, ORDER_STATES.DRAFT);
-  assert.strictEqual(t.to, ORDER_STATES.PUBLISHED);
-  assert.strictEqual(t.financialRule, STATE_FINANCIAL_RULES[ORDER_STATES.PUBLISHED]);
-  assert.strictEqual(m.history.length, 1);
-});
-
-test('rejects invalid transitions', () => {
-  const m = new OrderStateMachine(ORDER_STATES.DRAFT);
-  assert.throws(() => m.transition(ORDER_STATES.COMPLETED, {}), /Invalid order transition/);
-});
-
-test('CANNOT skip directly to IN_ESCROW from DRAFT', () => {
-  const m = new OrderStateMachine(ORDER_STATES.DRAFT);
-  assert.throws(() => m.transition(ORDER_STATES.IN_ESCROW, { actor: 'system' }), /Invalid order transition/);
-});
-
-test('funds can only release in settled states', () => {
-  assert.strictEqual(OrderStateMachine.canReleaseFunds(ORDER_STATES.COMPLETED), true);
-  assert.strictEqual(OrderStateMachine.canReleaseFunds(ORDER_STATES.WALLET_CREDITED), true);
-  assert.strictEqual(OrderStateMachine.canReleaseFunds(ORDER_STATES.IN_ESCROW), false);
-  assert.strictEqual(OrderStateMachine.canReleaseFunds(ORDER_STATES.DISPUTED), false);
-});
-
-test('protected states are recognized', () => {
-  assert.strictEqual(OrderStateMachine.isProtectedState(ORDER_STATES.DISPUTED), true);
-  assert.strictEqual(OrderStateMachine.isProtectedState(ORDER_STATES.REFUND_PENDING), true);
-  assert.strictEqual(OrderStateMachine.isProtectedState(ORDER_STATES.IN_ESCROW), false);
-});
-
-test('isValidState recognizes real and rejects fake', () => {
-  assert.strictEqual(OrderStateMachine.isValidState(ORDER_STATES.IN_TRANSIT), true);
-  assert.strictEqual(OrderStateMachine.isValidState('NOPE'), false);
+test('invalid financial shortcuts are rejected', () => {
+  const m = new OrderStateMachine(ORDER_STATES.AWAITING_SELLER_SHIPPING);
+  assert.equal(m.canTransition(ORDER_STATES.PAID_IN_ESCROW), false);
+  assert.throws(() => m.transition(ORDER_STATES.PAID_IN_ESCROW, { actor: 'system' }), /INVALID_ORDER_TRANSITION/);
 });

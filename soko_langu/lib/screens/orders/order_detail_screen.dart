@@ -53,7 +53,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String? _releasingTxId;
   String? _disputingTxId;
   bool _showAllDetails = false;
-  Map<String, dynamic> _liveData = const {};
+  Map<String, dynamic> _liveData = {};
   StreamSubscription? _orderSub;
   StreamSubscription? _txSub;
   DateTime? _lastAutoRefresh;
@@ -103,7 +103,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _isLoading = false);
     });
-    if (status == 'quoted') {
+    if (canonicalStatusOf(status) == OrderStatus.awaitingPayment) {
       _fetchGatewayFee();
     }
   }
@@ -443,7 +443,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   bool get _isPaidState =>
       _isEscrowStatus ||
-      const {
+      {
         OrderStatus.paid,
         OrderStatus.dispatched,
         OrderStatus.inTransit,
@@ -469,7 +469,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   bool get _isCompletedState {
     final s = canonicalStatusOf(status);
-    return const {
+    return {
       OrderStatus.delivered,
       OrderStatus.inspectionPeriod,
       OrderStatus.otpPending,
@@ -1817,7 +1817,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
     }
 
-    if (status == 'quoted' && isBuyer) {
+    if (canonicalStatusOf(status) == OrderStatus.awaitingPayment && isBuyer) {
       final shipping = _quotedShippingCost;
       final price = _quotedProductPrice;
       final platformFee = _quotedPlatformFee;
@@ -2544,7 +2544,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final sellerId = d['sellerId'] as String? ?? '';
     final sellerName = d['sellerName'] as String? ?? '';
     final isLogisticsStatus =
-        const {
+        {
           OrderStatus.dispatched,
           OrderStatus.inTransit,
           OrderStatus.outForDelivery,

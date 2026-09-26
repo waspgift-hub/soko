@@ -42,7 +42,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
 
   void _startRetryTimer() {
     _retryTimer?.cancel();
-    _//retryTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _retryTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       final reachable = await _isServerReachable();
       if (!mounted) return;
       if (reachable) {
@@ -75,7 +75,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
       return context.tr('connection_lost', 'Connection lost. Reconnecting...');
     } else if (_retryCount < 3) {
       return context.tr('still_connecting', 'Still trying to connect...');
-    } else if (_//retryCount < 6) {
+    } else if (_retryCount < 6) {
       return context.tr('network_unstable', 'Network unstable. Please check your settings.');
     } else {
       return context.tr('connection_timeout', 'Connection timeout. We are still trying...');

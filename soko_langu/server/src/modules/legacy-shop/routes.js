@@ -216,7 +216,7 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
       orderNumber: generateOrderNumber(),
       buyerId: req.user.id,
       sellerId,
-      status: ORDER_STATES.AWAITING_ESCROW_PAYMENT,
+      status: ORDER_STATES.AWAITING_SELLER_SHIPPING,
       productSnapshot: {
         productId: body.productId || null,
         name: body.productName || 'Mall',

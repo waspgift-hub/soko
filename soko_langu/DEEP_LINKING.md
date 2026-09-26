@@ -156,21 +156,18 @@ paths, API keys or user data are ever included in a share link.
 
 ## 10. Serving the web site
 
-- **The Flutter web app is no longer served** (`soko_langu/build/web` was
-  removed from git). The marketplace lives on the native Android/iOS apps.
-- `server/src/app.js` serves the marketing landing site from
-  `server/landing/` at the root: `index.html` + `css/site.css` +
-  `js/site.js` + `assets/` + `manifest.json`. Legal pages are served on clean
-  URLs (`/privacy-policy`, `/terms-of-service`, `/support`). `/marketing`
-  301-redirects to `/`. `/admin` keeps its static mount.
-- Web deep links (`/product/...`) now return a premium 404 — the native share
-  text still emits `www.sokovibe.co.tz/product/{id}`; switch share URLs to the
-  app scheme when store links are live.
-- Canonical host is **www.sokovibe.co.tz**; the app middleware 301s the apex
-  (`sokovibe.co.tz`) and any other soko subdomain → www (Render's edge redirect
-  of apex → www makes the apex hop redundant, but the app keeps it as belt and
-  suspenders). All canonical/OG/@id URLs use `https://www.sokovibe.co.tz`.
-- Public SEO pages served from `server/landing/`: `/tanzania-marketplace`,
-  `/categories`, `/about`, `/about/founder` in addition to the legal trio.
-- Firebase Console: add `sokovibe.co.tz` (apex) to **Authentication → Settings
-  → Authorized domains** if web sign-in is ever re-enabled.
+- **The Flutter web app is the public web application** and is deployed by
+  **Cloudflare Pages** from the `soko_langu` Flutter project.
+- Cloudflare Pages build configuration:
+  - Root directory: `soko_langu`
+  - Build command: `flutter build web --release --base-href /`
+  - Output directory: `build/web`
+- `www.sokovibe.co.tz/product/{id}` and `/seller/{id}` are handled by the
+  Flutter Web SPA history fallback when the native app is not installed.
+- The Node/Express server on Render remains the API origin and serves its own
+  backend/admin/legacy landing assets; it is **not** the public Flutter Web
+  deployment target.
+- GitHub Actions builds Flutter Web for CI validation but does not publish it.
+- GitHub Pages and Firebase Hosting are not production web deployment targets.
+- `hosting/` is legacy/reference content only and must not be treated as the
+  live web source.

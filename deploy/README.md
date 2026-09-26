@@ -212,3 +212,27 @@ npm run test:e2e # opt-in live end-to-end tests against a running deployment
 2. `./deploy.sh <previous-commit>`
 3. Monitor health for 15 minutes
 4. If rollback also fails, restore from backup
+
+
+## Soko Vibe deployment authority (current)
+
+This repository uses one deployment authority per responsibility:
+
+| Component | Authoritative deployment | Domain / purpose |
+|---|---|---|
+| Flutter Android | GitHub Actions | APK/AAB release artifacts |
+| Flutter Web | External web host configured outside this repository | Public web experience |
+| Node/Express API | Render | `api.sokovibe.co.tz` origin |
+| API edge | Cloudflare Worker | `api.sokovibe.co.tz` proxy/cache/WAF edge |
+| Auth / Firestore | Firebase | Identity and Firestore data/services only |
+| Media | Cloudflare R2 | Object storage/media |
+
+GitHub Pages is **not** a deployment target. Firebase Hosting is **not** a deployment target. The legacy `hosting/` directory is not part of the production web deployment.
+
+The GitHub Actions workflows validate Flutter Web so web regressions are caught in pull requests, but they do not publish the web build to GitHub Pages.
+
+The Cloudflare Worker is an API edge layer only; it does not build or host the Flutter application.
+
+For production API traffic the intended path is:
+
+`client -> api.sokovibe.co.tz -> Cloudflare Worker -> Render Node/Express -> PostgreSQL/Redis/Firebase services`

@@ -41,18 +41,14 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
   const prisma = getPrisma();
   const wallet = await getWallet(sellerId);
 
-  const account = await prisma.ledgerAccount.findFirst({
-    where: { userId: sellerId, accountName: 'USER_WALLET' },
-  });
-
   const [ledger, total] = await Promise.all([
-    prisma.ledgerEntry.findMany({
-      where: { accountId: account?.id },
+    prisma.walletLedgerEntry.findMany({
+      where: { walletId: wallet.id },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
     }),
-    prisma.ledgerEntry.count({ where: { accountId: account?.id } }),
+    prisma.walletLedgerEntry.count({ where: { walletId: wallet.id } }),
   ]);
 
   return {
@@ -227,30 +223,38 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
 
   try {
     return await db.$transaction(async (tx) => {
-      const prior = await tx.ledgerEntry.findFirst({
-        where: { referenceType: 'legacy_balance', referenceId: sellerId },
+      const prior = await tx.walletLedgerEntry.findFirst({
+        where: { idempotencyKey: `legacy_balance_${sellerId}` },
       });
       if (prior) return { alreadyMigrated: true, sellerId };
 
-      await ledgerService.updateWalletBalance({
-        userId: sellerId,
-        amount: amt,
-        type: 'LEGACY_BALANCE',
-        referenceType: 'legacy_balance',
-        referenceId: sellerId,
-        idempotencyKey: `legacy_balance_${sellerId}`,
-        description: 'Firestore sellerBalance migrated at wallet cutover',
-      });
-
-      await tx.wallet.update({
-        where: { sellerId },
+      const wallet = await ensureWallet(tx, sellerId);
+      const credit = BigInt(amt);
+      const withdrawnAmount = BigInt(withdrawn);
+      const balanceAfter = wallet.availableBalance + credit;
+      const updatedWallet = await tx.wallet.update({
+        where: { id: wallet.id },
         data: {
-          totalWithdrawn: { increment: withdrawn },
-          totalEarned: { increment: amt + withdrawn },
+          availableBalance: balanceAfter,
+          totalWithdrawn: wallet.totalWithdrawn + withdrawnAmount,
+          totalEarned: wallet.totalEarned + credit + withdrawnAmount,
         },
       });
 
-      return { alreadyMigrated: false, sellerId, amount: amt };
+      await tx.walletLedgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          type: 'LEGACY_BALANCE',
+          amount: credit,
+          balanceAfter,
+          referenceType: 'legacy_balance',
+          referenceId: sellerId,
+          idempotencyKey: `legacy_balance_${sellerId}`,
+          description: 'Firestore sellerBalance migrated at wallet cutover',
+        },
+      });
+
+      return { alreadyMigrated: false, sellerId, amount: amt, wallet: updatedWallet };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`legacy:${sellerId}`);

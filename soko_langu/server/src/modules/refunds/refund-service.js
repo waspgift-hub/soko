@@ -1,7 +1,7 @@
 const { getPrisma } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
-const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
+const { OrderStateMachine, ORDER_STATES, canonicalizeState } = require('../orders/order-state-machine');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');
 
@@ -47,7 +47,9 @@ function computeRefundMode(totalAmount, requestedAmount) {
 }
 
 function isRefundableEscrowState(status) {
-  return REFUNDABLE_ESCROW_STATES.includes(status);
+  const raw = String(status || '').trim().toLowerCase();
+  if (['in_transit', 'out_for_delivery', 'delivery_attempted'].includes(raw)) return false;
+  return REFUNDABLE_ESCROW_STATES.includes(canonicalizeState(status));
 }
 
 let _seq = 0;

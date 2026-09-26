@@ -87,12 +87,15 @@ BACKEND (Server):
   - compression (gzip)
 
 DATABASE:
-  - Cloud Firestore (primary database)
-  - Redis (distributed cache on Render)
+  - PostgreSQL (authoritative commerce/order/finance database)
+  - Firestore (Firebase client/presentation data where still used)
+  - Redis (queues/cache on the backend)
 
-HOSTING:
-  - Render (web service + Redis key-value store)
-  - Firebase (Auth, Firestore, Storage, Hosting, Cloud Functions)
+HOSTING / DEPLOYMENT:
+  - Cloudflare Pages (public Flutter Web)
+  - Cloudflare Worker (API edge: api.sokovibe.co.tz)
+  - Render (Node/Express API origin)
+  - Firebase (Auth, Firestore, Storage, Crashlytics, Performance, App Check) — not hosting
 
 PAYMENTS:
   - ClickPesa (USSD push, BillPay, Payout)
@@ -153,7 +156,7 @@ soko_langu/
     utils/                    # Helpers, validators, image compressor
     widgets/                  # 68 widgets
       ds/                     # Design system (17 components)
-  server/                     # Express.js backend
+  server/                     # Express.js backend (authoritative API)
     index.js                  # 9000+ line main server
     clickpesa.js              # ClickPesa integration
     orders.js                 # Order state machine
@@ -813,6 +816,7 @@ New ToS/PP sections (v2.0):
 ================================================================================
 
 Render (Backend):
+  - Authoritative Node/Express API deployment
   - Auto-deploys on push to origin/master
   - Service: soko-langu-server
   - Region: Frankfurt (EU)
