@@ -11,7 +11,7 @@
     "migrate:dev": "prisma migrate dev",
     "generate": "prisma generate",
     "postinstall": "prisma generate",
-    "test": "node --test test/*.test.js",
+    "test": "find test -maxdepth 1 -type f -name '*.test.js' ! -name 'e2e.live.test.js' -print0 | xargs -0 node --test",
     "test:e2e": "node --test test/e2e.live.test.js",
     "lint": "find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check"
   },
