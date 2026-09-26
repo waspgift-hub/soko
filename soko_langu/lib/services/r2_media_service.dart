@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
-import 'api_config.dart' show ApiConfig;
 import '../utils/network_error.dart';
 import '../utils/image_compressor.dart';
 
@@ -124,7 +123,7 @@ class R2MediaService {
       contentType: contentType,
     );
 
-    return _publicUrl(session['key']! as Stringeli);
+    return _publicUrl(session['key']! as String);
   }
 
   /// Compresses and uploads a video to R2.
