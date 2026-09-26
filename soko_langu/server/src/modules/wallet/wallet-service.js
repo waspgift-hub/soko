@@ -41,12 +41,12 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
   const prisma = getPrisma();
   const wallet = await getWallet(sellerId);
 
-  const account = await prisma.ledgerAccount.findFirst({
+  const account = await prisma.walletLedgerEntry.findFirst({
     where: { userId: sellerId, accountName: 'USER_WALLET' },
   });
 
   const [ledger, total] = await Promise.all([
-    prisma.ledgerEntry.findMany({
+    prisma.walletLedgerEntry.findMany({
       where: { accountId: account?.id },
       orderBy: { createdAt: 'desc' },
       take: Number(limit),
