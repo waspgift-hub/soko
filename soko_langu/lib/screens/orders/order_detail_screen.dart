@@ -53,7 +53,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String? _releasingTxId;
   String? _disputingTxId;
   bool _showAllDetails = false;
-  Map<String, dynamic> _liveData = const {};
+  Map<String, dynamic> _liveData = {};
   StreamSubscription? _orderSub;
   StreamSubscription? _txSub;
   DateTime? _lastAutoRefresh;
@@ -443,7 +443,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   bool get _isPaidState =>
       _isEscrowStatus ||
-      const {
+      {
         OrderStatus.paid,
         OrderStatus.dispatched,
         OrderStatus.inTransit,
@@ -469,7 +469,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   bool get _isCompletedState {
     final s = canonicalStatusOf(status);
-    return const {
+    return {
       OrderStatus.delivered,
       OrderStatus.inspectionPeriod,
       OrderStatus.otpPending,
@@ -2544,7 +2544,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final sellerId = d['sellerId'] as String? ?? '';
     final sellerName = d['sellerName'] as String? ?? '';
     final isLogisticsStatus =
-        const {
+        {
           OrderStatus.dispatched,
           OrderStatus.inTransit,
           OrderStatus.outForDelivery,
