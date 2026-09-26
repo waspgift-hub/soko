@@ -140,14 +140,12 @@ class PaymentService {
   }
 
   bool _isPaidStatus(String status) {
-    return const {
+    return {
           OrderStatus.escrowHold,
           OrderStatus.paidEscrowHold,
           OrderStatus.paidEscrowHeld,
           OrderStatus.dispatched,
           OrderStatus.delivered,
-          OrderStatus.deliveryConfirmed,
-          OrderStatus.confirmed,
           OrderStatus.completed,
           OrderStatus.refunded,
           OrderStatus.paid,
