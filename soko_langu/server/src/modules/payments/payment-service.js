@@ -33,7 +33,7 @@ async function initiatePayment({
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.buyerId !== buyerId) throw httpError(403, 'FORBIDDEN');
-      if (order.status !== ORDER_STATES.AWAITING_ESCROW_PAYMENT) {
+      if (order.status !== ORDER_STATES.AWAITING_PAYMENT) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
       if (!sameAmount(order.totalAmount, amount)) throw httpError(400, 'AMOUNT_MISMATCH');
@@ -65,7 +65,7 @@ async function initiatePayment({
 
       // Move order to PAYMENT_PENDING
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.PAYMENT_PENDING, {
+      machine.transition(ORDER_STATES.PAYMENT_PROCESSING, {
         actor: 'buyer',
         actorId: buyerId,
         reason: 'Payment initiated via ' + providerName,
@@ -74,7 +74,7 @@ async function initiatePayment({
       await tx.order.update({
         where: { id: orderId },
         data: {
-          status: ORDER_STATES.PAYMENT_PENDING,
+          status: ORDER_STATES.PAYMENT_PROCESSING,
           statusChangedBy: buyerId,
         },
       });
@@ -116,7 +116,7 @@ async function confirmCollection({
         result = { status: 'ALREADY_IN_ESCROW', order };
         return;
       }
-      if (![ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
+      if (order.status !== ORDER_STATES.PAYMENT_PROCESSING && !force) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
@@ -263,18 +263,18 @@ async function markPaymentFailed(orderReference) {
         where: { orderNumber: orderReference },
       });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
-      if (order.status !== ORDER_STATES.PAYMENT_PENDING) {
+      if (order.status !== ORDER_STATES.PAYMENT_PROCESSING) {
         result = { status: 'SKIPPED', order };
         return;
       }
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.FAILED, {
+      machine.transition(ORDER_STATES.PAYMENT_FAILED, {
         actor: 'system',
         reason: 'Provider reported collection failure',
       });
       const updated = await tx.order.update({
         where: { id: order.id },
-        data: { status: ORDER_STATES.FAILED },
+        data: { status: ORDER_STATES.PAYMENT_FAILED },
       });
       result = { status: 'FAILED', order: updated };
     });
