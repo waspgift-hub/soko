@@ -68,7 +68,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final s = (d.data() as Map)['status'] as String? ?? '';
       switch (_selectedFilter) {
         case 'pending':
-          return const {
+          return {
             OrderStatus.pending,
             OrderStatus.awaitingShippingQuote,
             OrderStatus.awaitingPayment,
@@ -81,7 +81,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             OrderStatus.paymentPending,
           }.contains(s);
         case 'active':
-          return const {
+          return {
             OrderStatus.paid,
             OrderStatus.paidEscrowHeld,
             OrderStatus.escrowHold,
@@ -98,14 +98,14 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             OrderStatus.refundPending,
           }.contains(s);
         case 'completed':
-          return const {
+          return {
             OrderStatus.completed,
             OrderStatus.walletCredited,
             OrderStatus.payoutPending,
             OrderStatus.payoutComplete,
           }.contains(s);
         case 'failed':
-          return const {
+          return {
             OrderStatus.failed,
             OrderStatus.cancelled,
             OrderStatus.refunded,
@@ -589,7 +589,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         .toList();
     final active = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return const {
+      return {
         OrderStatus.pending,
         OrderStatus.awaitingShippingQuote,
         OrderStatus.awaitingPayment,
@@ -618,7 +618,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     }).length;
     final completed = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return const {
+      return {
         OrderStatus.completed,
         OrderStatus.deliveryConfirmed,
         OrderStatus.walletCredited,
