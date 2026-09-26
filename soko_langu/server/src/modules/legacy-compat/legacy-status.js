@@ -1,45 +1,24 @@
-// Legacy Flutter status vocabulary: maps every v2 Postgres order state to the
-// status string the existing Flutter screens understand. Single source of truth
-// for both the web-shop mirror (legacy-shop) and the order presentation mirror
-// (presentation-mirror) so every writer emits identical values.
-// REMOVAL PATH (Phase G): delete with the mirrored collections; the app will
-// read order status straight from /api/v1/orders.
-
+// Presentation-only mapping from canonical Postgres states to the legacy
+// Firestore vocabulary still consumed by older Flutter/web surfaces.
 const LEGACY_STATUS = {
-  payment_pending: 'pending',
-  pending_shipping_fee: 'pending',
-  awaiting_escrow_payment: 'pending',
-  in_escrow: 'escrow_hold',
-  ready_to_dispatch: 'escrow_hold',
-  dispatched: 'dispatched',
-  in_transit: 'dispatched',
-  out_for_delivery: 'dispatched',
-  delivery_attempted: 'delivered',
-  delivered: 'delivered',
-  inspection_period: 'delivered',
-  otp_pending: 'delivered',
-  completed: 'completed',
-  wallet_credited: 'completed',
-  payout_pending: 'completed',
-  payout_complete: 'completed',
-  disputed: 'disputed',
-  refund_pending: 'refunded',
-  refunded: 'refunded',
-  cancelled: 'cancelled',
-  failed: 'failed',
-  expired: 'failed',
-  draft: 'pending',
-  published: 'pending',
-  address_required: 'pending',
-  shipping_fee_submitted: 'pending',
-  shipping_fee_review: 'pending',
+  AWAITING_SELLER_SHIPPING: 'pending',
+  AWAITING_PAYMENT: 'quoted',
+  PAYMENT_PROCESSING: 'pending',
+  PAID_IN_ESCROW: 'escrow_hold',
+  READY_FOR_DISPATCH: 'ready_to_dispatch',
+  DISPATCHED: 'dispatched',
+  DELIVERED_PENDING_CONFIRMATION: 'delivered',
+  COMPLETED: 'completed',
+  PAYMENT_FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  DISPUTED: 'disputed',
+  REFUND_PENDING: 'refunded',
+  REFUNDED: 'refunded',
+  EXPIRED: 'failed',
 };
 
 function legacyStatusOf(v2Status) {
-  return LEGACY_STATUS[v2Status] || 'pending';
+  return LEGACY_STATUS[String(v2Status || '').toUpperCase()] || 'pending';
 }
 
-module.exports = {
-  LEGACY_STATUS,
-  legacyStatusOf,
-};
+module.exports = { LEGACY_STATUS, legacyStatusOf };
