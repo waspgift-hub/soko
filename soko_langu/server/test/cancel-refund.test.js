@@ -254,10 +254,10 @@ test('buyer cancel refunds full totalAmount and ends the order REFUNDED', async 
   assert.equal(result.refund.status, 'completed');
   assert.equal(result.refund.mode, 'full');
   assert.equal(result.refund.amount, 50000n);
-  assert.equal(result.order.status, 'refunded');
+  assert.equal(result.order.status, 'REFUNDED');
 
   const store = state.prisma._store;
-  assert.equal(store.order[0].status, 'refunded');
+  assert.equal(store.order[0].status, 'REFUNDED');
   assert.equal(store.escrowHold[0].status, 'released_to_buyer');
   assert.equal(store.escrowHold[0].releasedToBuyer, 50000n);
   assert.ok(store.escrowHold[0].releasedAt instanceof Date);
@@ -292,10 +292,10 @@ test('escrow stays holding when the payout fails; order parks in REFUND_PENDING'
 
   assert.equal(result.refund.status, 'failed');
   assert.match(result.refund.lastError, /PAYOUT_DOWN/);
-  assert.equal(result.order.status, 'refund_pending');
+  assert.equal(result.order.status, 'REFUND_PENDING');
 
   const store = state.prisma._store;
-  assert.equal(store.order[0].status, 'refund_pending');
+  assert.equal(store.order[0].status, 'REFUND_PENDING');
   assert.equal(store.escrowHold[0].status, 'holding');
   assert.equal(store.escrowHold[0].releasedToBuyer, 0n);
   assert.equal(store.payoutTransaction.length, 0);
