@@ -197,7 +197,7 @@ test('creditLegacyBalance folds sellerBalance + withdrawn into the wallet', asyn
   const entry = prisma._state.walletLedgerEntry.find((e) => e.idempotencyKey === 'legacy_balance_sp-legacy-1');
   assert.ok(entry, 'legacy balance ledger entry must be posted');
   assert.equal(entry.type, 'LEGACY_BALANCE');
-  assert.equal(entry.amount, 50000);
+  assert.equal(entry.amount, BigInt(50000));
   assert.equal(entry.balanceAfter, BigInt(50000));
 });
 
