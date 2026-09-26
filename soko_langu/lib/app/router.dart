@@ -64,7 +64,7 @@ import '../screens/legal/terms_of_service_screen.dart';
 import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
-import '../repositories/product_repository.dart'; // Added for V3 API loading
+import '../repositories/product_repository.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
