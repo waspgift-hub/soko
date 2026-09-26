@@ -156,6 +156,7 @@ async function markDelivered({ orderId, actorId }) {
 }
 
 async function cancelOrder({ orderId, actorId, reason }) {
+  const refundService = require('../refunds/refund-service');
   const prisma = getPrisma();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error('ORDER_NOT_FOUND');
@@ -163,6 +164,16 @@ async function cancelOrder({ orderId, actorId, reason }) {
   const profile = await prisma.sellerProfile.findUnique({ where: { userId: actorId } });
   const isSeller = profile?.id === order.sellerId;
   if (!isBuyer && !isSeller) throw new Error('FORBIDDEN');
+
+  const canonicalStatus = OrderStateMachine.canonicalize(order.status);
+  const escrowCancellationStates = new Set([
+    ORDER_STATES.PAID_IN_ESCROW,
+    ORDER_STATES.READY_FOR_DISPATCH,
+  ]);
+  if (escrowCancellationStates.has(canonicalStatus)) {
+    if (!isBuyer) throw new Error('FORBIDDEN');
+    return refundService.refundOnCancel({ orderId, actorId, role: 'buyer', reason });
+  }
 
   const machine = new OrderStateMachine(order.status);
   machine.transition(ORDER_STATES.CANCELLED, { actor: isBuyer ? 'buyer' : 'seller', reason });
