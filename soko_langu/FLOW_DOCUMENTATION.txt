@@ -46,10 +46,10 @@ Table of contents
 ================================================================================
 1. ARCHITECTURE OVERVIEW
 ================================================================================
-- Frontend: Flutter app (lib/). Talks to Firebase (Auth, Firestore, Storage,
-  Functions, Crashlytics, Perf, App Check) AND a Node/Express REST API.
-- Backend: Single Node.js Express server (server/index.js, ~8,405 lines) running
-  on Render at https://soko-langu-server.onrender.com.
+- Frontend: Flutter app (lib/). Uses Firebase Auth/client services and the Node/Express REST API.
+  Commerce/order/finance mutations are authoritative on Node/PostgreSQL; legacy Firestore paths remain only where explicitly bridged.
+- Backend: Node.js/Express server running on Render behind the Cloudflare Worker API edge at
+  https://api.sokovibe.co.tz.
 - A standalone listener process (server/listener.js) handles Firestore-triggered
   notifications + SMS. It is NOT required by index.js.
 - The old Firebase Functions directory (functions/) is DEPRECATED (reference only).
@@ -57,7 +57,7 @@ Table of contents
 - Payment provider: ClickPesa (Tanzania) - USSD Push, BillPay, Payouts.
 - Push notifications: OneSignal. SMS: Meseji (primary) + Notify Africa (fallback).
 - AI: Groq (chat + Whisper transcription).
-- Database: Firestore (NoSQL). Local cache: Hive + SharedPreferences + sqflite.
+- Database: PostgreSQL is authoritative for commerce/order/finance; Firestore remains for Firebase client data and presentation bridges. Local cache: Hive + SharedPreferences + sqflite.
 
 Backend base URL is in lib/services/api_config.dart:
     https://soko-langu-server.onrender.com
@@ -775,6 +775,13 @@ firestore.indexes.json (composite indexes):
 
 ================================================================================
 31. DEPLOYMENT & CI/CD
+--------------------------------
+- GitHub: source control + CI validation.
+- Flutter Web: Cloudflare Pages (root=soko_langu, build=`flutter build web --release --base-href /`, output=`build/web`).
+- Android: GitHub Actions release artifacts.
+- API: Cloudflare Worker -> Render Node/Express -> PostgreSQL/Redis/Firebase services.
+- Firebase Hosting and GitHub Pages: NOT production deployment targets.
+- Firebase CLI remains for Firestore rules/indexes.
 ================================================================================
 - Render: web service from repo root; health path /health;
   NODE_OPTIONS --optimize-for-size --expose-gc.
