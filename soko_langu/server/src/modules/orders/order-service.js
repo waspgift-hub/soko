@@ -171,7 +171,7 @@ async function cancelOrder({ orderId, actorId, reason }) {
     ORDER_STATES.READY_FOR_DISPATCH,
   ]);
   if (escrowCancellationStates.has(canonicalStatus)) {
-    if (!isBuyer) throw new Error('FORBIDDEN');
+    if (!isBuyer) { const err = new Error('FORBIDDEN'); err.status = 403; throw err; }
     return refundService.refundOnCancel({ orderId, actorId, role: 'buyer', reason });
   }
 
