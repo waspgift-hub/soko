@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../extensions/context_tr.dart';
 import '../models/order_statuses.dart';
+import '../theme/app_colors.dart';
 
 class OrderStatusInfo {
   const OrderStatusInfo({required this.color, required this.icon, required this.labelKey});
