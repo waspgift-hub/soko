@@ -364,7 +364,7 @@ test('pre-escrow cancel goes through the state machine, no refund', async () => 
   const before = cancelCalls.length;
   const updated = await cancelOrder({ orderId: 'o1', actorId: 'u-buyer', reason: 'Changed mind' });
 
-  assert.equal(updated.status, 'cancelled');
-  assert.equal(state.prisma._store.order[0].status, 'cancelled');
+  assert.equal(updated.status, 'CANCELLED');
+  assert.equal(state.prisma._store.order[0].status, 'CANCELLED');
   assert.equal(cancelCalls.length, before, 'no refund for pre-escrow cancel');
 });
