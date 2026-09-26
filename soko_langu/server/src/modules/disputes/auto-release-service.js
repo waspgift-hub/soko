@@ -56,7 +56,7 @@ async function autoRelease({ orderId, triggeredBy = 'system' }) {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
-      if (![ORDER_STATES.INSPECTION_PERIOD, ORDER_STATES.DELIVERED].includes(order.status)) {
+      if (!order.status === ORDER_STATES.DELIVERED_PENDING_CONFIRMATION) {
         return { status: 'SKIPPED', reason: `STATE:${order.status}` };
       }
 
