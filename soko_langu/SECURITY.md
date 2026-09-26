@@ -317,7 +317,7 @@ Implemented as a **whitelist state machine** — only explicitly listed transiti
 
 | Control | Location | Details |
 |---------|----------|---------|
-| Origin allowlist | `server/index.js:101-111` | Explicit allowlist: Render, Railway, Firebase hosting, Capacitor, localhost |
+| Origin allowlist | `server/index.js:101-111` | Explicit allowlist: Render origin, Cloudflare web edge, Capacitor, localhost |
 | Exact match only | `server/index.js:114-117` | `origin === allowed` — blocks look-alike origins like `onrender.com.evil.com` |
 | Methods | `server/index.js:118` | Explicit list (GET, POST, PUT, DELETE, OPTIONS) |
 | Credentials | `server/index.js:121` | `credentials: false` — no cookie-based auth leakage |
