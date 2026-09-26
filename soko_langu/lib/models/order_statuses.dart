@@ -51,6 +51,8 @@ class OrderStatus {
   static const delivered = deliveredPendingConfirmation;
   static const inspectionPeriod = deliveredPendingConfirmation;
   static const otpPending = deliveredPendingConfirmation;
+  static const deliveryConfirmed = deliveredPendingConfirmation;
+  static const confirmed = deliveredPendingConfirmation;
   static const walletCredited = completed;
   static const payoutPending = completed;
   static const payoutComplete = completed;
