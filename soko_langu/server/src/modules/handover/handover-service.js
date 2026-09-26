@@ -21,7 +21,7 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
 
       assertCanIssueOtp(current, { userId: issuedBy, role: userRole });
 
-      if (current.status !== ORDER_STATES.DELIVERED_PENDING_CONFIRMATION_PENDING_CONFIRMATION) {
+      if (current.status !== ORDER_STATES.DELIVERED_PENDING_CONFIRMATION) {
         throw httpError(409, `CANNOT_ISSUE_OTP_IN_STATE:${current.status}`);
       }
 
@@ -85,10 +85,10 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
       // Layer 4: status priority check prevents double-credit on retry.
-      if ([ORDER_STATES.COMPLETED, ORDER_STATES.WALLET_CREDITED].includes(order.status)) {
+      if ([ORDER_STATES.COMPLETED].includes(order.status)) {
         return { status: 'ALREADY_COMPLETED', order };
       }
-      if (order.status !== ORDER_STATES.DELIVERED_PENDING_CONFIRMATION_PENDING_CONFIRMATION) {
+      if (order.status !== ORDER_STATES.DELIVERED_PENDING_CONFIRMATION) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 

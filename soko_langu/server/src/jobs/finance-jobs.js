@@ -179,17 +179,18 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
   const summary = { released: 0, blocked: 0, skipped: 0, errored: 0 };
   for (const order of orders) {
     try {
-      // V3 Alignment: Instead of a separate autoRelease service, we trigger
-      // the canonical completeOrder flow which handles the Ledger settlement.
-      const orderService = require('../modules/orders/order-service');
-      const result = await orderService.completeOrder({
+      // V3 Alignment: autoRelease runs the safeguard evaluation (no active
+      // dispute, verified delivery, dispatch evidence) before releasing escrow
+      // and settling the seller wallet — idempotent via releaseEscrowAndSettle.
+      const result = await autoRelease({
         orderId: order.id,
-        actorId: 'system',
-        method: 'AUTO_RELEASE',
+        triggeredBy: 'system',
       });
 
-      if (result) {
+      if (result && result.status === 'AUTO_RELEASED') {
         summary.released += 1;
+      } else if (result && result.status === 'BLOCKED') {
+        summary.blocked += 1;
       } else {
         summary.skipped += 1;
       }
