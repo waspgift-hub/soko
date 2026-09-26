@@ -92,7 +92,7 @@ DATABASE:
 
 HOSTING:
   - Render (web service + Redis key-value store)
-  - Firebase (Auth, Firestore, Storage, Hosting, Cloud Functions)
+  - Firebase (Auth, Firestore, Storage, Crashlytics, Performance, App Check)
 
 PAYMENTS:
   - ClickPesa (USSD push, BillPay, Payout)
@@ -813,6 +813,7 @@ New ToS/PP sections (v2.0):
 ================================================================================
 
 Render (Backend):
+  - Authoritative Node/Express API deployment
   - Auto-deploys on push to origin/master
   - Service: soko-langu-server
   - Region: Frankfurt (EU)
