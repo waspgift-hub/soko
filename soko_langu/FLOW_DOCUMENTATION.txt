@@ -784,8 +784,8 @@ firestore.indexes.json (composite indexes):
   (keep server awake).
 - Flutter: build APK (flutter build apk --release); app-debug.apk /
   app-release.apk in build/app/outputs/flutter-apk/.
-- Firebase hosting: sokonimoko-8c171-a8d14 (firebase.json).
-- firestore rules/indexes deploy via firebase deploy --only firestore:rules.
+- Public web deployment: Cloudflare Pages (configured in Cloudflare; GitHub Actions validates Flutter Web only).
+- Firestore rules/indexes remain Firebase-managed; deploy them with Firebase CLI when rules/indexes change.
 
 ================================================================================
 32. ENVIRONMENT VARIABLES (NAMES ONLY - server/.env.example)
