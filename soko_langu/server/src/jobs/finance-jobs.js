@@ -169,7 +169,7 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
   const orders = await prisma.order.findMany({
     where: {
       legacyFirestoreId: null,
-      status: { in: [ORDER_STATES.DELIVERED, ORDER_STATES.DELIVERY_CONFIRMED] },
+      status: { in: [ORDER_STATES.DELIVERED_PENDING_CONFIRMATION, ORDER_STATES.DELIVERY_CONFIRMED] },
       deliveredAt: { lte: due },
     },
     take: 50,
