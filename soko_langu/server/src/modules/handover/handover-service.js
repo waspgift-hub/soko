@@ -21,7 +21,7 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
 
       assertCanIssueOtp(current, { userId: issuedBy, role: userRole });
 
-      if (![ORDER_STATES.OTP_PENDING, ORDER_STATES.INSPECTION_PERIOD].includes(current.status)) {
+      if (current.status !== ORDER_STATES.DELIVERED_PENDING_CONFIRMATION) {
         throw httpError(409, `CANNOT_ISSUE_OTP_IN_STATE:${current.status}`);
       }
 
@@ -88,7 +88,7 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
       if ([ORDER_STATES.COMPLETED, ORDER_STATES.WALLET_CREDITED].includes(order.status)) {
         return { status: 'ALREADY_COMPLETED', order };
       }
-      if (![ORDER_STATES.OTP_PENDING, ORDER_STATES.INSPECTION_PERIOD].includes(order.status)) {
+      if (order.status !== ORDER_STATES.DELIVERED_PENDING_CONFIRMATION) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
 
@@ -128,7 +128,6 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
       const machine = new OrderStateMachine(order.status);
       machine.transition(ORDER_STATES.COMPLETED, {
         actor: 'buyer',
-        actorId: verifiedBy || order.buyerId,
         reason: 'OTP handover verified',
       });
 
@@ -137,16 +136,27 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
         data: { status: ORDER_STATES.COMPLETED, completedAt: new Date() },
       });
 
-      // V3 Ledger Settlement: Escrow Pool -> Seller Wallet
-      const sellerEntitlement = Number(order.total) - Number(order.platformFee);
-      
-      // Use the V3 ledger-service for atomic, double-entry updates
-      const { entry } = await settleEscrowToSeller({
-        orderId: order.id,
-        sellerId: order.sellerId,
-        amount: sellerEntitlement,
-        idempotencyKey: `settle_${order.id}`,
-      });
+      const hold = await tx.escrowHold.findUnique({ where: { orderId } });
+      if (!hold || !['holding', 'disputed'].includes(hold.status)) throw httpError(409, 'ESCROW_NOT_ACTIVE');
+
+      const existing = await tx.walletLedgerEntry.findUnique({ where: { idempotencyKey: `settlement_${order.id}` } });
+      let entry = existing;
+      if (!existing) {
+        const sellerEntitlement = BigInt(order.totalAmount) - BigInt(order.platformCommission);
+        const wallet = await ensureWallet(tx, order.sellerId);
+        const balanceAfter = BigInt(wallet.availableBalance) + sellerEntitlement;
+        await tx.escrowTransaction.createMany({ data: [
+          { escrowHoldId: hold.id, type: 'SETTLEMENT_TO_SELLER', amount: sellerEntitlement, referenceId: order.id },
+          { escrowHoldId: hold.id, type: 'COMMISSION_TO_PLATFORM', amount: BigInt(order.platformCommission), referenceId: order.id },
+        ] });
+        await tx.escrowHold.update({ where: { id: hold.id }, data: { status: 'released', releasedAt: new Date() } });
+        entry = await tx.walletLedgerEntry.create({ data: {
+          walletId: wallet.id, type: 'ORDER_SETTLEMENT', amount: sellerEntitlement, balanceAfter,
+          referenceType: 'order', referenceId: order.id, idempotencyKey: `settlement_${order.id}`,
+          description: 'Order settlement from escrow release',
+        } });
+        await tx.wallet.update({ where: { id: wallet.id }, data: { availableBalance: balanceAfter, totalEarned: BigInt(wallet.totalEarned) + sellerEntitlement } });
+      }
 
       // Create receipt
       await tx.receipt.create({
@@ -154,7 +164,7 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
           orderId,
           purchaserId: order.buyerId,
           sellerId: order.sellerId,
-          amount: order.total,
+          amount: order.totalAmount,
           currency: order.currency,
         },
       });
