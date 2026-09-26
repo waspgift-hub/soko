@@ -54,7 +54,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
         id: generateOrderNumber(), // Using as ID for simplicity if mapped to String @id
         buyerId,
         sellerId: product.sellerId,
-        status: ORDER_STATES.DRAFT,
+        status: ORDER_STATES.AWAITING_SELLER_SHIPPING,
         subtotal,
         total: subtotal, // Initial total; will be updated with shipping/fees
         currency: product.currency,
@@ -76,8 +76,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
       },
     });
 
-    // V3 Transition: DRAFT -> PENDING_PAYMENT (if no shipping quote needed) 
-    // or keep as DRAFT until shipping is sorted.
+    // The buyer cannot pay until the seller has supplied a shipping quote.
     return order;
   });
 }
@@ -95,7 +94,7 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
 
     // V3 Guard: Enforce State Transition
     const osm = new OrderStateMachine(order.status);
-    if (!osm.canTransition(ORDER_STATES.PENDING_PAYMENT)) {
+    if (!osm.canTransition(ORDER_STATES.AWAITING_PAYMENT)) {
       throw new Error(`INVALID_STATE_TRANSITION: Cannot approve quote for order in state ${order.status}`);
     }
 
@@ -108,7 +107,7 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {
-        status: ORDER_STATES.PENDING_PAYMENT,
+        status: ORDER_STATES.AWAITING_PAYMENT,
         shippingCost: shippingFee,
         platformFee: commission,
         total: totalAmount,
