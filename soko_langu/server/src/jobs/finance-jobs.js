@@ -77,7 +77,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
   const due = new Date(now.getTime() - config.finance.paymentExpireMs);
   const prismaOrders = await prisma.order.findMany({
     where: {
-      status: { in: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING] },
+      status: { in: [ORDER_STATES.AWAITING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING] },
       createdAt: { lte: due },
     },
     take: 100,
@@ -89,7 +89,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
     const lock = await acquireLock(`expire:${order.id}`, 60);
     try {
       const fresh = await prisma.order.findUnique({ where: { id: order.id } });
-      if (![ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING].includes(fresh.status)) {
+      if (![ORDER_STATES.AWAITING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING].includes(fresh.status)) {
         summary.skipped += 1;
         continue;
       }
