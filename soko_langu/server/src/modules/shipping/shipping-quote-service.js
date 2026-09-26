@@ -3,6 +3,8 @@ const { acquireLock, releaseLock } = require('../../config/redis');
 const { validateShippingQuote } = require('./shipping-validation');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 
+const { toBigIntSafe } = require('../../utils/money');
+
 // Seller submits a shipping quote for an order.
 // Runs platform validation to decide NORMAL / REVIEW_REQUIRED / BLOCKED.
 async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, shippingAddress, sellerRegion }) {
@@ -44,11 +46,19 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         reason: `Quote submitted (${quoteStatus})`,
       });
 
+      // The final payable goes live HERE, atomically, the moment the seller
+      // sets shipping: total = product + shipping, commission computed
+      // server-side on the product price. The buyer can only be charged this
+      // exact figure (initiatePayment enforces it) and never before this step.
+      const shippingFee = toBigIntSafe(amount);
+      const platformCommission = calcCommission(order.productPrice);
+      const totalAmount = toBigIntSafe(order.productPrice) + shippingFee;
+
       const quote = await tx.shippingQuote.create({
         data: {
           orderId,
           sellerId,
-          amount,
+          amount: shippingFee,
           estimatedDays,
           notes,
           status: quoteStatus,
@@ -59,10 +69,12 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         where: { id: orderId },
         data: {
           status: nextState,
-          shippingFee: amount,
+          shippingFee,
+          platformCommission,
+          totalAmount,
           shippingQuoteSnapshot: {
             id: quote.id,
-            amount: amount.toString(),
+            amount: shippingFee.toString(),
             estimatedDays,
             verdict: validation.verdict,
           },
@@ -163,8 +175,10 @@ async function blockQuote({ orderId, blockedBy, reason }) {
 }
 
 function calcCommission(productPrice) {
+  // PLATFORM_COMMISSION_PERCENT is a whole percent ("10" = 10%); the default is
+  // 0 because Soko Vibe charges no platform fee.
   const percent = require('../../config').business.platformCommissionPercent;
-  return Math.round(Number(productPrice) * percent);
+  return Math.round((Number(toBigIntSafe(productPrice)) * percent) / 100);
 }
 
 function httpError(status, message) {

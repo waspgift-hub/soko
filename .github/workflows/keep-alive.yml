@@ -20,6 +20,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Ping server health endpoint
-        run: curl -sf --max-time 20 "${{ vars.SERVER_HEALTH_URL }}" >/dev/null || exit 1
+        run: curl -sf --max-time 60 "${SERVER_HEALTH_URL:-https://soko-langu-server.onrender.com/health}" >/dev/null || exit 1
         env:
           SERVER_HEALTH_URL: ${{ vars.SERVER_HEALTH_URL || 'https://soko-langu-server.onrender.com/health' }}

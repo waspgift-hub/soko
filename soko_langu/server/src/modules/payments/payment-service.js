@@ -6,6 +6,7 @@ const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machi
 const { sameAmount } = require('../../utils/money');
 const outbox = require('./webhook-outbox');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
+const { sendOneSignalNotification } = require('../legacy-compat/notify');
 
 /**
  * Payment service.
@@ -87,7 +88,10 @@ async function initiatePayment({
 }
 
 // Server-side verification of a collection status (called on webhook or poll).
-// On success, creates the escrow hold and moves order to ESCROW_HELD.
+// On success, creates the escrow hold and moves order to PAID_IN_ESCROW.
+// Idempotent: the status-priority check and SceneHold's unique orderId make
+// re-entry (webhook redelivery, multi-instance, job re-run) a no-op or a
+// rollback-safe unique violation — never a double-credit.
 async function confirmCollection({
   orderReference,
   providerPaymentId,
@@ -105,19 +109,102 @@ async function confirmCollection({
       });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
+      // Layer 4: status priority check — runs BEFORE the payment lookup so a
+      // webhook redelivery or poll sweep after a successful commit is a fast,
+      // idempotent no-op instead of a 404 on the now-completed payment.
+      if (order.status === ORDER_STATES.PAID_IN_ESCROW) {
+        result = { status: 'ALREADY_IN_ESCROW', order };
+        return;
+      }
+
       const payment = await tx.payment.findFirst({
         where: { orderId: order.id, status: { in: ['initiated', 'pending'] } },
         orderBy: { createdAt: 'desc' },
       });
       if (!payment) throw httpError(404, 'PAYMENT_NOT_FOUND');
 
-      // Layer 4: status priority check
-      if (order.status === ORDER_STATES.PAID_IN_ESCROW) {
-        result = { status: 'ALREADY_IN_ESCROW', order };
-        return;
+      // The provider-reported amount must match the server-fixed payable; the
+      // escrow books the server amount, never a client/provider figure.
+      if (amount != null && !sameAmount(payment.amount, amount)) {
+        throw httpError(409, `PAYMENT_AMOUNT_MISMATCH:expected=${Number(payment.amount)}`);
       }
-      if (order.status !== ORDER_STATES.PAYMENT_PROCESSING && !force) {
-        throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
+
+      // A provider completion landing after the order left the pay window
+      // (cancelled/expired/failed while pre-escrow) still captures the money
+      // into a hold and parks the order REFUND_PENDING so the buyer gets it
+      // back via the standard refund path instead of it being stranded.
+      if (order.status !== ORDER_STATES.PAYMENT_PROCESSING) {
+        if (![ORDER_STATES.CANCELLED, ORDER_STATES.EXPIRED, ORDER_STATES.PAYMENT_FAILED].includes(order.status)) {
+          throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
+        }
+        // Idempotency: a redelivered webhook after a successful park must not
+        // open a second refund obligation for the same payment.
+        const parkedRefund = await tx.refund.findFirst({
+          where: { paymentId: payment.id },
+        });
+        if (parkedRefund) {
+          result = { status: 'ALREADY_REFUND_PARKED', order };
+          return;
+        }
+        if (providerPaymentId === 'auto' || !providerPaymentId) {
+          if (!force) {
+            const provider = getProvider(payment.provider);
+            const statusResp = await provider.queryCollectionStatus(orderReference);
+            if (statusResp.status !== 'completed') {
+              throw httpError(409, `PAYMENT_NOT_VERIFIED:${statusResp.status}`);
+            }
+            providerPaymentId = statusResp.providerPaymentId;
+          }
+        }
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'completed',
+            providerPaymentId: providerPaymentId || payment.providerReference,
+            verifiedAt: new Date(),
+          },
+        });
+
+        const escrowHold = await tx.escrowHold.create({
+          data: {
+            orderId: order.id,
+            paymentId: payment.id,
+            amount: payment.amount,
+            status: 'holding',
+          },
+        });
+
+        const machine = new OrderStateMachine(order.status);
+        machine.transition(ORDER_STATES.REFUND_PENDING, {
+          actor: 'system',
+          reason: 'Provider confirmed payment after order left the pay window',
+        });
+
+        const parked = await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: ORDER_STATES.REFUND_PENDING,
+            paidAt: new Date(),
+            statusChangedBy: 'system',
+          },
+        });
+
+        const { buildCorrelationId } = require('../refunds/refund-service');
+        await tx.refund.create({
+          data: {
+            orderId: order.id,
+            paymentId: payment.id,
+            amount: payment.amount,
+            mode: 'full',
+            reason: 'Late provider confirmation after cancel/expiry',
+            correlationId: buildCorrelationId(order.orderNumber),
+            requestedBy: order.buyerId,
+            status: 'pending',
+          },
+        });
+
+        result = { status: 'REFUND_PARKED', order: parked, escrowHold };
+        return;
       }
 
       // Optional server-side re-verification with the provider
@@ -162,32 +249,18 @@ async function confirmCollection({
         data: { status: ORDER_STATES.PAID_IN_ESCROW, paidAt: new Date() },
       });
 
-      // Ledger: buyer -> escrow
-      const escrowAccount = await tx.ledgerAccount.findFirst({
-        where: { accountName: 'ESCROW_POOL' },
-      });
-
-      if (!escrowAccount) throw new Error('ESCROW_POOL_ACCOUNT_MISSING');
-
-      await tx.ledgerEntry.create({
-        data: {
-          accountId: escrowAccount.id,
-          transactionId: payment.id,
-          direction: 'CREDIT',
-          amount: payment.amount,
-          referenceType: 'ORDER_PAYMENT',
-          referenceId: payment.orderId,
-        },
-      });
-
       result = { status: 'VERIFIED', order: updatedOrder, escrowHold };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`collection:${orderReference}`);
   }
 
-  // Presentation mirror AFTER commit
+  // Presentation mirror + seller notification AFTER commit.
   if (result && result.status === 'VERIFIED') {
+    await syncLegacyOrderStatus(result.order);
+    await notifySellerEscrowFunded(result.order);
+  }
+  if (result && result.status === 'REFUND_PARKED') {
     await syncLegacyOrderStatus(result.order);
   }
   return result;
@@ -286,6 +359,36 @@ async function markPaymentFailed(orderReference) {
     await syncLegacyOrderStatus(result.order);
   }
   return result;
+}
+
+// Best-effort: the seller learns their order is funded and can dispatch. Never
+// fails the webhook when the notification stack hiccups.
+async function notifySellerEscrowFunded(order) {
+  try {
+    const prisma = getPrisma();
+    const seller = await prisma.sellerProfile.findUnique({
+      where: { id: order.sellerId },
+      include: { user: { select: { id: true, firebaseUid: true } } },
+    });
+    if (!seller || !seller.user) return;
+    const title = 'Malipo Yamefika';
+    const body = `Malipo ya oda ${order.orderNumber} yameingia escrow. Tayarisha kupeleka.`;
+    const data = { type: 'order', orderId: order.id, escrowFunded: true };
+    try {
+      await prisma.notification.create({
+        data: { userId: seller.user.id, type: 'payment', title, body, data },
+      });
+    } catch (e) {
+      console.error('[PAYMENT][NOTIFY-SELLER-DB]', e.message);
+    }
+    try {
+      await sendOneSignalNotification(seller.user.firebaseUid, title, body, data);
+    } catch (e) {
+      console.error('[PAYMENT][NOTIFY-SELLER-OS]', e.message);
+    }
+  } catch (e) {
+    console.error('[PAYMENT][NOTIFY-SELLER]', e.message);
+  }
 }
 
 // Commission calculation (platform fee on product price).

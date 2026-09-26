@@ -6,7 +6,7 @@ on:
       - 'soko_langu/**'
       - '.github/workflows/**'
   push:
-    branches: [main, master]
+    branches: [main, master, fix/soko-vibe-flow-ui-sync-2026-09-26]
     paths:
       - 'soko_langu/**'
       - '.github/workflows/**'
@@ -57,7 +57,7 @@ jobs:
 
   android:
     name: Android release build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/soko-vibe-flow-ui-sync-2026-09-26') || github.event_name == 'workflow_dispatch'
     needs: [flutter, node]
     runs-on: ubuntu-latest
     defaults:
