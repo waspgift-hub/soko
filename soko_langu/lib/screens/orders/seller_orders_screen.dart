@@ -168,7 +168,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     final visible = allDocs.where((d) => (d.data() as Map)['deletedForSeller'] != true).toList();
     final awaitingQuote = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return const {
+      return {
         OrderStatus.awaitingShippingQuote,
         OrderStatus.pendingShippingFee,
         OrderStatus.shippingFeeSubmitted,
@@ -177,7 +177,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     }).length;
     final needsAction = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return const {
+      return {
         OrderStatus.awaitingShippingQuote,
         OrderStatus.pendingShippingFee,
         OrderStatus.awaitingPayment,
@@ -446,7 +446,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               status == 'completed' ||
                               status == 'delivery_confirmed' ||
                               status == 'confirmed' ||
-                              const {
+                              {
                                 OrderStatus.walletCredited,
                                 OrderStatus.payoutPending,
                                 OrderStatus.payoutComplete,
@@ -521,10 +521,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   /// (48h after dispatch) and how long the buyer has left to inspect.
   Widget _buildSellerTimers(ColorScheme cs, Map<String, dynamic> d) {
     final status = d['status'] as String? ?? '';
-    final inTransit = const {
+    final inTransit = {
       'dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted',
     }.contains(status);
-    final inspecting = const {
+    final inspecting = {
       'delivered', 'inspection_period', 'otp_pending',
     }.contains(status);
     final autoDead = inTransit
