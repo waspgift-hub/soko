@@ -274,6 +274,10 @@ router.post('/create-marketplace-payment-link', optionalAuth, resolveShopBuyer, 
       phoneNumber: phone,
     });
   } catch (e) {
+    // Guard errors (409 INVALID_ORDER_STATE when the seller has not quoted
+    // shipping yet, 403/400/404) must surface as-is; only genuine provider or
+    // initiation failures are 502.
+    if (e.status && e.status < 500) throw e;
     throw httpError(502, e.message || 'PAYMENT_INITIATION_FAILED');
   }
 

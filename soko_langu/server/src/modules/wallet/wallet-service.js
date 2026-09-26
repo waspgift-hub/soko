@@ -101,7 +101,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
         data: {
           walletId: wallet.id,
           sellerId,
-          amount,
+          amount: BigInt(amount),
           provider: 'clickpesa',
           status: 'pending',
           phoneNumber: phoneNumber || null,
@@ -109,14 +109,18 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
         },
       });
 
+      // Debit runs inside THIS transaction (Prisma forbids nesting a second
+      // $transaction) and posts a WalletLedgerEntry keyed by sellerId.
       await ledgerService.updateWalletBalance({
-        userId: sellerId,
-        amount: -amount,
+        sellerId,
+        amount: -BigInt(amount),
         type: ledgerService.LEDGER_TYPES.WITHDRAWAL_DEBITED,
         referenceType: 'withdrawal',
         referenceId: withdrawal.id,
         idempotencyKey: `ledger_withdrawal_${withdrawal.id}`,
         description: 'Seller withdrawal',
+        tx,
+        wallet,
       });
 
       // We must fetch the updated wallet state to return it

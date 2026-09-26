@@ -114,6 +114,12 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
   if (order.sellerId !== sellerId) throw new Error('FORBIDDEN');
 
   const machine = new OrderStateMachine(order.status);
+  // Money is in escrow the moment collection confirms; the seller must be able
+  // to dispatch straight from PAID_IN_ESCROW, walking through READY_FOR_DISPATCH
+  // per the canonical lifecycle.
+  if (machine.state === ORDER_STATES.PAID_IN_ESCROW) {
+    machine.transition(ORDER_STATES.READY_FOR_DISPATCH, { actor: 'seller', reason: 'Funds held in escrow; seller prepares dispatch' });
+  }
   machine.transition(ORDER_STATES.DISPATCHED, { actor: 'seller', reason: 'Seller dispatched order' });
 
   const updated = await prisma.order.update({
