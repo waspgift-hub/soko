@@ -112,7 +112,7 @@ async function confirmCollection({
       if (!payment) throw httpError(404, 'PAYMENT_NOT_FOUND');
 
       // Layer 4: status priority check
-      if (order.status === ORDER_STATES.ESCROW_HELD) {
+      if (order.status === ORDER_STATES.PAID_IN_ESCROW) {
         result = { status: 'ALREADY_IN_ESCROW', order };
         return;
       }
@@ -152,14 +152,14 @@ async function confirmCollection({
       });
 
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.ESCROW_HELD, {
+      machine.transition(ORDER_STATES.PAID_IN_ESCROW, {
         actor: 'system',
         reason: 'Collection verified server-side',
       });
 
       const updatedOrder = await tx.order.update({
         where: { id: order.id },
-        data: { status: ORDER_STATES.ESCROW_HELD, paidAt: new Date() },
+        data: { status: ORDER_STATES.PAID_IN_ESCROW, paidAt: new Date() },
       });
 
       // Ledger: buyer -> escrow
