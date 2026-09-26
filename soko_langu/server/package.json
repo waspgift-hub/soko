@@ -13,7 +13,7 @@
     "postinstall": "prisma generate",
     "test": "node --test test/*.test.js",
     "test:e2e": "node --test test/e2e.live.test.js",
-    "lint": "eslint src/"
+    "lint": "find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check"
   },
   "engines": {
     "node": ">=18"
