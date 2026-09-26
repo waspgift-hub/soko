@@ -28,7 +28,7 @@ function money(v) {
 
 async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
   const prisma = getPrisma();
-  return prisma.$transaction(async (tx) => {
+  const order = await prisma.$transaction(async (tx) => {
     const product = await tx.product.findUnique({ where: { id: productId }, include: { seller: true } });
     if (!product) throw new Error('PRODUCT_NOT_FOUND');
     if (product.status !== 'ACTIVE') throw new Error('PRODUCT_NOT_AVAILABLE');
@@ -81,9 +81,10 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
       },
       include: { items: true, buyer: true, seller: true },
     });
-    await syncLegacyOrderStatus(order);
     return order;
   });
+  await syncLegacyOrderStatus(order);
+  return order;
 }
 
 async function submitShippingQuote(args) {
