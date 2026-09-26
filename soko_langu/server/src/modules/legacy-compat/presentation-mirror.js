@@ -31,8 +31,8 @@ function buildSyncLegacyOrderStatus(db) {
       const patch = {
         status: legacyStatusOf(order.status),
         orderId: order.id,
-        buyerId: order.buyerId,
-        sellerId: order.sellerId,
+        buyerId: order.buyer?.firebaseUid || order.buyerId,
+        sellerId: order.seller?.userId || order.sellerId,
         productPrice: Number(order.productPrice || 0),
         shippingCost: Number(order.shippingFee || 0),
         platformFee: Number(order.platformCommission || 0),
