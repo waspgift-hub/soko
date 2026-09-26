@@ -79,8 +79,9 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
           },
         },
       },
-      include: { items: true },
+      include: { items: true, buyer: true, seller: true },
     });
+    await syncLegacyOrderStatus(order);
     return order;
   });
 }
