@@ -224,7 +224,7 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = 
   try {
     return await db.$transaction(async (tx) => {
       const prior = await tx.walletLedgerEntry.findFirst({
-        where: { referenceType: 'legacy_balance', referenceId: sellerId },
+        where: { idempotencyKey: `legacy_balance_${sellerId}` },
       });
       if (prior) return { alreadyMigrated: true, sellerId };
 
