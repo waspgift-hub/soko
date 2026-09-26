@@ -34,7 +34,8 @@ const LEGACY_STATUS = {
 };
 
 function legacyStatusOf(v2Status) {
-  return LEGACY_STATUS[String(v2Status || '').toUpperCase()] || 'pending';
+  const raw = String(v2Status || '').trim();
+  return LEGACY_STATUS[raw] || LEGACY_STATUS[raw.toLowerCase()] || LEGACY_STATUS[raw.toUpperCase()] || 'pending';
 }
 
 module.exports = { LEGACY_STATUS, legacyStatusOf };
