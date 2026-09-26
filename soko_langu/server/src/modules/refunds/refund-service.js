@@ -47,6 +47,8 @@ function computeRefundMode(totalAmount, requestedAmount) {
 }
 
 function isRefundableEscrowState(status) {
+  const raw = String(status || '').trim().toLowerCase();
+  if (['in_transit', 'out_for_delivery', 'delivery_attempted'].includes(raw)) return false;
   return REFUNDABLE_ESCROW_STATES.includes(canonicalizeState(status));
 }
 
