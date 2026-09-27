@@ -100,6 +100,13 @@ const adminLimiter = rateLimit({ max: 300, windowMs: 60000 });
 const authLimiter = rateLimit({ max: 10, windowMs: 900000 });
 const paymentLimiter = rateLimit({ max: 5, windowMs: 60000 });
 const searchLimiter = rateLimit({ max: 30, windowMs: 60000 });
+// LLM calls are far slower and far costlier than a Firestore read, and each one
+// may consume two provider calls when failover fires. Tighter than
+// generalLimiter so one abusive client cannot drain both providers' quota.
+// Per-IP, not per-user: this middleware runs before the route verifies the
+// Firebase token, so no uid is available to key on. The Flutter app enforces a
+// per-device limit on top (30 chat / 60 summary per hour, groq_service.dart).
+const aiLimiter = rateLimit({ max: 20, windowMs: 60000 });
 
 // Security-specific limiters (per plan Phase 12.3)
 const otpRequestLimiter = rateLimit({ max: 3, windowMs: 900000 });      // 3/15min per phone
@@ -117,6 +124,7 @@ module.exports = {
   authLimiter,
   paymentLimiter,
   searchLimiter,
+  aiLimiter,
   otpRequestLimiter,
   otpVerifyLimiter,
   checkoutLimiter,

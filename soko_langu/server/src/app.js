@@ -24,6 +24,7 @@ const disputeRouter = require('./modules/disputes/routes');
 const refundRouter = require('./modules/refunds/routes');
 const mediaRouter = require('./modules/media/routes');
 const feedRouter = require('./modules/feed/routes');
+const aiRouter = require('./modules/ai/routes');
 const searchRouter = require('./modules/search/routes');
 const sharingRouter = require('./modules/sharing/routes');
 const trustRouter = require('./modules/trust/routes');
@@ -313,7 +314,10 @@ app.use('/api/v1/reviews', reviewRouter);
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat; both mount
 // groups resolve to the same Firestore store seam via getStore().
-const { generalLimiter } = require('./middleware/rateLimiter');
+const { generalLimiter, aiLimiter } = require('./middleware/rateLimiter');
+
+app.use('/api/ai', aiLimiter, aiRouter);
+console.log('[AI] providers:', JSON.stringify(aiRouter.gatewayStatus()));
 app.use('/api', generalLimiter, legacyShopRouter);
 
 // Legacy-compat: proven old routers under original /api paths (payouts,

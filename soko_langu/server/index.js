@@ -61,7 +61,8 @@ const { verifyAdminSecret } = require('./middlewares/security');
 const { parseFlashSaleEndTime, isFlashSaleStillActive, resolveEffectivePrice } = require('./money');
 
 const DEFAULT_PAYOUT_FEE = 2000; // Estimated payout fee (actual varies by amount via clickpesaPayoutPreview)
-const { groqChat, groqTranscribe } = require('./groq');
+const { groqTranscribe } = require('./groq');
+const aiGateway = require('./src/modules/ai/ai-gateway');
 
 // Catch uncaught exceptions & rejections — log but don't exit
 process.on('uncaughtException', (err) => {
@@ -6139,10 +6140,11 @@ app.post('/api/cloudinary/delete', async (req, res) => {
 });
 
 // ============================================================
-// 🤖 GROQ AI — Secure proxy (API key stays server-side)
+// 🤖 AI — Secure proxy (provider API keys stay server-side)
 // ============================================================
-// The Flutter app sends the full Groq-compatible payload + Firebase token.
-// Server verifies auth, injects GROQ_API_KEY, proxies to Groq.
+// The Flutter app sends a Groq/OpenAI-shaped payload + Firebase token.
+// Server verifies auth, injects the provider key, and fails over
+// Groq -> Gemini on 429 / 5xx / timeout (see src/modules/ai/ai-gateway.js).
 // ============================================================
 app.post('/api/ai/chat', async (req, res) => {
   try {
@@ -6162,19 +6164,23 @@ app.post('/api/ai/chat', async (req, res) => {
       return res.status(400).json({ error: 'model and messages[] required' });
     }
 
-    const body = await groqChat({ model, messages, temperature, max_tokens });
+    const result = await aiGateway.chat({ model, messages, temperature, max_tokens });
+    res.set('X-AI-Provider', result.provider);
+    if (result.failedOver) res.set('X-AI-Failed-Over', '1');
     res.set('Content-Type', 'application/json');
-    res.send(body);
+    res.send(result.text);
   } catch (e) {
-    if (e.message === 'GROQ_API_KEY_NOT_CONFIGURED') {
-      return res.status(503).json({ error: 'Groq API key not configured on server' });
+    if (e.code === 'AI_NO_PROVIDER') {
+      return res.status(503).json({
+        error: 'No AI provider configured on server (GROQ_API_KEY or GEMINI_API_KEY)',
+      });
     }
-    console.error('Groq proxy error:', e.message);
+    console.error('AI proxy error:', e.message);
     res.status(e.status || 500).json({ error: 'AI service error' });
   }
 });
 
-// Speech-to-text proxy (audio → text via Groq Whisper)
+// Speech-to-text proxy (audio → text via Groq Whisper; no Gemini equivalent)
 app.post('/api/ai/transcribe', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -6196,7 +6202,7 @@ app.post('/api/ai/transcribe', async (req, res) => {
     res.set('Content-Type', 'application/json');
     res.send(body);
   } catch (e) {
-    if (e.message === 'GROQ_API_KEY_NOT_CONFIGURED') {
+    if (e.code === 'AI_NOT_CONFIGURED') {
       return res.status(503).json({ error: 'Groq API key not configured on server' });
     }
     console.error('Groq transcribe proxy error:', e.message);
