@@ -2,6 +2,8 @@
 // existing Flutter/browser clients keep parsing `body.error` unchanged while the
 // structured `code`/`message`/`requestId` fields converge new consumers.
 function jsonError(res, { status = 500, code = 'INTERNAL_ERROR', message = null, details = null }) {
+  // Never attempt a second response after Express has already committed one.
+  if (res.headersSent) return res;
   const requestId = res.req ? res.req.id || null : null;
   const payload = {
     success: false,
