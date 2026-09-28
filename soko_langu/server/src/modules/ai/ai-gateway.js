@@ -96,10 +96,13 @@ async function callThroughBreaker(providerName, fn) {
  * surfaced immediately rather than routed around.
  *
  * @param {object} body OpenAI Chat Completions request from the Flutter client
+ * @param {object} [options] forwarded to providers; `timeoutMs` caps a single
+ *   call, which the tool loop uses to keep several sequential rounds inside the
+ *   client's own 25s wait.
  * @returns {Promise<{ text: string, provider: string, failedOver: boolean }>}
  *   `text` is the provider's raw response body, forwarded to the client as-is.
  */
-async function chat(body) {
+async function chat(body, options = {}) {
   const attempted = [];
   let lastError = null;
   let hadConfiguredProvider = false;
@@ -113,7 +116,7 @@ async function chat(body) {
     hadConfiguredProvider = true;
 
     try {
-      const text = await callThroughBreaker(name, () => provider.chat(body));
+      const text = await callThroughBreaker(name, () => provider.chat(body, options));
       if (attempted.length) {
         console.warn(
           `[ai] served by ${name} after failover from: ${attempted.join(', ')}`

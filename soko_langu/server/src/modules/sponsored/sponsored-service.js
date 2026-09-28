@@ -454,13 +454,17 @@ function dayKey(d) {
 // engine to interleave sponsored results). Fraud protection: deduplicates by IP+userAgent
 // so a single client can't inflate impression counts.
 async function getActivePlacements({ categoryId, placement, limit = 10, ipAddress, userAgent }) {
+  // `today` is part of the cache key, so it has to be resolved before the key is
+  // built. Declaring it further down put it in the temporal dead zone and made
+  // every call throw, which silently dropped all sponsored placements from search.
+  const now = new Date();
+  const today = dayKey(now);
+
   const cacheKey = `sponsored:placements:${placement || 'all'}:${categoryId || 'all'}:l${limit}:${today}`;
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
 
   const store = getReadStore();
-  const now = new Date();
-  const today = dayKey(now);
 
   // Fraud protection: deduplicate impressions per (campaign, ip, userAgent) within a 60s window.
   // This prevents impression inflation via rapid refreshes.

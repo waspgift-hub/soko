@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { getFirebaseAuth } = require('../../config/firebase');
 const gateway = require('./ai-gateway');
+const { chatWithTools } = require('./tool-loop');
 
 const router = Router();
 
@@ -35,11 +36,20 @@ router.post('/chat', async (req, res) => {
     return res.status(400).json({ error: 'model and messages[] required' });
   }
 
+  // Tool use is on by default so the already-shipped app benefits without a
+  // rebuild, but it can be switched off per request and globally, because it
+  // costs an extra provider round trip when the model decides to use a tool.
+  const useTools = req.body?.tools !== false && process.env.AI_TOOLS_ENABLED !== 'false';
+  const body = { model, messages, temperature, max_tokens };
+
   try {
-    const result = await gateway.chat({ model, messages, temperature, max_tokens });
+    const result = useTools
+      ? await chatWithTools(body, user.uid)
+      : await gateway.chat(body);
     // Lets support answer "which provider served this?" without reading logs.
     res.set('X-AI-Provider', result.provider);
     if (result.failedOver) res.set('X-AI-Failed-Over', '1');
+    if (result.toolsUsed?.length) res.set('X-AI-Tools', result.toolsUsed.join(','));
     res.set('Content-Type', 'application/json');
     res.send(result.text);
   } catch (e) {

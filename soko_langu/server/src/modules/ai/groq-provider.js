@@ -22,7 +22,7 @@ class GroqProvider extends AiProvider {
     return true;
   }
 
-  async chat(body) {
+  async chat(body, options = {}) {
     if (!this.isConfigured) throw notConfigured(this.name);
     const resp = await postJson(GROQ_CHAT_URL, {
       headers: {
@@ -30,6 +30,7 @@ class GroqProvider extends AiProvider {
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body,
+      timeoutMs: options.timeoutMs,
     });
     if (!resp.ok) await throwOnError(resp, this.name);
     return resp.text();

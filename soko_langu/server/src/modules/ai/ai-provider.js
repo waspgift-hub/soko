@@ -46,9 +46,14 @@ class AiProvider {
    * Runs a chat completion. [body] is an OpenAI Chat Completions request
    * object as sent by the Flutter client ({ model, messages, temperature,
    * max_tokens }).
+   *
+   * [options.timeoutMs] caps this single call. The tool loop passes the smaller
+   * of the provider default and whatever is left of the request's total budget,
+   * because three sequential tool rounds at the per-call default can otherwise
+   * overrun the 25s the Flutter client waits.
    * @returns {Promise<string>} raw JSON response body
    */
-  async chat(body) {
+  async chat(body, options = {}) {
     throw new Error('Not implemented');
   }
 

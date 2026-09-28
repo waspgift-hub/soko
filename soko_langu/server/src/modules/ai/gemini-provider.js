@@ -83,7 +83,7 @@ class GeminiProvider extends AiProvider {
     return Boolean(process.env.GEMINI_API_KEY);
   }
 
-  async chat(body) {
+  async chat(body, options = {}) {
     if (!this.isConfigured) throw notConfigured(this.name);
 
     const resp = await postJson(
@@ -101,6 +101,7 @@ class GeminiProvider extends AiProvider {
         // reasoning_effort and thinking_config were both measured returning 400
         // or having no effect. Token-budget routing is the only lever available.
         body: { ...body, model: resolveModel(body.model, body.max_tokens) },
+        timeoutMs: options.timeoutMs,
       }
     );
 
