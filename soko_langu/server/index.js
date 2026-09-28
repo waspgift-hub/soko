@@ -9,6 +9,7 @@ const Redis = require('ioredis');
 const path = require('path');
 const config = require('./src/config');
 const { sendMail } = require('./src/services/mailer');
+const { buildOtpEmail } = require('./src/services/email-templates');
 
 // Firebase init — MUST be before any module that calls admin.firestore() at require time
 let db;
@@ -329,7 +330,7 @@ const CRITICAL_PUSH_TYPES = new Set([
 // concern on a single notification.
 const notifLangCache = require('./cache');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
-const { localizeNotif, localizeEmailOtp, localizeDefaultReason, smsSafeForGateway } = require('./notif_lang');
+const { localizeNotif, localizeDefaultReason, smsSafeForGateway } = require('./notif_lang');
 
 async function getUserNotifLang(userId) {
   if (!db) return 'sw';
@@ -1587,12 +1588,15 @@ app.post('/api/auth/send-email-otp', otpEmailRateLimit, async (req, res) => {
 
     // Pre-auth, so the app tells us its language via langCode (same as send-otp).
     const lang = ['sw', 'en'].includes(langCode) ? langCode : 'sw';
-    const copy = localizeEmailOtp(lang);
 
-    // Shared mailer (Cloudflare Email Sending first) — the email may not be a
+    // Shared brand template (Resend API first) — the email may not be a
     // registered Firebase user yet at this stage, so send directly.
-    const subject = copy.subject;
-    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${copy.heading}</h2><p>${copy.body}</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${copy.expires}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+    const { subject, html } = buildOtpEmail({
+      otp,
+      lang,
+      expiresInMinutes: 5,
+      recipientEmail: cleanEmail,
+    });
 
     const sent = await sendMail(cleanEmail, subject, html);
     if (!sent) {

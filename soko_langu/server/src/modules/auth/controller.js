@@ -1,9 +1,10 @@
 const crypto = require('crypto');
 const { getFirebaseAuth } = require('../../config/firebase');
 const { getStore } = require('../../config/database');
-const { sendSms } = require('../../services/sms-service');
 const { saveOtp, getOtp, markUsed, bumpAttempts } = require('../../services/otp-store');
 const { sendMail } = require('../../services/mailer');
+const { buildOtpEmail } = require('../../services/email-templates');
+const { deliverPhoneOtp } = require('../../services/otp-delivery');
 const accountStore = require('../../services/account-store');
 
 const OTP_TTL_SECONDS = 300; // 5 minutes
@@ -18,7 +19,8 @@ function cleanPhone(phone) {
 }
 
 // Send OTP to phone: generates a 6-digit code, stores its hash for 5
-// minutes, and delivers it by SMS (Meseji, Notify Africa fallback).
+// minutes, then delivers it over the cheapest configured channel in order
+// (push → WhatsApp → SMS; see services/otp-delivery.js).
 async function sendOtp(req, res) {
   try {
     const { phone } = req.body;
@@ -31,15 +33,22 @@ async function sendOtp(req, res) {
     const message = langCode === 'en'
       ? `Your OTP is ${otp}. It expires in 5 minutes.`
       : `OTP yako ni ${otp}. Inaisha kwa dakika 5.`;
-    const sent = await sendSms(clean, message);
-    if (!sent) {
-      console.error('[AUTH] send-otp SMS failed for', clean);
+
+    const delivery = await deliverPhoneOtp({
+      phone: clean,
+      message,
+      code: otp,
+      langCode,
+    });
+    if (!delivery.delivered) {
+      console.error('[AUTH] send-otp delivery failed for', clean);
       return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
     res.json({
       success: true,
       sent: true,
+      channel: delivery.channel,
       message: 'OTP imetumwa kwa simu yako',
     });
   } catch (error) {
@@ -98,8 +107,12 @@ async function sendEmailOtp(req, res) {
 
     await saveOtp(`email:${cleanEmail}`, hashOtp(otp), OTP_TTL_SECONDS);
 
-    const subject = lang === 'en' ? 'Your login code' : 'Namba yako ya kuingia';
-    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">Soko Vibe</h2><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${lang === 'en' ? 'Expires in 5 minutes.' : 'Inaisha kwa dakika 5.'}</p></body></html>`;
+    const { subject, html } = buildOtpEmail({
+      otp,
+      lang,
+      expiresInMinutes: OTP_TTL_SECONDS / 60,
+      recipientEmail: cleanEmail,
+    });
     const sent = await sendMail(cleanEmail, subject, html);
     if (!sent) {
       return res.status(502).json({ error: 'auth_otp_send_failed' });

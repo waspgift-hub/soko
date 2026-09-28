@@ -12,6 +12,27 @@ const NOTIFY_SMS_BASE = config.sms.notifyAfricaBaseUrl;
 const mesejiBreaker = createBreaker('sms-meseji', { failureThreshold: 3 });
 const notifyBreaker = createBreaker('sms-notify-africa', { failureThreshold: 3 });
 
+// Concurrency cap for SMS egress: SMS gateways throttle (and bill) bursts, so
+// during a 1000-user OTP day the requests queue here instead of stacking up at
+// the provider. The cap only limits HOW MANY are in flight, not throughput.
+const MAX_CONCURRENT_SMS = parseInt(process.env.SMS_MAX_CONCURRENT || '20', 10);
+let smsActive = 0;
+let smsWaiters = [];
+
+function acquireSmsSlot() {
+  if (smsActive < MAX_CONCURRENT_SMS) {
+    smsActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => smsWaiters.push(resolve));
+}
+
+function releaseSmsSlot() {
+  const next = smsWaiters.shift();
+  if (next) next();
+  else smsActive -= 1;
+}
+
 function toLocal(phone) {
   const digits = String(phone).replace(/\D/g, '');
   if (digits.startsWith('255')) return '0' + digits.slice(3);
@@ -85,10 +106,15 @@ async function sendViaNotifyAfrica(phone, message) {
 // Sends an SMS, Meseji first then Notify Africa. Returns true if delivered.
 async function sendSms(phone, message) {
   if (!phone || !message) return false;
-  if (await sendViaMeseji(phone, message)) return true;
-  if (await sendViaNotifyAfrica(phone, message)) return true;
-  console.error('[SMS] no provider delivered');
-  return false;
+  await acquireSmsSlot();
+  try {
+    if (await sendViaMeseji(phone, message)) return true;
+    if (await sendViaNotifyAfrica(phone, message)) return true;
+    console.error('[SMS] no provider delivered');
+    return false;
+  } finally {
+    releaseSmsSlot();
+  }
 }
 
 module.exports = { sendSms, toLocal, toInternational };

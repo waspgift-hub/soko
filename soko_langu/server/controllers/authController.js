@@ -1,7 +1,8 @@
 const crypto = require('crypto');
 const axios = require('axios');
 const { sendMail } = require('../src/services/mailer');
-const { smsSafeForGateway, localizeEmailOtp } = require('./notif_lang');
+const { buildOtpEmail } = require('../src/services/email-templates');
+const { smsSafeForGateway } = require('./notif_lang');
 
 async function sendSms(phone, message) {
   try {
@@ -123,10 +124,13 @@ module.exports = function ({ admin, db }) {
       });
 
       const lang = ['sw', 'en'].includes(langCode) ? langCode : 'sw';
-      const copy = localizeEmailOtp(lang);
 
-      const subject = copy.subject;
-      const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${copy.heading}</h2><p>${copy.body}</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${copy.expires}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+      const { subject, html } = buildOtpEmail({
+        otp,
+        lang,
+        expiresInMinutes: 10,
+        recipientEmail: cleanEmail,
+      });
 
       const sent = await sendMail(cleanEmail, subject, html);
       if (!sent) {

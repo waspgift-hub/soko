@@ -486,27 +486,4 @@ function smsSafeForGateway(lang, message) {
   return localized;
 }
 
-/// Localizes a Swahili email-OTP email into `lang`. Emails are pre-auth, so
-/// the app tells us its language via langCode (same as send-otp).
-const emailOtpCopy = {
-  en: {
-    subject: 'Soko Vibe — Your OTP',
-    heading: 'Soko Vibe — Email Verification',
-    body: 'Your OTP is:',
-    expires: 'Expires in 10 minutes. Do not share it with anyone.',
-  },
-};
-
-function localizeEmailOtp(lang) {
-  if (!lang || lang === 'sw') {
-    return {
-      subject: 'Soko Vibe — OTP yako',
-      heading: 'Soko Vibe — Uthibitisho wa Barua Pepe',
-      body: 'OTP yako ni:',
-      expires: 'Inaisha kwa dakika 10. Usimshiriki mtu yeyote.',
-    };
-  }
-  return emailOtpCopy[lang] || emailOtpCopy.en;
-}
-
-module.exports = { localizeNotif, localizeSms, localizeEmailOtp, localizeDefaultReason, smsSafeForGateway };
+module.exports = { localizeNotif, localizeSms, localizeDefaultReason, smsSafeForGateway };
