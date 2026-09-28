@@ -1,5 +1,6 @@
 const { getStore } = require('../../../config/database');
 const searchService = require('../../search/search-service');
+const { searchWeb } = require('../tavily');
 
 // A tool is { definition, run }.
 //
@@ -171,6 +172,25 @@ const TOOLS = {
       },
     },
     run: (args, ctx) => getMyProfile(args, ctx),
+  },
+  search_web: {
+    definition: {
+      type: 'function',
+      function: {
+        name: 'search_web',
+        description:
+          'Search the public internet for current information and get back source URLs. You MUST use this for anything not on Soko Vibe: exchange rates, laws, sports, weather, prices outside the app, company details, and any fact that could have changed. Never answer those from memory.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'A specific search query. Include the subject and anything time-sensitive.' },
+            max_results: { type: 'number', description: 'Optional, 1-5.' },
+          },
+          required: ['query'],
+        },
+      },
+    },
+    run: (args) => searchWeb({ query: args.query, maxResults: args.max_results }),
   },
 };
 
