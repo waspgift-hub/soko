@@ -47,7 +47,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _sendOtp() async {
     if (_email == null || _email!.isEmpty) return;
-    await context.read<AuthNotifier>().sendEmailOtp(_email!);
+    try {
+      await context.read<AuthNotifier>().sendEmailOtp(_email!);
+    } catch (_) {
+      // failure is already shown by the banner, which reads AuthNotifier.error
+    }
   }
 
   Future<void> _verifyOtp() async {

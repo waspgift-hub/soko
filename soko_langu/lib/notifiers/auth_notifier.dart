@@ -106,6 +106,17 @@ class AuthNotifier extends ChangeNotifier {
     );
   }
 
+  /// Bounds the admin/suspension/profile reads so a slow Firestore cold start
+  /// can't leave the auth gate on the loading spinner indefinitely.
+  Future<void> _safely(Future<void> Function() task) async {
+    try {
+      await task().timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // Best-effort: proceed with cached/default state; the values refresh
+      // from the subsequent authStateChanges listener update.
+    }
+  }
+
   Future<void> initialize() async {
     try {
       final currentUser = _authRepo.currentUser;
@@ -117,9 +128,9 @@ class AuthNotifier extends ChangeNotifier {
       if (currentUser != null) {
         _user = currentUser;
         _status = AuthStatus.authenticated;
-        await _fetchAdminStatus();
-        await _checkSuspended();
-        await _checkProfileCompleteness();
+        await _safely(_fetchAdminStatus);
+        await _safely(_checkSuspended);
+        await _safely(_checkProfileCompleteness);
       } else {
         _status = AuthStatus.unauthenticated;
       }
@@ -135,8 +146,8 @@ class AuthNotifier extends ChangeNotifier {
         _user = user;
         if (user != null) {
           _status = AuthStatus.authenticated;
-          await _fetchAdminStatus();
-          await _checkSuspended();
+          await _safely(_fetchAdminStatus);
+          await _safely(_checkSuspended);
         } else {
           _status = AuthStatus.unauthenticated;
           _isAdmin = false;
@@ -397,16 +408,23 @@ class AuthNotifier extends ChangeNotifier {
       );
       if (res.statusCode == 200) {
         _emailOtpState = EmailOtpState.sent;
-      } else {
-        final body = jsonDecode(res.body);
-        _error = body['error'] ?? 'auth_otp_send_failed';
-        _emailOtpState = EmailOtpState.error;
+        _error = null;
+        notifyListeners();
+        return;
       }
+      final body = jsonDecode(res.body);
+      final key = body['error'] ?? 'auth_otp_send_failed';
+      _error = key;
+      _emailOtpState = EmailOtpState.error;
       notifyListeners();
+      // rethrow so callers never treat a failed send as sent (login countdown)
+      throw NetworkError(message: key, userMessage: key);
     } catch (e) {
       _error = translateError(e);
       _emailOtpState = EmailOtpState.error;
       notifyListeners();
+      // transport/permission failures must surface to callers the same way
+      throw NetworkError(message: e.toString(), userMessage: _error!, originalError: e);
     }
   }
 
