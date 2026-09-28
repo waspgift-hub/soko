@@ -20,7 +20,7 @@ function cleanPhone(phone) {
 
 // Send OTP to phone: generates a 6-digit code, stores its hash for 5
 // minutes, then delivers it over the cheapest configured channel in order
-// (push → WhatsApp → SMS; see services/otp-delivery.js).
+// (push → SMS; see services/otp-delivery.js).
 async function sendOtp(req, res) {
   try {
     const { phone } = req.body;
