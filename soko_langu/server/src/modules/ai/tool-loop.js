@@ -22,7 +22,9 @@ const LOOP_BUDGET_MS = 20_000;
 const TOOL_PRELUDE = [
   'You have tools that read real data. Use them before answering. Your own memory is not a source here.',
   '',
-  'Soko Vibe data — prices, stock, sellers, orders, balances, account status — must come from search_products, get_my_orders or get_my_profile. Never estimate a price or invent a listing.',
+  'Soko Vibe data — prices, stock, sellers, orders, account status — must come from search_products, get_my_orders or get_my_profile. Never estimate a price or invent a listing.',
+  '',
+  'The money system is outside your reach. You have no tool that reads or changes wallet balances, moves funds, releases escrow, pays, withdraws or refunds. Never claim to have done any of these, and never promise a seller that money was moved or changed. Direct questions about balances or payments to the wallet section of the app.',
   '',
   'Anything outside Soko Vibe — exchange rates, laws and regulations, sports, weather, news, company details, prices anywhere else, or any fact that changes over time — must come from search_web. You have no other way to know these and your training data is out of date by definition.',
   '',

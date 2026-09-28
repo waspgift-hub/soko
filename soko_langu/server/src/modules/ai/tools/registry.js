@@ -90,9 +90,11 @@ async function getMyOrders(args, ctx) {
 /**
  * Account and verification status for the caller.
  *
- * Only fields that are safe to show back to the owner are read. isAdmin and
- * session fields are deliberately not exposed: the model does not need them and
- * a tool response is a poor place to carry privilege.
+ * Only fields that are safe to show back to the owner are read, and money is
+ * deliberately excluded: wallet/balances live outside the assistant, so the
+ * model can neither quote nor act on money state. isAdmin and session fields
+ * are also not exposed: the model does not need them and a tool response is a
+ * poor place to carry privilege.
  */
 async function getMyProfile(args, ctx) {
   if (!ctx.userId) return { note: 'No user record for this token.' };
@@ -102,7 +104,7 @@ async function getMyProfile(args, ctx) {
     select: {
       displayName: true, email: true, phone: true, role: true,
       accountStatus: true, kycStatus: true, kycVerified: true,
-      walletBalance: true, sellerBalance: true, createdAt: true,
+      createdAt: true,
     },
   });
   if (!u) return { note: 'Profile not found.' };
@@ -112,10 +114,54 @@ async function getMyProfile(args, ctx) {
     phone: u.phone ?? null,
     account_status: u.accountStatus ?? null,
     kyc_status: u.kycStatus ?? (u.kycVerified ? 'verified' : 'unverified'),
-    wallet_balance: u.walletBalance ?? null,
-    seller_balance: u.sellerBalance ?? null,
     is_seller: Boolean(ctx.sellerProfileId),
     member_since: u.createdAt ?? null,
+  };
+}
+
+// The only sellerProfile columns the assistant may write. Anything financial —
+// wallet, withdrawals, revenue, totals, payout settings, escrow — is not here
+// and never will be: the money system has no agent access.
+const SELLER_EDITABLE_FIELDS = ['storeName', 'storeDescription', 'logoUrl', 'coverUrl', 'businessType'];
+const SELLER_FIELD_CAPS = { storeName: 100, storeDescription: 2000, logoUrl: 500, coverUrl: 500, businessType: 50 };
+
+// Edits the caller's own store profile by command, mirroring what the regular
+// PUT /sellers/profile endpoint accepts. The profile is resolved from ctx (the
+// verified token), never from an argument, so a hallucinated id has nowhere to
+// land. Unknown keys are ignored, including any money key the model invents.
+async function updateMyStore(args, ctx) {
+  if (!ctx.sellerProfileId) {
+    return { error: 'No seller profile for this account. Become a seller first.' };
+  }
+
+  const data = {};
+  for (const field of SELLER_EDITABLE_FIELDS) {
+    const raw = args[field];
+    if (raw == null) continue;
+    let value = String(raw).trim();
+    const cap = SELLER_FIELD_CAPS[field];
+    if (value.length > cap) value = value.slice(0, cap);
+    if (field === 'storeName' && !value) return { error: 'storeName cannot be empty.' };
+    data[field] = value;
+  }
+  if (!Object.keys(data).length) {
+    return {
+      error: 'Tell the seller which field to change: storeName, storeDescription, businessType, logoUrl or coverUrl.',
+    };
+  }
+
+  const store = getStore();
+  try {
+    await store.sellerProfile.update({ where: { id: ctx.sellerProfileId }, data });
+  } catch (e) {
+    console.error('[ai] update_my_store failed:', e.message);
+    return { error: 'Store update could not be saved. Ask the seller to retry or contact support.' };
+  }
+
+  return {
+    success: true,
+    updated: data,
+    note: 'Store details only. Money, wallet, balances and payments are never changed by the assistant.',
   };
 }
 
@@ -167,11 +213,32 @@ const TOOLS = {
       function: {
         name: 'get_my_profile',
         description:
-          "Read the caller's own account: name, KYC verification status, wallet balance and account state. Use for 'is my KYC done' or 'what is my balance'.",
+          "Read the caller's own account: name, KYC verification status and account state. Use for 'is my KYC done' or 'how do I open a shop'. The assistant cannot read or change balances — those live outside it.",
         parameters: { type: 'object', properties: {} },
       },
     },
     run: (args, ctx) => getMyProfile(args, ctx),
+  },
+  update_my_store: {
+    definition: {
+      type: 'function',
+      function: {
+        name: 'update_my_store',
+        description:
+          "Update the caller's OWN store profile only (storeName, storeDescription, businessType, logoUrl, coverUrl). The seller must explicitly ask to change something and tell you the new value. Confirm with them before writing. This tool NEVER touches money, prices, wallet, balances, payments, escrow or withdrawal settings.",
+        parameters: {
+          type: 'object',
+          properties: {
+            storeName: { type: 'string', description: 'New store name (max 100 chars).' },
+            storeDescription: { type: 'string', description: 'New store description (max 2000 chars).' },
+            businessType: { type: 'string', description: 'Business type, e.g. electronics, fashion (max 50 chars).' },
+            logoUrl: { type: 'string', description: 'New logo image URL.' },
+            coverUrl: { type: 'string', description: 'New cover image URL.' },
+          },
+        },
+      },
+    },
+    run: (args, ctx) => updateMyStore(args, ctx),
   },
   search_web: {
     definition: {
