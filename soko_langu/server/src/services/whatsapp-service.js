@@ -12,14 +12,17 @@
 //     (e.g. "Msimbo wako ni {{1}}. Unaisha kwa dakika 5.")
 //   - if the template is approved for only one language, pin that language via
 //     WHATSAPP_LANGUAGE; the default sends `sw` then `en` bodies.
+//
+// All settings come straight from env (WHATSAPP_*) so the module boots even on
+// deployments that have not linked a Meta business; the `configured()` gate
+// keeps it a no-op until THEN.
 const axios = require('axios');
-const config = require('../config');
 
-const BASE_URL = config.whatsapp.baseUrl;
-const PHONE_NUMBER_ID = config.whatsapp.phoneNumberId;
-const TOKEN = config.whatsapp.token;
-const LANGUAGE = config.whatsapp.language || 'sw';
-const TEMPLATE_NAME = config.whatsapp.templateName || 'otp';
+const BASE_URL = process.env.WHATSAPP_BASE_URL || 'https://graph.facebook.com/v19.0';
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const TOKEN = process.env.WHATSAPP_TOKEN || '';
+const LANGUAGE = process.env.WHATSAPP_LANGUAGE || 'sw';
+const TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || 'otp';
 
 function configured() {
   return Boolean(TOKEN && PHONE_NUMBER_ID);
