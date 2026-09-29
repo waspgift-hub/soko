@@ -2116,6 +2116,129 @@ module.exports = function ({ admin: fbAdmin, db }) {
     });
   });
 
+  // Wallet deposit initiation (verbatim port of server/index.js:7984).
+  // Creates a Firestore deposits/{ref} doc, then either fires the ClickPesa
+  // USSD push (fire-and-forget, response returns immediately) or generates a
+  // BillPay control number. Completions are finalized by the v1 webhook
+  // (confirmLegacyDeposit, `dep` branch), so the push/control-number here must
+  // never replace that single source of truth for credits.
+  router.post('/wallet/deposit', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+      let decoded;
+      try { decoded = await A.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
+      const { userId, phone, amount, method } = req.body;
+      if (!userId || decoded.uid !== userId) {
+        return res.status(403).json({ error: 'userId mismatch' });
+      }
+      if (!amount) {
+        return res.status(400).json({ error: 'amount is required' });
+      }
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!phone) {
+        return res.status(400).json({ error: 'phone is required' });
+      }
+
+      const depositRef = `dep${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
+      const depMethod = method || 'ussd';
+
+      if (depMethod === 'billpay') {
+        // BillPay flow: create order control number (1% fee billed to the buyer)
+        const gatewayFee = calcGatewayFee('billpay', Math.round(amount), req.body.provider);
+        const totalCharge = Math.round(amount) + gatewayFee;
+
+        await db.collection('deposits').doc(depositRef).set({
+          userId,
+          phone,
+          amount: Math.round(amount),
+          gatewayFee,
+          totalCharge,
+          status: 'pending',
+          paymentMethod: 'BillPay',
+          createdAt: A.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const billResult = await clickpesaCreateBillPayOrder({
+          billAmount: totalCharge,
+          billDescription: `Soko Vibe wallet deposit: TZS ${Math.round(amount)}`,
+          billPaymentMode: 'EXACT',
+          billReference: depositRef,
+        });
+
+        if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+          const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+          return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+        }
+
+        const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+        const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
+
+        await db.collection('deposits').doc(depositRef).update({
+          billPayNumber,
+          clickpesaReference: clickpesaRef,
+        });
+
+        res.json({
+          success: true,
+          depositRef,
+          method: 'billpay',
+          billPayNumber,
+          totalCharge,
+          gatewayFee,
+          clickpesaId: clickpesaRef,
+          message: `BillPay control number: ${billPayNumber}. Total charge: TZS ${totalCharge.toLocaleString()}. Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalCharge.toLocaleString()} > PIN.`,
+        });
+      } else {
+        // USSD Push flow: ClickPesa charges its USSD fee to the customer on top,
+        // so we send the real deposit amount (never pre-add the fee).
+        const processingFee = 0;
+        const totalCharge = Math.round(amount);
+
+        const phoneDigits = phone.replace(/\D/g, '');
+        const normalizedPhone = phoneDigits.startsWith('0')
+          ? '255' + phoneDigits.substring(1)
+          : phoneDigits.startsWith('255')
+            ? phoneDigits
+            : '255' + phoneDigits;
+
+        await db.collection('deposits').doc(depositRef).set({
+          userId,
+          phone: normalizedPhone,
+          amount: Math.round(amount),
+          processingFee,
+          totalCharge,
+          status: 'pending',
+          paymentMethod: 'ClickPesa',
+          createdAt: A.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Fire ClickPesa async — return immediately
+        clickpesaCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
+          .then((result) => {
+            const ref = result?.id || '';
+            if (!ref) { console.error(`[USSD] Deposit ClickPesa no ref for ${depositRef}`); return; }
+            return db.collection('deposits').doc(depositRef).update({ clickpesaReference: ref, ussdSent: true });
+          })
+          .then(() => console.log(`[USSD] Deposit push sent for ${depositRef}`))
+          .catch((err) => {
+            console.error(`[USSD] Deposit ClickPesa error:`, err?.response?.data || err.message);
+            db.collection('deposits').doc(depositRef).update({ ussdFailed: true }).catch(() => {});
+          });
+
+        res.json({
+          success: true, depositRef, method: 'ussd',
+          message: `Malipo ya TZS ${totalCharge.toLocaleString()} yanatuma USSD push kwa ${normalizedPhone}. Ada ya ClickPesa inaongezwa kwenye malipo yako.`,
+        });
+      }
+    } catch (e) {
+      console.error('/api/wallet/deposit error:', e);
+      res.status(500).json({ error: e.message || 'Deposit failed' });
+    }
+  });
+
   router.get('/wallet/deposit/methods', (req, res) => {
     res.json({
       success: true,

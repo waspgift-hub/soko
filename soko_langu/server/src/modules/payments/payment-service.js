@@ -7,6 +7,8 @@ const { sameAmount } = require('../../utils/money');
 const outbox = require('./webhook-outbox');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { sendOneSignalNotification } = require('../legacy-compat/notify');
+const { confirmLegacyDeposit } = require('./legacy-deposit-confirm');
+const { confirmLegacyTransaction } = require('./legacy-transaction-confirm');
 
 /**
  * Payment service.
@@ -240,6 +242,32 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
             status: 'failed',
           });
         }
+        await outbox.markWebhookProcessed(event);
+        return { received: true, webhookId };
+      }
+
+      // Legacy `dep`, `boost`, and `kyc` references settle against Firestore
+      // money rows (deposits + transactions collections), not the ecommerce
+      // `orders` table — orderNumbers are SV-prefixed and can never collide.
+      // The escrow confirm path below 404s on them, so route them here first.
+      const legacyRef = String(normalized.orderReference);
+      if (legacyRef.startsWith('dep')) {
+        await confirmLegacyDeposit({
+          orderReference: legacyRef,
+          status: normalized.status,
+          providerPaymentId: normalized.providerPaymentId,
+          failureReason: normalized.raw?.message || normalized.raw?.reason || 'Payment failed',
+        });
+        await outbox.markWebhookProcessed(event);
+        return { received: true, webhookId };
+      }
+      if (legacyRef.startsWith('boost') || legacyRef.startsWith('kyc')) {
+        await confirmLegacyTransaction({
+          orderReference: legacyRef,
+          status: normalized.status,
+          providerPaymentId: normalized.providerPaymentId,
+          failureReason: normalized.raw?.message || normalized.raw?.reason || 'Payment failed',
+        });
         await outbox.markWebhookProcessed(event);
         return { received: true, webhookId };
       }
