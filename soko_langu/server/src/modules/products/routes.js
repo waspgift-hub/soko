@@ -170,6 +170,7 @@ router.get('/seller', authenticate, requireActive, async (req, res) => {
     const profile = await service.requireSellerProfile(req.user.id);
     const data = await service.listSellerProducts({
       sellerProfileId: profile.id,
+      userId: req.user.id,
       page: req.query.page,
       limit: req.query.limit,
     });
@@ -235,6 +236,7 @@ router.put(
         sellerProfileId: profile.id,
         data: req.body,
         sellerContext: sellerContext(profile, req),
+        userId: req.user.id,
       });
       invalidateProductCache(product);
       res.json({ success: true, data: product });
@@ -252,6 +254,7 @@ router.post('/:id/publish', authenticate, requireActive, async (req, res) => {
       productId: req.params.id,
       sellerProfileId: profile.id,
       status: 'published',
+      userId: req.user.id,
     });
     invalidateProductCache(product);
     await writeAudit({
@@ -273,6 +276,7 @@ router.post('/:id/unpublish', authenticate, requireActive, async (req, res) => {
       productId: req.params.id,
       sellerProfileId: profile.id,
       status: 'draft',
+      userId: req.user.id,
     });
     invalidateProductCache(product);
     res.json({ success: true, data: product });
@@ -314,6 +318,7 @@ router.post(
         sellerProfileId: profile.id,
         items: req.body.items,
         sellerContext: sellerContext(profile, req),
+        userId: req.user.id,
       });
       invalidateProductCache({ id: req.params.id });
       res.status(201).json({ success: true, data: rows });
@@ -330,6 +335,7 @@ router.delete('/:id', authenticate, requireActive, async (req, res) => {
     const product = await productStore.deleteListing({
       productId: req.params.id,
       sellerProfileId: profile.id,
+      userId: req.user.id,
     });
     invalidateProductCache(product);
     await writeAudit({

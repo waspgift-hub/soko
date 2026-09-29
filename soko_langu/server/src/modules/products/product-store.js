@@ -112,9 +112,9 @@ async function readDoc(db, id) {
 
 // Firestore-first update. Authz (ownership) is checked against the seam first —
 // never write to a doc the caller does not own.
-async function updateListing({ productId, sellerProfileId, data, sellerContext }) {
+async function updateListing({ productId, sellerProfileId, data, sellerContext, userId }) {
   const db = requireStore();
-  const owned = await service.getOwnedProduct({ id: productId, sellerProfileId });
+  const owned = await service.getOwnedProduct({ id: productId, sellerProfileId, userId });
 
   let doc = await readDoc(db, productId);
   if (doc) {
@@ -128,34 +128,34 @@ async function updateListing({ productId, sellerProfileId, data, sellerContext }
     await writeDoc(db, productId, { ...buildMirrorDoc(owned, sellerContext), updatedAt: nowIso() });
   }
 
-  return service.updateProduct({ id: productId, sellerProfileId, data });
+  return service.updateProduct({ id: productId, sellerProfileId, data, userId });
 }
 
 // Firestore-first publish/unpublish: the app sees isActive flip immediately.
-async function setListingPublished({ productId, sellerProfileId, status }) {
+async function setListingPublished({ productId, sellerProfileId, status, userId }) {
   const db = requireStore();
-  await service.getOwnedProduct({ id: productId, sellerProfileId });
+  await service.getOwnedProduct({ id: productId, sellerProfileId, userId });
 
   const doc = await readDoc(db, productId);
   if (doc) await writeDoc(db, productId, { isActive: status === 'published', updatedAt: nowIso() });
 
-  return service.setStatus({ id: productId, sellerProfileId, status });
+  return service.setStatus({ id: productId, sellerProfileId, status, userId });
 }
 
 // Firestore-first soft delete: hide from the app before retiring the row.
-async function deleteListing({ productId, sellerProfileId }) {
+async function deleteListing({ productId, sellerProfileId, userId }) {
   const db = requireStore();
-  await service.getOwnedProduct({ id: productId, sellerProfileId });
+  await service.getOwnedProduct({ id: productId, sellerProfileId, userId });
 
   await db.collection('products').doc(productId).delete().catch(() => {});
-  return service.softDelete({ id: productId, sellerProfileId });
+  return service.softDelete({ id: productId, sellerProfileId, userId });
 }
 
 // Attach R2 media. Firestore doc carries renderable public URLs (images[] +
 // videoUrl) like the legacy catalog; the row keeps its ProductMedia rows.
-async function attachListingMedia({ productId, sellerProfileId, items, sellerContext }) {
+async function attachListingMedia({ productId, sellerProfileId, items, sellerContext, userId }) {
   const db = requireStore();
-  const owned = await service.getOwnedProduct({ id: productId, sellerProfileId });
+  const owned = await service.getOwnedProduct({ id: productId, sellerProfileId, userId });
 
   let doc = await readDoc(db, productId);
   if (!doc) doc = buildMirrorDoc(owned, sellerContext);
@@ -182,7 +182,7 @@ async function attachListingMedia({ productId, sellerProfileId, items, sellerCon
   }
 
   await writeDoc(db, productId, { images: [...images], imageMetadata, videoUrl, updatedAt: nowIso() });
-  return service.attachMedia({ id: productId, sellerProfileId, items });
+  return service.attachMedia({ id: productId, sellerProfileId, items, userId });
 }
 
 // Firestore-first admin moderation: isActive mirrors the new status.

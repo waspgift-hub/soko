@@ -19,6 +19,19 @@ function slugify(title) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// A listing is owned through one of two seller identities: the profile doc id
+// (new v1 listings write sellerId = profile.id) or the legacy Firebase uid
+// (old direct-Firestore listings wrote sellerId = the caller's uid). Ownership
+// checks must accept both or every legacy seller's edit/delete false-404s.
+function sellerIdScope(sellerProfileId, userId) {
+  const ids = new Set();
+  if (sellerProfileId) ids.add(sellerProfileId);
+  if (userId && userId !== sellerProfileId) ids.add(userId);
+  if (ids.size === 0) return {};
+  if (ids.size === 1) return { sellerId: sellerProfileId };
+  return { OR: [...ids].map((sellerId) => ({ sellerId })) };
+}
+
 const PUBLIC_SELECT = {
   id: true,
   title: true,
@@ -103,12 +116,56 @@ async function resolveSellerProfile(idOrUid) {
   });
 }
 
+// Legacy sellers wrote products straight to Firestore with sellerId = their
+// Firebase uid but never got a sellerProfiles doc (that path predates the
+// profile requirement). Provisioning a working profile here makes the seller
+// hub and My Ads see their existing listings instead of an empty store.
+async function provisionLegacySeller(userId) {
+  const store = getStore();
+  const [user, legacy] = await Promise.all([
+    store.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    }),
+    store.product.findFirst({
+      where: { sellerId: userId, deletedAt: null },
+      select: { id: true, sellerName: true },
+    }),
+  ]);
+  if (!legacy) return null; // no listings, so this is not a seller account
+  const storeName = (legacy.sellerName || user?.displayName || 'My Store').trim().slice(0, 100);
+  const slugBase = storeName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 50) || 'store';
+  return store.sellerProfile.create({
+    data: {
+      userId,
+      storeName,
+      storeSlug: `${slugBase}-${userId.slice(0, 8)}`,
+      sellerStatus: 'active',
+      verificationStatus: 'pending',
+      reliabilityScore: 0,
+      totalSales: 0,
+      totalRevenue: 0,
+      disputeRate: 0,
+      onTimeDispatchRate: 1,
+    },
+    select: { id: true, userId: true, storeName: true },
+  });
+}
+
 async function requireSellerProfile(userId) {
   const store = getStore();
-  const profile = await store.sellerProfile.findUnique({
-    where: { userId },
-    select: { id: true, storeName: true },
-  });
+  const select = { id: true, userId: true, storeName: true };
+  let profile = await store.sellerProfile.findUnique({ where: { userId }, select });
+  if (!profile) {
+    // Legacy uuid-keyed docs hold their owner in a userId field; the keyed
+    // lookup above can't reach them, so match on the field instead.
+    profile = await store.sellerProfile.findFirst({ where: { userId }, select });
+  }
+  if (!profile) profile = await provisionLegacySeller(userId);
   if (!profile) throw httpError(404, 'SELLER_PROFILE_NOT_FOUND');
   return profile;
 }
@@ -120,15 +177,6 @@ async function categoryName(id) {
     select: { name: true },
   });
   return category?.name ?? null;
-}
-
-async function getOwnedProduct({ id, sellerProfileId }) {
-  const store = getStore();
-  const product = await store.product.findFirst({
-    where: { id, sellerId: sellerProfileId, deletedAt: null },
-  });
-  if (!product) throw httpError(404, 'PRODUCT_NOT_FOUND');
-  return product;
 }
 
 // Legacy-only product fields that live in the JSON snapshot during the
@@ -226,18 +274,18 @@ async function createProduct({ sellerProfileId, data, id }) {
   }
 }
 
-async function getOwnedProduct({ id, sellerProfileId }) {
+async function getOwnedProduct({ id, sellerProfileId, userId }) {
   const store = getStore();
   const product = await store.product.findFirst({
-    where: { id, sellerId: sellerProfileId, deletedAt: null },
+    where: { id, deletedAt: null, ...sellerIdScope(sellerProfileId, userId) },
   });
   if (!product) throw httpError(404, 'PRODUCT_NOT_FOUND');
   return product;
 }
 
-async function updateProduct({ id, sellerProfileId, data }) {
+async function updateProduct({ id, sellerProfileId, data, userId }) {
   const store = getStore();
-  const owned = await getOwnedProduct({ id, sellerProfileId });
+  const owned = await getOwnedProduct({ id, sellerProfileId, userId });
   const allowed = ['title', 'description', 'categoryId', 'price', 'originalPrice', 'stock', 'condition', 'weightGrams', 'shippingRequired'];
   const patch = {};
   for (const key of allowed) {
@@ -261,9 +309,9 @@ async function updateProduct({ id, sellerProfileId, data }) {
   return store.product.update({ where: { id }, data: patch });
 }
 
-async function setStatus({ id, sellerProfileId, status }) {
+async function setStatus({ id, sellerProfileId, status, userId }) {
   const store = getStore();
-  const product = await getOwnedProduct({ id, sellerProfileId });
+  const product = await getOwnedProduct({ id, sellerProfileId, userId });
   if (status === 'published') {
     if (!product.title || Number(product.price) <= 0) {
       throw httpError(400, 'PUBLISH_REQUIRES_TITLE_AND_PRICE');
@@ -272,9 +320,9 @@ async function setStatus({ id, sellerProfileId, status }) {
   return store.product.update({ where: { id }, data: { status } });
 }
 
-async function softDelete({ id, sellerProfileId }) {
+async function softDelete({ id, sellerProfileId, userId }) {
   const store = getStore();
-  await getOwnedProduct({ id, sellerProfileId });
+  await getOwnedProduct({ id, sellerProfileId, userId });
   return store.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
@@ -371,20 +419,49 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
   return { items: withSponsoredFlag.map(serializeProduct), pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
-async function listSellerProducts({ sellerProfileId, page = 1, limit = 20 }) {
+async function listSellerProducts({ sellerProfileId, userId, page = 1, limit = 20 }) {
   const store = getStore();
-  const where = { sellerId: sellerProfileId, deletedAt: null };
-  const [items, total] = await Promise.all([
-    store.product.findMany({
-      where,
-      include: { media: { orderBy: { sortOrder: 'asc' }, take: 4 } },
-      orderBy: { updatedAt: 'desc' },
-      take: Number(limit),
-      skip: (Number(page) - 1) * Number(limit),
-    }),
-    store.product.count({ where }),
-  ]);
-  return { items, pagination: { page: Number(page), limit: Number(limit), total } };
+  const take = Number(limit);
+  const skip = (Number(page) - 1) * take;
+  const orderBy = { updatedAt: 'desc' };
+  const include = { media: { orderBy: { sortOrder: 'asc' }, take: 4 } };
+  const ids = [...new Set([sellerProfileId, userId].filter(Boolean))];
+  let items;
+  let total;
+  if (ids.length <= 1) {
+    const where = { sellerId: sellerProfileId, deletedAt: null };
+    [items, total] = await Promise.all([
+      store.product.findMany({ where, include, orderBy, take, skip }),
+      store.product.count({ where }),
+    ]);
+  } else {
+    // Legacy uid-shape sellerId and profile-id-shape rows can't be expressed
+    // in one pushdown, so fetch each owner shape, dedupe and page in memory.
+    const byShape = await Promise.all(
+      ids.map((sellerId) =>
+        store.product.findMany({
+          where: { sellerId, deletedAt: null },
+          include,
+          orderBy,
+          take,
+        })
+      )
+    );
+    const seen = new Set();
+    const merged = [];
+    for (const rows of byShape) {
+      for (const row of rows) {
+        if (!seen.has(row.id)) {
+          seen.add(row.id);
+          merged.push(row);
+        }
+      }
+    }
+    merged.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    items = merged.slice(skip, skip + take);
+    total = merged.length;
+  }
+  return { items, pagination: { page: Number(page), limit: take, total } };
 }
 
 async function getProduct(idOrSlug) {
@@ -406,9 +483,9 @@ async function getProduct(idOrSlug) {
   return serializeProduct(product);
 }
 
-async function attachMedia({ id, sellerProfileId, items }) {
+async function attachMedia({ id, sellerProfileId, items, userId }) {
   const store = getStore();
-  await getOwnedProduct({ id, sellerProfileId });
+  await getOwnedProduct({ id, sellerProfileId, userId });
   const rows = await Promise.all(
     items.map((m, i) =>
       store.productMedia.create({
