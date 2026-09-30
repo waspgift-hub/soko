@@ -149,9 +149,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlassNavBar(ColorScheme cs) {
-    // The floating pill is carved from the canvas: raised neumorphic base with
-    // the dual shadow pair instead of a hairline border (a border would fight
-    // the extrude). Selected tabs recess back into the groove.
+    // The pill is FLAT, deliberately deviating from the `navBar` raised style
+    // in SurfacePolicy: it is a persistent element that is on screen for the
+    // whole session, so a soft-UI extrusion there reads as noise rather than
+    // emphasis. One directional shadow plus a hairline edge is enough to lift
+    // it off the content behind it. The bar's single soft accent is the Sell
+    // FAB, which is a real high-commitment control.
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
@@ -161,9 +164,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           height: 72,
           child: Container(
             decoration: BoxDecoration(
-              color: Neu.base(cs.brightness),
+              color: Neu.flatFill(cs.brightness),
               borderRadius: BorderRadius.circular(40),
-              boxShadow: Neu.raised(5, cs.brightness),
+              border: Border.all(
+                color: Neu.grooveColor(cs.brightness),
+                width: 0.5,
+              ),
+              boxShadow: Neu.flat(NeuFlatDepth.rest, cs.brightness),
             ),
             child: Row(
               children: [
@@ -199,6 +206,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// FLAT selected-tab background: a translucent brand-green tint, matching the
+  /// desktop sidebar so the two nav surfaces read as one system. Previously a
+  /// `Neu.inset` groove, which put a second soft-UI treatment next to the pill
+  /// and the FAB and made the bar read as entirely soft-UI.
+  BoxDecoration _selectedTabDecoration(ColorScheme cs) => BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(24),
+      );
+
   Widget _buildTab(
     int index,
     IconData icon,
@@ -221,10 +237,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration: isSelected
-                ? Neu.inset(24, cs.brightness,
-                    fill: cs.primary.withValues(alpha: 0.06))
-                : BoxDecoration(borderRadius: BorderRadius.circular(24)),
+            decoration:
+                isSelected ? _selectedTabDecoration(cs) : null,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -256,8 +270,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             decoration: BoxDecoration(
                               color: cs.error,
                               borderRadius: BorderRadius.circular(12),
+                              // Ring in the pill's own fill so the badge reads as
+                              // a cutout against it. Previously used the scaffold
+                              // colour, which matched the old grey soft-UI base
+                              // and would have left a pale halo on the flat fill.
                               border: Border.all(
-                                color: Theme.of(context).scaffoldBackgroundColor,
+                                color: Neu.flatFill(cs.brightness),
                                 width: 1.5,
                               ),
                             ),
@@ -309,10 +327,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration: isSelected
-                ? Neu.inset(24, cs.brightness,
-                    fill: cs.primary.withValues(alpha: 0.06))
-                : BoxDecoration(borderRadius: BorderRadius.circular(24)),
+            decoration:
+                isSelected ? _selectedTabDecoration(cs) : null,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -376,7 +392,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   color: cs.primary,
                   shape: BoxShape.circle,
-                  // Tinted dual shadow so the green FAB extruded from the pill.
+                  // The bar's one soft-UI accent. Selling is the highest
+                  // commitment action available here, and now that the pill and
+                  // the selected tab are flat this is the only extruded element
+                  // left — which is what gives it its emphasis. Tinted dual
+                  // shadow so the green reads as extruded from the flat pill.
                   boxShadow: Neu.raisedHue(4, cs.primary),
                 ),
                 child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 26),
