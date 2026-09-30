@@ -49,7 +49,7 @@ class SellerCard extends StatelessWidget {
                     backgroundColor: cs.surfaceContainerHighest,
                     backgroundImage: imageUrl.isNotEmpty ? CachedNetworkImageProvider(imageUrl) : null,
                     child: imageUrl.isEmpty
-                        ? Icon(Icons.storefront, size: 28, color: cs.onSurfaceVariant)
+                        ? Icon(Icons.storefront, size: 28, color: cs.primary)
                         : null,
                   ),
                   Positioned(

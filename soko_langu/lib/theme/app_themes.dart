@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_typography.dart';
+import 'neumorphic.dart';
 
 // Brand rule (§brand system): BLACK + WHITE canvas with a single GREEN accent
 // #00C853 for emphasis (commerce CTAs, links, selection). Green-on-white text
@@ -98,12 +99,15 @@ ThemeData buildThemeFromScheme(ColorScheme scheme, {SokoColors? brand}) =>
 ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   final isDark = scheme.brightness == Brightness.dark;
 
+  // Soft-UI (neumorphic) canvas: the whole app surfaces sit ON the element
+  // base tone so extruded/inset dual shadows read consistently. Raised and
+  // recessed fills use Neu.base/Neu.insetBase derived from the same canvas.
+  final neuCanvas = Neu.base(scheme.brightness);
+  final neuGroove = Neu.grooveColor(scheme.brightness);
+
   // Surfaces prefer solid, opaque fills for legibility; glass
   // translucency is retained only for the floating nav bar and
   // bottom sheets where layering is intentional.
-  final cardSurface = isDark ? scheme.surfaceContainerLow : scheme.surface;
-  final sheetSurface = isDark ? scheme.surfaceContainerLow : scheme.surface;
-
   final brand = brandOverride ??
       SokoColors(
         commerce: const Color(0xFF00C853),
@@ -124,7 +128,10 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   return base.copyWith(
     colorScheme: scheme,
     extensions: [brand],
-    scaffoldBackgroundColor: scheme.surface,
+    // The neumorphic canvas — every surface must sit on the same element base
+    // tone for the dual (top-left light / bottom-right dark) shadows to read
+    // as carved-out soft UI instead of floating DropShadow.
+    scaffoldBackgroundColor: neuCanvas,
     textTheme: AppTypography.apply(base.textTheme, scheme),
     // Android 12+ sparkle ripple + consistent material transitions for the
     // few non-GoRouter Navigator.push call sites.
@@ -140,12 +147,18 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     iconTheme: IconThemeData(
-      color: scheme.onSurface.withValues(alpha: 0.75),
+      // Brand rule: every icon that doesn't opt into a semantic color
+      // (error/warning) inherits the surface-legible brand green — deep green
+      // #009624 in light mode, #00C853 in dark — instead of a neutral gray.
+      color: brand.brandOnSurface,
     ),
 
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       foregroundColor: scheme.onSurface,
+      // Header icons (back, actions) render in brand green while the title
+      // text stays onSurface for readability.
+      iconTheme: IconThemeData(color: brand.brandOnSurface),
       elevation: 0,
       centerTitle: true,
       titleTextStyle: const TextStyle(
@@ -171,10 +184,11 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
             color: scheme.primary,
           );
         }
+        // Unselected tabs stay green, just de-emphasized.
         return TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          color: scheme.onSurface.withValues(alpha: 0.45),
+          color: scheme.primary.withValues(alpha: 0.55),
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
@@ -182,7 +196,7 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
           return IconThemeData(color: scheme.primary, size: 24);
         }
         return IconThemeData(
-          color: scheme.onSurface.withValues(alpha: 0.45),
+          color: scheme.primary.withValues(alpha: 0.55),
           size: 24,
         );
       }),
@@ -196,7 +210,7 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
           ? const Color(0xFF121212).withValues(alpha: 0.75)
           : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
       selectedItemColor: scheme.primary,
-      unselectedItemColor: scheme.onSurface.withValues(alpha: 0.45),
+      unselectedItemColor: scheme.primary.withValues(alpha: 0.55),
       type: BottomNavigationBarType.fixed,
       elevation: 0,
       selectedLabelStyle: const TextStyle(
@@ -206,37 +220,38 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
       unselectedLabelStyle: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w500,
-        color: scheme.onSurface.withValues(alpha: 0.45),
+        color: scheme.primary.withValues(alpha: 0.55),
       ),
     ),
 
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        // PRIMARY BUTTON — black (light) / white (dark) for authority.
-        backgroundColor: isDark ? Colors.white : Colors.black,
-        foregroundColor: isDark ? Colors.black : Colors.white,
+        // PRIMARY BUTTON — green commerce CTA on the soft canvas; black text
+        // keeps the 9.4:1 guarantee (onPrimary is fixed black).
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 15,
           letterSpacing: 0.2,
         ),
-        elevation: 0,
-        shadowColor: Colors.transparent,
+        elevation: 3,
+        shadowColor: Neu.shade(scheme.brightness).withValues(alpha: 0.35),
       ),
     ),
 
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         // Same authority treatment as Elevated for consistency.
-        backgroundColor: isDark ? Colors.white : Colors.black,
-        foregroundColor: isDark ? Colors.black : Colors.white,
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -247,12 +262,14 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        // SECONDARY BUTTON — outlined neutral, not green.
+        // SECONDARY BUTTON — outlined neutral sitting on the canvas, hairline
+        // groove instead of a hard edge so it reads soft.
         foregroundColor: scheme.onSurface,
-        side: BorderSide(color: scheme.outlineVariant),
+        backgroundColor: Neu.base(scheme.brightness),
+        side: BorderSide(color: neuGroove),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -272,26 +289,33 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     inputDecorationTheme: InputDecorationTheme(
+      // Neumorphic input wells: recessed fill (darker than canvas) with a
+      // hairline groove, not an outlined box. Focus swaps the groove to the
+      // green commerce accent so the field visibly "pressed in".
       filled: true,
-      fillColor: isDark ? scheme.surfaceContainerLow : const Color(0xFFF7F7F7),
+      fillColor: Neu.insetBase(scheme.brightness),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: neuGroove, width: 0.8),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: neuGroove, width: 0.8),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: neuGroove, width: 0.8),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: scheme.error, width: 1),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: scheme.error, width: 1.5),
       ),
       contentPadding: const EdgeInsets.symmetric(
@@ -305,20 +329,20 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
       hintStyle: TextStyle(
         color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
       ),
-      prefixIconColor: scheme.onSurfaceVariant.withValues(alpha: 0.6),
-      suffixIconColor: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+      prefixIconColor: scheme.primary.withValues(alpha: 0.7),
+      suffixIconColor: scheme.primary.withValues(alpha: 0.7),
     ),
 
     chipTheme: ChipThemeData(
-      backgroundColor: isDark ? scheme.surfaceContainerLow : const Color(0xFFF7F7F7),
-      selectedColor: scheme.primary.withValues(alpha: 0.15),
+      backgroundColor: Neu.insetBase(scheme.brightness),
+      selectedColor: scheme.primary.withValues(alpha: 0.18),
       labelStyle: TextStyle(color: scheme.onSurface),
       secondaryLabelStyle: const TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.5,
       ),
-      side: BorderSide(color: scheme.outlineVariant),
+      side: BorderSide(color: neuGroove),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -326,40 +350,41 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     dividerTheme: DividerThemeData(
-      color: scheme.outlineVariant,
+      color: neuGroove,
       thickness: 0.5,
       space: 1,
     ),
 
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: isDark ? scheme.surfaceContainerHigh : scheme.surface,
+      backgroundColor: Neu.base(scheme.brightness),
       contentTextStyle: TextStyle(color: scheme.onSurface),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: neuGroove),
       ),
       actionTextColor: scheme.primary,
       width: 440,
     ),
 
     dialogTheme: DialogThemeData(
-      backgroundColor: cardSurface,
+      backgroundColor: Neu.base(scheme.brightness),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: scheme.outlineVariant),
+        side: BorderSide(color: neuGroove),
       ),
-      elevation: 8,
+      elevation: 10,
+      shadowColor: Neu.shade(scheme.brightness).withValues(alpha: 0.4),
     ),
 
     cardTheme: CardThemeData(
-      color: cardSurface,
+      color: Neu.base(scheme.brightness),
       elevation: 0,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: scheme.outlineVariant),
+        side: BorderSide(color: neuGroove, width: 0.5),
       ),
       clipBehavior: Clip.antiAlias,
     ),
@@ -425,14 +450,14 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     menuTheme: MenuThemeData(
       style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(cardSurface),
+        backgroundColor: WidgetStatePropertyAll(Neu.base(scheme.brightness)),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: scheme.outlineVariant),
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: neuGroove),
           ),
         ),
-        elevation: WidgetStatePropertyAll(4),
+        elevation: WidgetStatePropertyAll(6),
       ),
     ),
 
@@ -459,53 +484,54 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: sheetSurface,
+      backgroundColor: Neu.base(scheme.brightness),
       surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      elevation: 8,
+      elevation: 12,
+      shadowColor: Neu.shade(scheme.brightness).withValues(alpha: 0.45),
     ),
 
     popupMenuTheme: PopupMenuThemeData(
-      color: cardSurface,
+      color: Neu.base(scheme.brightness),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: neuGroove),
       ),
-      elevation: 4,
+      elevation: 6,
     ),
 
     drawerTheme: DrawerThemeData(
-      backgroundColor: sheetSurface,
+      backgroundColor: Neu.base(scheme.brightness),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(20),
-          bottomRight: Radius.circular(20),
+          topRight: Radius.circular(24),
+          bottomRight: Radius.circular(24),
         ),
       ),
     ),
 
     expansionTileTheme: ExpansionTileThemeData(
-      iconColor: scheme.onSurfaceVariant,
-      collapsedIconColor: scheme.onSurfaceVariant,
+      iconColor: scheme.primary.withValues(alpha: 0.7),
+      collapsedIconColor: scheme.primary.withValues(alpha: 0.7),
       shape: Border(),
       collapsedShape: Border(),
     ),
 
     timePickerTheme: TimePickerThemeData(
-      backgroundColor: cardSurface,
+      backgroundColor: Neu.base(scheme.brightness),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: scheme.outlineVariant),
+        side: BorderSide(color: neuGroove),
       ),
     ),
 
     datePickerTheme: DatePickerThemeData(
-      backgroundColor: cardSurface,
+      backgroundColor: Neu.base(scheme.brightness),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: scheme.outlineVariant),
+        side: BorderSide(color: neuGroove),
       ),
       headerBackgroundColor: scheme.primary,
       headerForegroundColor: scheme.onPrimary,

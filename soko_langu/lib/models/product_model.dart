@@ -54,6 +54,11 @@ class WholesaleTier {
 
 class Product {
   final String id;
+
+  /// Canonical id from the v2 bridge: equal to [id] for Postgres rows and
+  /// their Firestore mirrors, and to the legacy Firestore doc id when a
+  /// migrated listing still carries it in its snapshot.
+  final String legacyId;
   final String name;
   final String description;
   final double price;
@@ -83,8 +88,7 @@ class Product {
   final bool isBoosted;
   final DateTime? boostedUntil;
   final String boostTier;
-  final bool isSponsored;
-  final String? sponsorshipCampaignId;
+  final DateTime? hiddenUntil;
   final String? brand;
   final String? sellerPhone;
   final String condition;
@@ -96,6 +100,7 @@ final String unit;
 
   Product({
     required this.id,
+    this.legacyId = '',
     required this.name,
     required this.description,
     required this.price,
@@ -125,8 +130,7 @@ final String unit;
     this.isBoosted = false,
     this.boostedUntil,
     this.boostTier = '',
-    this.isSponsored = false,
-    this.sponsorshipCampaignId,
+    this.hiddenUntil,
     this.brand,
     this.sellerPhone,
     this.condition = 'new',
@@ -221,6 +225,7 @@ final String unit;
 
     return Product(
       id: json['id']?.toString() ?? '',
+      legacyId: snapshot['legacyId']?.toString() ?? '',
       name: json['title']?.toString() ?? json['name']?.toString() ?? '',
       description: json['description']?.toString() ??
           snapshot['description']?.toString() ??
@@ -250,6 +255,9 @@ final String unit;
       reviewCount: json['reviewCount'] ?? snapshot['reviewCount'] ?? 0,
       soldCount: json['soldCount'] ?? snapshot['soldCount'] ?? 0,
       viewCount: json['viewCount'] ?? snapshot['viewCount'] ?? 0,
+      // Server owns visibility (draft/published/suspended/rejected); map it to
+      // the legacy isActive so My Ads and feeds reflect the module state.
+      isActive: (json['status']?.toString() ?? 'published') == 'published',
       isBoosted: json['isBoosted'] ?? snapshot['isBoosted'] ?? false,
       isFeatured: json['isFeatured'] ?? snapshot['isFeatured'] ?? false,
       boostedUntil: _legacyTimestamp(json['boostedUntil'] ?? snapshot['boostedUntil']),
@@ -257,10 +265,6 @@ final String unit;
       boostTier: json['boostTier']?.toString() ??
           snapshot['boostTier']?.toString() ??
           '',
-      isSponsored: json['isSponsored'] ?? false,
-      sponsorshipCampaignId: json['sponsoredCampaign'] is Map
-          ? (json['sponsoredCampaign'] as Map<String, dynamic>)['id']?.toString()
-          : null,
       brand: snapshot['brand']?.toString(),
       condition: json['condition']?.toString() ??
           snapshot['condition']?.toString() ??
@@ -311,6 +315,7 @@ final String unit;
 
     return Product(
       id: doc.id,
+      legacyId: data['legacyId']?.toString() ?? '',
       name: data['name'] ?? '',
       description: data['description'] ?? '',
       price: (data['price'] ?? 0).toDouble(),
@@ -339,6 +344,11 @@ final String unit;
       viewCount: data['viewCount'] ?? 0,
       attributes: Map<String, dynamic>.from(data['attributes'] ?? {}),
       isActive: data['isActive'] ?? true,
+      // Server lifecycle field: a seller-owned unpublish flips the row to
+      // 'draft', so mirrors feeds and My Ads reflect visibility accurately.
+      hiddenUntil: data['hiddenUntil'] is Timestamp
+          ? (data['hiddenUntil'] as Timestamp).toDate()
+          : null,
       isFeatured: data['isFeatured'] ?? false,
       featuredUntil: data['featuredUntil'] is Timestamp
           ? (data['featuredUntil'] as Timestamp).toDate()
@@ -350,8 +360,6 @@ final String unit;
               ? (data['featuredUntil'] as Timestamp).toDate()
               : null),
       boostTier: data['boostTier'] as String? ?? '',
-      isSponsored: data['isSponsored'] ?? false,
-      sponsorshipCampaignId: data['sponsorshipCampaignId'] as String?,
       brand: data['brand'],
       sellerPhone: data['sellerPhone'] as String?,
       condition: data['condition'] ?? 'new',
@@ -397,8 +405,6 @@ Map<String, dynamic> toMap() => {
         ? Timestamp.fromDate(boostedUntil!)
         : null,
     'boostTier': boostTier,
-    'isSponsored': isSponsored,
-    'sponsorshipCampaignId': sponsorshipCampaignId,
     'brand': brand,
     'sellerPhone': sellerPhone,
     'condition': condition,

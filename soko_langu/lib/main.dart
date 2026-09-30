@@ -89,7 +89,7 @@ void main() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    );
+    ).timeout(const Duration(seconds: 15));
     if (!kIsWeb) {
       // ONLINE-ONLY: no Firestore SDK cache on-device. Cached documents would
       // read like authoritative data while disconnected and hide the outage
@@ -106,7 +106,7 @@ void main() async {
   // Hive runs on web too (IndexedDB), so the offline product cache
   // keeps working for browser users.
   try {
-    await LocalCacheService.init();
+    await LocalCacheService.init().timeout(const Duration(seconds: 20));
   } catch (e) {
     debugPrint('LocalCacheService: init failed — $e');
   }
@@ -120,7 +120,7 @@ void main() async {
   // --- Google Sign-In: initialize before any sign in calls ---
   if (!kIsWeb) {
     try {
-      await GoogleSignIn.instance.initialize();
+      await GoogleSignIn.instance.initialize().timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('GoogleSignIn: init failed — $e');
     }
@@ -129,7 +129,7 @@ void main() async {
   // --- Local notifications for heads-up display ---
   if (!kIsWeb) {
     try {
-      await LocalNotificationService().initialize();
+      await LocalNotificationService().initialize().timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('LocalNotification: init failed — $e');
     }
@@ -589,14 +589,18 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
       // App Check
       try {
-        await FirebaseAppCheck.instance.activate(
-          providerAndroid: kDebugMode
-              ? const AndroidDebugProvider()
-              : const AndroidPlayIntegrityProvider(),
-          providerApple: const AppleDeviceCheckProvider(),
-        );
+        await FirebaseAppCheck.instance
+            .activate(
+              providerAndroid: kDebugMode
+                  ? const AndroidDebugProvider()
+                  : const AndroidPlayIntegrityProvider(),
+              providerApple: const AppleDeviceCheckProvider(),
+            )
+            .timeout(const Duration(seconds: 10));
         if (kDebugMode) {
-          final tokenStr = await FirebaseAppCheck.instance.getToken(true);
+          final tokenStr = await FirebaseAppCheck.instance
+              .getToken(true)
+              .timeout(const Duration(seconds: 8));
           debugPrint('🔥 AppCheck Debug Token (register in Firebase Console):');
           debugPrint(tokenStr ?? 'null');
         }
@@ -606,7 +610,9 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
       // AdMob
       try {
-        await MobileAds.instance.initialize();
+        await MobileAds.instance
+            .initialize()
+            .timeout(const Duration(seconds: 12));
       } catch (e) {
         debugPrint('AdMob: failed — $e');
       }
@@ -621,7 +627,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
     // FCM push + in-app notification service
     try {
-      await notificationService.initialize();
+      await notificationService.initialize().timeout(const Duration(seconds: 12));
     } catch (e) {
       debugPrint('notificationService: $e');
     }

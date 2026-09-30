@@ -234,7 +234,7 @@ Widget _media(
               child: DsBadge(
                   label: widget.badgeLabel!, color: cs.primary),
             ),
-          if (widget.product.isSponsored)
+          if (widget.product.isBoosted)
             const Positioned(
               top: 8,
               right: 8,

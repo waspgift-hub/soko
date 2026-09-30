@@ -487,7 +487,7 @@ class _ReadOnlyPhone extends StatelessWidget {
               ),
             ),
           ),
-          Icon(Icons.lock_outline, size: 18, color: cs.onSurfaceVariant),
+          Icon(Icons.lock_outline, size: 18, color: cs.primary),
         ],
       ),
     );

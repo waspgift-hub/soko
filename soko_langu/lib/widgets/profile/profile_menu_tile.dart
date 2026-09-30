@@ -53,7 +53,7 @@ class ProfileMenuTile extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.s2),
             ],
-            Icon(Icons.chevron_right_rounded, size: 20, color: cs.onSurfaceVariant),
+            Icon(Icons.chevron_right_rounded, size: 20, color: cs.primary),
           ],
         ),
       ),

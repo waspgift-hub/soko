@@ -300,7 +300,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
               ),
             ),
           IconButton(
-            icon: Icon(Icons.close, size: 18, color: cs.onSurfaceVariant),
+            icon: Icon(Icons.close, size: 18, color: cs.primary),
             onPressed: () => _removeAccount(account),
           ),
         ],

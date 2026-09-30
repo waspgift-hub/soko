@@ -29,6 +29,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   final Map<String, TextEditingController> _trackingCtrls = {};
   final Map<String, TextEditingController> _driverPhoneCtrls = {};
   final Map<String, TextEditingController> _notesCtrls = {};
+  final Map<String, bool> _freeDelivery = {};
 
   @override
   void dispose() {
@@ -46,11 +47,20 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   TextEditingController _phoneCtrl(String txId) => _driverPhoneCtrls.putIfAbsent(txId, () => TextEditingController());
   TextEditingController _notesCtrl(String txId) => _notesCtrls.putIfAbsent(txId, () => TextEditingController());
 
-  Future<void> _setShippingCost(String txId, double productPrice) async {
+  void _toggleFreeDelivery(String txId, bool value) {
+    setState(() => _freeDelivery[txId] = value);
+    if (value) _shipCtrl(txId).clear();
+  }
+
+  Future<void> _setShippingCost(String txId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final cost = double.tryParse(_shipCtrl(txId).text.trim().replaceAll(',', ''));
-    if (cost == null || cost <= 0) {
+    final free = _freeDelivery[txId] == true;
+    // Free delivery submits TZS 0; otherwise a positive cost is required.
+    final cost = free
+        ? 0.0
+        : double.tryParse(_shipCtrl(txId).text.trim().replaceAll(',', ''));
+    if (cost == null || (!free && cost <= 0)) {
       _showError(context.tr('enter_valid_shipping_cost'));
       return;
     }
@@ -58,8 +68,8 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     HapticFeedback.lightImpact();
     try {
       if (ApiConfig.kUseOrdersApi) {
-        // Quote runs the Postgres state machine (→ SHIPPING_FEE_SUBMITTED);
-        // the server presentation mirror updates the Firestore doc.
+        // Quote runs the Postgres state machine (→ AWAITING_ESCROW_PAYMENT on
+        // NORMAL, mirrored to Firestore); the totals stay server-locked.
         await OrderApiClient().submitShippingQuote(
           txId,
           amount: cost.round(),
@@ -70,7 +80,8 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         return;
       }
 
-      // Try server endpoint first (updates totalAmount + notifies buyer)
+      // Legacy engine path (updates totalAmount + notifies buyer); Shipping cost
+      // and totals are only ever written by the server, never the app directly.
       final token = await user.getIdToken();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/set-shipping-cost'),
@@ -82,32 +93,10 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
         return;
       }
-      // Fallback: direct Firestore write (rule allows shippingCost)
-      if (resp.statusCode == 404) {
-        final doc = FirebaseFirestore.instance.collection('transactions').doc(txId);
-        final total = productPrice + cost;
-        await doc.update({'shippingCost': cost, 'totalAmount': total});
-        // also sync orders mirror if exists
-        try {
-          await FirebaseFirestore.instance.collection('orders').doc(txId).update({'shippingCost': cost, 'totalAmount': total});
-        } catch (_) {}
-        _shipCtrl(txId).clear();
-        if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
-        return;
-      }
       final body = jsonDecode(resp.body);
       _showError(body['error'] ?? context.tr('dispatch_failed'));
     } catch (e) {
-      // Last fallback direct write
-      try {
-        final doc = FirebaseFirestore.instance.collection('transactions').doc(txId);
-        final total = productPrice + cost;
-        await doc.update({'shippingCost': cost, 'totalAmount': total});
-        _shipCtrl(txId).clear();
-        if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
-      } catch (_) {
-        if (mounted) _showError(context.trError(e));
-      }
+      if (mounted) _showError(context.trError(e));
     } finally {
       if (mounted) setState(() => _settingCostTxId = null);
     }
@@ -267,14 +256,47 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                               Row(children: [Icon(Icons.payments_outlined, size: 16, color: cs.primary), const SizedBox(width: 6), Text(context.tr('set_cost_note'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.primary))]),
                               const SizedBox(height: 4),
                               Text(context.tr('seller_quote_subtitle'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                              const SizedBox(height: 12),
-                              DsTextField(controller: _shipCtrl(txId), label: context.tr('shipping_cost'), hint: 'TZS 0', prefixIcon: Icons.monetization_on_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))]),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.card_giftcard_rounded, size: 18, color: cs.successGreen),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(context.tr('free_delivery'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                                        Text(context.tr('free_delivery_note'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: _freeDelivery[txId] == true,
+                                    onChanged: (v) => _toggleFreeDelivery(txId, v),
+                                    activeTrackColor: cs.primary,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              if (_freeDelivery[txId] == true)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: cs.successGreen.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: cs.successGreen.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Text(context.tr('free_delivery_confirmed'), style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                                )
+                              else
+                                DsTextField(controller: _shipCtrl(txId), label: context.tr('shipping_cost'), hint: 'TZS 0', prefixIcon: Icons.monetization_on_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))]),
                               const SizedBox(height: 12),
                               SizedBox(
                                 width: double.infinity,
                                 height: 44,
                                 child: ElevatedButton.icon(
-                                  onPressed: _settingCostTxId == txId ? null : () => _setShippingCost(txId, productPrice),
+                                  onPressed: _settingCostTxId == txId ? null : () => _setShippingCost(txId),
                                   icon: _settingCostTxId == txId ? const GoogleLoading(size: 18, strokeWidth: 2) : const Icon(Icons.check, size: 18),
                                   label: Text(_settingCostTxId == txId ? context.tr('sending_label') : context.tr('send_shipping_to_buyer')),
                                   style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),

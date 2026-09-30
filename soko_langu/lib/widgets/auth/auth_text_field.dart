@@ -3,7 +3,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
 
-/// Premium auth text field: 16dp radius, soft glass fill, floating label and
+/// Premium auth text field: 20dp radius, soft glass fill, floating label and
 /// a 2px primary border that animates in on focus. Form validation errors
 /// render inline below the field via the enclosing [Form].
 class AuthTextField extends StatefulWidget {
@@ -77,7 +77,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            borderRadius: BorderRadius.circular(AppRadius2.xl),
             border: Border.all(
               color: focused ? cs.primary : cs.brandBorder,
               width: focused ? 2 : 1,
@@ -103,7 +103,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
             validator: widget.validator,
             onChanged: widget.onChanged,
             onFieldSubmitted: widget.onFieldSubmitted,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
             decoration: InputDecoration(
               labelText: widget.label,
               hintText: widget.hint,
@@ -111,7 +111,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
                   ? null
                   : Icon(
                       widget.prefixIcon,
-                      size: 20,
+                      size: 24,
                       color: focused ? cs.primary : cs.onSurfaceVariant,
                     ),
               suffixIcon: widget.suffix,
@@ -132,8 +132,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
               focusedErrorBorder: InputBorder.none,
               isDense: false,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 16,
+                horizontal: 20,
+                vertical: 22,
               ),
             ),
           ),

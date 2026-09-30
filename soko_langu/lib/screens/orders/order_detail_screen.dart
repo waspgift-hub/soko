@@ -82,6 +82,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   // send the product straight from the order detail instead of the tab.
   bool _sellerShipBusy = false;
   bool _sellerDispatchBusy = false;
+  bool _freeShip = false;
   final _shipCostCtrl = TextEditingController();
   final _courierCtrl = TextEditingController();
   final _trackCtrl = TextEditingController();
@@ -1363,6 +1364,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                       _buildVerdictChip(cs),
                     ],
                   ],
+                  if (shippingCost != null && shippingCost == 0) ...[
+                    _tableRow(
+                      cs,
+                      context.tr('shipping_cost'),
+                      context.tr('free_delivery'),
+                    ),
+                  ],
                   if (discount != null && discount > 0)
                     _tableRow(
                       cs,
@@ -1895,7 +1903,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     _feeRow2(cs, context.tr('shipping_cost'), 'TZS ${_nf(_safeInt(shipping))}', cs.tertiary),
                   ],
                   const SizedBox(height: 6),
-                  _feeRow2(cs, context.tr('commission_3_5', 'Commission (3.5%)'), 'TZS ${_nf(_safeInt(platformFee))}', cs.onSurfaceVariant),
+                  _feeRow2(cs, context.tr('platform_fee', 'Platform fee'), 'TZS ${_nf(_safeInt(platformFee))}', cs.onSurfaceVariant),
                   if (_gatewayFee > 0) ...[
                     const SizedBox(height: 6),
                     _feeRow2(cs, context.tr('gateway_fee'), 'TZS ${_nf(_safeInt(_gatewayFee))}', cs.secondary),
@@ -2141,14 +2149,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           ),
           const SizedBox(height: 14),
           if (!hasShipping) ...[
-            Text(
-              context.tr('enter_shipping_cost', 'Weka gharama ya usafirishaji'),
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
+            Row(
+              children: [
+                Icon(Icons.card_giftcard_rounded, size: 18, color: cs.successGreen),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr('free_delivery'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
+                      Text(context.tr('free_delivery_note'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _freeShip,
+                  onChanged: (v) => setState(() {
+                    _freeShip = v;
+                    if (v) _shipCostCtrl.clear();
+                  }),
+                  activeTrackColor: cs.primary,
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            _dispatchField(cs, _shipCostCtrl,
-                context.tr('shipping_cost', 'Gharama ya usafirishaji'), Icons.monetization_on_outlined,
-                phone: true),
+            const SizedBox(height: 10),
+            if (_freeShip)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.successGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.successGreen.withValues(alpha: 0.3)),
+                ),
+                child: Text(context.tr('free_delivery_confirmed'), style: TextStyle(fontSize: 12, color: cs.onSurface)),
+              )
+            else
+              _dispatchField(cs, _shipCostCtrl,
+                  context.tr('shipping_cost', 'Gharama ya usafirishaji'), Icons.monetization_on_outlined,
+                  phone: true),
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
@@ -2905,8 +2944,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Future<void> _submitSellerShippingCost() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final cost = double.tryParse(_shipCostCtrl.text.trim().replaceAll(',', ''));
-    if (cost == null || cost <= 0) {
+    // Free delivery submits TZS 0; otherwise a positive cost is required.
+    final cost = _freeShip
+        ? 0.0
+        : double.tryParse(_shipCostCtrl.text.trim().replaceAll(',', ''));
+    if (cost == null || (!_freeShip && cost <= 0)) {
       if (mounted) _showSellerSnack(context.tr('enter_valid_shipping_cost', 'Weka gharama halali ya usafirishaji'), isError: true);
       return;
     }
@@ -2931,21 +2973,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         body: jsonEncode({'orderId': widget.docId, 'shippingCost': cost}),
       );
       if (resp.statusCode == 200) {
-        _shipCostCtrl.clear();
-        if (mounted) _showSellerSnack(context.tr('shipping_cost_submitted'));
-      } else if (resp.statusCode == 404) {
-        // Fallback: direct write — rules let the seller set shippingCost.
-        final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
-        await FirebaseFirestore.instance
-            .collection('transactions')
-            .doc(widget.docId)
-            .update({'shippingCost': cost, 'totalAmount': productPrice + cost});
-        try {
-          await FirebaseFirestore.instance
-              .collection('orders')
-              .doc(widget.docId)
-              .update({'shippingCost': cost, 'totalAmount': productPrice + cost});
-        } catch (_) {}
         _shipCostCtrl.clear();
         if (mounted) _showSellerSnack(context.tr('shipping_cost_submitted'));
       } else {
@@ -3044,9 +3071,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       (d['shippingCost'] as num?)?.toDouble() ?? 0;
   double get _quotedProductPrice =>
       (d['productPrice'] ?? 0).toDouble();
-  double get _quotedPlatformFee => _quotedProductPrice * 0.035;
-  double get _quotedTotal =>
-      _quotedProductPrice + _quotedShippingCost + _quotedPlatformFee + _gatewayFee;
+  double get _quotedPlatformFee => (d['platformFee'] as num?)?.toDouble() ?? 0;
+  // The server locks totalAmount = price + shipping when the quote lands; the
+  // invoice must show exactly what the escrow charges, never an invented fee.
+  double get _quotedTotal {
+    final locked = (d['totalAmount'] as num?)?.toDouble() ?? 0;
+    if (locked > 0) return locked;
+    return _quotedProductPrice + _quotedShippingCost;
+  }
 
   Future<void> _payQuotedOrder() async {
     final user = FirebaseAuth.instance.currentUser;

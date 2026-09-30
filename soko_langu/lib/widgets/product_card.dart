@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
-import '../../services/deep_link_service.dart';
-import '../../services/localization_service.dart';
 import '../../services/product_service.dart';
 import '../../services/soko_cache_manager.dart';
 import '../extensions/context_tr.dart';
@@ -16,33 +13,16 @@ class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
   final FlashSale? flashSale;
-  final VoidCallback? onShare;
 
-  final bool isSponsored;
-  final String? sponsorshipCampaignId;
+  final bool isBoosted;
 
   const ProductCard({
     super.key,
     required this.product,
     required this.onTap,
     this.flashSale,
-    this.onShare,
-    this.isSponsored = false,
-    this.sponsorshipCampaignId,
+    this.isBoosted = false,
   });
-
-  void _shareProduct(BuildContext context) {
-    final shareAction = onShare ?? () {
-      final price =
-          '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
-      final text =
-          '${product.name}\n'
-          '${context.trParams('share_price_line', {'price': price})}\n'
-          '${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(product.id)}';
-      SharePlus.instance.share(ShareParams(text: text));
-    };
-    shareAction();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,22 +82,6 @@ class ProductCard extends StatelessWidget {
                               ),
                             ),
                             _buildSellerBadge(context, badgeSize, cs),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Material(
-                                color: Colors.black.withValues(alpha: 0.30),
-                                borderRadius: BorderRadius.circular(999),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: () => _shareProduct(context),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: Icon(Icons.share_outlined, size: 18, color: cs.surface),
-                                  ),
-                                ),
-                              ),
-                            ),
                             Positioned(
                               bottom: 6,
                               left: 6,
@@ -259,7 +223,7 @@ final semanticsLabel = [
               ),
             ),
           ),
-        if (isSponsored || product.isSponsored)
+        if (isBoosted || product.isBoostedValid)
           Positioned(
             top: product.isFeaturedValid ? 32 : 8, left: 8,
             child: Container(
@@ -269,7 +233,7 @@ final semanticsLabel = [
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: cs.primary.withValues(alpha: 0.3), width: 1),
               ),
-              child: Text(context.tr('sponsored'),
+              child: Text(context.tr('boost_product'),
                 style: TextStyle(color: cs.primary, fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),

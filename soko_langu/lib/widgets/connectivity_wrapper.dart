@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../extensions/context_tr.dart';
 import '../services/network_state_service.dart';
-import 'soko_vibe_loading.dart';
 
-/// Root-level gate: dims the app and shows a reconnecting overlay while
-/// the API is unreachable. Driven by [NetworkStateService] (single source
-/// of truth) instead of its own probe timer.
+/// Root-level connectivity notice. When the API is degraded or the device is
+/// offline the app stays fully interactive (cache data + retry buttons work);
+/// a slim non-blocking banner at the top flags the state. Driven by
+/// [NetworkStateService] (single source of truth).
 class ConnectivityWrapper extends StatelessWidget {
   final Widget child;
   const ConnectivityWrapper({super.key, required this.child});
@@ -17,49 +17,61 @@ class ConnectivityWrapper extends StatelessWidget {
     final status = context.watch<NetworkStateService>().status;
     if (status == NetworkStatus.online) return child;
 
-    final message = status == NetworkStatus.offline
-        ? context.tr(
-            'connection_lost', 'Connection lost. Reconnecting...')
-        : context.tr('network_unstable',
-            'Network unstable. Please check your settings.');
+    final cs = Theme.of(context).colorScheme;
+    final isOffline = status == NetworkStatus.offline;
+    final message = isOffline
+        ? context.tr('no_network')
+        : context.tr('network_unstable');
 
     return Stack(
       children: [
-        AbsorbPointer(
-          child: Opacity(
-            opacity: 0.6,
-            child: child,
-          ),
-        ),
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SokoVibeLoading(size: 60),
-              const SizedBox(height: 16),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.primary,
-                  letterSpacing: 0.5,
-                ),
+        child,
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                context.tr(
-                    'please_stay_on_screen', 'Please stay on this screen'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant
-                      .withValues(alpha: 0.7),
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isOffline
+                        ? Icons.wifi_off_rounded
+                        : Icons.sync_problem_rounded,
+                    size: 18,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ],

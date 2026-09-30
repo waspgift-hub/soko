@@ -82,7 +82,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -137,7 +136,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         _buildEarningsCard(),
                         const SizedBox(height: 20),
                         _buildQuickActions(cs, isDark, productSnap.data ?? []),
-                        if (user?.email == 'admin@sokovibe.co.tz' || _isAdmin) ...[
+                        if (_isAdmin) ...[
                           const SizedBox(height: 20),
                           _buildAdminSection(),
                         ],
@@ -225,7 +224,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       _QuickActionData(Icons.price_check_outlined, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary),
       _QuickActionData(Icons.local_shipping_outlined, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange),
 
-      _QuickActionData(Icons.verified_outlined, context.tr('sponsored_listing'), () => context.push(AppRoutes.sponsoredDashboard), cs.trendingOrange),
+      _QuickActionData(Icons.verified_outlined, context.tr('boost_listing'), () => context.push(AppRoutes.boostProduct), cs.trendingOrange),
       _QuickActionData(Icons.receipt_long_outlined, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary),
       _QuickActionData(Icons.flash_on_outlined, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange),
       _QuickActionData(Icons.manage_search_outlined, context.tr('natufuta_bidhaa'), () => context.push(AppRoutes.buyerRequests), cs.secondary),

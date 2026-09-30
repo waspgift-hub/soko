@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -23,8 +23,7 @@ class SearchResult {
   final double? longitude;
   final bool kycApproved;
   final double? discount;
-  final bool isSponsored;
-  final String? sponsorshipCampaignId;
+  final bool isBoosted;
 
   SearchResult({
     required this.id,
@@ -42,8 +41,7 @@ class SearchResult {
     this.longitude,
     this.kycApproved = false,
     this.discount,
-    this.isSponsored = false,
-    this.sponsorshipCampaignId,
+    this.isBoosted = false,
   });
 
   factory SearchResult.fromMap(Map<String, dynamic> map) {
@@ -63,8 +61,7 @@ class SearchResult {
       longitude: (map['longitude'] as num?)?.toDouble(),
       kycApproved: map['kycApproved'] as bool? ?? false,
       discount: (map['discount'] as num?)?.toDouble(),
-      isSponsored: map['isSponsored'] as bool? ?? false,
-      sponsorshipCampaignId: map['sponsorshipCampaignId'] as String?,
+      isBoosted: map['isBoosted'] as bool? ?? false,
     );
   }
 
@@ -81,9 +78,8 @@ class SearchResult {
       rating: p.rating,
       reviewCount: p.reviewCount,
       location: p.location,
-      isSponsored: p.isSponsored,
+      isBoosted: p.isBoosted || p.isBoostedValid,
       kycApproved: p.sellerKycApproved,
-      sponsorshipCampaignId: p.sponsorshipCampaignId,
     );
   }
 }
@@ -141,8 +137,10 @@ class SearchResponse {
     required this.query,
     this.detected = const {},
     this.autoCorrected = false,
-  });  factory SearchResponse.fromMap(Map<String, dynamic> map) {
-    final resultsList = (map['results'] as List<dynamic>?)
+  });
+  factory SearchResponse.fromMap(Map<String, dynamic> map) {
+    final resultsList =
+        (map['results'] as List<dynamic>?)
             ?.map((e) => SearchResult.fromMap(e as Map<String, dynamic>))
             .toList() ??
         [];
@@ -195,11 +193,18 @@ class SearchService {
   static const String _base = '${ApiConfig.baseUrl}/api/search';
 
   SearchService({SearchApiClient? v1Search})
-      : _v1Search = v1Search ?? SearchApiClient();
+    : _v1Search = v1Search ?? SearchApiClient();
 
   Future<Map<String, String>> _headers() async {
     final user = _auth.currentUser;
-    final token = await user?.getIdToken();
+    // Token refresh over cellular can stall for seconds — fail fast so
+    // searches fall back to Firestore instead of holding a stuck spinner.
+    final token = user == null
+        ? null
+        : await user.getIdToken().timeout(
+            const Duration(seconds: 6),
+            onTimeout: () => null,
+          );
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -208,11 +213,13 @@ class SearchService {
 
   Future<dynamic> _post(String endpoint, Map<String, dynamic> body) async {
     final headers = await _headers();
-    final response = await http.post(
-      Uri.parse('$_base/$endpoint'),
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$_base/$endpoint'),
+          headers: headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 8));
     if (response.statusCode >= 400) {
       final err = _tryParseError(response.body);
       throw Exception(err);
@@ -221,8 +228,11 @@ class SearchService {
   }
 
   String _tryParseError(String body) {
-    try { return (jsonDecode(body) as Map)['error'] as String? ?? 'Request failed'; }
-    catch (_) { return 'Request failed'; }
+    try {
+      return (jsonDecode(body) as Map)['error'] as String? ?? 'Request failed';
+    } catch (_) {
+      return 'Request failed';
+    }
   }
 
   /// v1-Postgres search: GET /api/v1/search/products. Returns [SearchResponse]
@@ -272,7 +282,7 @@ class SearchService {
         page: page,
         pageSize: pageSize,
         filters: filters,
-      );
+      ).timeout(const Duration(seconds: 10), onTimeout: () => null);
       if (v1 != null) return v1;
     }
     try {
@@ -286,12 +296,16 @@ class SearchService {
       final serverResp = SearchResponse.fromMap(data as Map<String, dynamic>);
       // If server returned 0 results (search_index empty), use Firestore fallback
       if (serverResp.total == 0) {
-        debugPrint('[SearchService] Server returned 0 results, using Firestore fallback');
+        debugPrint(
+          '[SearchService] Server returned 0 results, using Firestore fallback',
+        );
         return _firestoreSearch(query: query, type: type, pageSize: pageSize);
       }
       return serverResp;
     } catch (e) {
-      debugPrint('[SearchService] Server search failed, using Firestore fallback: $e');
+      debugPrint(
+        '[SearchService] Server search failed, using Firestore fallback: $e',
+      );
       return _firestoreSearch(query: query, type: type, pageSize: pageSize);
     }
   }
@@ -305,44 +319,70 @@ class SearchService {
     if (q.length > 100) q = q.substring(0, 100);
     final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     if (words.isEmpty) {
-      return SearchResponse(results: [], sources: {}, total: 0, page: 0, hasMore: false, query: query);
+      return SearchResponse(
+        results: [],
+        sources: {},
+        total: 0,
+        page: 0,
+        hasMore: false,
+        query: query,
+      );
     }
 
     try {
       List<Product> products = [];
       if (words.length == 1) {
-        final snap = await _db.collection('products')
+        final snap = await _db
+            .collection('products')
             .where('searchKeywords', arrayContains: words[0])
             .where('isActive', isEqualTo: true)
             .limit(pageSize)
-            .get();
+            .get()
+            .timeout(const Duration(seconds: 10));
         products = snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
       } else {
-        final snap = await _db.collection('products')
+        final snap = await _db
+            .collection('products')
             .where('searchKeywords', arrayContainsAny: words.take(10).toList())
             .where('isActive', isEqualTo: true)
             .limit(pageSize)
-            .get();
+            .get()
+            .timeout(const Duration(seconds: 10));
         products = snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
       }
 
-      products = products.where((p) =>
-        words.every((w) =>
-          p.name.toLowerCase().contains(w) ||
-          p.description.toLowerCase().contains(w))).toList();
+      products = products
+          .where(
+            (p) => words.every(
+              (w) =>
+                  p.name.toLowerCase().contains(w) ||
+                  p.description.toLowerCase().contains(w),
+            ),
+          )
+          .toList();
 
       return SearchResponse.fromProducts(products, query);
     } catch (e) {
       debugPrint('[SearchService] Firestore search fallback also failed: $e');
-      return SearchResponse(results: [], sources: {}, total: 0, page: 0, hasMore: false, query: query);
+      return SearchResponse(
+        results: [],
+        sources: {},
+        total: 0,
+        page: 0,
+        hasMore: false,
+        query: query,
+      );
     }
   }
 
   Future<List<SearchSuggestion>> autocomplete(String query) async {
     try {
       final data = await _post('autocomplete', {'query': query});
-      final list = (data as Map<String, dynamic>)['suggestions'] as List<dynamic>? ?? [];
-      return list.map((e) => SearchSuggestion.fromMap(e as Map<String, dynamic>)).toList();
+      final list =
+          (data as Map<String, dynamic>)['suggestions'] as List<dynamic>? ?? [];
+      return list
+          .map((e) => SearchSuggestion.fromMap(e as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       debugPrint('[SearchService] Autocomplete server failed: $e');
       return _firestoreAutocomplete(query);
@@ -354,12 +394,14 @@ class SearchService {
     if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return [];
     try {
-      final snap = await _db.collection('products')
+      final snap = await _db
+          .collection('products')
           .where('searchName', isGreaterThanOrEqualTo: q)
           .where('searchName', isLessThanOrEqualTo: '$q\uf8ff')
           .where('isActive', isEqualTo: true)
           .limit(10)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       return snap.docs.map((doc) {
         final data = doc.data();
         return SearchSuggestion(
@@ -381,7 +423,8 @@ class SearchService {
   Future<List<Map<String, dynamic>>> getTrendingSearches() async {
     try {
       final data = await _post('trending', {});
-      final list = (data as Map<String, dynamic>)['trending'] as List<dynamic>? ?? [];
+      final list =
+          (data as Map<String, dynamic>)['trending'] as List<dynamic>? ?? [];
       return list.cast<Map<String, dynamic>>();
     } catch (e) {
       debugPrint('[SearchService] Trending server failed, returning empty: $e');

@@ -56,14 +56,10 @@ import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
-import '../screens/sponsored/sponsored_dashboard_screen.dart';
-import '../screens/sponsored/sponsored_campaign_creation_screen.dart';
-import '../screens/sponsored/sponsored_campaign_detail_screen.dart';
-import '../screens/sponsored/sponsored_performance_screen.dart';
+import '../screens/boost/boost_product_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
-import '../screens/profile/shop_customization_screen.dart';
 import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
@@ -105,10 +101,7 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.report,
   AppRoutes.buyerRequests,
   AppRoutes.postBuyerRequest,
-  AppRoutes.sponsoredDashboard,
-  AppRoutes.sponsoredCreate,
-  AppRoutes.sponsoredCampaign,
-  AppRoutes.sponsoredPerformance,
+  AppRoutes.boostProduct,
 ];
 
 final List<String> _adminOnlyRoutes = [
@@ -505,36 +498,14 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const PostBuyerRequestScreen()),
       ),
       GoRoute(
-        path: AppRoutes.sponsoredDashboard,
-        pageBuilder: (context, state) => _premiumPage(const SponsoredDashboardScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.sponsoredCreate,
+        path: AppRoutes.boostProduct,
         pageBuilder: (context, state) {
           final extra = state.extra is Map<String, dynamic>
               ? state.extra as Map<String, dynamic>
               : const {};
-          return _premiumPage(SponsoredCampaignCreationScreen(
+          return _premiumPage(BoostProductScreen(
             productId: extra['productId'] as String? ?? '',
             product: extra['product'] as dynamic,
-          ));
-        },
-      ),
-      GoRoute(
-        path: '${AppRoutes.sponsoredCampaign}/:id',
-        pageBuilder: (context, state) {
-          final campaignId = state.pathParameters['id']!;
-          return _premiumPage(SponsoredCampaignDetailScreen(campaignId: campaignId));
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.sponsoredPerformance,
-        pageBuilder: (context, state) {
-          final extra = state.extra is Map<String, dynamic>
-              ? state.extra as Map<String, dynamic>
-              : const {};
-          return _premiumPage(SponsoredPerformanceScreen(
-            campaignId: extra['campaignId'] as String? ?? '',
           ));
         },
       ),

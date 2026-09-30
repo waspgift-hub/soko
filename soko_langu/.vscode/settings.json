@@ -1,4 +1,7 @@
 {
     "cmake.sourceDirectory": "C:/Users/user/Desktop/ttr/soko_langu/linux",
-    "CodeGPT.apiKey": "Ollama"
+    "CodeGPT.apiKey": "Ollama",
+    "k6.executable": "C:/Program Files/k6/k6.exe",
+    "k6.thresholdsOnRun": true,
+    "k6.autoRunEnabled": true
 }

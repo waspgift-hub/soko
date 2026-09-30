@@ -478,7 +478,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                       ),
                       Text('${tp.viewCount}', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
                       const SizedBox(width: 4),
-                      Icon(Icons.visibility_outlined, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      Icon(Icons.visibility_outlined, size: 14, color: cs.primary.withValues(alpha: 0.5)),
                     ],
                   ),
                   if (topLoc.isNotEmpty)

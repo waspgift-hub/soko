@@ -57,7 +57,7 @@ class AuthPhoneFieldState extends State<AuthPhoneField> {
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            borderRadius: BorderRadius.circular(AppRadius2.xl),
             border: Border.all(
               color: focused ? cs.primary : cs.brandBorder,
               width: focused ? 2 : 1,
@@ -75,16 +75,16 @@ class AuthPhoneFieldState extends State<AuthPhoneField> {
           child: Row(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('🇹🇿', style: TextStyle(fontSize: 18)),
+                    const Text('🇹🇿', style: TextStyle(fontSize: 20)),
                     const SizedBox(width: 6),
                     Text(
                       '+255',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: focused ? cs.primary : cs.onSurface,
                       ),
@@ -93,7 +93,7 @@ class AuthPhoneFieldState extends State<AuthPhoneField> {
                 ),
               ),
               SizedBox(
-                height: 34,
+                height: 38,
                 child: VerticalDivider(
                   width: 1,
                   thickness: 1,
@@ -108,7 +108,7 @@ class AuthPhoneFieldState extends State<AuthPhoneField> {
                   textInputAction: widget.textInputAction,
                   onFieldSubmitted: widget.onFieldSubmitted,
                   validator: widget.validator,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
                   decoration: const InputDecoration(
                     hintText: '0XXXXXXXXX',
                     border: InputBorder.none,
@@ -117,11 +117,11 @@ class AuthPhoneFieldState extends State<AuthPhoneField> {
                     errorBorder: InputBorder.none,
                     focusedErrorBorder: InputBorder.none,
                     errorStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                    contentPadding: EdgeInsets.symmetric(vertical: 16),
+                    contentPadding: EdgeInsets.symmetric(vertical: 22),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
             ],
           ),
         );

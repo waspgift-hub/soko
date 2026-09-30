@@ -9,6 +9,8 @@ import android.graphics.Canvas
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.appwidget.AppWidgetManager
 import android.util.Log
@@ -24,17 +26,17 @@ class MainActivity : FlutterActivity() {
     private var initialSharePaths: List<String>? = null
     private var shareEventSink: EventChannel.EventSink? = null
     private var pendingSharePaths: List<String>? = null
+    // Share intent still copying to cache in background; getInitialMedia waits on it
+    private var pendingShareIntent: Intent? = null
+    private val initialShareWaiters = mutableListOf<MethodChannel.Result>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannels()
         pendingRoute = intent?.getStringExtra("route")
-        // Capture Gallery share that launched the app
-        val sharePaths = extractSharePaths(intent)
-        if (!sharePaths.isNullOrEmpty()) {
-            initialSharePaths = sharePaths
-            pendingSharePaths = sharePaths
-        }
+        // Capture Gallery share that launched the app — copy to cache async so a
+        // large video can't ANR the main thread at cold start
+        scheduleShareExtraction(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -45,21 +47,45 @@ class MainActivity : FlutterActivity() {
                 MethodChannel(messenger, "soko_lang/navigate").invokeMethod("navigate", route)
             }
         }
-        // Gallery share while app is alive — push via EventChannel if ready, else hold
-        val sharePaths = extractSharePaths(intent)
-        if (!sharePaths.isNullOrEmpty()) {
-            if (shareEventSink != null) {
-                shareEventSink?.success(sharePaths)
-            } else {
-                pendingSharePaths = sharePaths
-                // also try method channel fallback after engine ready
+        // Gallery share while app is alive — copied off the main thread, delivered
+        // via EventChannel once ready (or held if the stream isn't listening yet).
+        scheduleShareExtraction(intent)
+        // App Links / deep link data is handled separately via the app_links plugin
+    }
+
+    private fun scheduleShareExtraction(intent: Intent?) {
+        if (intent == null || pendingShareIntent != null) return
+        pendingShareIntent = intent
+        Thread {
+            val paths = try { extractSharePaths(intent) } catch (e: Exception) { null }
+            Handler(Looper.getMainLooper()).post {
+                pendingShareIntent = null
+                deliverSharePaths(paths)
+            }
+        }.start()
+    }
+
+    private fun deliverSharePaths(paths: List<String>?) {
+        val result = paths?.takeIf { it.isNotEmpty() }
+        if (initialShareWaiters.isNotEmpty()) {
+            // Cold start — Dart is still awaiting getInitialMedia
+            initialSharePaths = result
+            for (w in initialShareWaiters) w.success(result)
+            initialShareWaiters.clear()
+            return
+        }
+        // Warm start — push via the open stream, else hold and nudge Dart
+        val sink = shareEventSink
+        if (sink != null && result != null && result.isNotEmpty()) {
+            sink.success(result)
+            pendingSharePaths = null
+        } else {
+            pendingSharePaths = result
+            if (result != null && result.isNotEmpty()) {
                 flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-                    MethodChannel(messenger, "soko/share_receive").invokeMethod("onMediaShared", sharePaths)
+                    MethodChannel(messenger, "soko/share_receive").invokeMethod("onMediaShared", result)
                 }
             }
-        } else {
-            // also handle deep link data for App Links separately via app_links plugin
-            // (app_links handles it, we just keep route handling for shortcut)
         }
     }
 
@@ -142,9 +168,16 @@ class MainActivity : FlutterActivity() {
         // Share receive channels — gallery → Soko Vibe
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "soko/share_receive").setMethodCallHandler { call, result ->
             if (call.method == "getInitialMedia") {
-                result.success(initialSharePaths)
-                // keep pendingSharePaths until flutter consumes, then clear via clearPending
-                initialSharePaths = null
+                if (initialSharePaths != null) {
+                    result.success(initialSharePaths)
+                    pendingSharePaths = initialSharePaths
+                    initialSharePaths = null
+                } else if (pendingShareIntent != null) {
+                    // background copy still in flight — answer when it finishes
+                    initialShareWaiters.add(result)
+                } else {
+                    result.success(null)
+                }
             } else if (call.method == "clearPending") {
                 pendingSharePaths = null
                 result.success(true)

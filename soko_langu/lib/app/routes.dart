@@ -54,10 +54,7 @@ class AppRoutes {
   static const String orderFlow = '/order-flow';
   static const String sellerOrders = '/seller-orders';
   static const String adminUserDetail = '/admin/user';
-  static const String sponsoredDashboard = '/sponsored';
-  static const String sponsoredCreate = '/sponsored/create';
-  static const String sponsoredCampaign = '/sponsored/campaign';
-  static const String sponsoredPerformance = '/sponsored/performance';
+  static const String boostProduct = '/boost-product';
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';

@@ -198,6 +198,26 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _GoogleButton(onPressed: _isLoading ? null : _onGoogleLogin),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      context.tr('or'),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 20),
               _MethodSwitcher(
                 method: _method,
                 onChange: (m) {
@@ -251,44 +271,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _method == _LoginMethod.password
                           ? _onPasswordLogin
                           : _onOtpLogin,
+                      height: 58, // match 58dp fields so button row aligns
                     ),
-                    if (_method == _LoginMethod.password) ...[
-                      const SizedBox(height: 8),
-                      Align(
-                        child: TextButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => context.push(AppRoutes.forgotPassword),
-                          child: Text(
-                            context.tr('forgot_password'),
-                            style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      context.tr('or'),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _GoogleButton(onPressed: _isLoading ? null : _onGoogleLogin),
             ],
           ),
         ),
@@ -299,30 +286,56 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildMethodField() {
     final cs = Theme.of(context).colorScheme;
     if (_method == _LoginMethod.password) {
-      return AuthTextField(
+      return Column(
         key: const ValueKey('password_field'),
-        controller: _passwordController,
-        label: context.tr('password'),
-        prefixIcon: Icons.lock_outline_rounded,
-        obscureText: _obscurePassword,
-        textInputAction: TextInputAction.done,
-        autofillHints: const [AutofillHints.password],
-        validator: (v) => (v == null || v.isEmpty)
-            ? context.tr('enter_password')
-            : null,
-        suffix: IconButton(
-          onPressed: () => setState(
-            () => _obscurePassword = !_obscurePassword,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AuthTextField(
+            controller: _passwordController,
+            label: context.tr('password'),
+            prefixIcon: Icons.lock_outline_rounded,
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.password],
+            validator: (v) => (v == null || v.isEmpty)
+                ? context.tr('enter_password')
+                : null,
+            suffix: IconButton(
+              onPressed: () => setState(
+                () => _obscurePassword = !_obscurePassword,
+              ),
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            onFieldSubmitted: (_) => _onPasswordLogin(),
           ),
-          icon: Icon(
-            _obscurePassword
-                ? Icons.visibility_off_outlined
-                : Icons.visibility_outlined,
-            size: 20,
-            color: cs.onSurfaceVariant,
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _isLoading
+                  ? null
+                  : () => context.push(AppRoutes.forgotPassword),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                context.tr('forgot_password'),
+                style: TextStyle(
+                  color: cs.primary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           ),
-        ),
-        onFieldSubmitted: (_) => _onPasswordLogin(),
+        ],
       );
     } else if (!_otpSent) {
       return DsButton(
@@ -331,6 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
         icon: Icons.sms_outlined,
         loading: _sendingOtp,
         onPressed: _onSendOtp,
+        height: 58,
       );
     } else {
       return Column(
@@ -499,7 +513,7 @@ class _GoogleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 54,
+      height: 58,
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),

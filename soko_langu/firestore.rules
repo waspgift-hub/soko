@@ -85,19 +85,27 @@ service cloud.firestore {
 
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
+      // Any signed-in user may list a product: the client writes their own
+      // listing under their own uid (Postgres API and Firestore fallback both
+      // run under the user's token). isSellerOwns only requires the row's
+      // sellerId to match the caller so users cannot forge other sellers'
+      // listings. Suspension/trust enforcement stays server-side.
+      function isSellerOwns() {
+        return isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      }
       allow read: if true;
       // Create must not bootstrap boost/featured/sales state (server owns those
       // via the ClickPesa webhook and purchase flow), and cannot start with a
       // pre-inflated rating — otherwise a client could list a product with
       // isBoosted:true + rating:5.0 and get a free featured placement.
-      allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid
+      allow create: if isSellerOwns()
         && !request.resource.data.keys().hasAny([
           'isBoosted', 'boostedUntil', 'boostTier',
           'isFeatured', 'featuredUntil', 'soldCount'
         ])
         && request.resource.data.get('rating', 0) == 0
         && request.resource.data.get('reviewCount', 0) == 0;
-      allow update: if isSignedIn() && notSuspended() && (
+      allow update: if isSignedIn() && (
         // seller owns the product AND is not tampering with boost fields
         (resource.data.sellerId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'isBoosted', 'boostedUntil', 'boostTier', 'isFeatured', 'featuredUntil'
@@ -112,7 +120,7 @@ service cloud.firestore {
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['soldCount'])
         || isAdmin()
       );
-      allow delete: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
+      allow delete: if (isSignedIn() && resource.data.sellerId == request.auth.uid) || isAdmin();
 
       match /comments/{commentId} {
         allow read: if true;
@@ -145,15 +153,20 @@ service cloud.firestore {
         resource.data.sellerId == request.auth.uid ||
         isAdmin()
       );
+      // Orders and their mirrors are normally SERVER-OWNED via /api/orders/*
+      // (admin SDK bypasses rules; the Postgres state machine funds escrow).
+      // Client create is allowed ONLY for the buyer's own row (buyerId == uid)
+      // so a seller can never forge someone else's purchase attempt; real money
+      // still settles server-side.
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
-      // Order lifecycle (status, escrow release, dispatch proof, OTP gen) is
-      // SERVER-OWNED via /api/orders/*. Clients may only soft-delete their own
-      // row or, for sellers, persist a previously missing shipping cost.
+      // Order lifecycle (status, escrow release, dispatch proof, OTP gen) and
+      // all money fields (shippingCost, totalAmount) are SERVER-OWNED. Clients
+      // may only soft-delete their own row.
       allow update: if isSignedIn() && (
         (resource.data.buyerId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])) ||
         (resource.data.sellerId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller', 'shippingCost', 'totalAmount'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller'])) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -179,16 +192,16 @@ service cloud.firestore {
         resource.data.sellerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
-      // Server owns status/amount mutations (webhook, escrow, orders transition).
-      // Clients may only soft-delete their own row or, for sellers, persist a
-      // previously missing shipping cost before dispatching.
+      // Mirrors are written by the server (admin SDK). No client create path.
+      allow create: if false;
+      // Server owns status/amount mutations (webhook, escrow, orders transition,
+      // presentation mirror). Clients may only soft-delete their own row.
       allow update: if isSignedIn() && (
         (resource.data.buyerId == request.auth.uid && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])
         )) ||
         (resource.data.sellerId == request.auth.uid && (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller', 'shippingCost', 'totalAmount'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller'])
         )) ||
         isAdmin()
       );
@@ -264,22 +277,32 @@ service cloud.firestore {
     }
 
     // ─── FLASH SALES ────────────────────────────────────────
+    // All mutations route through /api/flash-sale/* (admin SDK): a seller can
+    // never extend endTime, rewrite prices, or inflate stock after creation.
     match /flash_sales/{saleId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // ─── BUYER REQUESTS (Natafuta Bidhaa) ───────────────────
-    // Fixed permission-denied: allow any signed-in user to read (was notSuspended gated).
+    // Any signed-in user may read the feed (was notSuspended gated).
     match /BuyerRequests/{requestId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && notSuspended() && request.resource.data.buyerUid == request.auth.uid
-        && request.resource.data.keys().hasAll(['buyerUid','title','budget']);
+        && request.resource.data.keys().hasAll(['buyerUid','title','budget'])
+        // contact must start locked — a requester cannot pre-grant unlocks
+        && request.resource.data.get('unlockedBy', []).size() == 0;
+      // Unlock: a signed-in seller OTHER than the requester may arrayUnion
+      // only their OWN uid. Blocks self-unlock and any tampering with other
+      // sellers' unlock state. The premium/paid gate lives server-side.
       allow update: if isAdmin() || (
         isSignedIn() && notSuspended()
+        && request.auth.uid != resource.data.buyerUid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockedBy'])
+        && request.resource.data.unlockedBy is list
+        && request.resource.data.unlockedBy.size() == resource.data.unlockedBy.size() + 1
+        && resource.data.unlockedBy.toSet().difference(request.resource.data.unlockedBy.toSet()).size() == 0
+        && request.resource.data.unlockedBy.toSet().difference(resource.data.unlockedBy.toSet()).hasOnly([request.auth.uid])
       );
       allow delete: if isAdmin();
     }
@@ -287,8 +310,10 @@ service cloud.firestore {
     // ─── NOTIFICATIONS ──────────────────────────────────────
     match /notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // userId must be the caller's own — a client may never target another
+      // user's inbox (spam/phishing). Server fan-out uses the admin SDK.
       allow create: if isSignedIn()
-        && (request.resource.data.userId == request.auth.uid || isAdmin())
+        && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasAll(['title', 'body', 'userId'])
         && request.resource.data.title is string
         && request.resource.data.body is string;
@@ -309,7 +334,12 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn() && notSuspended()
         && request.resource.data.userId == request.auth.uid
-        && (request.resource.data.sellerId != request.auth.uid);
+        && (request.resource.data.sellerId != request.auth.uid)
+        && request.resource.data.productId is string
+        && exists(/databases/$(database)/documents/products/$(request.resource.data.productId))
+        && request.resource.data.get('rating', 5) is number
+        && request.resource.data.get('rating', 5) >= 1
+        && request.resource.data.get('rating', 5) <= 5;
       allow update: if isSignedIn() && notSuspended()
         && (
           // any signed-in user can like/unlike any review (unlimited)
@@ -325,21 +355,44 @@ service cloud.firestore {
     }
 
     // ─── AD VIEWS ───────────────────────────────────────────
+    // Each view pays out TSh 15 to the seller, so the create rule doubles as
+    // an anti-fraud gate: buyerId must be the caller (no bot accounts via a
+    // script), the timestamp must be server-produced (no backdating), and a
+    // seller can never record a view on their OWN product (self-inflation).
+    // Rewarded-ads (100% platform revenue) carry no sellerId and are exempt
+    // from the self-serve check. True per-device rate limiting is not possible
+    // in rules — needs server-side enforcement (see /api/ad-revenue).
     match /ad_views/{adViewId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      // Sellers see only their own ad views; users see only what they watched.
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.get('processed', false) == false
+        && request.resource.data.timestamp == request.time
+        && (
+          !request.resource.data.keys().hasAny(['sellerId', 'productId'])
+          || (request.resource.data.sellerId != request.auth.uid
+              && request.resource.data.productId is string
+              && exists(/databases/$(database)/documents/products/$(request.resource.data.productId)))
+        );
       allow update, delete: if isAdmin();
     }
 
     // ─── PRODUCT ANALYTICS ──────────────────────────────────
-    // Client tracks views (any user/anonymous). Server reads for dashboards.
+    // Tracked views are unique per signed-in account; dashboards are server-read.
     match /product_analytics/{productId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
 
       match /views/{viewId} {
         allow read: if isAdmin();
-        allow create: if isSignedIn();
+        // unique per-account views use userId == doc id; anonymous adds stay
+        // blocked (client caps those server-side via the API)
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       }
 
       match /daily_stats/{statId} {
@@ -348,32 +401,16 @@ service cloud.firestore {
       }
     }
 
-    // ─── SPONSORED CAMPAIGNS ────────────────────────────────
-    // Fixed: allow active campaigns to be readable for feed/visibility checks;
-    // owning seller and admin retain full read. Writes remain server-owned.
-    match /sponsoredCampaigns/{campaignId} {
-      allow read: if isSignedIn() && (resource.data.sellerId == request.auth.uid || isAdmin() || resource.data.status == 'active');
-      allow list: if isSignedIn() && (isAdmin() || request.auth.uid != null);
-      allow create, update, delete: if isAdmin();
-      match /{doc=**} {
-        allow read, write: if isAdmin();
-      }
-    }
-    // Legacy alias — keep read open for signed-in to avoid dashboard 404
-    match /sponsored_campaigns/{campaignId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
     // ─── BOOST ANALYTICS ────────────────────────────────────
-    // Client tracks impressions. Server reads for dashboards.
+    // Impressions are SERVER-OWNED (the boost service meters placements
+    // via the admin SDK) — any client write here would inflate boost
+    // metrics, so there is no client create path.
     match /boost_analytics/{productId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
 
       match /impressions/{impId} {
-        allow read: if isAdmin();
-        allow create: if isSignedIn();
+        allow read, write: if isAdmin();
       }
     }
 
@@ -418,9 +455,13 @@ service cloud.firestore {
     // ─── PRICE DROPS ────────────────────────────────────────
     match /price_drops/{docId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn()
-        && request.resource.data.keys().hasAll(['productId', 'userId', 'createdAt'])
-        && request.resource.data.userId == request.auth.uid;
+      // Only the product's own seller may announce a drop (blocks forged
+      // attribution + app-wide fan-out spam; the server also rate-limits).
+      allow create: if isSignedIn() && notSuspended()
+        && request.resource.data.keys().hasAll(['productId', 'sellerId', 'createdAt'])
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.sellerId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
@@ -464,11 +505,14 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'lastMessage', 'lastMessageTime', 'unreadCount'
             ]))
-        // a non-admin participant may only remove themselves when leaving:
-        // adminIds must never gain the user's own uid (blocks self-promotion).
+        // a non-admin participant may only REMOVE THEMSELVES when leaving:
+        // adminIds must stay untouched, nothing may be added, and the only
+        // removed member must be the caller (blocks kicking others out).
         || (isGroupParticipant() && !isGroupAdmin()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantIds', 'adminIds'])
-            && !request.resource.data.adminIds.hasAny([request.auth.uid]))
+            && request.resource.data.adminIds == resource.data.adminIds
+            && request.resource.data.participantIds.toSet().difference(resource.data.participantIds.toSet()).size() == 0
+            && resource.data.participantIds.toSet().difference(request.resource.data.participantIds.toSet()).hasOnly([request.auth.uid]))
       );
       allow delete: if isSignedIn() && (isGroupCreator() || isAdmin());
 

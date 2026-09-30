@@ -547,8 +547,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         .toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
-        children: _filters.map((f) {
+      // Horizontal scroll keeps the row from overflowing on narrow screens —
+      // there are more filter chips than fit 360dp in swahili.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _filters.map((f) {
           final selected = _selectedFilter == f;
           final count = f == 'all' ? visible.length : _filterCount(visible, f);
           return Padding(
@@ -577,6 +581,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             ),
           );
         }).toList(),
+        ),
       ),
     );
   }

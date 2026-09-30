@@ -29,12 +29,7 @@ class _NotificationPreferencesScreenState
   String? _districtPicker;
 
   static const _masterKey = 'general';
-  static const _channelKeys = [
-    'payments',
-    'chat',
-    'orders',
-    'marketing',
-  ];
+  static const _channelKeys = ['payments', 'chat', 'orders', 'marketing'];
   static const _channelLabels = [
     'notification_payments',
     'notification_chat',
@@ -50,11 +45,8 @@ class _NotificationPreferencesScreenState
 
   static const String _base = '${ApiConfig.baseUrl}/api/notification';
 
-  List<String> get _allDistricts => kRegionDistricts.values
-      .expand((d) => d)
-      .toSet()
-      .toList()
-    ..sort();
+  List<String> get _allDistricts =>
+      kRegionDistricts.values.expand((d) => d).toSet().toList()..sort();
 
   @override
   void initState() {
@@ -84,7 +76,8 @@ class _NotificationPreferencesScreenState
         headers: headers,
         body: jsonEncode({}),
       );
-      if (response.statusCode >= 400) throw Exception('Failed to load preferences');
+      if (response.statusCode >= 400)
+        throw Exception('Failed to load preferences');
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final prefs = Map<String, dynamic>.from(data['preferences']);
       setState(() {
@@ -92,7 +85,9 @@ class _NotificationPreferencesScreenState
         _smsEnabled = prefs['sms_enabled'] as bool? ?? true;
         _districtEnabled = prefs['district_new_products'] as bool? ?? true;
         _interestedDistricts = List<String>.from(
-          (prefs['interested_districts'] as List? ?? const []).map((e) => e.toString()),
+          (prefs['interested_districts'] as List? ?? const []).map(
+            (e) => e.toString(),
+          ),
         );
         _loading = false;
       });
@@ -108,7 +103,9 @@ class _NotificationPreferencesScreenState
       _smsEnabled = next['sms_enabled'] as bool? ?? true;
       _districtEnabled = next['district_new_products'] as bool? ?? true;
       _interestedDistricts = List<String>.from(
-        (next['interested_districts'] as List? ?? const []).map((e) => e.toString()),
+        (next['interested_districts'] as List? ?? const []).map(
+          (e) => e.toString(),
+        ),
       );
       _saving = true;
     });
@@ -166,8 +163,9 @@ class _NotificationPreferencesScreenState
 
   void _removeDistrict(String district) {
     final next = Map<String, dynamic>.from(_preferences!);
-    next['interested_districts'] =
-        _interestedDistricts.where((d) => d != district).toList();
+    next['interested_districts'] = _interestedDistricts
+        .where((d) => d != district)
+        .toList();
     _save(next);
   }
 
@@ -264,59 +262,64 @@ class _NotificationPreferencesScreenState
             child: IgnorePointer(
               ignoring: !_districtEnabled,
               child: GlassCard(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
                 child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  value: _districtPicker,
-                  decoration: InputDecoration(
-                    labelText: context.tr('select_districts'),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: _allDistricts
-                      .map(
-                        (d) => DropdownMenuItem(
-                          value: d,
-                          child: Text(d, overflow: TextOverflow.ellipsis),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      value: _allDistricts.contains(_districtPicker)
+                          ? _districtPicker
+                          : null,
+                      decoration: InputDecoration(
+                        labelText: context.tr('select_districts'),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: _allDistricts
+                          .map(
+                            (d) => DropdownMenuItem(
+                              value: d,
+                              child: Text(d, overflow: TextOverflow.ellipsis),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) _addDistrict(value);
+                        setState(() => _districtPicker = null);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (_interestedDistricts.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Text(
+                          context.tr('no_districts_selected'),
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
                         ),
                       )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) _addDistrict(value);
-                    setState(() => _districtPicker = null);
-                  },
-                ),
-                const SizedBox(height: 12),
-                if (_interestedDistricts.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: Text(
-                      context.tr('no_districts_selected'),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 13,
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _interestedDistricts
+                            .map(
+                              (d) => InputChip(
+                                label: Text(d),
+                                onDeleted: () => _removeDistrict(d),
+                                deleteIconColor: cs.onSurfaceVariant,
+                              ),
+                            )
+                            .toList(),
                       ),
-                    ),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _interestedDistricts
-                        .map(
-                          (d) => InputChip(
-                            label: Text(d),
-                            onDeleted: () => _removeDistrict(d),
-                            deleteIconColor: cs.onSurfaceVariant,
-                          ),
-                        )
-                        .toList(),
-                  ),
-              ],
-            ),
+                  ],
+                ),
               ),
             ),
           ),

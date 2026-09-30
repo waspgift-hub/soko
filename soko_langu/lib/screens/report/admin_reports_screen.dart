@@ -137,7 +137,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.flag, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      Icon(Icons.flag, size: 64, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(height: 16),
                       Text(context.tr('no_reports'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],

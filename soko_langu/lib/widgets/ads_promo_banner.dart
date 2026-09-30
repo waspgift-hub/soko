@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../app/routes.dart';
 import '../extensions/context_tr.dart';
 
-/// Seller-facing promo for the sponsored ads system: every seller spends on
-/// campaigns, not per-listing promotions.
+/// Seller-facing promo for Boost: buy a boost package and your listing jumps
+/// to the top of discovery/search for a fixed number of days.
 class AdsPromoBanner extends StatelessWidget {
   const AdsPromoBanner({super.key});
 
@@ -12,7 +12,7 @@ class AdsPromoBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
-      onTap: () => context.push(AppRoutes.sponsoredDashboard),
+      onTap: () => context.push(AppRoutes.boostProduct),
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
         height: 180,
@@ -52,7 +52,7 @@ class AdsPromoBanner extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        context.tr('sponsored_listing'),
+                        context.tr('boost_promo_title'),
                         style: TextStyle(
                           color: cs.tertiary,
                           fontSize: 10,
@@ -63,7 +63,7 @@ class AdsPromoBanner extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      context.tr('promote_product_copy'),
+                      context.tr('boost_promo_subtitle'),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -73,7 +73,7 @@ class AdsPromoBanner extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      context.tr('run_7_day_campaign_copy'),
+                      context.tr('boost_promo_desc'),
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 11.5,
@@ -89,7 +89,7 @@ class AdsPromoBanner extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        context.tr('start_sponsored_campaign_copy'),
+                        context.tr('boost_promo_cta'),
                         style: TextStyle(
                           color: cs.surface,
                           fontSize: 12,
@@ -114,13 +114,13 @@ class AdsPromoBanner extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.campaign_rounded,
+                        Icons.rocket_launch_rounded,
                         size: 48,
                         color: cs.tertiary,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        context.tr('ad_label'),
+                        context.tr('boost_product'),
                         style: TextStyle(
                           color: cs.tertiary,
                           fontWeight: FontWeight.bold,

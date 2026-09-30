@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_config.dart';
 import '../../services/order_api.dart';
 import '../../extensions/context_tr.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds.dart';
 
@@ -22,6 +23,7 @@ class SellerQuoteScreen extends StatefulWidget {
 class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
   final Map<String, TextEditingController> _costCtrls = {};
   final Map<String, bool> _submitting = {};
+  final Map<String, bool> _freeDelivery = {};
 
   @override
   void dispose() {
@@ -35,10 +37,17 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     return _costCtrls.putIfAbsent(txId, () => TextEditingController());
   }
 
+  void _toggleFreeDelivery(String txId, bool value) {
+    setState(() => _freeDelivery[txId] = value);
+    if (value) _ctrlFor(txId).clear();
+  }
+
   Future<void> _submitQuote(String txId, String buyerId, String productName) async {
+    final free = _freeDelivery[txId] == true;
     final ctrl = _ctrlFor(txId);
-    final cost = double.tryParse(ctrl.text.trim());
-    if (cost == null || cost <= 0) {
+    // Free delivery submits TZS 0; otherwise a positive cost is required.
+    final cost = free ? 0.0 : double.tryParse(ctrl.text.trim());
+    if (cost == null || (!free && cost <= 0)) {
       _showError(context.tr('enter_valid_shipping_cost'));
       return;
     }
@@ -165,6 +174,8 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                   txId: txId,
                   costController: _ctrlFor(txId),
                   isSubmitting: _submitting[txId] == true,
+                  isFreeDelivery: _freeDelivery[txId] == true,
+                  onFreeDeliveryChanged: (v) => _toggleFreeDelivery(txId, v),
                   onSubmit: () => _submitQuote(txId, d['buyerId'] ?? '', d['productName'] ?? ''),
                 );
               },
@@ -195,6 +206,8 @@ class _OrderQuoteCard extends StatelessWidget {
   final String txId;
   final TextEditingController costController;
   final bool isSubmitting;
+  final bool isFreeDelivery;
+  final ValueChanged<bool> onFreeDeliveryChanged;
   final VoidCallback onSubmit;
 
   const _OrderQuoteCard({
@@ -202,7 +215,9 @@ class _OrderQuoteCard extends StatelessWidget {
     required this.txId,
     required this.costController,
     required this.onSubmit,
+    required this.onFreeDeliveryChanged,
     this.isSubmitting = false,
+    this.isFreeDelivery = false,
   });
 
   @override
@@ -305,7 +320,7 @@ class _OrderQuoteCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.phone_outlined, size: 16, color: cs.onSurfaceVariant),
+                        Icon(Icons.phone_outlined, size: 16, color: cs.primary),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -396,22 +411,65 @@ class _OrderQuoteCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          context.tr('enter_shipping_cost'),
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          context.tr('set_cost_note', 'Weka gharama ya usafirishaji kwa mnunuzi'),
-                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    isFreeDelivery
+                                        ? context.tr('free_delivery')
+                                        : context.tr('enter_shipping_cost'),
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    isFreeDelivery
+                                        ? context.tr('free_delivery_note')
+                                        : context.tr('set_cost_note', 'Weka gharama ya usafirishaji kwa mnunuzi'),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: isFreeDelivery,
+                              onChanged: onFreeDeliveryChanged,
+                              activeTrackColor: cs.primary,
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
-                        DsTextField(
-                          controller: costController,
-                          hint: 'TZS 0',
-                          prefixIcon: Icons.monetization_on_outlined,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        ),
+                        if (isFreeDelivery)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: cs.successGreen.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: cs.successGreen.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.card_giftcard_rounded, size: 18, color: cs.successGreen),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    context.tr('free_delivery_confirmed'),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurface),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          DsTextField(
+                            controller: costController,
+                            hint: 'TZS 0',
+                            prefixIcon: Icons.monetization_on_outlined,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
                         const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,

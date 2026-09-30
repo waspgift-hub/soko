@@ -178,7 +178,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
     }
-    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -195,14 +196,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       await _applyPosition(pos);
     } catch (e) {
       debugPrint('EditProfile getCurrentPosition: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', 'location'))),
+          SnackBar(
+            content: Text(
+              context.tr('imeshindwa').replaceAll('{0}', 'location'),
+            ),
+          ),
         );
       }
     }
@@ -269,10 +276,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _showError(context.tr('phone_validator_invalid'));
       return;
     }
-    if (!await RateLimiter.canProceed(action: 'profile_phone_otp', cooldown: const Duration(seconds: 60))) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please wait before requesting another code')),
-      );
+    if (!await RateLimiter.canProceed(
+      action: 'profile_phone_otp',
+      cooldown: const Duration(seconds: 60),
+    )) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait before requesting another code'),
+          ),
+        );
       return;
     }
     setState(() => _otpSending = true);
@@ -286,7 +299,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         });
         await RateLimiter.record('profile_phone_otp');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', PhoneUtils.formatForDisplay(normalized)))),
+          SnackBar(
+            content: Text(
+              context
+                  .tr('otp_sent_to')
+                  .replaceAll('{0}', PhoneUtils.formatForDisplay(normalized)),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -301,7 +320,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final raw = _phoneController.text.trim();
     final otp = _otpController.text.trim();
     if (otp.length != 6) {
-      _showError(context.tr('otp_invalid_length', 'OTP lazima iwe na nambari 6'));
+      _showError(
+        context.tr('otp_invalid_length', 'OTP lazima iwe na nambari 6'),
+      );
       return false;
     }
     try {
@@ -321,7 +342,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (_phoneChanged && _originalPhone.isNotEmpty) {
       if (!_otpSent) {
-        _showError(context.tr('phone_otp_required', 'Thibitisha namba ya simu kwanza'));
+        _showError(
+          context.tr('phone_otp_required', 'Thibitisha namba ya simu kwanza'),
+        );
         return;
       }
       final verified = await _verifyPhoneOtp();
@@ -434,7 +457,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 
@@ -566,7 +592,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('email'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email, color: Theme.of(context).colorScheme.primary),
+                    prefixIcon: Icon(
+                      Icons.email,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
@@ -577,7 +606,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: context.tr('phone'),
                     hintText: context.tr('phone_hint_example'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
+                    prefixIcon: Icon(
+                      Icons.phone,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   keyboardType: TextInputType.phone,
                   onChanged: (v) {
@@ -599,11 +631,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _otpSending ? null : _sendPhoneOtp,
                         icon: _otpSending
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : const Icon(Icons.sms_outlined, size: 18),
-                        label: Text(_otpSending ? context.tr('sending_otp', 'Inatuma OTP...') : context.tr('send_otp', 'Tuma OTP')),
+                        label: Text(
+                          _otpSending
+                              ? context.tr('sending_otp', 'Inatuma OTP...')
+                              : context.tr('send_otp', 'Tuma OTP'),
+                        ),
                         style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
@@ -614,7 +658,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       keyboardType: TextInputType.number,
                       maxLength: 6,
                       decoration: InputDecoration(
-                        labelText: context.tr('otp_code_hint', 'Weka Msimbo wa OTP'),
+                        labelText: context.tr(
+                          'otp_code_hint',
+                          'Weka Msimbo wa OTP',
+                        ),
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.lock_outline),
                         counterText: '',
@@ -628,7 +675,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         icon: const Icon(Icons.refresh, size: 18),
                         label: Text(context.tr('resend_otp', 'Tuma OTP Tena')),
                         style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
@@ -647,7 +696,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     suffixIcon: IconButton(
-                      icon: Icon(Icons.my_location, color: Theme.of(context).colorScheme.primary),
+                      icon: Icon(
+                        Icons.my_location,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       onPressed: _getCurrentLocation,
                       tooltip: context.tr('get_location'),
                     ),
@@ -659,7 +711,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ],
@@ -692,16 +749,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _genderController.text.isEmpty ? null : _genderController.text,
+                  value: _genderController.text.isEmpty
+                      ? null
+                      : const [
+                          'male',
+                          'female',
+                          'other',
+                        ].contains(_genderController.text.toLowerCase())
+                      ? _genderController.text.toLowerCase()
+                      : null,
                   decoration: InputDecoration(
                     labelText: context.tr('gender'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.wc, color: Theme.of(context).colorScheme.primary),
+                    prefixIcon: Icon(
+                      Icons.wc,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   items: [
-                    DropdownMenuItem(value: 'male', child: Text(context.tr('male'))),
-                    DropdownMenuItem(value: 'female', child: Text(context.tr('female'))),
-                    DropdownMenuItem(value: 'other', child: Text(context.tr('other'))),
+                    DropdownMenuItem(
+                      value: 'male',
+                      child: Text(context.tr('male')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'female',
+                      child: Text(context.tr('female')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'other',
+                      child: Text(context.tr('other')),
+                    ),
                   ],
                   onChanged: (v) => _genderController.text = v ?? '',
                 ),
@@ -712,20 +789,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: context.tr('date_of_birth'),
                     hintText: 'YYYY-MM-DD',
                     border: const OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
+                    prefixIcon: Icon(
+                      Icons.calendar_today,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     suffixIcon: IconButton(
-                      icon: Icon(Icons.date_range, color: Theme.of(context).colorScheme.primary),
+                      icon: Icon(
+                        Icons.date_range,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
                           initialDate: _dobController.text.isNotEmpty
-                              ? DateTime.tryParse(_dobController.text) ?? DateTime(2000)
+                              ? DateTime.tryParse(_dobController.text) ??
+                                    DateTime(2000)
                               : DateTime(2000),
                           firstDate: DateTime(1940),
-                          lastDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+                          lastDate: DateTime.now().subtract(
+                            const Duration(days: 365 * 5),
+                          ),
                         );
                         if (date != null) {
-                          _dobController.text = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                          _dobController.text =
+                              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                         }
                       },
                     ),

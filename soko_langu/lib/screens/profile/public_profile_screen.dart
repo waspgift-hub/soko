@@ -436,7 +436,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.star_outline, size: 18, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                  Icon(Icons.star_outline, size: 18, color: cs.primary.withValues(alpha: 0.5)),
                   const SizedBox(width: 6),
                   Text(
                     context.tr('no_ratings_yet'),

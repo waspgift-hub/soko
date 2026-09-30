@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/product_service.dart';
 import '../../models/category_model.dart';
@@ -10,6 +11,8 @@ import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
 import '../../app/app_transitions.dart';
+import '../../app/routes.dart';
+import '../../app/router.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/safe_dropdown.dart';
 import '../../constants/tanzania_districts.dart';
@@ -394,17 +397,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final cs = Theme.of(context).colorScheme;
     final isExisting = globalIndex < _existingImages.length;
     final isCover = globalIndex == 0;
-    final Widget img = isExisting
-        ? Image.network(
-            _existingImages[globalIndex],
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _brokenImage(),
-          )
-        : Image.file(
-            File(_newImages[globalIndex - _existingImages.length].path),
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _brokenImage(),
-          );
+    final Widget img = GestureDetector(
+      onTap: () => _showImagePreview(globalIndex),
+      child: isExisting
+          ? Image.network(
+              _existingImages[globalIndex],
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _brokenImage(),
+            )
+          : Image.file(
+              File(_newImages[globalIndex - _existingImages.length].path),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _brokenImage(),
+            ),
+    );
     return Container(
       width: 84,
       decoration: BoxDecoration(
@@ -486,6 +492,34 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
+  void _showImagePreview(int globalIndex) {
+    final isExisting = globalIndex < _existingImages.length;
+    final ImageProvider provider = isExisting
+        ? NetworkImage(_existingImages[globalIndex])
+        : FileImage(
+            File(_newImages[globalIndex - _existingImages.length].path));
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: GestureDetector(
+          onTap: () => Navigator.of(ctx).pop(),
+          child: InteractiveViewer(
+            maxScale: 4,
+            child: Image(
+              image: provider,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) =>
+                  _brokenImage(iconSize: 56),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _scanBarcode() async {
     final result = await Navigator.push<String>(
       context,
@@ -524,6 +558,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
 
     setState(() => _saving = true);
+    String? createdId;
     try {
       final variantData = _buildVariantData();
       if (_isEditing) {
@@ -557,7 +592,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           videoUrl: _videoFile == null ? _existingVideoUrl : null,
         );
       } else {
-        await _productService.addProduct(
+        createdId = await _productService.addProduct(
           name: _nameController.text,
           description: _descriptionController.text,
           price: parsedPrice,
@@ -593,7 +628,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ),
         ),
       );
-      navigator.pop();
+      if (createdId != null) {
+        _openCreatedProduct(createdId);
+      } else {
+        navigator.pop();
+      }
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
@@ -631,6 +670,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// After a successful upload: switch to Home and open the new listing.
+  void _openCreatedProduct(String productId) {
+    final rootCtx = rootNavigatorKey.currentContext;
+    if (rootCtx == null || !rootCtx.mounted) return;
+    rootCtx.go(AppRoutes.home);
+    // Wait one frame so Home is visible before the detail page slides in.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        ctx.push('${AppRoutes.productDetail}/$productId');
+      }
+    });
   }
 
   String _normalizeBrand(String brand) {
@@ -817,7 +870,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         SizedBox(
                           height: 210,
                           width: double.infinity,
-                          child: _coverImage(),
+                          child: GestureDetector(
+                            onTap: () => _showImagePreview(0),
+                            child: _coverImage(),
+                          ),
                         ),
                         Positioned(
                           top: 10,

@@ -202,14 +202,16 @@ Ikiwa swali linahusu bidhaa na hakuna data iliyopewa, toa mwongozo wa nje kwa mu
 ''';
   }
 
-  static String buildNotFoundCatalogContext(String query) => '''
+  static String buildNotFoundCatalogContext(String query) =>
+      '''
 DATA YA Soko Vibe: tupu — hakuna matokeo kwa "$query".
 
 Kumbuka: chochote utakachosema kuhusu muuzaji, eneo, au bei ya nje YA APP lazima kiwe na lebo:
 "Hii taarifa HAITOKEI kwenye Soko Vibe — ni mwongozo wa nje ya app."
 ''';
 
-  static String buildInAppCatalogContext(String richProductBlocks) => '''
+  static String buildInAppCatalogContext(String richProductBlocks) =>
+      '''
 DATA YA Soko Vibe (HALISI — kutoka Firestore):
 $richProductBlocks
 ''';
@@ -224,23 +226,30 @@ $richProductBlocks
   @override
   List<String> get userPreferences => List.unmodifiable(_userPreferences);
 
-  Future<String> _proxyCall({required String model, required List<Map<String, dynamic>> messages, double? temperature, int? maxTokens}) async {
+  Future<String> _proxyCall({
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    double? temperature,
+    int? maxTokens,
+  }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not authenticated');
     final token = await user.getIdToken();
-    final resp = await http.post(
-      Uri.parse(_proxyUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'model': model,
-        'messages': messages,
-        'temperature': ?temperature,
-        'max_tokens': ?maxTokens,
-      }),
-    );
+    final resp = await http
+        .post(
+          Uri.parse(_proxyUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'model': model,
+            'messages': messages,
+            'temperature': ?temperature,
+            'max_tokens': ?maxTokens,
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
     debugPrint('Groq proxy [$model] ${resp.statusCode}: ${resp.body}');
     if (resp.statusCode == 200) return resp.body;
     throw Exception('Status ${resp.statusCode}');
@@ -254,7 +263,11 @@ $richProductBlocks
     String? searchQuery,
     String locale = 'sw',
   }) async {
-    await RateLimiter.incrementAttempt('ai_chat', maxAttempts: 30, window: const Duration(minutes: 60));
+    await RateLimiter.incrementAttempt(
+      'ai_chat',
+      maxAttempts: 30,
+      window: const Duration(minutes: 60),
+    );
     if (!await RateLimiter.isWithinLimit('ai_chat', maxAttempts: 30)) {
       throw Exception('Rate limit exceeded. Please try again later.');
     }
@@ -269,8 +282,8 @@ $richProductBlocks
     final temperature = productContext != null && productContext.isNotEmpty
         ? 0.35
         : catalogStatus == AiCatalogStatus.notFoundInApp
-            ? 0.5
-            : 0.7;
+        ? 0.5
+        : 0.7;
 
     Future<String> tryModel(String model) async {
       return _proxyCall(
@@ -278,7 +291,8 @@ $richProductBlocks
         messages: [
           {
             'role': 'system',
-            'content': _buildSystemPrompt(
+            'content':
+                _buildSystemPrompt(
                   productContext: productContext,
                   catalogStatus: catalogStatus,
                   userQuery: searchQuery ?? userMessage,
@@ -306,7 +320,9 @@ $richProductBlocks
       return reply;
     } catch (e) {
       final msg = e.toString();
-      if (msg.contains('401') || msg.contains('Unauthorized') || msg.contains('Invalid API key')) {
+      if (msg.contains('401') ||
+          msg.contains('Unauthorized') ||
+          msg.contains('Invalid API key')) {
         return locale == 'en'
             ? 'AI service is not configured. Please contact the admin to set up the Groq API key.'
             : 'Huduma ya AI haijasanidiwa. Tafadhali wasiliana na admin kuweka Groq API key.';
@@ -364,8 +380,15 @@ $groundedContext
   }) async {
     // Separate, more generous budget than chat so normal searching is not
     // throttled by the 30/60min AI-chat limit.
-    await RateLimiter.incrementAttempt('ai_search_summary', maxAttempts: 60, window: const Duration(minutes: 60));
-    if (!await RateLimiter.isWithinLimit('ai_search_summary', maxAttempts: 60)) {
+    await RateLimiter.incrementAttempt(
+      'ai_search_summary',
+      maxAttempts: 60,
+      window: const Duration(minutes: 60),
+    );
+    if (!await RateLimiter.isWithinLimit(
+      'ai_search_summary',
+      maxAttempts: 60,
+    )) {
       throw Exception('Rate limit exceeded for summary generation.');
     }
 

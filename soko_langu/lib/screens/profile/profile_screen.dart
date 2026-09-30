@@ -146,7 +146,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.person_outline_rounded, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                      Icon(Icons.person_outline_rounded, size: 64, color: cs.primary.withValues(alpha: 0.4)),
                       const SizedBox(height: 16),
                       Text(context.tr('profile_not_found'), style: TextStyle(color: cs.onSurfaceVariant)),
                       const SizedBox(height: 16),
@@ -363,9 +363,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   }
 
   Widget _buildActionGrid(ColorScheme cs) {
-    final user = FirebaseAuth.instance.currentUser;
-    final isAdmin = _profile?.email == 'admin@sokovibe.co.tz' ||
-        user?.email?.toLowerCase() == 'admin@sokovibe.co.tz';
+    // Admin gating comes from the server flag only (users.isAdmin) — anyone
+    // could otherwise register the admin email and unlock the panel.
+    final isAdmin = context.read<AuthNotifier>().isAdmin;
     final actions = [
       _ActionItem(Icons.switch_account_rounded, context.tr('accounts'), () => AccountSwitcherSheet.show(context)),
       _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),

@@ -15,7 +15,6 @@ import '../../services/fraud_prevention_service.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
-import 'admin_ads_management_screen.dart';
 import 'admin_transactions_tab.dart';
 import 'admin_clickpesa_screen.dart';
 import 'admin_kyc_document_view_screen.dart';
@@ -277,7 +276,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               icon: const Icon(Icons.inventory_2),
               text: context.tr('products'),
             ),
-            Tab(icon: const Icon(Icons.ads_click), text: context.tr('ads')),
             Tab(icon: const Icon(Icons.flag), text: context.tr('reports')),
             Tab(icon: const Icon(Icons.security), text: context.tr('fraud')),
             Tab(
@@ -301,7 +299,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildUsersTab(),
             _buildVerificationTab(),
             _buildProductsTab(),
-            _buildAdsTab(),
             _buildReportsTab(),
             _buildFraudTab(),
             _buildTransactionsTab(),
@@ -2154,11 +2151,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
-  }
-
-  // ─── ADS MANAGEMENT TAB ─────────────────────────────────────
-  Widget _buildAdsTab() {
-    return const AdminAdsManagementScreen(embedded: true);
   }
 
   // ─── REPORTS TAB ─────────────────────────────────────────────

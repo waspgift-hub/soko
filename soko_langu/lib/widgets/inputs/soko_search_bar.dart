@@ -45,14 +45,30 @@ class SokoSearchBar extends StatefulWidget {
 }
 
 class _SokoSearchBarState extends State<SokoSearchBar> {
-  FocusNode? _internalFocus;
+  late final FocusNode _focus;
   bool _focused = false;
 
-  FocusNode get _focus => widget.focusNode ?? (_internalFocus ??= FocusNode());
+  @override
+  void initState() {
+    super.initState();
+    // The groove recolors via a node listener and the SAME node is owned by the
+    // TextField ONLY. Sharing one node between a parent Focus() and the field
+    // throws 'child != this' (a Focus node cannot have two parents).
+    _focus = widget.focusNode ?? FocusNode();
+    _focus.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    final focused = _focus.hasFocus;
+    if (focused != _focused && mounted) {
+      setState(() => _focused = focused);
+    }
+  }
 
   @override
   void dispose() {
-    _internalFocus?.dispose();
+    _focus.removeListener(_onFocusChanged);
+    if (widget.focusNode == null) _focus.dispose();
     super.dispose();
   }
 
@@ -78,46 +94,42 @@ class _SokoSearchBarState extends State<SokoSearchBar> {
       textField: true,
       label: widget.semanticsLabel ??
           (widget.hint.isEmpty ? null : widget.hint),
-      child: Focus(
-        focusNode: _focus,
-        onFocusChange: (v) {
-          if (v != _focused) setState(() => _focused = v);
-        },
-        child: DecoratedBox(
-          decoration: Neu.inset(
-            AppRadius.lg,
-            cs.brightness,
-            accent: _focused ? cs.primary : null,
-          ),
-          child: TextField(
-            controller: widget.controller,
-            focusNode: _focus,
-            autofocus: widget.autofocus,
-            onChanged: widget.onChanged,
-            onSubmitted: widget.onSubmitted,
-            textInputAction: TextInputAction.search,
-            style: TextStyle(fontSize: AppFontSize.md, color: cs.onSurface),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: widget.hint,
-              hintStyle: TextStyle(
-                fontSize: AppFontSize.md,
-                color: cs.onSurfaceVariant,
-              ),
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                size: 20,
-                color: cs.onSurfaceVariant,
-              ),
-              suffixIconConstraints: trailingCount > 0
-                  ? const BoxConstraints(minWidth: 0, minHeight: 0)
-                  : null,
-              suffixIcon: suffix,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.s3,
-                vertical: 8,
-              ),
+      child: DecoratedBox(
+        decoration: Neu.inset(
+          AppRadius.lg,
+          cs.brightness,
+          accent: _focused ? cs.primary : null,
+        ),
+        child: TextField(
+          controller: widget.controller,
+          // _focused is kept fresh by the listener above; autofocus requests
+          // focus right after mount and the listener picks it up.
+          focusNode: _focus,
+          autofocus: widget.autofocus,
+          onChanged: widget.onChanged,
+          onSubmitted: widget.onSubmitted,
+          textInputAction: TextInputAction.search,
+          style: TextStyle(fontSize: AppFontSize.md, color: cs.onSurface),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: widget.hint,
+            hintStyle: TextStyle(
+              fontSize: AppFontSize.md,
+              color: cs.onSurfaceVariant,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
+            suffixIconConstraints: trailingCount > 0
+                ? const BoxConstraints(minWidth: 0, minHeight: 0)
+                : null,
+            suffixIcon: suffix,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.s3,
+              vertical: 8,
             ),
           ),
         ),
@@ -187,7 +199,7 @@ class _SuffixRow extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.close_rounded, size: 18, color: cs.onSurfaceVariant),
+              icon: Icon(Icons.close_rounded, size: 18, color: cs.primary),
             ),
             ...?trailing,
             if (onFilter != null) filterButton,

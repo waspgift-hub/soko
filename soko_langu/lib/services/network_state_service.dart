@@ -128,10 +128,11 @@ class NetworkStateService extends ChangeNotifier {
     }
   }
 
-  // Backed-off re-probe while not online; cancelled on recovery.
+  // Backed-off re-probe while not online; cancelled on recovery. Capped at 20s
+  // so a dead `/health` endpoint can't keep the banner up for a full minute.
   void _scheduleProbe() {
     _probeTimer?.cancel();
-    final delaySeconds = (_consecutiveFailures * 5).clamp(5, 60);
+    final delaySeconds = (_consecutiveFailures * 5).clamp(5, 20);
     _probeTimer = Timer(Duration(seconds: delaySeconds), () {
       if (!isOnline) _evaluate();
     });

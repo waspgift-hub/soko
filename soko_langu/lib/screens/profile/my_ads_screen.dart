@@ -19,6 +19,7 @@ class MyAdsScreen extends StatefulWidget {
 
 class _MyAdsScreenState extends State<MyAdsScreen> {
   final ProductService _productService = ProductService();
+  bool _sweepStarted = false;
 
   Future<void> _deleteProduct(Product product) async {
     final confirm = await showDialog<bool>(
@@ -60,6 +61,95 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
     await context.push(AppRoutes.addProduct, extra: product);
   }
 
+  /// Hides (or, for an already-hidden listing, re-shows) a product.
+  Future<void> _hideProduct(Product product) async {
+    if (!product.isActive) {
+      try {
+        await _productService.setProductVisibility(product.id, visible: true);
+        await _productService.scheduleReappear(product.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('product_unhidden', 'Bidhaa imeonekana tena'))),
+          );
+        }
+      } catch (e) {
+        if (mounted) _showFailed(context.tr('delete_failed', 'Imeshindikana'), e);
+      }
+      return;
+    }
+
+    final period = await showDialog<Duration>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(context.tr('hide_product', 'Ficha bidhaa')),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, const Duration(hours: 24)),
+            child: Text(context.tr('hide_for_24h', 'Ficha kwa saa 24')),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, const Duration(days: 7)),
+            child: Text(context.tr('hide_for_7d', 'Ficha kwa siku 7')),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, Duration.zero),
+            child: Text(context.tr('hide_until_unhide', 'Ficha hadi nirudishe mwenyewe')),
+          ),
+        ],
+      ),
+    );
+    if (period == null) return;
+
+    try {
+      await _productService.setProductVisibility(product.id, visible: false);
+      await _productService.scheduleReappear(
+        product.id,
+        at: period > Duration.zero ? DateTime.now().add(period) : null,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(period > Duration.zero
+                ? context.tr('product_hidden_until', 'Bidhaa imefichwa kwa muda')
+                : context.tr('product_hidden', 'Bidhaa imefichwa')),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showFailed(context.tr('delete_failed', 'Imeshindikana'), e);
+    }
+  }
+
+  void _showFailed(String label, Object e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label: $e')),
+    );
+  }
+
+  /// Re-publishes any listing whose hidden-for-period window has elapsed.
+  /// Runs once per screen visit so a timed lock restores without server work.
+  void _maybeSweep(List<Product> products) {
+    if (_sweepStarted) return;
+    final now = DateTime.now();
+    final due =
+        products.where((p) => p.hiddenUntil != null && !p.hiddenUntil!.isAfter(now)).toList();
+    if (due.isEmpty) {
+      _sweepStarted = true;
+      return;
+    }
+    _sweepStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      for (final p in due) {
+        try {
+          await _productService.setProductVisibility(p.id, visible: true);
+          await _productService.scheduleReappear(p.id);
+        } catch (e) {
+          debugPrint('auto-restore failed for ${p.id}: $e');
+        }
+      }
+    });
+  }
+
   void _showOptions(Product product) {
     showModalBottomSheet(
       context: context,
@@ -73,6 +163,15 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
               leading: const Icon(Icons.edit_outlined),
               title: Text(context.tr('edit')),
               onTap: () { Navigator.pop(ctx); _editProduct(product); },
+            ),
+            ListTile(
+              leading: Icon(
+                product.isActive ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              ),
+              title: Text(product.isActive
+                  ? context.tr('hide_product', 'Ficha bidhaa')
+                  : context.tr('unhide_product', 'Onyesha tena')),
+              onTap: () { Navigator.pop(ctx); _hideProduct(product); },
             ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
@@ -116,6 +215,7 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                   return const GoogleLoadingPage();
                 }
                 final products = snapshot.data ?? [];
+                _maybeSweep(products);
                 if (products.isEmpty) {
                   return Center(
                     child: Column(
@@ -145,12 +245,38 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                   itemCount: products.length,
                   itemBuilder: (context, index) {
                     final product = products[index];
-                    return GestureDetector(
-                      onLongPress: () => _showOptions(product),
-                      child: ProductCard(
-                        product: product,
-                        onTap: () => context.push('${AppRoutes.productDetail}/${product.id}', extra: product),
-                      ),
+                    return Stack(
+                      children: [
+                        GestureDetector(
+                          onLongPress: () => _showOptions(product),
+                          child: ProductCard(
+                            product: product,
+                            onTap: () => context.push('${AppRoutes.productDetail}/${product.id}', extra: product),
+                          ),
+                        ),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: GestureDetector(
+                            onTap: () => _showOptions(product),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.more_horiz,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 );

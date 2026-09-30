@@ -213,6 +213,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   _infoRow(cs, context.tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
                   if (shippingCost > 0)
                     _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
+                  if (shippingCost == 0)
+                    _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), context.tr('free_delivery'), valueColor: cs.successGreen),
                   _infoRow(cs, context.tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
                   _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(clickpesaFee.toInt())}', valueColor: cs.tertiary),
                 ]),

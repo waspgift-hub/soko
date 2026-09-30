@@ -93,7 +93,7 @@ class SellerProfileHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.location_on_outlined, size: 14, color: cs.onSurfaceVariant),
+              Icon(Icons.location_on_outlined, size: 14, color: cs.primary),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(

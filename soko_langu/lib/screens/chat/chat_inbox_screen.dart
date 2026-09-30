@@ -753,7 +753,7 @@ class _ChatListTile extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (isMuted)
-                                Icon(Icons.volume_off, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                                Icon(Icons.volume_off, size: 14, color: cs.primary.withValues(alpha: 0.5)),
                               if (lastTimestamp != null)
                                 Padding(
                                   padding: const EdgeInsets.only(left: 4),
@@ -822,7 +822,7 @@ class _ChatListTile extends StatelessWidget {
   Widget _buildMenuButton(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert, size: 20, color: cs.onSurfaceVariant),
+      icon: Icon(Icons.more_vert, size: 20, color: cs.primary),
       onSelected: onMenuAction,
       itemBuilder: (ctx) => [
         PopupMenuItem(value: 'select', child: Row(children: [const Icon(Icons.checklist, size: 20), const SizedBox(width: 10), Text(context.tr('select'))])),

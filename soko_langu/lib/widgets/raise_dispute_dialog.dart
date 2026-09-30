@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../services/api_config.dart';
 import '../services/cloudinary_service.dart';
+import '../services/order_api.dart';
 import '../extensions/context_tr.dart';
 
 /// Preset dispute reasons; the buyer can also type a custom one.
@@ -30,7 +31,8 @@ String _presetLabel(BuildContext context, String key) {
 }
 
 /// Shows the raise-dispute flow: pick a reason, attach up to 3 photos, then
-/// submit to the Firestore escrow engine. Returns true when submitted.
+/// submit. v1 orders freeze the escrow hold server-side; legacy orders go to
+/// the Firestore escrow engine. Returns true when submitted.
 Future<bool> showRaiseDisputeDialog(
   BuildContext context, {
   required String txId,
@@ -90,6 +92,20 @@ class _RaiseDisputeDialogState extends State<_RaiseDisputeDialog> {
     return extra.isEmpty ? base : '$base — $extra';
   }
 
+  String _canonicalReason(String preset) {
+    switch (preset) {
+      case 'not_received':
+        return 'NOT_RECEIVED';
+      case 'damaged':
+        return 'DAMAGED_ITEM';
+      case 'not_as_described':
+        // v1 has no NOT_AS_DESCRIBED spelling; quality mismatch is the closest.
+        return 'QUALITY_ISSUE';
+      default:
+        return 'QUALITY_ISSUE';
+    }
+  }
+
   Future<void> _submit() async {
     setState(() {
       _submitting = true;
@@ -104,6 +120,18 @@ class _RaiseDisputeDialogState extends State<_RaiseDisputeDialog> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         setState(() => _error = 'Not authenticated');
+        return;
+      }
+      final evidenceNote = urls.isEmpty ? '' : '\n\nUshahidi:\n${urls.join('\n')}';
+      if (ApiConfig.kUseOrdersApi) {
+        // v1 moves the order to DISPUTED and freezes the escrow hold server-side;
+        // legacy compat only rewrote Firestore and left the escrow live.
+        await OrderApiClient().disputeOrder(
+          widget.txId,
+          reason: _canonicalReason(_selectedReason),
+          description: '$_effectiveReason$evidenceNote',
+        );
+        if (mounted) Navigator.pop(context, true);
         return;
       }
       final resp = await http.post(

@@ -135,7 +135,7 @@ class ProductFilter {
         out.sort((a, b) => b.price.compareTo(a.price));
       case 'popular':
         out.sort((a, b) {
-          if (a.isSponsored != b.isSponsored) return a.isSponsored ? -1 : 1;
+          if (a.isBoosted != b.isBoosted) return a.isBoosted ? -1 : 1;
           final r = b.rating.compareTo(a.rating);
           if (r != 0) return r;
           return b.soldCount.compareTo(a.soldCount);

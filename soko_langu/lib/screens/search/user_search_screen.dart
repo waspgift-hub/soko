@@ -229,7 +229,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          Icon(Icons.search_off, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+          Icon(Icons.search_off, size: 48, color: cs.primary.withValues(alpha: 0.4)),
           const SizedBox(height: 12),
           Text(context.tr('no_users_found', 'No users found'),
               style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
@@ -308,7 +308,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
               if (u.location.isNotEmpty)
                 Row(
                   children: [
-                    Icon(Icons.location_on, size: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+                    Icon(Icons.location_on, size: 12, color: cs.primary.withValues(alpha: 0.6)),
                     const SizedBox(width: 2),
                     Expanded(
                       child: Text(

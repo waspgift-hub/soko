@@ -23,7 +23,7 @@ class DynamicBanner extends StatelessWidget {
   }
 }
 
-// Single banner that cycles every sponsored product inside it, mirroring the
+// Single banner that cycles every boosted product inside it, mirroring the
 // flash-sale banner so ads never stack as one banner per product.
 class _AdsCarousel extends StatefulWidget {
   final List<Product> products;
@@ -193,7 +193,7 @@ class _AdsCarouselState extends State<_AdsCarousel> {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  context.tr('sponsored'),
+                  context.tr('boost_product'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

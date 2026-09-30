@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -55,11 +56,11 @@ String getThumbnailUrl(String imageUrl, {int width = 300}) {
   return imageUrl;
 }
 
-void _sortBySponsored(List<Product> products) {
+void _sortByBoosted(List<Product> products) {
   products.sort((a, b) {
-    final aSponsored = a.isSponsored ? 0 : 1;
-    final bSponsored = b.isSponsored ? 0 : 1;
-    final f = aSponsored.compareTo(bSponsored);
+    final aBoosted = a.isBoostedValid ? 0 : 1;
+    final bBoosted = b.isBoostedValid ? 0 : 1;
+    final f = aBoosted.compareTo(bBoosted);
     if (f != 0) return f;
     return b.createdAt.compareTo(a.createdAt);
   });
@@ -74,7 +75,9 @@ class ProductService {
     return CloudinaryService.uploadImage(xfile, folder: 'products');
   }
 
-  Future<void> addProduct({
+  /// Publish a new listing. Returns the created product id so callers can open
+  /// the detail page immediately after upload (no extra lookup round-trip).
+  Future<String> addProduct({
     required String name,
     required String description,
     required double price,
@@ -163,7 +166,7 @@ class ProductService {
 
       if (ApiConfig.kUseProductsApi) {
         try {
-          await _addProductViaApi(
+          final id = await _addProductViaApi(
             uid: user.uid,
             name: name,
             description: description,
@@ -185,7 +188,7 @@ class ProductService {
             imageMetadata: imageMetadata,
             videoUrl: resolvedVideoUrl,
           );
-          return;
+          return id;
         } catch (apiError) {
           // Rescue path: a broken/partial API write falls back to the legacy
           // Firestore listing so sellers are never stuck mid-submission.
@@ -193,7 +196,7 @@ class ProductService {
         }
       }
 
-      await _writeProduct(
+      return await _writeProduct(
         user.uid, name, description, price, currency, imageUrls,
         category, subcategory, stock, sellerName, sellerPhone,
         sellerKycApproved, isWholesale, wholesaleTiers, variants,
@@ -319,7 +322,7 @@ class ProductService {
       "reviewCount": 0,
       "isActive": true,
       // Server-owned promotion fields are intentionally omitted:
-      // rules reject them on create and the server computes sponsored status.
+      // rules reject them on create and the server computes boost status.
       "sellerKycApproved": sellerKycApproved,
       "searchKeywords": searchKeywords,
       "barcode": barcode,
@@ -347,7 +350,7 @@ class ProductService {
   /// v1 API, so the seller hub writes Postgres-authoritative product rows.
   /// A category name that the Postgres tree cannot map still submits (the
   /// listing lands on the feed); the Firestore fallback covers flag-off mode.
-  Future<void> _addProductViaApi({
+  Future<String> _addProductViaApi({
     required String uid,
     required String name,
     required String description,
@@ -425,6 +428,7 @@ class ProductService {
       price: price,
       sellerProductCount: productCount,
     );
+    return id;
   }
 
   /// PostgreSql-aware cousin of [_findDuplicateListing]: the legacy check only
@@ -571,7 +575,7 @@ class ProductService {
     final products = snapshot.docs
         .map((doc) => Product.fromFirestore(doc))
         .toList();
-    _sortBySponsored(products);
+    _sortByBoosted(products);
     final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
     return (products, lastDoc);
   }
@@ -588,7 +592,7 @@ class ProductService {
         .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
         .take(limit)
         .toList();
-    _sortBySponsored(products);
+    _sortByBoosted(products);
     return products;
   }
 
@@ -655,23 +659,74 @@ class ProductService {
           .map((doc) => Product.fromFirestore(doc))
           .toList();
       products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      _sortBySponsored(products);
+      _sortByBoosted(products);
       return products.take(limitAmt).toList();
     });
+  }
+
+  /// Fuses the Postgres list from [api] with the live [firestore] source so
+  /// listings that only exist in Firestore (the create call fell back while
+  /// the v2 bridge was down or rejecting) still surface under their tagged
+  /// category. Dedupes by [Product.legacyId] so Postgres rows and their
+  /// Firestore mirrors count once; the API list wins order.
+  Stream<List<Product>> _fusedCategoryStream(
+    Future<List<Product>> Function() api, {
+    required Stream<List<Product>> firestore,
+  }) {
+    final controller = StreamController<List<Product>>();
+    var apiDone = false;
+    var apiItems = <Product>[];
+    var fsSeen = false;
+    var fsItems = <Product>[];
+    StreamSubscription<List<Product>>? fsSub;
+
+    void emit() {
+      if (!apiDone && !fsSeen) return;
+      final seen = <String>{};
+      final merged = <Product>[];
+      for (final p in [...apiItems, ...fsItems]) {
+        final key = p.legacyId.isNotEmpty ? p.legacyId : p.id;
+        if (!seen.add(key)) continue;
+        merged.add(p);
+      }
+      merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _sortByBoosted(merged);
+      controller.add(merged.length > 100 ? merged.sublist(0, 100) : merged);
+    }
+
+    controller.onListen = () {
+      // Emit the Postgres list as soon as it lands so the page paints before
+      // the Firestore snapshot arrives, then re-emit merged on both updates.
+      api().then((items) {
+        apiDone = true;
+        apiItems = items;
+        emit();
+      }).catchError((Object _) {
+        apiDone = true;
+        emit();
+      });
+      fsSub = firestore.listen((items) {
+        fsSeen = true;
+        fsItems = items;
+        emit();
+      }, onError: (Object _) {
+        fsSeen = true;
+        emit();
+      });
+    };
+    controller.onCancel = () {
+      fsSub?.cancel();
+    };
+    return controller.stream;
   }
 
   Stream<List<Product>> getProductsByCategory(
     String category, {
     Set<String>? aliases,
   }) {
-    if (ApiConfig.kUseProductsApi) {
-      // Legacy products tag categories by NAME; the API resolves the name to a
-      // Postgres uuid and filters server-side, keeping parity with Firestore.
-      return Stream.fromFuture(_api.fetchProductsByCategoryName(category));
-    }
     // whereIn reuses the same composite index as equality on this field.
     final names = <String>{category, ...?aliases}.toList();
-    return _db
+    final firestore = _db
         .collection("products")
         .where("category", whereIn: names)
         .where('isActive', isEqualTo: true)
@@ -679,12 +734,22 @@ class ProductService {
         .limit(100)
         .snapshots()
         .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .toList();
-          _sortBySponsored(products);
-          return products;
-        });
+      return snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+    });
+    if (ApiConfig.kUseProductsApi) {
+      // Legacy products tag categories by NAME; the API resolves the name to a
+      // Postgres uuid and filters server-side, keeping parity with Firestore.
+      return _fusedCategoryStream(
+        () => _api.fetchProductsByCategoryName(category),
+        firestore: firestore,
+      );
+    }
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
   }
 
   Stream<List<Product>> getProductsByCategoryAndSubcategory(
@@ -693,15 +758,10 @@ class ProductService {
     Set<String>? categoryAliases,
     Set<String>? subcategoryAliases,
   }) {
-    if (ApiConfig.kUseProductsApi) {
-      return Stream.fromFuture(
-        _api.fetchProductsByCategoryName(category, subcategory: subcategory),
-      );
-    }
     final categories = <String>{category, ...?categoryAliases}.toList();
     final subcategories =
         <String>{subcategory, ...?subcategoryAliases}.toList();
-    return _db
+    final firestore = _db
         .collection("products")
         .where("category", whereIn: categories)
         .where("subcategory", whereIn: subcategories)
@@ -710,12 +770,23 @@ class ProductService {
         .limit(100)
         .snapshots()
         .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .toList();
-          _sortBySponsored(products);
-          return products;
-        });
+      return snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+    });
+    if (ApiConfig.kUseProductsApi) {
+      return _fusedCategoryStream(
+        () => _api.fetchProductsByCategoryName(
+          category,
+          subcategory: subcategory,
+        ),
+        firestore: firestore,
+      );
+    }
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
   }
 
   Stream<List<Product>> searchProducts(String query) {
@@ -746,7 +817,7 @@ class ProductService {
             p.name.toLowerCase().contains(w) ||
             p.description.toLowerCase().contains(w)))
           .toList();
-      _sortBySponsored(filtered);
+      _sortByBoosted(filtered);
       return filtered;
     });
   }
@@ -796,7 +867,7 @@ class ProductService {
             p.name.toLowerCase().contains(w) ||
             p.description.toLowerCase().contains(w)))
           .toList();
-      _sortBySponsored(products);
+      _sortByBoosted(products);
     } catch (e) {
       debugPrint('searchProductsOnce error: $e');
     }
@@ -816,7 +887,7 @@ class ProductService {
                 .map((doc) => Product.fromFirestore(doc))
                 .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
                 .toList();
-            _sortBySponsored(products);
+            _sortByBoosted(products);
             return products;
           });
     }
@@ -831,7 +902,7 @@ class ProductService {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
-          _sortBySponsored(products);
+          _sortByBoosted(products);
           return products;
         });
   }
@@ -1075,6 +1146,36 @@ class ProductService {
     }
   }
 
+  /// Hides (unpublishes) or re-shows a seller's listing. The API owns the
+  /// visibility lifecycle; the Firestore branch mirrors it for flag-off mode.
+  Future<void> setProductVisibility(String productId, {required bool visible}) async {
+    if (ApiConfig.kUseProductsApi) {
+      if (visible) {
+        await _api.publishProduct(productId);
+      } else {
+        await _api.unpublishProduct(productId);
+      }
+      return;
+    }
+    await _db.collection('products').doc(productId).update({
+      'isActive': visible,
+    });
+  }
+
+  /// Stores the seller-chosen auto-restore moment for a hidden listing.
+  /// Passing `at: null` clears the scheduled re-appearance.
+  Future<void> scheduleReappear(String productId, {DateTime? at}) async {
+    try {
+      await _db.collection('products').doc(productId).update({
+        'hiddenUntil': at ?? FieldValue.delete(),
+      });
+    } catch (e) {
+      // The visible/invisible state lives on the API row; this timestamp only
+      // drives the in-app auto-restore, so a write failure is safe to ignore.
+      debugPrint('scheduleReappear skipped: $e');
+    }
+  }
+
   Future<void> updateProductRating(String productId, double newRating) async {
     try {
       final product = await getProductById(productId);
@@ -1099,12 +1200,11 @@ class ProductService {
 
   Stream<List<Product>> getFeaturedProducts() {
     if (ApiConfig.kUseProductsApi) {
-      // v1 is HTTP, not a stream: fetch once, keep the sponsored (ads) rows
-      // first; fall back to recent listings so the carousel never clears when
-      // no campaign is live.
+      // v1 is HTTP, not a stream: fetch once, keep boosted rows first; fall
+      // back to recent listings so the carousel never clears.
       return Stream.fromFuture(() async {
         final res = await _api.fetchProducts(limit: 40);
-        var products = res.items.where((p) => p.isSponsored).toList();
+        var products = res.items.where((p) => p.isBoostedValid).toList();
         if (products.isEmpty) {
           products = res.items.take(20).toList();
         }

@@ -738,7 +738,8 @@ class _KycScreenState extends State<KycScreen> {
           controller: _phoneController,
           keyboardType: TextInputType.phone,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          maxLength: 10,
+          // 13 digits fits intl (255...) form: 0712345678 (E.164 = 12) + margin
+          maxLength: 13,
           decoration: InputDecoration(
             labelText: context.tr('kyc_phone_label'),
             hintText: '0712 345 678',
@@ -1066,7 +1067,8 @@ class _KycScreenState extends State<KycScreen> {
             controller: _feePhoneController,
             keyboardType: TextInputType.phone,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            maxLength: 10,
+            // 0712345678 is 12 digits as 255...; 13 avoids truncating pasted intl
+            maxLength: 13,
             decoration: InputDecoration(
               labelText: context.tr('kyc_phone_label'),
               hintText: '0712 345 678',

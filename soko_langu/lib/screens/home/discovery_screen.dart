@@ -125,8 +125,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
       case FeedTab.forYou:
         final list = List<Product>.from(all);
         list.sort((a, b) {
-          if (a.isSponsored != b.isSponsored) {
-            return a.isSponsored ? -1 : 1;
+          if (a.isBoosted != b.isBoosted) {
+            return a.isBoosted ? -1 : 1;
           }
           return b.viewCount.compareTo(a.viewCount);
         });

@@ -34,6 +34,11 @@ class ProductRepository {
   int _brandPage = 1;
   int _categoryPage = 1;
 
+  // Firestore `.get()` has no built-in deadline; on a dead-but-"connected"
+  // radio it can retry for minutes. Capping it here makes the feed resolve to
+  // the cache (or an error the UI can retry) instead of an endless skeleton.
+  static const Duration _kFirestoreTimeout = Duration(seconds: 12);
+
   ProductRepository(
       {ProductService? remote,
       ProductApiClient? api,
@@ -83,7 +88,9 @@ class ProductRepository {
         } catch (_) {}
       }
       try {
-        final result = await _remote.fetchProducts(limit: limit, startAfter: _lastDoc);
+        final result = await _remote
+            .fetchProducts(limit: limit, startAfter: _lastDoc)
+            .timeout(_kFirestoreTimeout);
         _lastDoc = result.$2;
         await _updateCache(result.$1);
         return ProductResult.data(result.$1, source: DataSource.network);
@@ -124,11 +131,13 @@ class ProductRepository {
         } catch (_) {}
       }
       try {
-        final result = await _remote.fetchProductsByBrand(
-          brand,
-          limit: limit,
-          startAfter: _brandLastDoc,
-        );
+        final result = await _remote
+            .fetchProductsByBrand(
+              brand,
+              limit: limit,
+              startAfter: _brandLastDoc,
+            )
+            .timeout(_kFirestoreTimeout);
         _brandLastDoc = result.$2;
         await _updateCache(result.$1);
         return ProductResult.data(result.$1, source: DataSource.network);
@@ -170,12 +179,14 @@ class ProductRepository {
         } catch (_) {}
       }
       try {
-        final result = await _remote.fetchProductsByCategory(
-          category,
-          subcategory: subcategory,
-          limit: limit,
-          startAfter: _categoryLastDoc,
-        );
+        final result = await _remote
+            .fetchProductsByCategory(
+              category,
+              subcategory: subcategory,
+              limit: limit,
+              startAfter: _categoryLastDoc,
+            )
+            .timeout(_kFirestoreTimeout);
         _categoryLastDoc = result.$2;
         await _updateCache(result.$1);
         return ProductResult.data(result.$1, source: DataSource.network);
@@ -206,7 +217,9 @@ class ProductRepository {
         } catch (_) {}
       }
       try {
-        final product = await _remote.fetchProduct(id);
+        final product = await _remote
+            .fetchProduct(id)
+            .timeout(_kFirestoreTimeout);
         if (product != null) {
           await LocalCacheService.cacheProduct(
             CachedProduct.fromProduct(product),
@@ -285,6 +298,10 @@ class ProductRepository {
     final cached = products.map(CachedProduct.fromProduct).toList();
     await LocalCacheService.cacheProducts(cached);
   }
+
+  /// Public cache read so callers (e.g. the feed provider) can fall back to
+  /// saved listings after an overdue fetch instead of calling `loadProducts`.
+  Future<ProductResult<List<Product>>> loadFromCache() => _loadFromCache();
 
   Future<ProductResult<List<Product>>> _loadFromCache() async {
     final cached = LocalCacheService.getCachedProducts();

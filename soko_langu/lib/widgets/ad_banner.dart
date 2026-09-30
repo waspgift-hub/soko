@@ -103,7 +103,7 @@ class _AdBannerState extends State<AdBanner> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(context.tr('sponsored'), style: TextStyle(color: cs.brandPrimary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
               const SizedBox(height: 2),
-              Text(context.tr('sponsored_desc_fallback'), style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(context.tr('ad_label'), style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
           ),
           const SizedBox(width: 10),

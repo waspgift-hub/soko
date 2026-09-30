@@ -488,6 +488,11 @@ class ProductApiClient {
     await _authorizedJson('POST', '/products/$id/publish', const {});
   }
 
+  /// Hides a listing so it leaves the public feed but stays editable in My Ads.
+  Future<void> unpublishProduct(String id) async {
+    await _authorizedJson('POST', '/products/$id/unpublish', const {});
+  }
+
   /// Soft-deletes a listing the seller owns (legacy delete semantics).
   Future<void> deleteProduct(String id) async {
     await _authorizedJson('DELETE', '/products/$id', const {});

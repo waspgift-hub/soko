@@ -278,7 +278,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)),
                 const SizedBox(width: 4),
                 Text(
                   profile!.location,
@@ -292,7 +292,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.phone, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                Icon(Icons.phone, size: 16, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)),
                 const SizedBox(width: 4),
                 Text(profile!.phone, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
@@ -324,7 +324,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.star_outline, size: 18, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                  Icon(Icons.star_outline, size: 18, color: cs.primary.withValues(alpha: 0.5)),
                   const SizedBox(width: 6),
                   Text(
                     context.tr('no_ratings_yet'),

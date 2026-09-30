@@ -44,6 +44,13 @@ class CategoryService {
 
   List<Category> get cached => _cached ?? [];
 
+  /// Drops the cached Firestore category stream so the next [getCategories]
+  /// call subscribes fresh. Used by the home screen retry UI after a
+  /// stream timeout — a timed-out single-subscription stream cannot be reused.
+  void invalidateCachedStream() {
+    _cachedStream = null;
+  }
+
   // =========================
   // GET CATEGORY BY ID
   // =========================

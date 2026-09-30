@@ -110,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _categoryStream = _categoryService.getCategories();
+    _initCategoryStream();
     _subscribeFlashSales();
     _subscribeNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -127,6 +127,21 @@ class _HomeScreenState extends State<HomeScreen>
         provider.loadInitial();
       }
     });
+  }
+
+  void _initCategoryStream() {
+    // A silent snapshot stream (dead network, cold Firestore persistence)
+    // would leave the category skeleton up forever — cap it so the grid always
+    // resolves to data or an explicit retry UI within a few seconds.
+    _categoryStream = _categoryService
+        .getCategories()
+        .timeout(const Duration(seconds: 12));
+  }
+
+  void _reloadCategories() {
+    _categoryService.invalidateCachedStream();
+    _initCategoryStream();
+    setState(() {});
   }
 
   void _subscribeFlashSales() {
@@ -562,6 +577,36 @@ class _HomeScreenState extends State<HomeScreen>
                   stream: _categoryStream,
                   builder: (context, snapshot) {
                     final cats = snapshot.data ?? [];
+                    if (snapshot.hasError) {
+                      // Stream timeout (see _initCategoryStream) surfaces here;
+                      // offer a retry instead of an endless skeleton.
+                      return Container(
+                        height: 130,
+                        margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: cs.brandBorder),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.cloud_off_outlined, color: cs.primary, size: 22),
+                              const SizedBox(height: 6),
+                              Text(
+                                context.tr('something_wrong'),
+                                style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                              TextButton(
+                                onPressed: _reloadCategories,
+                                child: Text(context.tr('try_again')),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return SizedBox(
                         height: 130,
@@ -569,8 +614,8 @@ class _HomeScreenState extends State<HomeScreen>
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                           itemCount: 6,
-                          separatorBuilder: (_, __) => const SizedBox(width: 12),
-                          itemBuilder: (_, __) => Container(
+                          separatorBuilder: (_, _) => const SizedBox(width: 12),
+                          itemBuilder: (_, _) => Container(
                             width: 92,
                             decoration: BoxDecoration(
                               color: cs.surfaceVariant.withValues(alpha: 0.5),
@@ -1011,7 +1056,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   decoration: InputDecoration(
                     hintText: context.tr('location_hint'),
                     hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                    prefixIcon: Icon(Icons.location_on_outlined, size: 18, color: cs.onSurfaceVariant),
+                    prefixIcon: Icon(Icons.location_on_outlined, size: 18, color: cs.primary),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),

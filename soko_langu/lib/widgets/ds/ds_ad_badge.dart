@@ -3,7 +3,7 @@ import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
 
-/// Design-system newline pill for sponsored (ad) listings on feed posts.
+/// Design-system newline pill for boosted (featured) listings on feed posts.
 class DsAdBadge extends StatelessWidget {
   const DsAdBadge({super.key, this.label});
 
@@ -24,9 +24,9 @@ class DsAdBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.campaign_rounded, size: 12, color: Colors.white),
+          const Icon(Icons.rocket_launch_rounded, size: 12, color: Colors.white),
           const SizedBox(width: 4),
-          Text(label ?? context.tr('sponsored'), style: AppTypography.statusChip(fg)),
+          Text(label ?? context.tr('boost_product'), style: AppTypography.statusChip(fg)),
         ],
       ),
     );

@@ -25,7 +25,7 @@ class AuthOtpField extends StatefulWidget {
     this.autofocus = true,
     this.enabled = true,
     this.errorTick = 0,
-    this.boxSize = 52,
+    this.boxSize = 60,
   });
 
   @override

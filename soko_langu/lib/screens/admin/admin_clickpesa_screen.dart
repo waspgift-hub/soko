@@ -53,21 +53,26 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     });
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final uri = Uri.parse(
-        '${ApiConfig.baseUrl}/api/admin/clickpesa/transactions',
-      ).replace(queryParameters: {
-        'type': _type,
-        if (_status.isNotEmpty) 'status': _status,
-        if (_channel.isNotEmpty) 'channel': _channel,
-        'limit': '200',
-      });
-      final resp = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 20));
+      final uri =
+          Uri.parse(
+            '${ApiConfig.baseUrl}/api/admin/clickpesa/transactions',
+          ).replace(
+            queryParameters: {
+              'type': _type,
+              if (_status.isNotEmpty) 'status': _status,
+              if (_channel.isNotEmpty) 'channel': _channel,
+              'limit': '200',
+            },
+          );
+      final resp = await http
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}');
       }
@@ -88,12 +93,15 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         _payouts = ((po['data'] as List?) ?? [])
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
-        _paymentsTotal = (pay['totalCount'] as num?)?.toInt() ?? _payments.length;
+        _paymentsTotal =
+            (pay['totalCount'] as num?)?.toInt() ?? _payments.length;
         _payoutsTotal = (po['totalCount'] as num?)?.toInt() ?? _payouts.length;
-        _paymentsSummary =
-            Map<String, dynamic>.from(pay['summary'] as Map? ?? {});
-        _payoutsSummary =
-            Map<String, dynamic>.from(po['summary'] as Map? ?? {});
+        _paymentsSummary = Map<String, dynamic>.from(
+          pay['summary'] as Map? ?? {},
+        );
+        _payoutsSummary = Map<String, dynamic>.from(
+          po['summary'] as Map? ?? {},
+        );
         _asOf = DateTime.tryParse(result['asOf'] as String? ?? '');
         _loading = false;
       });
@@ -139,9 +147,9 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
       'exportedBy': FirebaseAuth.instance.currentUser?.uid,
       'filters': {'type': _type, 'status': _status, 'channel': _channel},
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('users_csv_saved'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.tr('users_csv_saved'))));
   }
 
   String _customerPhone(Map<String, dynamic> p) {
@@ -184,10 +192,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
   Widget _buildBody() {
     if (_loading) return const GoogleLoadingPage();
     if (_error != null) {
-      return SokoVibeErrorState(
-        message: _error,
-        onRetry: _load,
-      );
+      return SokoVibeErrorState(message: _error, onRetry: _load);
     }
     final nf = NumberFormat('#,###', 'en');
     return RefreshIndicator(
@@ -260,13 +265,9 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _statusDropdown(cs),
-                ),
+                Expanded(child: _statusDropdown(cs)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _channelDropdown(cs, channels),
-                ),
+                Expanded(child: _channelDropdown(cs, channels)),
               ],
             ),
           ],
@@ -293,7 +294,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
       'FAILED': context.tr('clickpesa_failed'),
     };
     return DropdownButtonFormField<String>(
-      initialValue: _status,
+      initialValue: statuses.contains(_status) ? _status : '',
       decoration: InputDecoration(
         labelText: context.tr('status'),
         border: const OutlineInputBorder(),
@@ -311,7 +312,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
 
   Widget _channelDropdown(ColorScheme cs, Set<String> channels) {
     return DropdownButtonFormField<String>(
-      initialValue: _channel.isEmpty ? '' : _channel,
+      initialValue: channels.contains(_channel) ? _channel : '',
       decoration: InputDecoration(
         labelText: context.tr('clickpesa_channel'),
         border: const OutlineInputBorder(),
@@ -319,9 +320,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
       ),
       items: [
         const DropdownMenuItem(value: '', child: Text('')),
-        ...channels.map(
-          (c) => DropdownMenuItem(value: c, child: Text(c)),
-        ),
+        ...channels.map((c) => DropdownMenuItem(value: c, child: Text(c))),
       ],
       onChanged: (v) {
         setState(() => _channel = v ?? '');
@@ -438,12 +437,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
               nf,
             ),
             const SizedBox(height: 4),
-            _financeRow(
-              context.tr('ad_revenue'),
-              adRevenue,
-              cs.onSurface,
-              nf,
-            ),
+            _financeRow(context.tr('ad_revenue'), adRevenue, cs.onSurface, nf),
             const SizedBox(height: 4),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
@@ -501,9 +495,10 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     final cs = Theme.of(context).colorScheme;
     final paySum = _paymentsSummary['total'] as num? ?? 0;
     final poSum = _payoutsSummary['total'] as num? ?? 0;
-    final byStatus = (_paymentsSummary['byStatus'] as Map?)?.cast<String, num>();
-    final byChannel =
-        (_paymentsSummary['byChannel'] as Map?)?.cast<String, num>();
+    final byStatus = (_paymentsSummary['byStatus'] as Map?)
+        ?.cast<String, num>();
+    final byChannel = (_paymentsSummary['byChannel'] as Map?)
+        ?.cast<String, num>();
 
     return Card(
       child: Padding(
@@ -543,12 +538,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
               ),
               const SizedBox(height: 4),
               for (final e in byStatus.entries)
-                _row(
-                  _statusLabel(e.key),
-                  e.value.toDouble(),
-                  cs.onSurface,
-                  nf,
-                ),
+                _row(_statusLabel(e.key), e.value.toDouble(), cs.onSurface, nf),
             ],
             if (byChannel != null && byChannel.isNotEmpty) ...[
               const Padding(
@@ -564,12 +554,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
               ),
               const SizedBox(height: 4),
               for (final e in byChannel.entries)
-                _row(
-                  e.key,
-                  e.value.toDouble(),
-                  cs.onSurface,
-                  nf,
-                ),
+                _row(e.key, e.value.toDouble(), cs.onSurface, nf),
             ],
           ],
         ),
@@ -588,12 +573,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     return labels[key] ?? key;
   }
 
-  Widget _row(
-    String label,
-    double amount,
-    Color color,
-    NumberFormat nf,
-  ) {
+  Widget _row(String label, double amount, Color color, NumberFormat nf) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -605,10 +585,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         ),
         Text(
           '${nf.format(amount.round())} TZS',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w600, color: color),
         ),
       ],
     );
@@ -618,8 +595,8 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     final total = _type == 'payouts'
         ? _payoutsTotal
         : _type == 'payments'
-            ? _paymentsTotal
-            : _paymentsTotal + _payoutsTotal;
+        ? _paymentsTotal
+        : _paymentsTotal + _payoutsTotal;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -664,7 +641,8 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
           currency: p['collectedCurrency']?.toString() ?? 'TZS',
           channel: p['channel']?.toString() ?? '',
           provider: '',
-          reference: p['orderReference']?.toString() ?? p['id']?.toString() ?? '',
+          reference:
+              p['orderReference']?.toString() ?? p['id']?.toString() ?? '',
           phone: _customerPhone(p),
           name: _customerName(p),
           date: p['createdAt']?.toString() ?? '',
@@ -677,7 +655,8 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
           currency: p['currency']?.toString() ?? 'TZS',
           channel: p['channel']?.toString() ?? '',
           provider: p['channelProvider']?.toString() ?? '',
-          reference: p['orderReference']?.toString() ?? p['id']?.toString() ?? '',
+          reference:
+              p['orderReference']?.toString() ?? p['id']?.toString() ?? '',
           phone: _beneficiaryPhone(p),
           name: _beneficiaryName(p),
           date: p['createdAt']?.toString() ?? '',
@@ -713,13 +692,15 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
 
   String _customerName(Map<String, dynamic> p) {
     final c = p['customer'];
-    if (c is Map && c['customerName'] != null) return c['customerName'].toString();
+    if (c is Map && c['customerName'] != null)
+      return c['customerName'].toString();
     return '';
   }
 
   String _beneficiaryName(Map<String, dynamic> p) {
     final b = p['beneficiary'];
-    if (b is Map && b['accountName'] != null) return b['accountName'].toString();
+    if (b is Map && b['accountName'] != null)
+      return b['accountName'].toString();
     return '';
   }
 }
@@ -780,10 +761,7 @@ class _CpRowCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     row.reference,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
                 Container(
@@ -822,19 +800,15 @@ class _CpRowCard extends StatelessWidget {
                   row.channel,
                   if (row.provider.isNotEmpty) row.provider,
                 ].join(' \u2022 '),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             if (row.name.isNotEmpty || row.phone.isNotEmpty)
               Text(
-                [if (row.name.isNotEmpty) row.name, if (row.phone.isNotEmpty) row.phone]
-                    .join(' \u2022 '),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                ),
+                [
+                  if (row.name.isNotEmpty) row.name,
+                  if (row.phone.isNotEmpty) row.phone,
+                ].join(' \u2022 '),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             if (date != null)
               Text(
