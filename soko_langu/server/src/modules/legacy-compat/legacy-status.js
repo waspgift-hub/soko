@@ -11,7 +11,8 @@ const CANONICAL_TO_LEGACY = {
   PENDING_SHIPPING_FEE: 'pending',
   SHIPPING_FEE_SUBMITTED: 'pending',
   SHIPPING_FEE_REVIEW: 'pending',
-  AWAITING_ESCROW_PAYMENT: 'pending',
+  // Ready to pay once a NORMAL quote lands; the app arms its pay UI on 'quoted'.
+  AWAITING_ESCROW_PAYMENT: 'quoted',
   PENDING_PAYMENT: 'pending',
   PAYMENT_PENDING: 'pending',
   PAYMENT_PROCESSING: 'pending',
@@ -45,7 +46,7 @@ const CANONICAL_TO_LEGACY = {
 const LEGACY_SPELLINGS = {
   payment_pending: 'pending',
   pending_shipping_fee: 'pending',
-  awaiting_escrow_payment: 'pending',
+  awaiting_escrow_payment: 'quoted',
   in_escrow: 'escrow_hold',
   ready_to_dispatch: 'escrow_hold',
   dispatched: 'dispatched',

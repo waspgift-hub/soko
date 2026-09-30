@@ -1,12 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { validate, schemas } = require('../../middleware/validation');
-const { authLimiter, otpRequestLimiter, otpVerifyLimiter } = require('../../middleware/rateLimiter');
+const { authLimiter, otpVerifyLimiter } = require('../../middleware/rateLimiter');
+const { otpSendGuard } = require('../../middleware/otpGuard');
+const { verifyAppCheck } = require('../../middleware/appCheck');
 const { sendOtp, verifyOtp, sendEmailOtp, verifyEmailOtp, checkPhone, checkEmail, phoneLogin, resetPasswordByPhone, emailOtpLogin, otpSignIn } = require('./controller');
 
-router.post('/send-otp', otpRequestLimiter, validate(schemas.sendOtp), sendOtp);
+// Send routes are guarded by otpSendGuard (per-phone/email cooldown + quota +
+// per-IP ceiling). The old shared per-IP OTP limiter is NOT applied here —
+// one NAT would exhaust its whole budget for a campus of genuine users.
+router.post('/send-otp', otpSendGuard('phone'), verifyAppCheck, validate(schemas.sendOtp), sendOtp);
 router.post('/verify-otp', otpVerifyLimiter, validate(schemas.verifyOtp), verifyOtp);
-router.post('/send-email-otp', otpRequestLimiter, sendEmailOtp);
+router.post('/send-email-otp', otpSendGuard('email'), verifyAppCheck, sendEmailOtp);
 router.post('/verify-email-otp', otpVerifyLimiter, verifyEmailOtp);
 router.post('/check-phone', authLimiter, checkPhone);
 router.post('/check-email', authLimiter, checkEmail);

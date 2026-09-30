@@ -63,14 +63,7 @@ const MODELS = {
   moderationReport: { col: 'moderationReports' },
   adminSetting: { col: 'adminSettings', keyField: 'key' },
   reconciliation: { col: 'reconciliations' },
-  sponsoredCampaign: { col: 'sponsoredCampaigns', money: ['bidAmountTzs', 'dailyBudgetTzs', 'totalBudgetTzs', 'spendTzs', 'dailySpendTzs'] },
-  campaignPlacement: { col: 'campaignPlacements' },
-  campaignEvent: { col: 'campaignEvents' },
-  campaignImpression: { col: 'campaignImpressions' },
-  campaignClick: { col: 'campaignClicks' },
-  campaignAttribution: { col: 'campaignAttributions' },
-  campaignPayment: { col: 'campaignPayments' },
-  campaignAuditLog: { col: 'campaignAuditLogs' },
+  dataDeletionRequest: { col: 'dataDeletionRequests' },
 };
 
 // Relation resolution for `include`. `local` is this model's field holding the
@@ -106,16 +99,6 @@ const RELATIONS = {
   payment: { order: { model: 'order', local: 'orderId', remote: 'id' } },
   withdrawal: { seller: { model: 'sellerProfile', local: 'sellerId', remote: 'id' } },
   referral: { referrer: { model: 'user', local: 'referrerId', remote: 'id' } },
-  sponsoredCampaign: {
-    seller: { model: 'sellerProfile', local: 'sellerId', remote: 'id' },
-    placements: { model: 'campaignPlacement', local: 'id', remote: 'campaignId', many: true },
-    payment: { model: 'campaignPayment', local: 'id', remote: 'campaignId' },
-    auditLogs: { model: 'campaignAuditLog', local: 'id', remote: 'campaignId', many: true },
-  },
-  campaignPlacement: {
-    campaign: { model: 'sponsoredCampaign', local: 'campaignId', remote: 'id' },
-    product: { model: 'product', local: 'productId', remote: 'id' },
-  },
 };
 
 // ---------------------------- value helpers ------------------------------
@@ -247,6 +230,69 @@ function isRelationClause(x) {
     !['equals', 'in', 'not', 'contains', 'startsWith', 'gt', 'gte', 'lt', 'lte'].some((op) => op in x);
 }
 
+// Plan how much of a `where` can be pushed onto the Firestore query itself.
+// Equality and single-field range operators express cleanly server-side. OR,
+// `contains`, `in`, `not` and nested relation clauses cannot — they stay as a
+// residual matchWhere post-filter. When the residual is empty the query is
+// "exact": Firestore returns every matching doc, so the read ceiling can be the
+// requested `collect` count instead of the full CAP scan.
+function buildPushdownPlan(clean) {
+  const filters = [];
+  let residual = false;
+  const rangedFields = new Set();
+  // Money prices arrive as BigInt from callers but Firestore stores them as
+  // numbers — coerce every pushed operand so the native where() never sees one.
+  const num = (x) => (typeof x === 'bigint' ? Number(x) : x);
+
+  for (const [k, v] of Object.entries(clean)) {
+    if (v == null || isRelationClause(v)) continue;
+    if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number') {
+      filters.push({ field: k, op: '==', val: v });
+      continue;
+    }
+    if (typeof v === 'bigint') {
+      filters.push({ field: k, op: '==', val: Number(v) });
+      continue;
+    }
+    if (v instanceof Date) {
+      filters.push({ field: k, op: '==', val: v });
+      continue;
+    }
+    if (Array.isArray(v)) {
+      residual = true;
+      continue;
+    }
+    if (typeof v === 'object') {
+      // JSON path probes ({ path: [...], equals }) are not Firestore fields —
+      // always leave them to the post-filter so behavior matches the old scan.
+      if (v.path && Array.isArray(v.path)) {
+        residual = true;
+        continue;
+      }
+      const rangeOps = ['gt', 'gte', 'lt', 'lte'];
+      if (v.equals != null && !(v.equals && typeof v.equals === 'object')) {
+        filters.push({ field: k, op: '==', val: num(v.equals) });
+        continue;
+      }
+      const ranges = rangeOps.filter((o) => o in v);
+      if (ranges.length) {
+        // Firestore allows inequality filters on one field per query; when a
+        // second field needs a range, push the equalities only and post-filter.
+        if (rangedFields.size === 0 || rangedFields.has(k)) {
+          rangedFields.add(k);
+          for (const o of ranges) {
+            filters.push({ field: k, op: o === 'gt' ? '>' : o === 'gte' ? '>=' : o === 'lt' ? '<' : '<=', val: num(v[o]) });
+          }
+          continue;
+        }
+      }
+    }
+    residual = true;
+  }
+
+  return { filters, exact: !residual };
+}
+
 // ---------------------------- model facade -------------------------------
 
 class ModelFacade {
@@ -322,7 +368,7 @@ class ModelFacade {
     return this._serialize(snap.data(), key);
   }
 
-  async _baseRows(where) {
+  async _baseRows(where, opts = {}) {
     const clean = this._cleanWhere(where);
     // Prefer a single-key resolution to a cheap doc read.
     const key = this._resolveKey(clean);
@@ -331,20 +377,19 @@ class ModelFacade {
       const r = await this._readByKey(key);
       if (r && matchWhere(r, clean)) rows.push(r);
     } else {
-      // Push down one equality filter; range/`in`/contains post-filtered.
-      let primer = null;
-      for (const [k, v] of Object.entries(clean)) {
-        if (isRelationClause(v)) continue;
-        if (k === 'id' || k === this.keyField) continue;
-        if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number' ||
-            (typeof v === 'bigint' && (typeof v === 'bigint'))) {
-          primer = { field: k, value: typeof v === 'bigint' ? Number(v) : v };
-          break;
-        }
-      }
+      // Push down every filter Firestore can express natively, then post-filter
+      // the residual in memory. For exact plans the read ceiling is the
+      // requested row count (collect) — not the full CAP scan that made every
+      // list call cost up to 1000 Firestore reads. Ordered reads stay full-CAP:
+      // bounding them would require server-side ordering (new composite indexes)
+      // or risk mid-list truncation, so caching absorbs those instead.
+      const plan = buildPushdownPlan(clean);
+      const collect = Number(opts.collect > 0 ? opts.collect : 0) || 0;
       let q = this.db().collection(this.col);
-      if (primer) q = q.where(primer.field, '==', primer.value);
-      const snap = await q.limit(CAP).get();
+      for (const f of plan.filters) q = q.where(f.field, f.op, f.val);
+      const ordered = normOrderBy(opts.orderBy).length > 0;
+      const want = plan.exact && !ordered && collect > 0 ? Math.min(CAP, collect) : CAP;
+      const snap = await q.limit(want).get();
       for (const d of snap.docs) {
         const row = this._serialize(d.data(), d.id);
         if (matchWhere(row, clean)) rows.push(row);
@@ -412,15 +457,24 @@ class ModelFacade {
     if (!row) return null;
     const out = select ? await this._project(row, select) : { ...row };
     if (!include) return out;
+    // Relation loads are independent of each other — resolve concurrently so a
+    // page of products doesn't pay include[media]+[seller]+[category] serially.
+    const jobs = [];
     for (const [relName, specRaw] of Object.entries(include)) {
       if (!specRaw) continue;
       const def = RELATIONS[this.name] && RELATIONS[this.name][relName];
       if (!def) continue;
       const spec = specRaw === true ? {} : specRaw;
       const link = row[def.local];
-      const kids = await this._loadRelation(def, link, spec);
-      out[relName] = def.many ? kids : (kids[0] || null);
+      if (link == null) {
+        out[relName] = def.many ? [] : null;
+        continue;
+      }
+      jobs.push(this._loadRelation(def, link, spec).then((kids) => {
+        out[relName] = def.many ? kids : (kids[0] || null);
+      }));
     }
+    await Promise.all(jobs);
     return out;
   }
 
@@ -440,9 +494,7 @@ class ModelFacade {
     if (spec.where && typeof spec.where === 'object' && Object.keys(spec.where).length) {
       kids = kids.filter((k) => matchWhere(k, spec.where));
     }
-    const decorated = [];
-    for (const k of kids) decorated.push(await model._decorate(k, spec.select, spec.include));
-    return decorated;
+    return Promise.all(kids.map((k) => model._decorate(k, spec.select, spec.include)));
   }
 
   async findUnique({ where = {}, select, include } = {}) {
@@ -450,22 +502,23 @@ class ModelFacade {
   }
 
   async findFirst({ where = {}, orderBy, select, include } = {}) {
-    const rows = sortRows(await this._baseRows(where), orderBy);
+    const rows = sortRows(await this._baseRows(where, { collect: 1, orderBy }), orderBy);
     return this._decorate(rows[0] || null, select, include);
   }
 
   async findMany({ where = {}, orderBy, take, skip = 0, select, include } = {}) {
-    let rows = sortRows(await this._baseRows(where), orderBy);
+    let rows = sortRows(
+      await this._baseRows(where, { collect: take != null ? Number(skip) + Number(take) : 0, orderBy }),
+      orderBy
+    );
     const start = Number(skip) || 0;
     const end = take != null ? start + Number(take) : undefined;
     rows = rows.slice(start, end);
-    const out = [];
-    for (const r of rows) out.push(await this._decorate(r, select, include));
-    return out;
+    return Promise.all(rows.map((r) => this._decorate(r, select, include)));
   }
 
   async _findBase({ where, take }) {
-    let rows = await this._baseRows(where);
+    let rows = await this._baseRows(where, { collect: take != null ? Number(take) : 1 });
     if (take != null) rows = rows.slice(0, take);
     return rows[0] || null;
   }

@@ -32,19 +32,32 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         : validation.verdict === 'REVIEW_REQUIRED' ? 'review_required'
         : 'submitted';
 
-      // If in review, the order moves to SHIPPING_FEE_REVIEW so admin must act.
-      const nextState = quoteStatus === 'review_required'
-        ? ORDER_STATES.SHIPPING_FEE_REVIEW
-        : quoteStatus === 'blocked'
-          ? ORDER_STATES.PENDING_SHIPPING_FEE // stays put; seller must revise
-          : ORDER_STATES.SHIPPING_FEE_SUBMITTED;
+      // NORMAL quotes auto-approve so the buyer can pay immediately after the
+      // seller quotes (matches the app's quote→pay UX); REVIEW_REQUIRED/BLOCKED
+      // still need human action. The two-step chain keeps the canonical machine
+      // honest: the seller hands off, then the system moves the order to
+      // payment-readiness.
+      const autoApproved = quoteStatus === 'submitted';
 
       const machine = new OrderStateMachine(order.status);
-      machine.transition(nextState, {
+      machine.transition(ORDER_STATES.SHIPPING_FEE_SUBMITTED, {
         actor: 'seller',
         actorId: sellerId,
         reason: `Quote submitted (${quoteStatus})`,
       });
+      if (autoApproved) {
+        machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {
+          actor: 'system',
+          actorId: sellerId,
+          reason: 'NORMAL quote auto-approved',
+        });
+      }
+
+      const nextState = autoApproved
+        ? ORDER_STATES.AWAITING_ESCROW_PAYMENT
+        : quoteStatus === 'review_required'
+          ? ORDER_STATES.SHIPPING_FEE_REVIEW
+          : ORDER_STATES.PENDING_SHIPPING_FEE;
 
       const quote = await tx.shippingQuote.create({
         data: {
@@ -57,7 +70,9 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         },
       });
 
-      await tx.order.update({
+      // Lock the server-computed totals the moment a NORMAL quote lands so the
+      // payment step charges price + shipping exactly (never client-inflated).
+      const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: {
           status: nextState,
@@ -68,11 +83,24 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
             estimatedDays,
             verdict: validation.verdict,
           },
+          ...(autoApproved
+            ? {
+                platformCommission: calcCommission(order.productPrice),
+                totalAmount: BigInt(order.productPrice) + BigInt(Math.round(amount)),
+              }
+            : {}),
           statusChangedBy: sellerId,
         },
       });
 
-      return { orderId, quote, validation };
+      if (autoApproved) {
+        await tx.shippingQuote.updateMany({
+          where: { orderId, status: 'submitted' },
+          data: { status: 'approved', reviewedBy: 'system', reviewedAt: new Date() },
+        });
+      }
+
+      return { orderId, quote, validation, updatedOrder };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`shipping:${orderId}`);

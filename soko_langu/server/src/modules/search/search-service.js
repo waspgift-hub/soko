@@ -1,10 +1,4 @@
 const { getFirebaseFirestore } = require('../../config/firebase');
-const sponsoredService = require('../sponsored/sponsored-service');
-
-// Slot positions (0-based) where a sponsored placement may appear on page 1.
-// Kept sparse so paid placement never floods organic results.
-const SPONSORED_SLOTS = [0, 3, 6];
-const MAX_SPONSORED_PER_PAGE = SPONSORED_SLOTS.length;
 
 // How many active docs to scan before giving up on in-memory text matching.
 // A full collection scan is not viable at scale: see the note on searchProducts
@@ -102,23 +96,7 @@ async function searchProducts({ query, categoryId, minPrice, maxPrice, sort, pag
 
   const total = scored.length;
   const pageRows = scored.slice((p - 1) * take, p * take);
-  let products = pageRows.map((r) => shapeProduct(r));
-
-  if (p === 1) {
-    try {
-      const placements = await sponsoredService.getActivePlacements({
-        categoryId,
-        placement: 'search',
-        limit: MAX_SPONSORED_PER_PAGE,
-        ipAddress,
-        userAgent,
-      });
-      products = interleaveSponsored(products, placements, take);
-    } catch (e) {
-      // Sponsored is an enhancement: never let it break organic search.
-      console.error('[Search] sponsored slotting failed:', e.message);
-    }
-  }
+  const products = pageRows.map((r) => shapeProduct(r));
 
   return { products, pagination: { page: p, limit: take, total } };
 }
@@ -144,45 +122,6 @@ function shapeProduct({ doc, d, id }) {
     seller: d.sellerName ? { storeName: d.sellerName } : null,
     category: d.category ? { name: d.category } : null,
   };
-}
-
-// Merge active sponsored placements into organic results at fixed slots.
-// Sponsored items are marked and de-duplicated against organic matches so a
-// product never appears twice (and always carries its Sponsored label).
-function interleaveSponsored(organic, campaigns, limit) {
-  const sponsored = [];
-  const seen = new Set();
-  for (const campaign of campaigns || []) {
-    for (const placement of campaign.placements || []) {
-      const product = placement.product;
-      if (!product || seen.has(product.id)) continue;
-      seen.add(product.id);
-      sponsored.push({
-        ...product,
-        isSponsored: true,
-        sponsoredCampaign: { id: campaign.id },
-      });
-    }
-  }
-  if (sponsored.length === 0) return organic;
-
-  const sponsoredIds = new Set(sponsored.map((p) => p.id));
-  const organicFiltered = organic.filter((p) => !sponsoredIds.has(p.id));
-
-  const result = [];
-  let si = 0;
-  let oi = 0;
-  const maxSponsored = Math.min(sponsored.length, MAX_SPONSORED_PER_PAGE);
-  while (result.length < limit && (oi < organicFiltered.length || si < maxSponsored)) {
-    if (si < maxSponsored && SPONSORED_SLOTS.includes(result.length)) {
-      result.push(sponsored[si++]);
-    } else if (oi < organicFiltered.length) {
-      result.push(organicFiltered[oi++]);
-    } else {
-      result.push(sponsored[si++]);
-    }
-  }
-  return result;
 }
 
 /**

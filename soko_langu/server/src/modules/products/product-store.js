@@ -1,7 +1,7 @@
 // Phase 2 (Firestore-primary catalog writes): products/{id} is the
 // authoritative listing doc the mobile app streams from (same legacy shape the
 // mirror always wrote). The store seam row is kept so money modules (orders,
-// wallet, sponsored, refunds) keep their uuid join.
+// wallet, refunds) keep their uuid join.
 // Writes land in Firestore first; a failed seam write aborts the operation
 // because a listing without its money-facing row would orphan order math.
 const crypto = require('crypto');

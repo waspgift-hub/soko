@@ -146,7 +146,9 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
  * overrides the recorded actor.
  */
 async function approveShippingQuote({ orderId, approvedBy }) {
-  return approveQuote({ orderId, approvedBy, actor: 'buyer' });
+  const updated = await approveQuote({ orderId, approvedBy, actor: 'buyer' });
+  await syncLegacyOrderStatus(updated);
+  return updated;
 }
 
 /**
@@ -155,7 +157,11 @@ async function approveShippingQuote({ orderId, approvedBy }) {
  * the v1 orders alias so the controller keeps one call path.
  */
 async function submitShippingQuote({ orderId, sellerId, amount, estimatedDays, notes }) {
-  return submitQuote({ orderId, sellerId, amount, estimatedDays, notes });
+  const result = await submitQuote({ orderId, sellerId, amount, estimatedDays, notes });
+  // Mirror the quote outcome (status 'quoted' + locked shippingCost/totalAmount)
+  // so the Flutter invoice always reflects the server-computed totals.
+  if (result.updatedOrder) await syncLegacyOrderStatus(result.updatedOrder);
+  return result;
 }
 
 /**

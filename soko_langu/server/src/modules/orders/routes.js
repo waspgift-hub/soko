@@ -34,7 +34,8 @@ router.post(
   requireActive,
   validate({
     body: z.object({
-      amount: z.number().int().positive(),
+      // min(0) admits free delivery — the seller absorbs shipping cost.
+      amount: z.number().int().min(0),
       estimatedDays: z.number().int().min(1).max(60),
       notes: z.string().max(500).optional(),
     }),

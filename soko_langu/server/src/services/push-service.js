@@ -7,12 +7,14 @@ const config = require('../config');
  */
 class PushService {
   constructor() {
-    this.appId = config.oneSignalAppId;
-    this.restApiKey = process.env.ONESIGNAL_REST_API_KEY || config.oneSignalRestApiKey;
+    this.appId = config.onesignal.appId;
+    this.restApiKey = process.env.ONESIGNAL_REST_API_KEY || config.onesignal.apiKey;
+    this.baseUrl = config.onesignal.baseUrl;
   }
 
   /**
-   * Sends a push notification to a specific user using their External ID (Postgres userId).
+   * Sends a push notification to a specific user using their External ID
+   * (the app calls OneSignal.login(uid), so the Firebase UID is the alias).
    */
   async sendPush(userId, title, body, data = {}) {
     if (!this.appId || !this.restApiKey) {
@@ -22,11 +24,11 @@ class PushService {
 
     try {
       const response = await axios.post(
-        'https://onesignal.com/api/v1/notifications',
+        `${this.baseUrl}/notifications`,
         {
           app_id: this.appId,
           include_external_user_ids: [userId],
-          headings: { 'en': title, 'sw': title }, // Simplified: usually uses translation keys
+          headings: { 'en': title, 'sw': title },
           contents: { 'en': body, 'sw': body },
           data: data,
         },
@@ -35,6 +37,7 @@ class PushService {
             'Authorization': `Basic ${this.restApiKey}`,
             'Content-Type': 'application/json',
           },
+          timeout: 10000,
         }
       );
 
@@ -52,7 +55,7 @@ class PushService {
   async sendSegmentPush(segmentId, title, body, data = {}) {
     try {
       const response = await axios.post(
-        'https://onesignal.com/api/v1/notifications',
+        `${this.baseUrl}/notifications`,
         {
           app_id: this.appId,
           included_segments: [segmentId],
@@ -65,6 +68,7 @@ class PushService {
             'Authorization': `Basic ${this.restApiKey}`,
             'Content-Type': 'application/json',
           },
+          timeout: 10000,
         }
       );
       return { success: true, id: response.data.id };

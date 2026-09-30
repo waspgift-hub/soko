@@ -25,10 +25,7 @@ const BUSINESS_COLLECTIONS = [
   'withdrawals', 'otpCredentials', 'disputes', 'disputeEvidence',
   'auditLogs', 'webhookEvents', 'addresses', 'userSettings', 'devices',
   'referrals', 'boosts', 'kycApplications', 'moderationReports',
-  'adminSettings', 'reconciliations', 'sponsoredCampaigns',
-  'campaignPlacements', 'campaignEvents', 'campaignImpressions',
-  'campaignClicks', 'campaignAttributions', 'campaignPayments',
-  'campaignAuditLogs',
+  'adminSettings', 'reconciliations',
 ];
 
 // Pre-existing leftovers in the target project — report only, never fail.

@@ -417,32 +417,32 @@ router.post('/autocomplete', async (req, res) => {
     const queryLower = query.trim().toLowerCase();
 
     // Keystroke-by-keystroke calls hammer the index — 90s TTL on a per-query key.
+    // getOrCompute single-flights concurrent identical keystrokes into one query.
     const cacheKey = `autocomplete:${queryLower}`;
-    const cached = await cache.get(cacheKey);
-    if (cached) return res.json(cached);
-
-    const prefixEnd = queryLower + '\uf8ff';
-    const matchMap = new Map();
-    const [productSnap, userSnap, categorySnap] = await Promise.all([
-      db.collection(SEARCH_INDEX.products).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(MAX_AUTOCOMPLETE).get(),
-      db.collection(SEARCH_INDEX.users).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(5).get(),
-      db.collection(SEARCH_INDEX.categories).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(5).get(),
-    ]);
-    for (const doc of productSnap.docs) {
-      const d = doc.data();
-      matchMap.set(d.displayName + '_product', { text: d.displayName, type: 'product', image: d.image || '', price: d.price, id: doc.id });
-    }
-    for (const doc of userSnap.docs) {
-      const d = doc.data();
-      matchMap.set(d.displayName + '_user', { text: d.displayName, type: 'seller', image: d.profileImage || '', id: doc.id });
-    }
-    for (const doc of categorySnap.docs) {
-      const d = doc.data();
-      matchMap.set(d.displayName + '_category', { text: d.displayName, type: 'category', image: d.image || d.icon || '', id: doc.id });
-    }
-    const suggestions = Array.from(matchMap.values()).slice(0, MAX_AUTOCOMPLETE);
-    await cache.set(cacheKey, { suggestions }, 90 * 1000);
-    res.json({ suggestions });
+    const cached = await cache.getOrCompute(cacheKey, async () => {
+      const prefixEnd = queryLower + '\uf8ff';
+      const matchMap = new Map();
+      const [productSnap, userSnap, categorySnap] = await Promise.all([
+        db.collection(SEARCH_INDEX.products).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(MAX_AUTOCOMPLETE).get(),
+        db.collection(SEARCH_INDEX.users).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(5).get(),
+        db.collection(SEARCH_INDEX.categories).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(5).get(),
+      ]);
+      for (const doc of productSnap.docs) {
+        const d = doc.data();
+        matchMap.set(d.displayName + '_product', { text: d.displayName, type: 'product', image: d.image || '', price: d.price, id: doc.id });
+      }
+      for (const doc of userSnap.docs) {
+        const d = doc.data();
+        matchMap.set(d.displayName + '_user', { text: d.displayName, type: 'seller', image: d.profileImage || '', id: doc.id });
+      }
+      for (const doc of categorySnap.docs) {
+        const d = doc.data();
+        matchMap.set(d.displayName + '_category', { text: d.displayName, type: 'category', image: d.image || d.icon || '', id: doc.id });
+      }
+      const suggestions = Array.from(matchMap.values()).slice(0, MAX_AUTOCOMPLETE);
+      return { suggestions };
+    }, 90 * 1000);
+    res.json(cached);
   } catch (e) {
     console.error('[SEARCH] autocomplete error:', e.message);
     res.status(400).json({ error: e.message });
@@ -455,12 +455,11 @@ router.post('/autocomplete', async (req, res) => {
 router.post('/trending', async (req, res) => {
   try {
     const CACHE_KEY = 'trending:all';
-    const cached = await cache.get(CACHE_KEY);
-    if (cached) return res.json(cached);
-    const snap = await db.collection(SEARCH_INDEX.trending).orderBy('count', 'desc').limit(MAX_TRENDING).get();
-    const trending = snap.docs.map(doc => ({ text: doc.id, count: doc.data().count || 0 }));
-    const payload = { trending };
-    await cache.set(CACHE_KEY, payload, 5 * 60 * 1000);
+    const payload = await cache.getOrCompute(CACHE_KEY, async () => {
+      const snap = await db.collection(SEARCH_INDEX.trending).orderBy('count', 'desc').limit(MAX_TRENDING).get();
+      const trending = snap.docs.map(doc => ({ text: doc.id, count: doc.data().count || 0 }));
+      return { trending };
+    }, 5 * 60 * 1000);
     res.json(payload);
   } catch (e) {
     console.error('[SEARCH] trending error:', e.message);
@@ -503,79 +502,81 @@ router.post('/most-rated', async (req, res) => {
     const limit = Math.min(Number(req.body.limit) || 10, 20);
 
     // Reads the whole `reviews` collection + per-seller user docs per request —
-    // the single biggest read on the Spark free tier. Cache for 10 minutes.
+    // the single biggest read on the Spark free tier. Cache for 10 minutes and
+    // single-flight the recompute so a cold burst is ONE scan, not N.
     const cacheKey = `most-rated:${limit}`;
-    const cached = await cache.get(cacheKey);
-    if (cached) return res.json(cached);
+    const payload = await cache.getOrCompute(cacheKey, async () => {
+      // Top rated products — real reviewCount, active listings only
+      const productsSnap = await db.collection('products')
+        .where('isActive', '==', true)
+        .orderBy('reviewCount', 'desc')
+        .limit(limit * 2)
+        .get();
+      const products = [];
+      for (const doc of productsSnap.docs) {
+        const d = doc.data();
+        if ((d.reviewCount || 0) <= 0) continue;
+        const imgs = d.images || [];
+        const boostedUntil = d.boostedUntil;
+        const boosted = !!(d.isBoosted && boostedUntil &&
+          new Date(boostedUntil.seconds ? boostedUntil.seconds * 1000 : boostedUntil) > new Date());
+        products.push({
+          id: doc.id,
+          type: 'product',
+          displayName: d.name || '',
+          description: d.description || '',
+          price: d.price || 0,
+          image: imgs.length ? imgs[0] : null,
+          sellerName: d.sellerName || '',
+          category: d.category || '',
+          rating: d.rating || 0,
+          reviewCount: d.reviewCount || 0,
+          location: d.location || '',
+          isBoosted: boosted,
+          kycApproved: !!d.sellerKycApproved,
+        });
+        if (products.length >= limit) break;
+      }
 
-    // Top rated products — real reviewCount, active listings only
-    const productsSnap = await db.collection('products')
-      .where('isActive', '==', true)
-      .orderBy('reviewCount', 'desc')
-      .limit(limit * 2)
-      .get();
-    const products = [];
-    for (const doc of productsSnap.docs) {
-      const d = doc.data();
-      if ((d.reviewCount || 0) <= 0) continue;
-      const imgs = d.images || [];
-      const boostedUntil = d.boostedUntil;
-      const boosted = !!(d.isBoosted && boostedUntil &&
-        new Date(boostedUntil.seconds ? boostedUntil.seconds * 1000 : boostedUntil) > new Date());
-      products.push({
-        id: doc.id,
-        type: 'product',
-        displayName: d.name || '',
-        description: d.description || '',
-        price: d.price || 0,
-        image: imgs.length ? imgs[0] : null,
-        sellerName: d.sellerName || '',
-        category: d.category || '',
-        rating: d.rating || 0,
-        reviewCount: d.reviewCount || 0,
-        location: d.location || '',
-        isBoosted: boosted,
-        kycApproved: !!d.sellerKycApproved,
-      });
-      if (products.length >= limit) break;
-    }
+      // Top rated sellers — aggregate real reviews by sellerId
+      const reviewsSnap = await db.collection('reviews').get();
+      const bySeller = {};
+      for (const doc of reviewsSnap.docs) {
+        const r = doc.data();
+        if (!r.sellerId || r.sellerId.startsWith('seller_')) continue;
+        if (!bySeller[r.sellerId]) bySeller[r.sellerId] = { total: 0, count: 0 };
+        bySeller[r.sellerId].total += Number(r.rating) || 0;
+        bySeller[r.sellerId].count += 1;
+      }
+      const ranked = Object.entries(bySeller)
+        .map(([sellerId, s]) => ({ sellerId, avg: s.total / s.count, count: s.count }))
+        .filter((r) => r.count > 0)
+        .sort((a, b) => b.avg - a.avg || b.count - a.count)
+        .slice(0, 8);
 
-    // Top rated sellers — aggregate real reviews by sellerId
-    const reviewsSnap = await db.collection('reviews').get();
-    const bySeller = {};
-    for (const doc of reviewsSnap.docs) {
-      const r = doc.data();
-      if (!r.sellerId || r.sellerId.startsWith('seller_')) continue;
-      if (!bySeller[r.sellerId]) bySeller[r.sellerId] = { total: 0, count: 0 };
-      bySeller[r.sellerId].total += Number(r.rating) || 0;
-      bySeller[r.sellerId].count += 1;
-    }
-    const ranked = Object.entries(bySeller)
-      .map(([sellerId, s]) => ({ sellerId, avg: s.total / s.count, count: s.count }))
-      .filter((r) => r.count > 0)
-      .sort((a, b) => b.avg - a.avg || b.count - a.count)
-      .slice(0, 8);
+      // Seller profile reads are independent — fetch in parallel, not one-by-one.
+      const userDocs = await Promise.all(ranked.map((r) => db.collection('users').doc(r.sellerId).get()));
+      const sellers = [];
+      for (let i = 0; i < ranked.length; i++) {
+        const userDoc = userDocs[i];
+        if (!userDoc.exists) continue;
+        const u = userDoc.data();
+        if (u.isSuspended) continue;
+        const r = ranked[i];
+        sellers.push({
+          id: r.sellerId,
+          type: 'seller',
+          displayName: u.displayName || u.name || '',
+          image: u.photoURL || u.photoUrl || null,
+          rating: r.avg,
+          reviewCount: r.count,
+          kycApproved: !!u.isKycApproved,
+          location: u.location || '',
+        });
+      }
 
-    const sellers = [];
-    for (const r of ranked) {
-      const userDoc = await db.collection('users').doc(r.sellerId).get();
-      if (!userDoc.exists) continue;
-      const u = userDoc.data();
-      if (u.isSuspended) continue;
-      sellers.push({
-        id: r.sellerId,
-        type: 'seller',
-        displayName: u.displayName || u.name || '',
-        image: u.photoURL || u.photoUrl || null,
-        rating: r.avg,
-        reviewCount: r.count,
-        kycApproved: !!u.isKycApproved,
-        location: u.location || '',
-      });
-    }
-
-    const payload = { success: true, products, sellers };
-    await cache.set(cacheKey, payload, 10 * 60 * 1000);
+      return { success: true, products, sellers };
+    }, 10 * 60 * 1000);
     res.json(payload);
   } catch (e) {
     console.error('[SEARCH] most-rated error:', e.message);

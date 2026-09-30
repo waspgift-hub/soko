@@ -5,24 +5,24 @@ const { jsonError } = require('../utils/http');
 const schemas = {
   // Auth schemas
   sendOtp: z.object({
-    phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
+    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
     langCode: z.enum(['sw', 'en']).optional(),
   }),
 
   verifyOtp: z.object({
-    phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
+    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
     otp: z.string().length(6, 'OTP must be 6 digits').optional(),
     code: z.string().length(6, 'OTP must be 6 digits').optional(),
   }),
 
   phoneLogin: z.object({
-    phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
+    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
     otp: z.string().length(6, 'OTP must be 6 digits').optional(),
     code: z.string().length(6, 'OTP must be 6 digits').optional(),
   }),
 
   resetPasswordByPhone: z.object({
-    phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
+    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
     otp: z.string().length(6, 'OTP must be 6 digits').optional(),
     code: z.string().length(6, 'OTP must be 6 digits').optional(),
     newPassword: z.string().min(8, 'Password must be at least 8 characters'),

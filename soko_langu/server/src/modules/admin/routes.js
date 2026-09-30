@@ -770,4 +770,69 @@ router.post(
   }
 );
 
+// ---- Data-deletion web-form requests (public /data-deletion form) ----
+// The public endpoint stores each submission in Firestore (dataDeletionRequests);
+// these routes let the panel triage them (see privacy policy 7.2: 30-day
+// cooling-off before permanent deletion) without touching the Firestore console.
+
+// List submissions, newest first, optional status filter.
+router.get(
+  '/data-deletion-requests',
+  validate({
+    query: z.object({
+      status: z.enum(['new', 'in_progress', 'resolved', 'rejected']).optional(),
+      limit: z.coerce.number().int().min(1).max(500).default(100),
+    }),
+  }),
+  async (req, res) => {
+    const db = getFirebaseFirestore();
+    if (!db) return res.status(503).json({ error: 'FIRESTORE_UNAVAILABLE' });
+    const ref = db.collection('dataDeletionRequests');
+    const snap = await ref.orderBy('createdAt', 'desc').limit(Number(req.query.limit)).get();
+    let docs = snap.docs.map(fsDoc);
+    if (req.query.status) docs = docs.filter((d) => d.status === req.query.status);
+    try {
+      const cnt = await ref.count().get();
+      return res.json({ success: true, data: { items: docs, total: cnt.data().count } });
+    } catch (e) {
+      return res.json({ success: true, data: { items: docs, total: docs.length } });
+    }
+  }
+);
+
+// Dispatch path: mark a submission as being handled / done / rejected.
+router.put(
+  '/data-deletion-requests/:id/status',
+  requireActiveAdmin,
+  validate({
+    body: z.object({
+      status: z.enum(['new', 'in_progress', 'resolved', 'rejected']),
+      note: z.string().max(500).optional(),
+    }),
+  }),
+  async (req, res) => {
+    const db = getFirebaseFirestore();
+    if (!db) return res.status(503).json({ error: 'FIRESTORE_UNAVAILABLE' });
+    const docRef = db.collection('dataDeletionRequests').doc(req.params.id);
+    const before = await docRef.get();
+    if (!before.exists) return res.status(404).json({ error: 'DATA_DELETION_REQUEST_NOT_FOUND' });
+    const patch = { status: req.body.status, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (req.body.note != null && req.body.note.trim()) patch.note = req.body.note.trim();
+    await docRef.set(patch, { merge: true });
+    try {
+      await writeAudit({
+        ...auditFromReq(req),
+        action: 'dataDeletionRequest.status.change',
+        entityType: 'dataDeletionRequest',
+        entityId: req.params.id,
+        newState: req.body,
+      });
+    } catch (ae) {
+      console.error('[admin:data-deletion] audit write skipped:', ae?.message || ae);
+    }
+    const after = await docRef.get();
+    res.json({ success: true, data: fsDoc(after) });
+  }
+);
+
 module.exports = router;

@@ -5,7 +5,6 @@ const assert = require('node:assert/strict');
 // injected into require.cache. Everything else in the repo's unit tests is pure,
 // which is why there is no shared harness for this.
 const FIREBASE = require.resolve('../src/config/firebase');
-const SPONSORED = require.resolve('../src/modules/sponsored/sponsored-service');
 const SEARCH = require.resolve('../src/modules/search/search-service');
 const { buildMirrorDoc } = require('../src/modules/products/product-mirror');
 
@@ -93,10 +92,6 @@ function mirrorDoc(overrides) {
 
 function loadSearchService() {
   require.cache[FIREBASE] = { id: FIREBASE, filename: FIREBASE, loaded: true, exports: { getFirebaseFirestore: fakeDb } };
-  require.cache[SPONSORED] = {
-    id: SPONSORED, filename: SPONSORED, loaded: true,
-    exports: { getActivePlacements: async () => [] },
-  };
   delete require.cache[SEARCH];
   return require(SEARCH);
 }
@@ -119,7 +114,6 @@ describe('searchProducts', () => {
   afterEach(() => {
     delete require.cache[SEARCH];
     delete require.cache[FIREBASE];
-    delete require.cache[SPONSORED];
   });
 
   it('filters on the field the mirror actually writes', async () => {

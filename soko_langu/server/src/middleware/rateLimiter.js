@@ -109,8 +109,8 @@ const searchLimiter = rateLimit({ max: 30, windowMs: 60000 });
 const aiLimiter = rateLimit({ max: 20, windowMs: 60000 });
 
 // Security-specific limiters (per plan Phase 12.3)
-const otpRequestLimiter = rateLimit({ max: 3, windowMs: 900000 });      // 3/15min per phone
-const otpVerifyLimiter = rateLimit({ max: 5, windowMs: 900000 });        // 5/15min per phone
+const otpRequestLimiter = rateLimit({ max: 100, windowMs: 60000 });      // loose global ceiling; per-target guard lives in otpGuard
+const otpVerifyLimiter = rateLimit({ max: 30, windowMs: 900000 });        // 30/15min per source; real brute-force guard is the 5-attempt cap per OTP key
 const checkoutLimiter = rateLimit({ max: 5, windowMs: 60000 });          // 5/min per user
 const withdrawalLimiter = rateLimit({ max: 3, windowMs: 3600000 });      // 3/hour per seller
 const loginLimiter = rateLimit({ max: 5, windowMs: 900000 });            // 5/15min per email

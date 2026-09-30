@@ -61,6 +61,16 @@ const config = {
     apiKey: process.env.ONE_SIGNAL_REST_API_KEY,
     baseUrl: process.env.ONE_SIGNAL_BASE_URL || 'https://onesignal.com/api/v1',
   },
+
+  // WhatsApp Business Cloud API (OTP template delivery). Missing token/phone
+  // number id is a valid no-op — the delivery chain then falls back to SMS.
+  whatsapp: {
+    token: process.env.WHATSAPP_BUSINESS_TOKEN,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+    baseUrl: process.env.WHATSAPP_GRAPH_BASE_URL || 'https://graph.facebook.com/v20.0',
+    templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'otp',
+    language: process.env.WHATSAPP_LANGUAGE || 'sw',
+  },
   
   // AI
   groq: {

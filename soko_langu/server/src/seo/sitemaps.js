@@ -20,6 +20,7 @@ const SITEMAP_PATHS = [
   '/about/founder',
   '/privacy-policy',
   '/terms-of-service',
+  '/data-deletion',
   '/support',
 ];
 

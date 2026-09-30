@@ -71,6 +71,29 @@ test('syncLegacyOrderStatus updates existing mirror docs with the legacy status'
   assert.strictEqual(writes[1].data.status, 'escrow_hold');
 });
 
+test('syncLegacyOrderStatus also mirrors the server-locked money fields', async () => {
+  const writes = [];
+  const db = {
+    collection(name) {
+      return {
+        doc(id) {
+          return {
+            async get() { return { exists: true }; },
+            async set(data, opts) { writes.push({ name, id, data, opts }); },
+          };
+        },
+      };
+    },
+  };
+  const sync = buildSyncLegacyOrderStatus(db);
+  await sync({ id: 'or-paid', status: 'awaiting_escrow_payment', shippingFee: 4500n, totalAmount: 54500n, platformCommission: 0n });
+
+  assert.strictEqual(writes[0].data.status, 'quoted');
+  assert.strictEqual(writes[0].data.shippingCost, 4500);
+  assert.strictEqual(writes[0].data.totalAmount, 54500);
+  assert.strictEqual(writes[0].data.platformFee, 0);
+});
+
 test('a Firestore failure never throws out of the sync', async () => {
   const db = {
     collection() {

@@ -24,8 +24,8 @@ const disputeRouter = require('./modules/disputes/routes');
 const refundRouter = require('./modules/refunds/routes');
 const mediaRouter = require('./modules/media/routes');
 const feedRouter = require('./modules/feed/routes');
-const aiRouter = require('./modules/ai/routes');
 const searchRouter = require('./modules/search/routes');
+const aiRouter = require('./modules/ai/routes');
 const sharingRouter = require('./modules/sharing/routes');
 const trustRouter = require('./modules/trust/routes');
 const adminRouter = require('./modules/admin/routes');
@@ -38,7 +38,7 @@ const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
-const sponsoredRouter = require('./modules/sponsored/routes');
+const deletionRequestRouter = require('./modules/data-deletion/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 const requestId = require('./middleware/requestId');
@@ -219,6 +219,7 @@ app.use(seoRouter);
 const PUBLIC_HTML_PAGES = [
   ['/privacy-policy', 'privacy.html'],
   ['/terms-of-service', 'terms.html'],
+  ['/data-deletion', 'deletion.html'],
   ['/support', 'support.html'],
   ['/tanzania-marketplace', 'tanzania-marketplace.html'],
   ['/categories', 'categories.html'],
@@ -303,19 +304,21 @@ app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/products', productRouter);
 app.use('/api/v1/referrals', referralRouter);
 app.use('/api/v1/moderation', moderationRouter);
+app.use('/api/v1/data-deletion', deletionRequestRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1', sellerAnalyticsRouter);
 app.use('/api/v1/reviews', reviewRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
-  app.use('/api/v1/sponsored', sponsoredRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat; both mount
 // groups resolve to the same Firestore store seam via getStore().
 const { generalLimiter, aiLimiter } = require('./middleware/rateLimiter');
-
+// AI proxy: the app sends an OpenAI-shaped payload plus its Firebase token;
+// the server injects provider keys and fails over Groq -> Gemini. Mounted on
+// the ORIGINAL /api/ai/* paths (not /api/v1) so the shipped app needs no change.
 app.use('/api/ai', aiLimiter, aiRouter);
 console.log('[AI] providers:', JSON.stringify(aiRouter.gatewayStatus()));
 app.use('/api', generalLimiter, legacyShopRouter);

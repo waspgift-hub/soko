@@ -30,6 +30,11 @@ function buildSyncLegacyOrderStatus(db) {
       const snapshot = await db.collection('orders').doc(order.id).get();
       if (!snapshot.exists) return;
       const patch = { status: legacyStatusOf(order.status), updatedAt: FieldValue.serverTimestamp() };
+      // Mirror the money fields so invoices drawn from Firestore show the
+      // server-locked totals, not the creation-time zeros.
+      if (order.shippingFee != null) patch.shippingCost = Number(order.shippingFee);
+      if (order.totalAmount != null) patch.totalAmount = Number(order.totalAmount);
+      if (order.platformCommission != null) patch.platformFee = Number(order.platformCommission);
       await db.collection('orders').doc(order.id).set(patch, { merge: true });
       await db.collection('transactions').doc(order.id).set(patch, { merge: true });
     } catch (e) {

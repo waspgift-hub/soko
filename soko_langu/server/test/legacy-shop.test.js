@@ -29,7 +29,7 @@ test('buildLegacyMirror produces the legacy Flutter document shape', () => {
   const m = buildLegacyMirror(order, body);
 
   assert.strictEqual(m.orderId, 'or-123');
-  assert.strictEqual(m.status, 'pending');
+  assert.strictEqual(m.status, 'quoted');
   assert.strictEqual(m.escrowStatus, 'none');
   assert.strictEqual(m.productName, 'Vitamin C');
   assert.strictEqual(m.productPrice, 50000);
@@ -64,7 +64,7 @@ test('LEGACY_STATUS covers every money-relevant v2 state', () => {
   for (const s of states) {
     assert.ok(LEGACY_STATUS[s], `missing legacy mapping for ${s}`);
   }
-  assert.strictEqual(LEGACY_STATUS.awaiting_escrow_payment, 'pending');
+  assert.strictEqual(LEGACY_STATUS.awaiting_escrow_payment, 'quoted');
   assert.strictEqual(LEGACY_STATUS.in_escrow, 'escrow_hold');
   assert.strictEqual(LEGACY_STATUS.completed, 'completed');
 });

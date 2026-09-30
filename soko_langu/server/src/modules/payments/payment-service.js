@@ -225,27 +225,6 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
     await outbox.markWebhookProcessing(event);
 
     try {
-      // Sponsorship (campaign budget) payments carry a `camp_` order reference
-      // and are reconciled against the campaign, not an ecommerce `orders`
-      // row. Route them to the sponsored module so ads can activate; anything
-      // else continues through the escrow path.
-      if (String(normalized.orderReference).startsWith('camp_')) {
-        const sponsoredService = require('../sponsored/sponsored-service');
-        if (normalized.status === 'completed') {
-          await sponsoredService.confirmPayment({
-            orderReference: normalized.orderReference,
-            status: 'completed',
-          });
-        } else if (normalized.status === 'failed') {
-          await sponsoredService.confirmPayment({
-            orderReference: normalized.orderReference,
-            status: 'failed',
-          });
-        }
-        await outbox.markWebhookProcessed(event);
-        return { received: true, webhookId };
-      }
-
       // Legacy `dep`, `boost`, and `kyc` references settle against Firestore
       // money rows (deposits + transactions collections), not the ecommerce
       // `orders` table — orderNumbers are SV-prefixed and can never collide.

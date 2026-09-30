@@ -43,16 +43,23 @@ function validateShippingQuote({ amount, shippingAddress, sellerRegion, sellerRi
   let verdict = 'NORMAL';
   let reason = null;
 
-  // Hard upper bound: never allow egregiously inflated quotes without review.
-  if (amount > baseline.max * DEVIATION_THRESHOLD) {
-    verdict = 'REVIEW_REQUIRED';
-    reason = `Quote TZS ${amount} exceeds baseline max TZS ${baseline.max} for ${tier}`;
-  }
+  // Free delivery (amount 0) is a legitimate offer — the seller absorbs the
+  // shipping cost and escrow holds only the product price. It auto-approves
+  // like any NORMAL quote; the seller-risk overrides below still apply.
+  if (amount === 0) {
+    reason = 'free delivery';
+  } else {
+    // Hard upper bound: never allow egregiously inflated quotes without review.
+    if (amount > baseline.max * DEVIATION_THRESHOLD) {
+      verdict = 'REVIEW_REQUIRED';
+      reason = `Quote TZS ${amount} exceeds baseline max TZS ${baseline.max} for ${tier}`;
+    }
 
-  // Unusually low quotes (possible fee-shifting / scam signal).
-  if (amount < baseline.min / 2) {
-    verdict = verdict === 'REVIEW_REQUIRED' ? 'REVIEW_REQUIRED' : 'REVIEW_REQUIRED';
-    reason = (reason ? reason + '; ' : '') + `Quote TZS ${amount} unusually low for ${tier}`;
+    // Unusually low nonzero quotes (possible fee-shifting / scam signal).
+    if (amount < baseline.min / 2) {
+      verdict = 'REVIEW_REQUIRED';
+      reason = (reason ? reason + '; ' : '') + `Quote TZS ${amount} unusually low for ${tier}`;
+    }
   }
 
   // High-risk seller quotes get flagged regardless of amount.

@@ -361,35 +361,6 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
   }
   const where = buildListWhere({ q, categoryId, minPrice, maxPrice, boosted, featured, subcategory, brand, sellerProfileId, ids });
 
-  // Resolve active ad placements (productId -> campaignId) so sponsored
-  // listings can be surfaced first (guideline 11.1) and labelled with their
-  // campaign for click attribution. Placements are real campaignPlacement
-  // rows, fetched via `include` because the store seam only resolves relations
-  // through include (a `select: { placements }` silently drops them).
-  const now = new Date();
-  const activeCampaigns = await store.sponsoredCampaign.findMany({
-    where: {
-      status: 'active',
-      startsAt: { lte: now },
-      expiresAt: { gte: now },
-      ...(categoryId ? { placement: 'category' } : {}),
-    },
-    include: { placements: true },
-    take: 50,
-  });
-  const sponsorMap = new Map();
-  const categories = activeCampaigns.length
-    ? await store.category.findMany({ select: { id: true, slug: true } })
-    : [];
-  const catBySlug = new Map(categories.map((c) => [c.slug, c.id]));
-  for (const campaign of activeCampaigns) {
-    for (const placement of campaign.placements || []) {
-      const productId = placement.productId;
-      if (!productId) continue;
-      if (!sponsorMap.has(productId)) sponsorMap.set(productId, campaign.id);
-    }
-  }
-
   const [items, total] = await Promise.all([
     store.product.findMany({
       where,
@@ -401,22 +372,7 @@ async function listProducts({ q, categoryId, minPrice, maxPrice, boosted, featur
     store.product.count({ where }),
   ]);
 
-  // Re-rank: sponsored products first (sorted by bid amount desc), then
-  // organic results. The client still receives the full pagination info; the
-  // re-rank only affects the visible ordering within this page slice.
-  const withSponsoredFlag = items.map((p) => ({
-    ...p,
-    isSponsored: sponsorMap.has(p.id),
-    sponsoredCampaignId: sponsorMap.get(p.id) || null,
-  }));
-
-  withSponsoredFlag.sort((a, b) => {
-    if (a.isSponsored && !b.isSponsored) return -1;
-    if (!a.isSponsored && b.isSponsored) return 1;
-    return 0;
-  });
-
-  return { items: withSponsoredFlag.map(serializeProduct), pagination: { page: Number(page), limit: Number(limit), total } };
+  return { items: items.map(serializeProduct), pagination: { page: Number(page), limit: Number(limit), total } };
 }
 
 async function listSellerProducts({ sellerProfileId, userId, page = 1, limit = 20 }) {

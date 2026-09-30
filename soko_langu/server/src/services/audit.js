@@ -17,20 +17,21 @@ async function writeAudit({
   if (!action) throw new Error('AUDIT_ACTION_REQUIRED');
   try {
     const store = getStore();
-    return await store.auditLog.create({
-      data: {
-        actorId,
-        actorType,
-        action,
-        entityType,
-        entityId,
-        oldState: oldState ?? undefined,
-        newState: newState ?? undefined,
-        requestId,
-        ipAddress,
-        userAgent,
-      },
-    });
+    const data = {
+      actorId: actorId ?? null,
+      actorType,
+      action,
+      entityType: entityType ?? null,
+      entityId: entityId ?? null,
+      requestId: requestId ?? null,
+      ipAddress: ipAddress ?? null,
+      userAgent: userAgent ?? null,
+    };
+    // Firestore rejects undefined values; only set optional state snapshots
+    // when the caller actually provided them (null means "no snapshot").
+    if (oldState !== null && oldState !== undefined) data.oldState = oldState;
+    if (newState !== null && newState !== undefined) data.newState = newState;
+    return await store.auditLog.create({ data });
   } catch (e) {
     // Audit must never break the primary operation.
     console.error('[AUDIT] write failed:', e.message);

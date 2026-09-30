@@ -65,13 +65,17 @@ async function applyTransition(db, docRef, order, newStatus, uid, note) {
   const base = { updatedAt: timestamp };
   switch (newStatus) {
     case 'quoted': {
-      let shippingCost = 0;
-      try { shippingCost = Math.round(Number((JSON.parse(note || '{}') || {}).shippingCost || 0)); } catch (_) {}
-      if (!(shippingCost > 0)) {
+      let parsed;
+      try { parsed = JSON.parse(note || '{}') || {}; } catch (_) { parsed = {}; }
+      const rawShipping = parsed.shippingCost;
+      // Free delivery is allowed as an explicit 0; missing or negative
+      // shippingCost is still a client bug and rejects.
+      if (typeof rawShipping !== 'number' || rawShipping < 0) {
         const err = new Error('Cannot transition: valid shippingCost required');
         err.status = 400;
         throw err;
       }
+      const shippingCost = Math.round(rawShipping);
       const totalAmount = (order.productPrice || 0) + shippingCost;
       const buyerAddrMap =
         order.deliveryAddress && typeof order.deliveryAddress === 'object'

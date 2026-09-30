@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { optionalAuth } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
+const cache = require('../../../cache');
 const searchService = require('./search-service');
 
 const router = Router();
@@ -22,12 +23,19 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const results = await searchService.searchProducts({
-      ...req.query,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'] || '',
-    });
-    res.json({ success: true, data: results });
+    // Cache result per exact filter set so repeat visitors share one Firestore
+    // scan per window instead of each paying a full CAP=1000 read (Spark quota).
+    // Short TTL keeps results fresh; single-flight
+    // inside getOrCompute stops a cold-hits stampede.
+    const key = `search:products:${JSON.stringify(req.query)}`;
+    const data = await cache.getOrCompute(key, () =>
+      searchService.searchProducts({
+        ...req.query,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] || '',
+      }),
+      30 * 1000);
+    res.json({ success: true, data });
   }
 );
 

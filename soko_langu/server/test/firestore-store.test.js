@@ -629,19 +629,19 @@ test('interactive $transaction: does not rewite create/update twice', async () =
 
 test('array-form $transaction executes every op and returns results', async () => {
   const { store } = setup({
-    sponsoredCampaigns: {
-      'c1': { id: 'c1', status: 'active', spendTzs: 10 },
-      'c2': { id: 'c2', status: 'active', spendTzs: 20 },
-      'c3': { id: 'c3', status: 'paused', spendTzs: 30 },
+    boosts: {
+      'b1': { id: 'b1', status: 'completed', price: 1500 },
+      'b2': { id: 'b2', status: 'completed', price: 3000 },
+      'b3': { id: 'b3', status: 'pending', price: 3000 },
     },
   });
   const results = await store.$transaction([
-    { model: 'sponsoredCampaign', op: 'updateMany', args: { where: { status: 'active' }, data: { status: 'ended' } } },
-    { model: 'sponsoredCampaign', op: 'count', args: { where: { status: 'ended' } } },
+    { model: 'boost', op: 'updateMany', args: { where: { status: 'completed' }, data: { status: 'swept' } } },
+    { model: 'boost', op: 'count', args: { where: { status: 'swept' } } },
   ]);
-  assert.equal(results[0].count, 2, 'first op: two campaigns swept');
+  assert.equal(results[0].count, 2, 'first op: two boosts swept');
   assert.equal(results[1], 2, 'second op: count sees the first op within the same batch');
-  const remaining = await store.sponsoredCampaign.findMany({ where: { status: 'paused' } });
+  const remaining = await store.boost.findMany({ where: { status: 'pending' } });
   assert.equal(remaining.length, 1);
 });
 

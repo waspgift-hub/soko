@@ -25,6 +25,7 @@ const { paymentService } = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
+const { resolveEffectivePrice } = require('../../../money');
 const { LEGACY_STATUS } = require('../legacy-compat/legacy-status');
 
 function httpError(status, message) {
@@ -201,10 +202,19 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
   const body = req.body || {};
   if (body.buyerId && body.buyerId !== req.user.firebaseUid) throw httpError(403, 'FORBIDDEN');
 
-  const productPrice = Math.round(Number(body.productPrice));
-  if (!Number.isFinite(productPrice) || productPrice <= 0) throw httpError(400, 'INVALID_PRICE');
+  const clientPrice = Math.round(Number(body.productPrice));
+  if (!Number.isFinite(clientPrice) || clientPrice <= 0) throw httpError(400, 'INVALID_PRICE');
   const quantity = Math.max(1, Math.round(Number(body.quantity) || 1));
-  const unitPrice = Math.round(Number(body.unitPrice) || productPrice);
+  // SECURITY: a tampered checkout amount would set payment, commission and
+  // settlement all wrong, so the Firestore product doc (and any active flash
+  // sale) wins whenever productId exists; the client value only fills in when
+  // the product doc is unreachable. The stored line total is serverPrice*qty.
+  let unitPrice = Math.round(Number(body.unitPrice) || clientPrice / quantity);
+  if (body.productId) {
+    const db = getFirebaseFirestore();
+    if (db) unitPrice = await resolveEffectivePrice(db, body.productId, unitPrice);
+  }
+  const productPrice = unitPrice * quantity;
 
   const sellerId = await ensureSellerProfile(body.sellerId, body.sellerName, body.sellerPhone);
   if (!sellerId) throw httpError(404, 'SELLER_NOT_FOUND');
@@ -216,7 +226,9 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
       orderNumber: generateOrderNumber(),
       buyerId: req.user.id,
       sellerId,
-      status: ORDER_STATES.AWAITING_ESCROW_PAYMENT,
+      // Born needing a shipping quote: the seller sets cost, the NORMAL quote
+      // auto-approves, then and only then can the buyer fund the escrow.
+      status: ORDER_STATES.PENDING_SHIPPING_FEE,
       productSnapshot: {
         productId: body.productId || null,
         name: body.productName || 'Mall',

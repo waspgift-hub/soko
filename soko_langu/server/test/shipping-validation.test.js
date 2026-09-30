@@ -22,9 +22,29 @@ test('inflated quote triggers REVIEW_REQUIRED', () => {
 
 test('unusually low quote triggers review', () => {
   const result = validateShippingQuote({
-    amount: 100, // far below intra-city min
+    amount: 100, // far below intra-city min, still a nonzero fee
     shippingAddress: { region: 'Dar es Salaam', city: 'Dar es Salaam' },
     sellerRegion: 'Dar es Salaam',
+  });
+  assert.strictEqual(result.verdict, 'REVIEW_REQUIRED');
+});
+
+test('free delivery (amount 0) auto-approves as NORMAL', () => {
+  const result = validateShippingQuote({
+    amount: 0,
+    shippingAddress: { region: 'Dar es Salaam', city: 'Dar es Salaam' },
+    sellerRegion: 'Dar es Salaam',
+  });
+  assert.strictEqual(result.verdict, 'NORMAL');
+  assert.strictEqual(result.reason, 'free delivery');
+});
+
+test('free delivery still reviewed for a high-risk seller', () => {
+  const result = validateShippingQuote({
+    amount: 0,
+    shippingAddress: { region: 'Dar es Salaam', city: 'Dar es Salaam' },
+    sellerRegion: 'Dar es Salaam',
+    sellerRiskScore: 80,
   });
   assert.strictEqual(result.verdict, 'REVIEW_REQUIRED');
 });
