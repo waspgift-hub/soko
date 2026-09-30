@@ -1,12 +1,69 @@
 import 'package:flutter/material.dart';
 
-/// Neumorphic surface tokens — "soft UI" dual shadows sharing one light source
-/// (top-left) so raised elements read as carved from the same canvas as the
-/// scaffold. Light theme keeps a white canvas (brand §black/white) with a
-/// near-white element base; dark theme lifts the base just above the near-black
-/// canvas so the pure-black bottom-right shadow stays visible.
+/// Separation strength for a flat surface. Flat is not shadowless — it just
+/// uses one low-alpha shadow instead of the soft-UI light/shade pair.
+enum NeuFlatDepth {
+  /// No shadow: solid fill plus a hairline edge.
+  none,
+
+  /// Content cards resting on the canvas.
+  rest,
+
+  /// Overlays — sheets, menus, dialogs.
+  overlay,
+}
+
+/// Surface tokens for the app's flat-first visual system.
+///
+/// The app is ~90% flat and ~10% soft-UI. [Neu.base]/[Neu.insetBase]/
+/// [Neu.raised]/[Neu.inset] are the soft-UI half and are reserved for
+/// *controls* — primary CTAs, the FAB, the nav bar, text/search wells and
+/// active filter state. Everything that carries content (cards, list rows,
+/// dialogs, sheets, menus, banners) uses the flat tokens: [canvas], [flatFill]
+/// and the single-direction [flat] shadow.
+///
+/// Soft-UI needs its element base lifted off the canvas or the dual shadows
+/// disappear, which is why [base] is grey (#F0F1F5 light / #171920 dark) while
+/// the flat [canvas] is pure white / near-black. The two never share a fill.
 class Neu {
   Neu._();
+
+  /// Flat app canvas. Deliberately not [base]: a soft-UI canvas would make the
+  /// flat 90% read as grey-on-grey and leave the soft 10% with nothing to
+  /// contrast against.
+  static Color canvas(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFF0B0B0B) : const Color(0xFFFFFFFF);
+
+  /// Flat surface fill. One step off the canvas so a hairline edge reads in
+  /// light mode, and so dark-mode cards do not vanish into the canvas.
+  static Color flatFill(Brightness b) => b == Brightness.dark
+      ? const Color(0xFF161616)
+      : const Color(0xFFFFFFFF);
+
+  /// Single-direction flat shadow. A tinted flat shadow reads cleaner than pure
+  /// black over a grey canvas, and the alpha steps are deliberately low so
+  /// surfaces stay visually flush.
+  static List<BoxShadow> flat(NeuFlatDepth depth, Brightness b) {
+    return switch (depth) {
+      NeuFlatDepth.none => const [],
+      NeuFlatDepth.rest => [
+          BoxShadow(
+            color: shade(b)
+                .withValues(alpha: b == Brightness.dark ? 0.34 : 0.07),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      NeuFlatDepth.overlay => [
+          BoxShadow(
+            color: shade(b)
+                .withValues(alpha: b == Brightness.dark ? 0.5 : 0.12),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+        ],
+    };
+  }
 
   /// Element base for raised (extruded) surfaces flush with the canvas.
   static Color base(Brightness b) =>

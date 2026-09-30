@@ -6,6 +6,7 @@ import '../../services/product_service.dart';
 import '../../services/soko_cache_manager.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
+import '../theme/surface_policy.dart';
 import 'soko_vibe_watermark.dart';
 import 'ds/ds.dart';
 
@@ -39,17 +40,11 @@ class ProductCard extends StatelessWidget {
         const radius = 15.0;
 
         Widget card = Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.25 : 0.05),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
+          decoration: SurfacePolicy.decorate(
+            SurfaceRole.card,
+            cs.brightness,
+            radius: radius,
+            fill: cs.surface,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

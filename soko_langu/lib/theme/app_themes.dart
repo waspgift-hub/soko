@@ -99,15 +99,18 @@ ThemeData buildThemeFromScheme(ColorScheme scheme, {SokoColors? brand}) =>
 ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   final isDark = scheme.brightness == Brightness.dark;
 
-  // Soft-UI (neumorphic) canvas: the whole app surfaces sit ON the element
-  // base tone so extruded/inset dual shadows read consistently. Raised and
-  // recessed fills use Neu.base/Neu.insetBase derived from the same canvas.
-  final neuCanvas = Neu.base(scheme.brightness);
+  // Flat-first canvas (see surface_policy.dart): the canvas and every content
+  // surface are FLAT — pure white / near-black with a hairline edge. The
+  // soft-UI element base (Neu.base) is deliberately *not* used here, because a
+  // soft-UI canvas would leave the flat 90% looking grey-on-grey and give the
+  // soft 10% (CTAs, FAB, nav bar, input wells) nothing to contrast against.
+  final flatCanvas = Neu.canvas(scheme.brightness);
+  final flatFill = Neu.flatFill(scheme.brightness);
   final neuGroove = Neu.grooveColor(scheme.brightness);
 
-  // Surfaces prefer solid, opaque fills for legibility; glass
-  // translucency is retained only for the floating nav bar and
-  // bottom sheets where layering is intentional.
+  // Recessed fill for the soft-UI input wells. The raised element base is
+  // resolved by the widgets themselves (Neu.base) so a control can tint it.
+  final neuInset = Neu.insetBase(scheme.brightness);
   final brand = brandOverride ??
       SokoColors(
         commerce: const Color(0xFF00C853),
@@ -128,10 +131,8 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   return base.copyWith(
     colorScheme: scheme,
     extensions: [brand],
-    // The neumorphic canvas — every surface must sit on the same element base
-    // tone for the dual (top-left light / bottom-right dark) shadows to read
-    // as carved-out soft UI instead of floating DropShadow.
-    scaffoldBackgroundColor: neuCanvas,
+    // FLAT canvas. Soft-UI is additive here, not foundational.
+    scaffoldBackgroundColor: flatCanvas,
     textTheme: AppTypography.apply(base.textTheme, scheme),
     // Android 12+ sparkle ripple + consistent material transitions for the
     // few non-GoRouter Navigator.push call sites.
@@ -172,9 +173,7 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121212).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+      backgroundColor: flatFill,
       indicatorColor: scheme.primary.withValues(alpha: 0.15),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
@@ -206,9 +205,7 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121212).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+      backgroundColor: flatFill,
       selectedItemColor: scheme.primary,
       unselectedItemColor: scheme.primary.withValues(alpha: 0.55),
       type: BottomNavigationBarType.fixed,
@@ -226,8 +223,11 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        // PRIMARY BUTTON — green commerce CTA on the soft canvas; black text
-        // keeps the 9.4:1 guarantee (onPrimary is fixed black).
+        // PRIMARY CTA — the green commerce accent. This is one of the soft-UI
+        // roles, so it carries a hue-tinted glow rather than a neutral drop
+        // shadow; that glow is what separates it from the flat 90%. The full
+        // dual-shadow treatment lives on DsButton, which is the design-system
+        // CTA — this theme only covers legacy ElevatedButton call sites.
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
@@ -239,14 +239,15 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
           fontSize: 15,
           letterSpacing: 0.2,
         ),
-        elevation: 3,
-        shadowColor: Neu.shade(scheme.brightness).withValues(alpha: 0.35),
+        elevation: 4,
+        shadowColor: Color.lerp(scheme.primary, Colors.black, 0.45)!
+            .withValues(alpha: isDark ? 0.6 : 0.32),
       ),
     ),
 
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        // Same authority treatment as Elevated for consistency.
+        // Same accent authority as Elevated.
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
@@ -257,15 +258,19 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
           fontWeight: FontWeight.w600,
           fontSize: 15,
         ),
+        elevation: 4,
+        shadowColor: Color.lerp(scheme.primary, Colors.black, 0.45)!
+            .withValues(alpha: isDark ? 0.6 : 0.32),
       ),
     ),
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        // SECONDARY BUTTON — outlined neutral sitting on the canvas, hairline
-        // groove instead of a hard edge so it reads soft.
+        // SECONDARY BUTTON — flat. Solid fill on the flat canvas with a
+        // hairline edge; a secondary action is not one of the soft roles, so it
+        // must not compete with the primary CTA's glow.
         foregroundColor: scheme.onSurface,
-        backgroundColor: Neu.base(scheme.brightness),
+        backgroundColor: flatFill,
         side: BorderSide(color: neuGroove),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
@@ -289,11 +294,11 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     inputDecorationTheme: InputDecorationTheme(
-      // Neumorphic input wells: recessed fill (darker than canvas) with a
-      // hairline groove, not an outlined box. Focus swaps the groove to the
-      // green commerce accent so the field visibly "pressed in".
+      // RECESSED input wells — one of the soft-UI roles, so the fill sits a
+      // step darker than the flat canvas with a hairline groove. Focus swaps
+      // the groove to the green commerce accent.
       filled: true,
-      fillColor: Neu.insetBase(scheme.brightness),
+      fillColor: neuInset,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: neuGroove, width: 0.8),
@@ -334,8 +339,12 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     chipTheme: ChipThemeData(
-      backgroundColor: Neu.insetBase(scheme.brightness),
-      selectedColor: scheme.primary.withValues(alpha: 0.18),
+      // FLAT chips. Only the *selected* chip is a soft role (activeFilter), and
+      // that reads as a green fill rather than a recessed well — a recessed
+      // unselected chip would put soft-UI on the majority of chips and blow
+      // past the 10% budget on any filter-heavy screen.
+      backgroundColor: scheme.surfaceContainer,
+      selectedColor: scheme.primary,
       labelStyle: TextStyle(color: scheme.onSurface),
       secondaryLabelStyle: const TextStyle(
         fontSize: 10,
@@ -356,7 +365,7 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: Neu.base(scheme.brightness),
+      backgroundColor: flatFill,
       contentTextStyle: TextStyle(color: scheme.onSurface),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
@@ -365,20 +374,26 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
       ),
       actionTextColor: scheme.primary,
       width: 440,
+      elevation: 0,
     ),
 
     dialogTheme: DialogThemeData(
-      backgroundColor: Neu.base(scheme.brightness),
+      // FLAT overlay — raised by an overlay-strength flat shadow, not the
+      // soft-UI light/shade pair.
+      backgroundColor: flatFill,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: neuGroove),
       ),
-      elevation: 10,
-      shadowColor: Neu.shade(scheme.brightness).withValues(alpha: 0.4),
+      elevation: 0,
+      shadowColor: Colors.transparent,
     ),
 
     cardTheme: CardThemeData(
-      color: Neu.base(scheme.brightness),
+      // FLAT content card — this is the workhorse surface of the flat 90%, and
+      // the single biggest change from the previous soft-UI-everywhere theme.
+      color: flatFill,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
@@ -390,9 +405,13 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     floatingActionButtonTheme: FloatingActionButtonThemeData(
+      // SOFT — floatingAction is one of the soft-UI roles. This Flutter version
+      // has no shadowColor on FloatingActionButtonThemeData, so a theme-level
+      // FAB cannot carry the hue-tinted glow; a genuinely soft FAB must be built
+      // with Neu.raisedHue, as the sell FAB in bottom_nav_bar.dart does.
       backgroundColor: scheme.primary,
       foregroundColor: scheme.onPrimary,
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -450,14 +469,15 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     menuTheme: MenuThemeData(
       style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(Neu.base(scheme.brightness)),
+        backgroundColor: WidgetStatePropertyAll(flatFill),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: neuGroove),
           ),
         ),
-        elevation: WidgetStatePropertyAll(6),
+        elevation: WidgetStatePropertyAll(0),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
       ),
     ),
 
@@ -484,26 +504,30 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: Neu.base(scheme.brightness),
+      // FLAT overlay.
+      backgroundColor: flatFill,
       surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      elevation: 12,
-      shadowColor: Neu.shade(scheme.brightness).withValues(alpha: 0.45),
+      elevation: 0,
+      shadowColor: Colors.transparent,
     ),
 
     popupMenuTheme: PopupMenuThemeData(
-      color: Neu.base(scheme.brightness),
+      color: flatFill,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: neuGroove),
       ),
-      elevation: 6,
+      elevation: 0,
+      shadowColor: Colors.transparent,
     ),
 
     drawerTheme: DrawerThemeData(
-      backgroundColor: Neu.base(scheme.brightness),
+      backgroundColor: flatFill,
+      surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
           topRight: Radius.circular(24),
@@ -520,7 +544,7 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     timePickerTheme: TimePickerThemeData(
-      backgroundColor: Neu.base(scheme.brightness),
+      backgroundColor: flatFill,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: neuGroove),
@@ -528,7 +552,8 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     ),
 
     datePickerTheme: DatePickerThemeData(
-      backgroundColor: Neu.base(scheme.brightness),
+      backgroundColor: flatFill,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: neuGroove),

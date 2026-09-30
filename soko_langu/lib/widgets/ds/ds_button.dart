@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/neumorphic.dart';
+import '../../theme/surface_policy.dart';
 import '../soko_vibe_loading.dart';
 import 'animated_press.dart';
 
@@ -9,6 +10,12 @@ enum DsButtonVariant { primary, secondary, tonal, ghost, danger }
 enum DsButtonSize { sm, md, lg }
 
 /// Design-system button (spec §4.1).
+///
+/// [DsButtonVariant.primary] is the app's `primaryCta` soft-UI role: an
+/// extruded green block carrying a hue-tinted dual shadow. [secondary] is also
+/// raised but neutral, and [tonal] is recessed. [ghost] and the disabled state
+/// stay flat — a button is one of the highest-frequency elements on any screen,
+/// so only the variants that earn the soft treatment get it.
 ///
 /// Primary CTAs are full-width and 52dp tall by default; loading swaps the
 /// label for an 18dp spinner while preserving width. Haptic feedback fires
@@ -92,8 +99,14 @@ class DsButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(_radius),
       );
     } else if (variant == DsButtonVariant.tonal) {
-      decoration = Neu.inset(_radius, scheme.brightness);
+      decoration = SurfacePolicy.decorate(
+        SurfaceRole.textField,
+        scheme.brightness,
+        radius: _radius,
+      );
     } else {
+      // Raised. A tinted fill needs [Neu.raisedHue] so the highlight/shade pair
+      // is derived from the green rather than the neutral canvas.
       final isHue = variant == DsButtonVariant.primary ||
           variant == DsButtonVariant.danger;
       decoration = BoxDecoration(

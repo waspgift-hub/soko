@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
+import '../../theme/surface_policy.dart';
 import 'animated_press.dart';
 
 enum DsChipSize { sm, md }
 
+/// Design-system filter chip.
+///
+/// FLAT by default: an unselected chip is a `chip` role and rests on the canvas
+/// with a hairline edge. Only the *selected* chip takes the soft-UI treatment
+/// (`activeFilter`), where the brand-green fill is the "pressed in" active
+/// state. That is deliberate — a recessed well on every chip would put soft-UI
+/// on the majority of chips and swamp the flat/soft ratio on filter-heavy
+/// screens such as search and category products.
 class DsChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -26,15 +35,33 @@ class DsChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final bg = filled
-        ? (selected ? scheme.primary : scheme.cardBase)
-        : Colors.transparent;
     final fg = filled
         ? (selected ? scheme.onPrimary : scheme.brandTextSecondary)
         : scheme.primary;
-    final border = selected && !filled
-        ? Border.all(color: scheme.primary, width: 1.5)
-        : Border.all(color: scheme.brandBorder, width: 0.5);
+
+    final decoration = filled
+        ? (selected
+            // Soft-UI: the one accent on the chip.
+            ? SurfacePolicy.decorate(
+                SurfaceRole.activeFilter,
+                scheme.brightness,
+                radius: AppRadius2.xl,
+                fill: scheme.primary,
+              )
+            : SurfacePolicy.decorate(
+                SurfaceRole.chip,
+                scheme.brightness,
+                radius: AppRadius2.xl,
+                fill: scheme.surfaceContainer,
+              ))
+        : BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius2.xl),
+            border: Border.all(
+              color: selected ? scheme.primary : scheme.brandBorder,
+              width: selected ? 1.5 : 0.5,
+            ),
+          );
 
     final verticalPad = chipSize == DsChipSize.sm ? 6.0 : 10.0;
     final fontSize = chipSize == DsChipSize.sm ? 12.0 : 14.0;
@@ -46,11 +73,7 @@ class DsChip extends StatelessWidget {
         horizontal: AppSpacing.s4,
         vertical: verticalPad,
       ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius2.xl),
-        border: border,
-      ),
+      decoration: decoration,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

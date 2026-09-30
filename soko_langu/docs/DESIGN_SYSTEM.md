@@ -230,15 +230,62 @@ top radius 24. Touch target ≥48×48 (critical: ±44 with 4px hit-slop acceptab
 | `radius-2xl` | 24 | Bottom sheets, dialogs |
 | `radius-full` | 999 | Avatars, pills, FAB |
 
-### 3.5 Elevation & Glass
+### 3.5 Surfaces — flat-first with a soft-UI accent
+
+The app is **~90% flat and ~10% soft-UI (neumorphic)**. Flat is the default for
+everything; soft-UI is a deliberate accent reserved for interactive controls.
+
+The mix is keyed to a widget's **role**, not to individual screens, so it does
+not drift as screens are added. `SurfacePolicy` in
+`lib/theme/surface_policy.dart` is the single source of truth — widgets ask for
+a `SurfaceRole` and get back a `SurfaceStyle`.
+
+**Soft-UI roles (raised — extruded):**
+
+| Role | Use |
+|---|---|
+| `primaryCta` | The one high-commitment action on a screen |
+| `floatingAction` | FAB and always-on shortcuts |
+| `navBar` | Persistent bottom navigation |
+
+**Soft-UI roles (inset — recessed):**
+
+| Role | Use |
+|---|---|
+| `searchField` | Search input |
+| `textField` | Text entry wells |
+| `activeFilter` | Selected filter / tab / segment |
+
+**Flat roles (everything else):** `card`, `listRow`, `dialog`, `sheet`, `menu`,
+`banner`, `chip`, `divider`.
+
+**Tokens** (`Neu`, in `lib/theme/neumorphic.dart`):
 
 | Token | Value | Use |
 |---|---|---|
-| `shadow-sm` | 0 1 2 rgba(16,19,31,.06) | Resting cards |
-| `shadow-md` | 0 4 12 rgba(16,19,31,.10) | Floating cards, sheets |
-| `shadow-lg` | 0 8 24 rgba(16,19,31,.16) | FAB, modals, product hero |
-| `glass-blur` | 30px | Glass panels: payment sheet, live banner, top app bar |
-| `glass-tint` | light `#CCFFFFFF` / dark `#1AFFFFFF` | BackdropFilter fill |
+| `Neu.canvas` | light `#FFFFFF` / dark `#0B0B0B` | Scaffold — flat, never the soft base |
+| `Neu.flatFill` | light `#FFFFFF` / dark `#161616` | Flat card/dialog/sheet fill |
+| `Neu.flat(rest)` | shade @ 7% light / 34% dark, blur 10, y+2 | Content cards |
+| `Neu.flat(overlay)` | shade @ 12% light / 50% dark, blur 28, y+10 | Sheets, dialogs, menus |
+| `Neu.flat(none)` | — | Shadowless; hairline edge only |
+| `Neu.raised(d)` | Dual: shade y+d / highlight y−d, blur 2d | Soft-UI extrusion |
+| `Neu.raisedHue(d)` | Dual, tinted from a colored base | Green CTAs, FABs |
+| `Neu.inset(r)` | `insetBase` fill + hairline groove | Recessed wells |
+
+**Rules that keep the ratio honest**
+
+- The canvas is flat. A soft-UI canvas would make the flat 90% read as
+  grey-on-grey and leave the soft 10% nothing to contrast against.
+- Flat surfaces get **one** directional shadow (falling to the bottom-right).
+  Soft-UI gets a **dual** light/shade pair. Mixing the two on the same surface
+  is the failure mode to watch for.
+- A card should stay `DsCardElevation.flat`. `low`/`medium` are for the few hero
+  surfaces per screen — spending them on every list item erases the ratio.
+- An **unselected** chip is flat; only the selected state takes the soft accent.
+  Recessed wells on every chip would swamp filter-heavy screens.
+- Sheets, dialogs and menus are flat even though they overlay content: they
+  cover most of the screen, so a soft treatment there would blow the budget on
+  one widget.
 
 ### 3.6 Iconography
 

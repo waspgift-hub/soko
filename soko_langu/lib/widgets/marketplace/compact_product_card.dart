@@ -5,6 +5,7 @@ import '../../extensions/context_tr.dart';
 import '../../services/deep_link_service.dart';
 import '../../services/localization_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/surface_policy.dart';
 import '../../services/product_service.dart';
 import '../soko_vibe_watermark.dart';
 import '../ds/ds.dart';
@@ -72,17 +73,11 @@ class CompactProductCard extends StatelessWidget {
 
         Widget card = Container(
           width: cardWidth,
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.25 : 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
+          decoration: SurfacePolicy.decorate(
+            SurfaceRole.card,
+            cs.brightness,
+            radius: 14,
+            fill: cs.surface,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_dimens.dart';
-import '../../theme/app_colors.dart';
+import '../../theme/neumorphic.dart';
 
-/// Design-system text field (spec §4.4): 12dp radius, surface fill, hairline
-/// border; focused gets a 2px primary border, error gets error chrome +
-/// helper text.
+/// Design-system text field (spec §4.4): 12dp radius, **recessed** well, focus
+/// gets a 2px primary border, error gets error chrome + helper text.
+///
+/// Text entry is one of the soft-UI roles under [SurfacePolicy], so the fill
+/// sits a step darker than the flat canvas with a hairline groove — the field
+/// reads as pressed into the page rather than drawn on top of it.
 ///
 /// Security: input is sanitized before delivery via [onChanged] — control
 /// characters and zero-width joiners are stripped to prevent injection
@@ -104,7 +107,10 @@ class DsTextField extends StatelessWidget {
             : null,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: scheme.brandBorder, width: 1),
+          borderSide: BorderSide(
+            color: Neu.grooveColor(scheme.brightness),
+            width: 1,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),

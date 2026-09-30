@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
+import '../../theme/surface_policy.dart';
 
 /// Design-system bottom sheet (spec §4.2): 24dp top radius, grabber,
 /// drag-to-dismiss, max 85% height, 24dp content padding.
+///
+/// A sheet is a `sheet` role — FLAT. It is one of the heaviest surfaces in the
+/// app and is almost always the entire lower half of the screen, so giving it
+/// the soft-UI treatment would blow the flat/soft budget on a single widget.
 class DsSheet extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -46,18 +50,13 @@ class DsSheet extends StatelessWidget {
       padding: EdgeInsets.only(
         bottom: MediaQuery.paddingOf(context).bottom,
       ),
-      decoration: BoxDecoration(
-        color: scheme.surfaceLight,
+      decoration: SurfacePolicy.decorate(
+        SurfaceRole.sheet,
+        scheme.brightness,
+        radius: AppRadius2.xxl,
         borderRadius: const BorderRadius.vertical(
           top: Radius.circular(AppRadius2.xxl),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: scheme.brandTextPrimary.withValues(alpha: 0.16),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: SingleChildScrollView(
         padding: padding,
@@ -71,7 +70,7 @@ class DsSheet extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: scheme.brandTextSecondary.withValues(alpha: 0.3),
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
                 ),
