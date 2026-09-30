@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../extensions/context_tr.dart';
-import '../services/cloudinary_service.dart';
+import '../services/media_service.dart';
 import '../widgets/soko_vibe_loading.dart';
 
 Future<bool> requestPermissionWithDialog(
@@ -73,7 +73,11 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
       return null;
     }
 
-    final url = await CloudinaryService.uploadImage(image, folder: 'uploads');
+    final url = await MediaService.uploadImage(
+      image,
+      folder: 'uploads',
+      owner: MediaOwner.feed,
+    );
 
     if (context.mounted) Navigator.pop(context);
     return url;

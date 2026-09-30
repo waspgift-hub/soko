@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
-import 'cloudinary_service.dart';
+import 'media_service.dart';
 import 'fraud_prevention_service.dart';
 import 'api_config.dart';
 import 'product_api.dart';
@@ -72,7 +72,7 @@ class ProductService {
   final ProductApiClient _api = ProductApiClient();
 
   Future<String> uploadImage(XFile xfile) async {
-    return CloudinaryService.uploadImage(xfile, folder: 'products');
+    return MediaService.uploadImage(xfile, folder: 'products', owner: MediaOwner.product);
   }
 
   /// Publish a new listing. Returns the created product id so callers can open
@@ -150,7 +150,10 @@ class ProductService {
       step = 'upload-video';
       String? resolvedVideoUrl = videoUrl;
       if (videoFile != null) {
-        resolvedVideoUrl = await CloudinaryService.uploadVideo(videoFile);
+        resolvedVideoUrl = await MediaService.uploadVideo(
+          videoFile,
+          owner: MediaOwner.product,
+        );
       }
 
       step = 'save-product';
@@ -1055,7 +1058,10 @@ class ProductService {
       if (imageMetadata != null) data["imageMetadata"] = imageMetadata;
 
       if (newVideoFile != null) {
-        data["videoUrl"] = await CloudinaryService.uploadVideo(newVideoFile);
+        data["videoUrl"] = await MediaService.uploadVideo(
+          newVideoFile,
+          owner: MediaOwner.product,
+        );
       } else if (videoUrl != null) {
         data["videoUrl"] = videoUrl;
       }

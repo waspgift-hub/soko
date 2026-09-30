@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/status_model.dart';
-import '../services/cloudinary_service.dart';
+import 'media_service.dart';
 
 class StatusService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -38,7 +38,7 @@ class StatusService {
     if (_uid == null) throw Exception('Not logged in');
     final now = DateTime.now();
     final xfile = XFile(imageFile.path);
-    final mediaUrl = await CloudinaryService.uploadImage(xfile);
+    final mediaUrl = await MediaService.uploadImage(xfile, owner: MediaOwner.feed);
     final doc = _db.collection('statuses').doc();
     final status = StatusUpdate(
       id: doc.id,
@@ -59,7 +59,7 @@ class StatusService {
     if (_uid == null) throw Exception('Not logged in');
     final now = DateTime.now();
     final xfile = XFile(videoFile.path);
-    final mediaUrl = await CloudinaryService.uploadVideo(xfile);
+    final mediaUrl = await MediaService.uploadVideo(xfile, owner: MediaOwner.feed);
     final doc = _db.collection('statuses').doc();
     final status = StatusUpdate(
       id: doc.id,

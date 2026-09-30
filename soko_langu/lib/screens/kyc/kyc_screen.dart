@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../services/kyc_service.dart';
-import '../../services/cloudinary_service.dart';
+import '../../services/media_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
@@ -162,7 +162,11 @@ class _KycScreenState extends State<KycScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
-      return await CloudinaryService.uploadImage(file, folder: 'kyc/${user.uid}');
+      return await MediaService.uploadImage(
+        file,
+        folder: 'kyc/${user.uid}',
+        owner: MediaOwner.user,
+      );
     } catch (e) {
       debugPrint('Upload error: $e');
       return null;
@@ -507,9 +511,9 @@ class _KycScreenState extends State<KycScreen> {
       }
       String? videoUrl;
       try {
-        videoUrl = await CloudinaryService.uploadVideo(
+        videoUrl = await MediaService.uploadVideo(
           _videoFile!,
-          folder: 'kyc/${user.uid}',
+          owner: MediaOwner.user,
         );
       } catch (e) {
         debugPrint('KYC video upload error: $e');

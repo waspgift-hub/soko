@@ -130,7 +130,7 @@ class ProductFeedProvider extends ChangeNotifier {
       _products = result.data ?? [];
       _fromCache = result.isCache;
       _loadedIds = _products.map((p) => p.id).toSet();
-      _hasMore = _products.length >= 15;
+      _hasMore = result.hasMore;
     }
 
     _isLoading = false;
@@ -164,7 +164,7 @@ class ProductFeedProvider extends ChangeNotifier {
       _products = result.data ?? [];
       _fromCache = result.isCache;
       _loadedIds = _products.map((p) => p.id).toSet();
-      _hasMore = _products.length >= 15;
+      _hasMore = result.hasMore;
     }
 
     _isLoading = false;
@@ -211,7 +211,7 @@ class ProductFeedProvider extends ChangeNotifier {
           _products.add(p);
         }
       }
-      _hasMore = fresh.length >= 15;
+      _hasMore = result.hasMore;
       _fromCache = result.isCache;
     }
 

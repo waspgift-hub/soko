@@ -84,10 +84,11 @@ class ApiConfig {
   /// or uploads will 503 R2_NOT_CONFIGURED.
   static const bool kUseMediaApi = true;
 
-  /// Public read origin for R2 media (server: `R2_PUBLIC_URL`, served through
-  /// the media CDN edge). Objects live at `<r2PublicUrl>/<kind>/<key>`.
-  /// Since `kUseMediaApi` stays OFF until the R2 media backfill, this base is
-  /// unused by current production flows.
+  /// Public read origin for R2 media (server: `R2_PUBLIC_URL`), served by the
+  /// `soko-media` Worker which fronts all four buckets on this one hostname and
+  /// picks the bucket from the first path segment. Object keys are
+  /// `<kind>s/<ownerType>/<ownerId>/<uuid>.<ext>`, e.g.
+  /// `media.sokovibe.co.tz/images/product/<uid>/<uuid>.webp`.
   static const String r2PublicUrl = 'https://media.sokovibe.co.tz';
 
   /// Phase D user-profile bridge switch: when true, the current user's profile

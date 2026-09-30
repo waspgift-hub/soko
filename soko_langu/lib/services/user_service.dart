@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
-import 'cloudinary_service.dart';
+import 'media_service.dart';
 
 class UserProfile {
   final String uid;
@@ -347,7 +347,11 @@ class UserService {
   }
 
   Future<String> uploadProfileImage(String filePath) async {
-    return CloudinaryService.uploadFromPath(filePath, folder: 'profiles');
+    return MediaService.uploadFromPath(
+      filePath,
+      folder: 'profiles',
+      owner: MediaOwner.user,
+    );
   }
 
   Future<void> updateProfileImage(String url) async {

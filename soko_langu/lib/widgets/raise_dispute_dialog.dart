@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../services/api_config.dart';
-import '../services/cloudinary_service.dart';
+import '../services/media_service.dart';
 import '../services/order_api.dart';
 import '../extensions/context_tr.dart';
 
@@ -115,7 +115,11 @@ class _RaiseDisputeDialogState extends State<_RaiseDisputeDialog> {
       setState(() => _uploading = true);
       final urls = _photos.isEmpty
           ? <String>[]
-          : await CloudinaryService.uploadMultiple(_photos, folder: 'disputes');
+          : await MediaService.uploadMultiple(
+              _photos,
+              folder: 'disputes',
+              owner: MediaOwner.dispute,
+            );
       if (mounted) setState(() => _error = null);
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {

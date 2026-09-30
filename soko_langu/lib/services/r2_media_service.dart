@@ -90,13 +90,43 @@ class R2MediaService {
     }
   }
 
-  /// Compresses and uploads an image to R2.
+  /// PUT a file to R2 without loading it fully into memory.
+  ///
+  /// Needed for video: a 300MB clip held as a `List<int>` needs ~300MB of
+  /// heap, which a low-RAM Android device does not have while also decoding
+  /// the picked video thumbnail.
+  static Future<void> _putR2Stream({
+    required String url,
+    required File file,
+    required String contentType,
+  }) async {
+    final request = http.StreamedRequest('PUT', Uri.parse(url))
+      ..headers['Content-Type'] = contentType
+      ..contentLength = await file.length();
+    await request.sink.addStream(file.openRead());
+    await request.sink.close();
+
+    final client = http.Client();
+    try {
+      final response = await client.send(request).timeout(const Duration(seconds: 300));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw NetworkError(
+          message: 'R2 upload failed (HTTP ${response.statusCode})',
+          userMessage: 'Tafadhali jaribu tena',
+        );
+      }
+    } finally {
+      client.close();
+    }
+  }
+
+/// Compresses and uploads an image to R2.
   ///
   /// Returns the public CDN URL so callers get the same shape as
   /// [CloudinaryService.uploadImage].
   static Future<String> uploadImage(
     XFile xfile, {
-    String folder = 'soko_langu',
+    String ownerType = 'product',
   }) async {
     // Compress to WebP first — identical to the Cloudinary path.
     File uploadFile = File(xfile.path);
@@ -114,8 +144,8 @@ class R2MediaService {
     final session = await _createUploadSession(
       kind: 'image',
       contentType: contentType,
-      ownerType: 'product',
-      ownerId: _ownerIdFor(folder),
+      ownerType: ownerType,
+      ownerId: _ownerId(),
     );
 
     await _putToR2(
@@ -130,19 +160,22 @@ class R2MediaService {
   /// Compresses and uploads a video to R2.
   static Future<String> uploadVideo(
     XFile xfile, {
-    String folder = 'soko_langu',
+    String ownerType = 'product',
   }) async {
     final contentType = 'video/mp4';
     final session = await _createUploadSession(
       kind: 'video',
       contentType: contentType,
-      ownerType: 'product',
-      ownerId: _ownerIdFor(folder),
+      ownerType: ownerType,
+      ownerId: _ownerId(),
     );
 
-    await _putToR2(
+    // Stream the bytes instead of readAsBytes(): a seller filming on a budget
+    // phone can hand us 60-500MB, and buffering that on a mid-range Android is
+    // an instant OOM kill of the app mid-upload.
+    await _putR2Stream(
       url: session['uploadUrl']! as String,
-      bytes: await xfile.readAsBytes(),
+      file: File(xfile.path),
       contentType: contentType,
     );
 
@@ -152,20 +185,20 @@ class R2MediaService {
   /// Uploads a file from a path (see CloudinaryService.uploadFromPath).
   static Future<String> uploadFromPath(
     String filePath, {
-    String folder = 'soko_langu',
+    String ownerType = 'product',
   }) async {
     final xf = XFile(filePath);
-    return uploadImage(xf, folder: folder);
+    return uploadImage(xf, ownerType: ownerType);
   }
 
   /// Uploads multiple files sequentially (matches CloudinaryService.uploadMultiple).
   static Future<List<String>> uploadMultiple(
     List<XFile> xfiles, {
-    String folder = 'soko_langu',
+    String ownerType = 'product',
   }) async {
     final urls = <String>[];
     for (final xf in xfiles) {
-      urls.add(await uploadImage(xf, folder: folder));
+      urls.add(await uploadImage(xf, ownerType: ownerType));
     }
     return urls;
   }
@@ -189,10 +222,16 @@ class R2MediaService {
   static String _publicUrl(String key) =>
       '${ApiConfig.r2PublicUrl}/$key';
 
-  static String _ownerIdFor(String folder) {
+  /// Object-owner namespace segment for the R2 key.
+  ///
+  /// Always the caller's Firebase UID. It is deliberately NOT derived from the
+  /// Cloudinary `folder` string: the R2 key layout is
+  /// `<kind>s/<ownerType>/<ownerId>/…`, and folding a caller-supplied folder
+  /// into the owner slot would put files under another account's namespace.
+  static String _ownerId() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) return user.uid;
     // Deterministic place-holder for anonymous/dev uploads; never persisted.
-    return 'dev-${folder.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')}';
+    return 'dev-anon';
   }
 }

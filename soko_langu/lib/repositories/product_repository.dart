@@ -77,11 +77,20 @@ class ProductRepository {
     if (online) {
       if (ApiConfig.kUseProductsApi) {
         try {
-          final res = await _api.fetchProducts(page: _page, limit: limit);
+          // Over-fetch by one to learn whether a next page exists, then trim.
+          // See ProductResult.hasMore for why the page length is not a signal.
+          final res = await _api.fetchProducts(page: _page, limit: limit + 1);
           if (res.items.isNotEmpty) {
             _page++;
-            await _updateCache(res.items);
-            return ProductResult.data(res.items, source: DataSource.network);
+            final hasMore = res.items.length > limit;
+            final items =
+                hasMore ? res.items.sublist(0, limit) : res.items;
+            await _updateCache(items);
+            return ProductResult.data(
+              items,
+              source: DataSource.network,
+              hasMore: hasMore,
+            );
           }
           // API returned nothing (e.g. Postgres not yet backfilled) — fall
           // through to the Firestore source below.
@@ -93,7 +102,11 @@ class ProductRepository {
             .timeout(_kFirestoreTimeout);
         _lastDoc = result.$2;
         await _updateCache(result.$1);
-        return ProductResult.data(result.$1, source: DataSource.network);
+        return ProductResult.data(
+          result.$1,
+          source: DataSource.network,
+          hasMore: result.$1.length >= limit,
+        );
       } catch (_) {
         // Network failed — fall through to cache
       }
@@ -120,13 +133,19 @@ class ProductRepository {
         try {
           final res = await _api.fetchProducts(
             page: _brandPage,
-            limit: limit,
+            limit: limit + 1,
             brand: brand,
           );
           if (res.items.isNotEmpty) {
             _brandPage++;
-            await _updateCache(res.items);
-            return ProductResult.data(res.items, source: DataSource.network);
+            final hasMore = res.items.length > limit;
+            final items = hasMore ? res.items.sublist(0, limit) : res.items;
+            await _updateCache(items);
+            return ProductResult.data(
+              items,
+              source: DataSource.network,
+              hasMore: hasMore,
+            );
           }
         } catch (_) {}
       }
@@ -140,7 +159,11 @@ class ProductRepository {
             .timeout(_kFirestoreTimeout);
         _brandLastDoc = result.$2;
         await _updateCache(result.$1);
-        return ProductResult.data(result.$1, source: DataSource.network);
+        return ProductResult.data(
+          result.$1,
+          source: DataSource.network,
+          hasMore: result.$1.length >= limit,
+        );
       } catch (_) {}
     }
     return _loadFromCache();
@@ -169,12 +192,18 @@ class ProductRepository {
             category,
             subcategory: subcategory,
             page: _categoryPage,
-            limit: limit,
+            limit: limit + 1,
           );
           if (items.isNotEmpty) {
             _categoryPage++;
-            await _updateCache(items);
-            return ProductResult.data(items, source: DataSource.network);
+            final hasMore = items.length > limit;
+            final page = hasMore ? items.sublist(0, limit) : items;
+            await _updateCache(page);
+            return ProductResult.data(
+              page,
+              source: DataSource.network,
+              hasMore: hasMore,
+            );
           }
         } catch (_) {}
       }
@@ -189,7 +218,11 @@ class ProductRepository {
             .timeout(_kFirestoreTimeout);
         _categoryLastDoc = result.$2;
         await _updateCache(result.$1);
-        return ProductResult.data(result.$1, source: DataSource.network);
+        return ProductResult.data(
+          result.$1,
+          source: DataSource.network,
+          hasMore: result.$1.length >= limit,
+        );
       } catch (_) {}
     }
 
@@ -325,13 +358,29 @@ class ProductResult<T> {
   final T? data;
   final String? error;
   final DataSource source;
+  /// Whether the server has another page after this one.
+  ///
+  /// Computed by over-fetching one row (`limit + 1`) rather than by comparing
+  /// the page length to the page size: a length check is wrong whenever a
+  /// filter returns a partial page (say 17 of 30), which silently killed
+  /// infinite scroll for any category between 15 and 29 products.
+  final bool hasMore;
   bool get isCache => source == DataSource.cache;
   bool get isError => error != null;
 
-  ProductResult._({this.data, this.error, required this.source});
+  ProductResult._({
+    this.data,
+    this.error,
+    required this.source,
+    this.hasMore = false,
+  });
 
-  factory ProductResult.data(T data, {required DataSource source}) =>
-      ProductResult._(data: data, source: source);
+  factory ProductResult.data(
+    T data, {
+    required DataSource source,
+    bool hasMore = false,
+  }) =>
+      ProductResult._(data: data, source: source, hasMore: hasMore);
 
   factory ProductResult.error(String error) =>
       ProductResult._(error: error, source: DataSource.cache);

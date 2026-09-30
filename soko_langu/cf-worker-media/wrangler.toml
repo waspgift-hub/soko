@@ -1,0 +1,29 @@
+name = "soko-media"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# All four R2 buckets behind ONE hostname. The worker picks the bucket from the
+# first path segment (`images/`, `videos/`, `thumbnails/`, `backups/`) so the
+# storage layout never leaks into URLs and one cache serves every kind.
+#
+# DNS: a proxied CNAME for `media` must exist on the zone; this Worker route
+# intercepts the request at the edge, so the CNAME target is never contacted.
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "soko-vibe-images"
+
+[[r2_buckets]]
+binding = "VIDEOS"
+bucket_name = "soko-vibe-videos"
+
+[[r2_buckets]]
+binding = "THUMBNAILS"
+bucket_name = "soko-vibe-thumbnails"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "soko-vibe-backups"
+
+[[routes]]
+pattern = "media.sokovibe.co.tz/*"
+zone_name = "sokovibe.co.tz"
