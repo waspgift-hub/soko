@@ -5,16 +5,20 @@ import 'package:path_provider/path_provider.dart';
 /// Compresses product images before upload to save Firebase bandwidth
 /// and reduce storage costs.
 ///
-/// Target: < 200KB per image, WebP format, max 1200px on longest edge.
-/// On a 2G network (50 KB/s), a 200KB image uploads in ~4 seconds
+/// Target: < 300KB per image, WebP format, max 1600px on longest edge.
+/// 1600px, not 1200px: the product detail gallery renders full-width at ~3x
+/// device pixels on phones and up to ~2400 physical px on tablets, so 1200px
+/// sources looked soft (upscaled) there. The compression floor is q62 so the
+/// worst case on a detailed image stays presentable in front of buyers.
+/// On a 2G network (50 KB/s), a 300KB image uploads in ~6 seconds
 /// vs a 5MB original which would take ~100 seconds.
 class ImageCompressor {
-  static const int _maxFileSize = 200 * 1024; // 200KB
-  static const int _maxDimension = 1200;
-  static const int _initialQuality = 85;
-  static const int _minQuality = 40;
+  static const int _maxFileSize = 300 * 1024; // 300KB
+  static const int _maxDimension = 1600;
+  static const int _initialQuality = 90;
+  static const int _minQuality = 62;
 
-  /// Compresses an image file to under [targetBytes] (default 200KB).
+  /// Compresses an image file to under [targetBytes] (default 300KB).
   ///
   /// Returns a new File in WebP format. The original is not modified.
   /// If the image is already under the target, it's still converted to WebP.
@@ -29,7 +33,7 @@ class ImageCompressor {
       return _convertToWebP(originalFile, _initialQuality);
     }
 
-    // Progressive compression: start at quality 85, reduce by 10 each pass
+    // Progressive compression: start at quality 90, reduce by 10 each pass
     // until we hit the target or the minimum quality.
     for (int quality = _initialQuality; quality >= _minQuality; quality -= 10) {
       final result = await _convertToWebP(originalFile, quality);

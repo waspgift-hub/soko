@@ -2,7 +2,7 @@ const config = require('../../config');
 
 /**
  * Build a public CDN URL for a media key served from the R2 public bucket.
- * media.soko-vibe.co.tz/<bucket>/<key>
+ * media.sokovibe.co.tz/<bucket>/<key>
  */
 function publicUrl({ kind, key }) {
   const base = config.r2.publicUrl.replace(/\/+$/, '');

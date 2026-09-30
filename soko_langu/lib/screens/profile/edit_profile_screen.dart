@@ -152,8 +152,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!granted) return;
     final XFile? image = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 512,
-      imageQuality: 80,
+      // 800px keeps the avatar sharp for the profile-header crop even on
+      // high-DPR screens; the compressor never needs to upscale it.
+      maxWidth: 800,
+      imageQuality: 95,
     );
     if (image != null) {
       setState(() => _imagePath = image.path);

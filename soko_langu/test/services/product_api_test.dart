@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -38,7 +38,7 @@ void main() {
       expect(p.stock, 5);
       expect(p.sellerName, 'John Store');
       expect(p.category, 'Electronics');
-      expect(p.images, ['https://media.soko-vibe.co.tz/products/abc.jpg']);
+      expect(p.images, ['https://media.sokovibe.co.tz/products/abc.jpg']);
       expect(p.createdAt, DateTime.parse('2026-09-01T10:00:00Z').toLocal());
     });
 
@@ -271,7 +271,7 @@ void main() {
       expect(p, isNotNull);
       expect(p!.name, 'Shoes');
       expect(p.sellerName, 'Nike Store');
-      expect(p.images, ['https://media.soko-vibe.co.tz/k/shoes.jpg']);
+      expect(p.images, ['https://media.sokovibe.co.tz/k/shoes.jpg']);
     });
 
     test('returns null on 404', () async {

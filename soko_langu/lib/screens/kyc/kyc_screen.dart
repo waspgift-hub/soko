@@ -197,7 +197,7 @@ class _KycScreenState extends State<KycScreen> {
     final source = await _chooseSource(cameraLabel: context.tr('take_photo'));
     if (source == null) return;
 
-    final file = await _picker.pickImage(source: source, maxWidth: 1024, maxHeight: 1024);
+    final file = await _picker.pickImage(source: source, maxWidth: 1600, maxHeight: 1600, imageQuality: 95);
     if (file != null) {
       setState(() {
         if (isSelfie) {

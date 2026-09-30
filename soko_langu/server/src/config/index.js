@@ -24,7 +24,7 @@ const config = {
     bucketVideos: process.env.R2_BUCKET_VIDEOS || 'soko-vibe-videos',
     bucketThumbnails: process.env.R2_BUCKET_THUMBNAILS || 'soko-vibe-thumbnails',
     bucketBackups: process.env.R2_BUCKET_BACKUPS || 'soko-vibe-backups',
-    publicUrl: process.env.R2_PUBLIC_URL || 'https://media.soko-vibe.co.tz',
+    publicUrl: process.env.R2_PUBLIC_URL || 'https://media.sokovibe.co.tz',
   },
   
   // Payment (ClickPesa)
@@ -126,8 +126,8 @@ const config = {
   // dead host. Payment webhooks use clickpesa.collectionWebhookUrl, never APP_URL.
   urls: {
     app: process.env.APP_URL || '',
-    frontend: process.env.FRONTEND_URL || 'https://soko-vibe.co.tz',
-    admin: process.env.ADMIN_URL || 'https://admin.soko-vibe.co.tz',
+    frontend: process.env.FRONTEND_URL || 'https://www.sokovibe.co.tz',
+    admin: process.env.ADMIN_URL || 'https://admin.sokovibe.co.tz',
   },
 
   // Deep-link store destinations. Left empty on purpose: the app is not yet

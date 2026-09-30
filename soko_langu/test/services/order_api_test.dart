@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -22,7 +22,7 @@ Map<String, dynamic> _orderJson() => {
   'productSnapshot': {
     'id': 'p-1',
     'title': 'Vitamin C',
-    'imageUrl': 'media.soko-vibe.co.tz/products/vit.jpg',
+    'imageUrl': 'media.sokovibe.co.tz/products/vit.jpg',
   },
   'productPrice': 50000,
   'shippingFee': 3000,
@@ -62,7 +62,7 @@ void main() {
       expect(o.orderNumber, 'SV202609161234');
       expect(o.status, 'in_escrow');
       expect(o.productName, 'Vitamin C');
-      expect(o.productImage, 'media.soko-vibe.co.tz/products/vit.jpg');
+      expect(o.productImage, 'media.sokovibe.co.tz/products/vit.jpg');
       expect(o.productPrice, 50000);
       expect(o.shippingFee, 3000);
       expect(o.totalAmount, 53000);

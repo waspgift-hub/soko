@@ -104,7 +104,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
 
     try {
       final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery, maxWidth: 512, imageQuality: 80,
+        source: ImageSource.gallery, maxWidth: 800, imageQuality: 95,
       );
       if (image != null) {
         setState(() { _localImagePath = image.path; _avatarError = false; });

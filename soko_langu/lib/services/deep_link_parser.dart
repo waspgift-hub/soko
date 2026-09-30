@@ -49,8 +49,6 @@ class DeepLinkParser {
     'www.sokovibe.co.tz',
     'sokovibe.co.tz',
     'api.sokovibe.co.tz',
-    'www.soko-vibe.co.tz',
-    'soko-vibe.co.tz',
   ];
 
   static const String webBaseUrl = 'https://www.sokovibe.co.tz';

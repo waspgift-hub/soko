@@ -348,7 +348,7 @@ soft delete) with a Firestore rescue fallback and an API-aware duplicate
    earliest product (no more `users/{uid}` read) and trust passport by the
    seller profile id from the API `seller` block. `svProduct(raw)` in app.js
    maps the API DTO to the flat shop shape (media r2Key → absolute URLs via
-   `https://media.soko-vibe.co.tz`, boostedUntil `_seconds` timestamps, seller
+   `https://media.sokovibe.co.tz`, boostedUntil `_seconds` timestamps, seller
    block → sellerId/sellerPhone/sellerProfileId). Review POSTs route through
    `POST /api/v1/reviews` (server recomputes the product rating; Firestore
    write retained as rescue fallback only). Server side: `serializeProduct`

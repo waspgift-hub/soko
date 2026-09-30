@@ -86,7 +86,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final ProductService _productService = ProductService();
   final ImagePicker _picker = ImagePicker();
 
-  List<Category> _categories = getDefaultCategories();
+  List<Category> _categories = CategoryService.getCategories();
 
   List<String> get _allDistricts => kRegionDistricts.values
       .expand((d) => d)
@@ -99,7 +99,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCategories();
+    _updateSubcategories();
     if (_isEditing) _prefillFields();
     _handleInitialSharedMedia();
   }
@@ -191,19 +191,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.dispose();
   }
 
-  void _loadCategories() {
-    CategoryService().getCategories().listen((categories) {
-      if (mounted) {
-        setState(() {
-          _categories = categories.isNotEmpty
-              ? categories
-              : getDefaultCategories();
-          _updateSubcategories();
-        });
-      }
-    });
-  }
-
   void _updateSubcategories() {
     final normalizedSelected = normalizeCategory(_selectedCategory);
     final category = _categories.isEmpty
@@ -213,12 +200,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
             orElse: () => _categories.first,
           );
     if (category == null) return;
-    setState(() {
-      _subcategories = category.subcategories;
-      if (_subcategories.isNotEmpty && !_subcategories.any((s) => normalizeCategory(s.name) == normalizeCategory(_selectedSubcategory))) {
-        _selectedSubcategory = _subcategories.first.name;
-      }
-    });
+    _subcategories = category.subcategories;
+    if (_subcategories.isNotEmpty && !_subcategories.any((s) => normalizeCategory(s.name) == normalizeCategory(_selectedSubcategory))) {
+      _selectedSubcategory = _subcategories.first.name;
+    }
   }
 
   Future<void> _pickImages() async {
@@ -256,8 +241,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
     if (src == ImageSource.camera) {
       final shot = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1024,
-        imageQuality: 80,
+        // 2000px @ q95 → the R2/Cloudinary pipeline downsizes to 1600px WebP;
+        // picking at q80/1024px double-compressed too early and looked soft
+        // in the product detail gallery.
+        maxWidth: 2000,
+        imageQuality: 95,
       );
       if (shot == null) return;
       final meta = await _decodeSize(shot);
@@ -269,8 +257,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
     final List<XFile> images = await _picker.pickMultiImage(
-      maxWidth: 1024,
-      imageQuality: 80,
+      maxWidth: 2000,
+      imageQuality: 95,
       limit: remaining,
     );
     if (images.isEmpty) return;

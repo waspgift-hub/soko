@@ -398,8 +398,8 @@ Mkakati wa data (migration):
     soko-vibe-backups.
   - Pre-signed PUT URLs (upload-service.js) kwa client ku-upload moja kwa
     moja (image max 50MB, video max 500MB).
-  - Public URL: media.soko-vibe.co.tz (CNAME kwa R2 custom domain).
-  - CDN: media.soko-vibe.co.tz kwenye edge.
+  - Public URL: media.sokovibe.co.tz (CNAME kwa R2 custom domain).
+  - CDN: media.sokovibe.co.tz kwenye edge.
 
 8.3 Cloudinary (LEGACY — client bado inatumia)
   - lib/services/cloudinary_service.dart: upwa upload images/video to

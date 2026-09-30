@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,7 +51,7 @@ void main() {
       expect(result.items.first.price, 850000);
       expect(result.items.first.sellerName, 'Tek Store');
       expect(result.items.first.images, [
-        'https://media.soko-vibe.co.tz/media/prod_1/a.jpg',
+        'https://media.sokovibe.co.tz/media/prod_1/a.jpg',
       ]);
       expect(result.total, 1);
     });
