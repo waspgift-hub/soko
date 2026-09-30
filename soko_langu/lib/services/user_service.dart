@@ -134,7 +134,7 @@ class UserService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  DocumentReference _profileDoc() =>
+  DocumentReference<Map<String, dynamic>> _profileDoc() =>
       _db.collection('users').doc(_auth.currentUser!.uid);
 
   Future<UserProfile?> getProfile(String uid) async {
@@ -351,6 +351,15 @@ class UserService {
   }
 
   Future<void> updateProfileImage(String url) async {
+    // Retire the old avatar BEFORE pointing the profile at the new one: the
+    // delete endpoint only destroys the caller's CURRENT profile image, so it
+    // must run while the old url is still on the doc (that is what proves the
+    // caller owns the asset — disallows deleting another user's guessed url).
+    try {
+      final snap = await _profileDoc().get();
+      final old = snap.data()?['profileImage'] as String? ?? '';
+      if (old.isNotEmpty && old != url) await deleteProfileImage(old);
+    } catch (_) {}
     await _updateSelf({'profileImage': url});
     await _profileDoc().update({'profileImage': url});
   }

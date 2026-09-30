@@ -1654,8 +1654,9 @@ module.exports = function ({ admin: fbAdmin, db }) {
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Missing or invalid token' });
       }
+      let decoded;
       try {
-        await A.auth().verifyIdToken(authHeader.split(' ')[1]);
+        decoded = await A.auth().verifyIdToken(authHeader.split(' ')[1]);
       } catch {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -1673,6 +1674,20 @@ module.exports = function ({ admin: fbAdmin, db }) {
       const match = imageUrl.match(/\/v\d+\/(.+)\.\w+$/);
       if (!match) return res.json({ success: false, skipped: true });
       const publicId = match[1];
+
+      // BOLA guard: only the owner of the CURRENT profile image may delete it.
+      // The client retires the old avatar BEFORE updating the doc, so a match
+      // here proves ownership — every other URL (including guessed or scraped
+      // asset URLs in the shared Cloudinary account) is rejected.
+      try {
+        const userSnap = await db.collection('users').doc(decoded.uid).get();
+        const current = userSnap.data();
+        if (!current || current.profileImage !== imageUrl) {
+          return res.json({ success: false, skipped: true });
+        }
+      } catch {
+        return res.json({ success: false, skipped: true });
+      }
 
       const resp = await axios.post(
         config.cloudinary.destroyUrl,

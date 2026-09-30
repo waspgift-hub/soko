@@ -405,18 +405,28 @@
 
     if (!firebaseReady) { showMsg(cmMsg, t('cm_err'), false); return; }
 
-    var payload = {
+    // Comment doc carries ONLY public fields; the optional contact email goes
+    // into the admin-only landing_comment_contacts collection (same doc id) so
+    // submitter PII is never world-readable via the comment feed.
+    var ref = db.collection('landing_comments').doc();
+    var batch = db.batch();
+    batch.set(ref, {
       name: name,
       text: text,
       createdAt: serverTimestamp(),
       lang: state.lang
-    };
-    if (email) payload.email = email;
+    });
+    if (email) {
+      batch.set(db.collection('landing_comment_contacts').doc(ref.id), {
+        email: email,
+        createdAt: serverTimestamp()
+      });
+    }
 
     var btn = cmForm.querySelector('[type="submit"]');
     btn.disabled = true;
 
-    db.collection('landing_comments').add(payload).then(function () {
+    batch.commit().then(function () {
       btn.disabled = false;
       cmForm.reset();
       showMsg(cmMsg, t('cm_ok'), true);

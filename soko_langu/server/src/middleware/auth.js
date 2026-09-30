@@ -1,6 +1,7 @@
 const { getFirebaseAuth } = require('../config/firebase');
 const { getStore } = require('../config/database');
 const { recordUserActivity } = require('../services/activity');
+const crypto = require('crypto');
 const config = require('../config');
 const { jsonError } = require('../utils/http');
 
@@ -183,10 +184,27 @@ async function verifyAdmin(req, res, next) {
 // The single admin gate: x-admin-secret only. No Firebase path — the panel
 // and all admin tooling authenticate with the shared secret, so there is
 // exactly one login method on backend and UI alike.
+//
+// checkRevoked is intentionally NOT enabled on verifyIdToken anywhere in this
+// file: every OTP sign-in (phone + email) uses signInWithCustomToken
+// (auth_repository.dart), and Firebase only supports revocation checks for
+// native identity-provider sign-ins — the check throws for custom-token
+// sessions, so enabling it would 401 every OTP user on the first request.
+// Session death on suspension is instead enforced by the accountStatus/
+// isSuspended gates on money-touching routes.
 function authenticateAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
+  const expected = config.security.adminSecret;
 
-  if (secret && secret === config.security.adminSecret) {
+  // timingSafeEqual throws on length mismatch, so the length gate is the
+  // constant-time side channel here; both branches cost ~the same.
+  if (
+    secret &&
+    expected &&
+    typeof secret === 'string' &&
+    secret.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected))
+  ) {
     req.isAdmin = true;
     return next();
   }

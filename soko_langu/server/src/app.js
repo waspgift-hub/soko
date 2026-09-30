@@ -180,8 +180,10 @@ app.use(cors({
   maxAge: 86400,
 }));
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
+// Body parsing. Image/video bytes never travel in a JSON body anymore (presigned
+// R2 PUT / direct Cloudinary upload), so 1mb is generous for every v1 payload —
+// the old 10mb let an unauthenticated client force a 10mb JSON parse per request.
+app.use(express.json({ limit: '1mb' }));
 
 // Request timeout
 app.use((req, res, next) => {
@@ -283,6 +285,12 @@ const fallbackRouter = require('./modules/sharing/fallback-routes');
 app.use('/', fallbackRouter);
 
 // Routes
+// Per-IP ceilings for the whole v1 surface (trust proxy is 1 hop, so req.ip is
+// the real client behind the Cloudflare worker). Admin gets a wider own limiter
+// so an auth/crawler loop against one endpoint can't exhaust the general one.
+const { generalLimiter, adminLimiter, aiLimiter } = require('./middleware/rateLimiter');
+app.use('/api/v1', generalLimiter);
+app.use('/api/v1/admin', adminLimiter);
 app.use('/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users/settings', userSettingsRouter);
@@ -315,7 +323,7 @@ app.use('/api/v1/reviews', reviewRouter);
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat; both mount
 // groups resolve to the same Firestore store seam via getStore().
-const { generalLimiter, aiLimiter } = require('./middleware/rateLimiter');
+// generalLimiter/aiLimiter are hoisted at the v1 block above.
 // AI proxy: the app sends an OpenAI-shaped payload plus its Firebase token;
 // the server injects provider keys and fails over Groq -> Gemini. Mounted on
 // the ORIGINAL /api/ai/* paths (not /api/v1) so the shipped app needs no change.

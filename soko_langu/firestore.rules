@@ -114,10 +114,11 @@ service cloud.firestore {
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
         // any signed-in user can like/unlike (arrayUnion/arrayRemove on likedBy)
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
-        // any signed-in user can update rating/reviewCount (after leaving a review)
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'reviewCount'])
-        // server increments soldCount
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['soldCount'])
+        // rating/reviewCount/soldCount were client-writable here and let any
+        // user inflate their own listing's rating, review totals, and volume.
+        // The server now owns all three: recompute flows through the admin SDK
+        // (POST /api/products/:id/rating) which bypasses rules entirely, so a
+        // client write of these fields is a fraud signal, never a legitimate one.
         || isAdmin()
       );
       allow delete: if (isSignedIn() && resource.data.sellerId == request.auth.uid) || isAdmin();
@@ -665,19 +666,33 @@ service cloud.firestore {
 
     // ─── LANDING COMMENTS ─────────────────────────────────────────
     // Public create + read: the coming-soon page renders recent comments
-    // for anyone. Moderation/deletes are admin-only.
+    // for anyone. The submitter's optional contact EMAIL is NOT stored here —
+    // it lives in the admin-only landing_comment_contacts collection so a
+    // comment's PII is never world-readable. Moderation/deletes are admin-only.
     match /landing_comments/{commentId} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['name', 'text', 'createdAt'])
+        && !('email' in request.resource.data.keys())
         && request.resource.data.createdAt is timestamp
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 2
         && request.resource.data.name.size() <= 60
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 3
-        && request.resource.data.text.size() <= 1000
-        && request.resource.data.get('email', '') is string;
+        && request.resource.data.text.size() <= 1000;
       allow update, delete: if isAdmin();
+    }
+
+    // ─── LANDING COMMENT CONTACTS (PII, admin-only) ───────────────
+    // Keyed by the parent comment id so an admin can look the contact up.
+    // Anonymous create is allowed (the landing page is not signed in); the
+    // read side — and therefore PII exposure — is admin-only.
+    match /landing_comment_contacts/{commentId} {
+      allow create: if request.resource.data.keys().hasAll(['email', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
     }
 
     // ─── SMOKE: deny-all fallback for any undocumented collection ──
