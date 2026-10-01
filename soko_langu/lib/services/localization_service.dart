@@ -81,6 +81,7 @@ class LocalizationService {
       'profile_media': 'Video za Muuzaji',
       'up_next': 'Zinazofuata',
       'watch_on_youtube': 'Tazama YouTube',
+      'yt_unplayable': 'Video hii hairuhusiwi kuchezwa ndani ya app',
       'sleep_timer': 'Kipima Usingizi',
       'sleep_off': 'Zima Kipima',
       'audio_track': 'Sauti',
@@ -331,6 +332,8 @@ class LocalizationService {
       'i_am_over_18': 'Nina miaka 18 au zaidi',
       'i_am_under_18': 'Nina chini ya miaka 18',
       'not_now': 'Sio sasa',
+  'notifications_blocked_hint':
+      'Programu huandaa maombi ya taarifa, lakini mfano wako umekataa. Ili kupata taarifa, fungua mipangilio ya mfano na uruhusu programu kutoa taarifa.',
       'profile_saved': 'Wasifu umehifadhiwa!',
       'call_history': 'Historia ya Simu',
       'my_media': 'Vyombo Vyangu',
@@ -2411,6 +2414,7 @@ class LocalizationService {
       'profile_media': 'Seller Videos',
       'up_next': 'Up next',
       'watch_on_youtube': 'Watch on YouTube',
+      'yt_unplayable': 'This video cannot play inside the app',
       'sleep_timer': 'Sleep timer',
       'sleep_off': 'Timer off',
       'audio_track': 'Audio',
@@ -2884,6 +2888,8 @@ class LocalizationService {
       'i_am_over_18': 'I am 18 or older',
       'i_am_under_18': 'I am under 18',
       'not_now': 'Not now',
+  'notifications_blocked_hint':
+      'The app records notification requests, but your phone blocked them. To receive notifications, open your phone settings and allow the app to post them.',
       'profile_saved': 'Profile saved!',
       'call_history': 'Call History',
       'my_media': 'My Media',

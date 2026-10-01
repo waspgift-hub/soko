@@ -87,12 +87,16 @@ class NotificationService {
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
 
-      final perm = await OneSignal.Notifications.requestPermission(true);
+final perm = await OneSignal.Notifications.requestPermission(true);
       debugPrint('[OS] permission result: $perm');
       _pushDenied = !perm;
       if (_pushDenied) {
-        // Push denied — mirror in-app notifications as heads-up via Firestore
-        // so critical events are still visible without push permission.
+        // Push declined — mirror in-app notifications as heads-up so critical
+        // events are still visible. POST_NOTIFICATIONS is the SAME OS
+        // permission OneSignal just asked for, so a declined push means the
+        // fallback would post nothing at all; ask once more on its own so the
+        // fallback is not silently dead.
+        await LocalNotificationService.requestPermission();
         _startFirestoreFallback();
       } else {
         _fallbackSub?.cancel();

@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/localization_service.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/notification_service.dart';
+import '../../services/local_notification_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../services/app_lock_service.dart';
 import '../../services/user_service.dart';
@@ -209,15 +210,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildTile(
                  icon: Icons.notifications,
                  title: context.tr('push_notifications'),
-                 trailing: Switch(
-                   value: _notificationsEnabled,
-                   activeThumbColor: Theme.of(context).colorScheme.primary,
-                   onChanged: (value) async {
-                     final notif = NotificationService();
-                     await notif.setEnabled(value);
-                     if (mounted) setState(() => _notificationsEnabled = value);
-                   },
-                 ),
+trailing: Switch(
+                  value: _notificationsEnabled,
+                  activeThumbColor: Theme.of(context).colorScheme.primary,
+                  onChanged: (value) async {
+                    final notif = NotificationService();
+                    await notif.setEnabled(value);
+                    if (!mounted) return;
+                    setState(() => _notificationsEnabled = value);
+                    if (!value) return;
+                    // Turning the switch on is not enough on Android 13+: the
+                    // OS permission may still be denied, and then every heads-up
+                    // is dropped without a word. Ask, and if the OS still says
+                    // no, send the user to settings — re-prompting will not help.
+                    final granted =
+                        await LocalNotificationService.requestPermission();
+                    if (granted || !mounted) return;
+                    final openSettings = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(context.tr('notifications')),
+                        content: Text(
+                          context.tr(
+                            'notifications_blocked_hint',
+                            'Itafanya araka za maombi ya taarifa. Ili kupata taarifa lazima uruhusu programu kutoa taarifa kwenye mipangilio ya mfano.',
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(context.tr('not_now')),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(context.tr('open_settings')),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (openSettings == true) {
+                      await LocalNotificationService.openSystemSettings();
+                    }
+                  },
+                ),
                ),
                _buildTile(
                  icon: Icons.tune,
