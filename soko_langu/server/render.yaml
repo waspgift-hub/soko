@@ -46,6 +46,17 @@ services:
       mountPath: /tmp
       sizeGB: 1
     # Secrets come from the Render dashboard; do not inline them here.
+    # Dashboard checklist (both services unless noted):
+    #   - EDGE_SECRET: shared edge secret, SAME value as `wrangler secret put
+    #     EDGE_SECRET` on soko-api-edge. Lets origin rate limits key on the
+    #     real client IP (cf-connecting-ip) instead of shared Cloudflare IPs.
+    #   - ALLOWED_ORIGINS: comma-separated web origins for CORS
+    #     (e.g. https://www.sokovibe.co.tz,https://admin.sokovibe.co.tz).
+    #   - Firebase Admin credentials (service account JSON or projectId +
+    #     privateKey + clientEmail) for Firestore/Auth.
+    #   - R2_* vars + R2_PUBLIC_URL for presigned media uploads.
+    #   - CLICKPESA_* keys for payments/payouts; CRON_SECRET for cron routes;
+    #     X_ADMIN_SECRET for the legacy admin compat surface.
 
   - type: worker
     name: soko-langu-worker

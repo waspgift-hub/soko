@@ -1,5 +1,30 @@
+const crypto = require('crypto');
 const { getRedis } = require('../config/redis');
 const { jsonError } = require('../utils/http');
+
+// Behind the Cloudflare Worker, req.ip is a Cloudflare edge IP shared by many
+// users (mobile CGNAT makes it worse), so per-IP limits would throttle
+// strangers together — or never fire at all. When the edge proves itself with
+// the shared EDGE_SECRET (timing-safe compare), trust cf-connecting-ip, which
+// Cloudflare sets and which cannot be spoofed through the worker.
+// Direct-to-origin traffic, or an unset EDGE_SECRET, keeps keying on the
+// socket IP exactly as before — no behaviour change until both sides opt in.
+function edgeVerified(req) {
+  const secret = process.env.EDGE_SECRET;
+  const presented = req.headers && req.headers['x-soko-edge'];
+  if (!secret || !presented) return false;
+  const a = Buffer.from(String(presented));
+  const b = Buffer.from(secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function clientIp(req) {
+  if (edgeVerified(req)) {
+    const cfIp = req.headers['cf-connecting-ip'];
+    if (cfIp) return String(cfIp).split(',')[0].trim();
+  }
+  return req.ip || (req.connection && req.connection.remoteAddress) || 'unknown';
+}
 
 // In-memory fallback when Redis is unavailable
 const memoryStore = new Map();
@@ -18,7 +43,7 @@ function rateLimit(options = {}) {
   const {
     windowMs = 60000,
     max = 100,
-    keyGenerator = (req) => req.ip || req.connection.remoteAddress || 'unknown',
+    keyGenerator = (req) => clientIp(req),
     skip = () => false,
     message = 'Too many requests',
   } = options;

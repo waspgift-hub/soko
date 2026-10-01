@@ -25,21 +25,29 @@
 // Stale-while-revalidate: an expired-but-present entry is served immediately
 // and refreshed in the background, so a thundering herd never reaches Render.
 
-const ORIGIN = (typeof ORIGIN_URL !== 'undefined' && ORIGIN_URL)
-  ? ORIGIN_URL
-  : 'https://soko-langu-server.onrender.com';
+// Workers run in modules format: `[vars]` and secrets arrive on `env`, NOT as
+// globals. Resolve every origin from `env` first so wrangler.toml overrides
+// (and regional replicas) actually take effect; the hardcoded URL is only the
+// last-resort fallback.
+const ORIGIN_FALLBACK = 'https://soko-langu-server.onrender.com';
+
+function primaryOrigin(env) {
+  return (env && env.ORIGIN_URL) || ORIGIN_FALLBACK;
+}
 
 // Regional origins (optional, for the 10M multi-region tier). Keys are
 // Cloudflare continent codes; each maps to a regional Render replica. Leave a
 // key empty and that continent falls back to the primary ORIGIN. Add matching
 // env vars (`REGION_ORIGIN_*`) in wrangler.toml [vars] when replicas exist.
-const REGIONAL_ORIGINS = {
-  /* e.g. AF: 'https://soko-africa.onrender.com' */
-  AF: (typeof REGION_ORIGIN_AF !== 'undefined' && REGION_ORIGIN_AF) ? REGION_ORIGIN_AF : '',
-  EU: (typeof REGION_ORIGIN_EU !== 'undefined' && REGION_ORIGIN_EU) ? REGION_ORIGIN_EU : '',
-  AS: (typeof REGION_ORIGIN_AS !== 'undefined' && REGION_ORIGIN_AS) ? REGION_ORIGIN_AS : '',
-  NA: (typeof REGION_ORIGIN_NA !== 'undefined' && REGION_ORIGIN_NA) ? REGION_ORIGIN_NA : '',
-};
+function regionalOrigins(env) {
+  return {
+    /* e.g. AF: 'https://soko-africa.onrender.com' */
+    AF: (env && env.REGION_ORIGIN_AF) || '',
+    EU: (env && env.REGION_ORIGIN_EU) || '',
+    AS: (env && env.REGION_ORIGIN_AS) || '',
+    NA: (env && env.REGION_ORIGIN_NA) || '',
+  };
+}
 
 // Only meaningful for region-agnostic (public catalog) reads; personalised
 // paths (auth, payments) MUST stay on the primary so regional replicas can
@@ -49,13 +57,13 @@ const REGION_ROUTABLE = (m) =>
   (m.method === 'POST' && m.pathname === '/api/search/trending') ||
   (m.method === 'POST' && m.pathname === '/api/search/most-rated');
 
-function resolveOrigin(request, meta) {
+function resolveOrigin(request, env, meta) {
   const continent = request.cf?.continent || '';
   if (REGION_ROUTABLE(meta)) {
-    const regional = REGIONAL_ORIGINS[continent];
+    const regional = regionalOrigins(env)[continent];
     if (regional) return regional;
   }
-  return ORIGIN;
+  return primaryOrigin(env);
 }
 
 // All cache rules evaluated top-to-bottom; first match wins.
@@ -106,20 +114,113 @@ function isCached(method, pathname) {
   return CACHE_RULES.some((r) => r.match({ method, pathname }));
 }
 
+// Scanner/probe paths that never exist on this API. Answered at the edge so
+// botnets and vulnerability scanners never spend origin (Render) CPU, Firestore
+// reads, or rate-limit budget.
+const PROBE_PATTERNS = [
+  /^\/\.env(\.|$|\/)/,
+  /^\/\.git(\/|$)/,
+  /^\/\.well-known\/(?!assetlinks\.json|apple-app-site-association)/,
+  /^\/wp-(admin|login|content|includes)/,
+  /\/phpmyadmin/i,
+  /\.php($|\?)/,
+  /^\/server-status/,
+  /^\/actuator(\/|$)/,
+  /^\/\.DS_Store$/,
+  /^\/.(aws|ssh|docker)/,
+];
+
+function isProbe(pathname) {
+  return PROBE_PATTERNS.some((re) => re.test(pathname));
+}
+
+// Mirrors the origin's 1mb JSON body cap: oversized payloads are rejected at
+// the edge instead of being proxied to Render just to be re-rejected there.
+const MAX_BODY_BYTES = 1024 * 1024;
+
+// Coarse abuse brake for uncached (mutation/auth) traffic when a KV namespace
+// is bound as RATE_LIMIT_KV. KV is eventually consistent, so this is a
+// dampener, not a precise gate — the origin's Redis/memory limiters stay the
+// source of truth. Unset binding = skip silently (zero behaviour change).
+const EDGE_RATE_LIMIT_PER_MIN = 120;
+
+async function edgeRateLimit(request, env, ctx) {
+  const kv = env && env.RATE_LIMIT_KV;
+  if (!kv) return null;
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const window = Math.floor(Date.now() / 60000);
+  const key = `edge-rl:${ip}:${window}`;
+  let count = 0;
+  try {
+    count = Number(await kv.get(key)) || 0;
+  } catch (e) {
+    return null;
+  }
+  if (count >= EDGE_RATE_LIMIT_PER_MIN) {
+    return new Response(JSON.stringify({ success: false, error: 'Too many requests' }), {
+      status: 429,
+      headers: { 'content-type': 'application/json', 'retry-after': '60' },
+    });
+  }
+  ctx.waitUntil(kv.put(key, String(count + 1), { expirationTtl: 120 }).catch(() => {}));
+  return null;
+}
+
+// Security headers applied to every response the edge returns. The origin sets
+// its own CSP for HTML pages; the edge layer only adds transport/embedding
+// guards that are safe for both JSON and HTML.
+function withSecurityHeaders(res) {
+  const headers = new Headers(res.headers);
+  headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  headers.set('x-content-type-options', 'nosniff');
+  headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+  headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  headers.delete('x-powered-by');
+  headers.delete('server');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const method = request.method;
     const pathname = url.pathname;
     const meta = { method, pathname };
-    const origin = resolveOrigin(request, meta);
+    const origin = resolveOrigin(request, env, meta);
 
-    // Passthrough everything that isn't on the cache whitelist.
-    const rule = CACHE_RULES.find((r) => r.match(meta));
-    if (!rule) {
-      return proxyToOrigin(request, url, origin);
+    // 1. Drop scanner probes before they cost anything downstream.
+    if (isProbe(pathname)) {
+      return withSecurityHeaders(
+        new Response(JSON.stringify({ success: false, error: 'Not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
     }
 
+    // 2. Reject oversized request bodies at the edge (origin caps at 1mb).
+    if (method !== 'GET' && method !== 'HEAD') {
+      const declared = Number(request.headers.get('content-length') || 0);
+      if (declared > MAX_BODY_BYTES) {
+        return withSecurityHeaders(
+          new Response(JSON.stringify({ success: false, error: 'Payload too large' }), {
+            status: 413,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      }
+    }
+
+    // 3. Coarse per-IP brake on uncached traffic (KV-bound only). Cached
+    // reads are already absorbed by the edge cache, so they skip the check.
+    const rule = CACHE_RULES.find((r) => r.match(meta));
+    if (!rule) {
+      const limited = await edgeRateLimit(request, env, ctx);
+      if (limited) return withSecurityHeaders(limited);
+      return withSecurityHeaders(await proxyToOrigin(request, url, origin, env));
+    }
+
+    // 4. Cached flow with stale-while-revalidate.
     const cache = caches.default;
     const cacheKeyFinal = await buildCacheKey(request, meta, rule);
     // Include the resolved origin in the key: the same path served from
@@ -133,25 +234,25 @@ export default {
       const ageMs = Date.now() - fetchAt;
       if (ageMs <= rule.ttl * 1000) {
         // Fresh hit — serve straight from the edge.
-        return cloneResponse(cachedRes);
+        return withSecurityHeaders(cloneResponse(cachedRes));
       }
       // Stale hit — serve immediately, revalidate in background.
-      ctx.waitUntil(revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin));
-      return cloneResponse(cachedRes);
+      ctx.waitUntil(revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin, env));
+      return withSecurityHeaders(cloneResponse(cachedRes));
     }
 
     // Cold miss — fetch from origin and store.
-    const originRes = await proxyFetch(request, url, origin);
+    const originRes = await proxyFetch(request, url, origin, env);
     if (originRes.status === 200) {
       ctx.waitUntil(cache.put(keyWithPath, tagResponse(originRes.clone())));
     }
-    return originRes;
+    return withSecurityHeaders(originRes);
   },
 };
 
-async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin) {
+async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin, env) {
   try {
-    const originRes = await proxyFetch(request, url, origin);
+    const originRes = await proxyFetch(request, url, origin, env);
     if (originRes.status === 200) {
       await cache.put(keyWithPath, tagResponse(originRes));
     }
@@ -160,8 +261,9 @@ async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheK
   }
 }
 
-async function proxyFetch(request, url, origin) {
-  const target = new URL(url.pathname + url.search, origin || ORIGIN);
+async function proxyFetch(request, url, origin, env) {
+  const fallback = (env && env.ORIGIN_URL) || ORIGIN_FALLBACK;
+  const target = new URL(url.pathname + url.search, origin || fallback);
   const headers = new Headers(request.headers);
   headers.delete('host');
   headers.set('x-edge-colo', 'cf');
@@ -169,18 +271,25 @@ async function proxyFetch(request, url, origin) {
   // applies but its general rate limiter stays fair (shared across clients).
   headers.set('x-forwarded-proto', 'https');
   headers.set('x-forwarded-host', url.hostname);
-  headers.set('x-soko-origin', origin || ORIGIN);
+  headers.set('x-soko-origin', origin || fallback);
+  // Shared edge secret (wrangler secret EDGE_SECRET, mirrored on Render).
+  // Lets the origin trust cf-connecting-ip for rate-limit keys; absent secret
+  // = origin keeps keying on the socket IP exactly as before.
+  if (env && env.EDGE_SECRET) headers.set('x-soko-edge', env.EDGE_SECRET);
   const init = {
     method: request.method,
     headers,
     body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
     redirect: 'follow',
+    // Never let a hung origin hold an edge request longer than the origin's
+    // own 20s request timeout.
+    signal: AbortSignal.timeout(25000),
   };
   return fetch(target, init);
 }
 
-function proxyToOrigin(request, url, origin) {
-  return proxyFetch(request, url, origin);
+function proxyToOrigin(request, url, origin, env) {
+  return proxyFetch(request, url, origin, env);
 }
 
 function tagResponse(res) {

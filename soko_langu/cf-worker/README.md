@@ -21,6 +21,47 @@ payments, escrow, auth all go to the origin untouched.
 Stale-while-revalidate: an expired entry is served instantly and refreshed in
 the background, so a burst of users never thunders into Render.
 
+## Edge protections (all in `worker.js`, no dashboard clicks needed)
+
+- **Scanner/probe blocking** — `/.env`, `/.git/*`, `/wp-*`, `*.php`,
+  `/phpmyadmin`, `/server-status`, `/actuator`, `/.aws` etc. get a 404 at the
+  edge and never touch Render, Firestore, or rate-limit budget.
+- **Body cap** — non-GET/HEAD requests declaring `content-length` over 1MB
+  (the origin's JSON cap) get a 413 at the edge.
+- **Origin timeout** — edge-to-origin fetch aborts at 25s (origin times out at
+  20s), so a hung origin can't hold edge requests.
+- **Security headers** — every edge response gets HSTS, `nosniff`,
+  `referrer-policy`, `permissions-policy`, and `x-powered-by`/`server`
+  fingerprint stripping.
+- **Optional KV rate brake** — bind a `RATE_LIMIT_KV` namespace (see
+  `wrangler.toml`) for a coarse 120 req/min/IP sliding window on uncached
+  traffic. KV is eventually consistent, so this is a dampener; the origin's
+  Redis/memory limiters stay the source of truth.
+
+## Edge ↔ origin trust (EDGE_SECRET)
+
+The worker sends `x-soko-edge: <EDGE_SECRET>` (a `wrangler secret`, never
+committed). The origin only trusts `cf-connecting-ip` for rate-limit keys when
+that header matches its own `EDGE_SECRET` env var — otherwise it keys on the
+socket IP exactly as before. Setup:
+
+```bash
+cd cf-worker
+wrangler secret put EDGE_SECRET   # generate: openssl rand -hex 32
+```
+
+Then paste the SAME value as `EDGE_SECRET` in the Render dashboard for
+`soko-langu-api`. Until both sides are set, everything behaves as today.
+
+## Cloudflare dashboard checklist (one-time, can't be done in code)
+
+- **SSL/TLS → Full (strict)** so edge-to-origin is always encrypted.
+- **WAF managed rules ON** + a rate-limiting rule for `/api/v1/auth/*` and
+  `/api/v1/payments/*` as a second layer behind the worker/origin limits.
+- **Bot Fight Mode** (free tier) for basic bot mitigation.
+- **DNS**: `api` CNAME proxied (orange cloud); keep the Render
+  `onrender.com` URL out of public docs so attackers can't bypass the edge.
+
 ## Deploy (one-time, needs your Cloudflare login)
 
 ```bash

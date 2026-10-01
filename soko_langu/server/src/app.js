@@ -53,6 +53,11 @@ BigInt.prototype.toJSON = function toJSON() {
 
 const app = express();
 
+// Never fingerprint the stack: Express sends `X-Powered-By: Express` by
+// default, which hands scanners a version oracle for free. The edge strips it
+// too, but defence starts at the origin (direct-to-Render traffic included).
+app.disable('x-powered-by');
+
 // Trust proxy for Nginx
 app.set('trust proxy', 1);
 
