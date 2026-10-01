@@ -177,32 +177,38 @@ class AnalyticsService {
 
   Future<AppUsageStats> getActiveUserCounts() async {
     try {
-      final sessions = await _firestore.collection('user_sessions').get();
-      final allTime = sessions.docs.length;
+      final sessions = _firestore.collection('user_sessions');
       final now = DateTime.now();
-      int perSecond = 0, perMinute = 0, perHour = 0;
-      int perDay = 0, perMonth = 0, perYear = 0;
 
-      for (final doc in sessions.docs) {
-        final ts = (doc.data()['lastActive'] as Timestamp?)?.toDate();
-        if (ts == null) continue;
-        final diff = now.difference(ts);
-        if (diff.inSeconds <= 1) perSecond++;
-        if (diff.inMinutes <= 1) perMinute++;
-        if (diff.inHours <= 1) perHour++;
-        if (diff.inDays <= 1) perDay++;
-        if (diff.inDays <= 30) perMonth++;
-        if (diff.inDays <= 365) perYear++;
+      // Bounded server-side counts avoid downloading every session document,
+      // so dashboard cost stays constant as the user base grows.
+      Future<int> countSince(Duration window) async {
+        final cutoff = Timestamp.fromDate(now.subtract(window));
+        final snap = await sessions
+            .where('lastActive', isGreaterThan: cutoff)
+            .count()
+            .get();
+        return snap.count ?? 0;
       }
 
+      final results = await Future.wait<int>([
+        countSince(const Duration(seconds: 1)),
+        countSince(const Duration(minutes: 1)),
+        countSince(const Duration(hours: 1)),
+        countSince(const Duration(days: 1)),
+        countSince(const Duration(days: 30)),
+        countSince(const Duration(days: 365)),
+        sessions.count().get().then((snap) => snap.count ?? 0),
+      ]);
+
       return AppUsageStats(
-        perSecond: perSecond,
-        perMinute: perMinute,
-        perHour: perHour,
-        perDay: perDay,
-        perMonth: perMonth,
-        perYear: perYear,
-        allTime: allTime,
+        perSecond: results[0],
+        perMinute: results[1],
+        perHour: results[2],
+        perDay: results[3],
+        perMonth: results[4],
+        perYear: results[5],
+        allTime: results[6],
       );
     } catch (_) {
       return const AppUsageStats();
@@ -278,191 +284,6 @@ class AnalyticsService {
     }
   }
 
-  // ── Get App-Wide Analytics (Admin) ────────────────────────────────────
-
-  Future<SellerAnalytics> getAppAnalytics() async {
-    int totalProducts = 0;
-    int totalProductViews = 0;
-    final genderBreakdown = <String, int>{};
-    final locationBreakdown = <String, int>{};
-    final ageBreakdown = <String, int>{};
-    final List<TopProduct> topProducts = [];
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthlySales = List.generate(12, (i) {
-      final m = (now.month - 1 - (11 - i) + 12) % 12 + 1;
-      return DailyMetric(date: DateTime(now.year, m, 1), count: 0);
-    });
-
-    try {
-      final productsSnap = await _firestore.collection('products').get();
-      totalProducts = productsSnap.docs.length;
-
-      final productFutures = <Future<void>>[];
-      for (final productDoc in productsSnap.docs) {
-        final pid = productDoc.id;
-        final pData = productDoc.data();
-        totalProductViews += (pData['viewCount'] as num?)?.toInt() ?? 0;
-
-        productFutures.add(() async {
-          final results = await Future.wait([
-            _productViews
-                .doc(pid)
-                .collection('views')
-                .where('gender', isNotEqualTo: null)
-                .get(),
-            _productViews
-                .doc(pid)
-                .collection('views')
-                .where('location', isNotEqualTo: null)
-                .get(),
-            _productViews
-                .doc(pid)
-                .collection('views')
-                .where('age', isNotEqualTo: null)
-                .get(),
-            _productViews.doc(pid).collection('views').count().get(),
-          ]);
-
-          final gSnap = results[0] as QuerySnapshot;
-          for (final doc in gSnap.docs) {
-            final g =
-                (doc.data() as Map<String, dynamic>)['gender'] as String? ??
-                'unknown';
-            genderBreakdown[g] = (genderBreakdown[g] ?? 0) + 1;
-          }
-
-          final lSnap = results[1] as QuerySnapshot;
-          final prodLocBreakdown = <String, int>{};
-          for (final doc in lSnap.docs) {
-            final loc =
-                (doc.data() as Map<String, dynamic>)['location'] as String? ??
-                'unknown';
-            locationBreakdown[loc] = (locationBreakdown[loc] ?? 0) + 1;
-            prodLocBreakdown[loc] = (prodLocBreakdown[loc] ?? 0) + 1;
-          }
-
-          final aSnap = results[2] as QuerySnapshot;
-          for (final doc in aSnap.docs) {
-            final age =
-                (doc.data() as Map<String, dynamic>)['age'] as int? ?? 0;
-            final group = _ageGroup(age);
-            ageBreakdown[group] = (ageBreakdown[group] ?? 0) + 1;
-          }
-
-          final countSnap = results[3] as AggregateQuerySnapshot;
-          final viewCount = countSnap.count ?? 0;
-
-          topProducts.add(
-            TopProduct(
-              productId: pid,
-              productName: pData['name'] as String? ?? 'Bidhaa',
-              productImage: pData['images'] is List
-                  ? (pData['images'] as List).firstOrNull as String?
-                  : pData['image'] as String?,
-              viewCount: viewCount,
-              locationBreakdown: prodLocBreakdown,
-            ),
-          );
-        }());
-      }
-      await Future.wait(productFutures);
-    } catch (_) {}
-
-    int totalOrders = 0;
-    int successfulOrders = 0;
-    int failedOrders = 0;
-    double monthlyEarnings = 0;
-    int totalTransactions = 0;
-    int successfulTransactions = 0;
-    int failedTransactions = 0;
-
-    try {
-      final txSnap = await _firestore.collection('transactions').get();
-      totalTransactions = txSnap.docs.length;
-
-      for (final doc in txSnap.docs) {
-        final data = doc.data();
-        final status = data['status'] as String? ?? '';
-        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-
-        if (status == 'escrow_hold' ||
-            status == 'paid_escrow_hold' ||
-            status == 'paid_escrow_held' ||
-            status == 'dispatched' ||
-            status == 'delivered' ||
-            status == 'delivery_confirmed' ||
-            status == 'confirmed' ||
-            status == 'completed' ||
-            status == 'refunded') {
-          successfulOrders++;
-          successfulTransactions++;
-          if (createdAt != null) {
-            if (createdAt.isAfter(monthStart)) {
-              monthlyEarnings += (data['totalAmount'] as num?)?.toDouble() ?? 0;
-            }
-            for (int i = 0; i < monthlySales.length; i++) {
-              if (createdAt.month == monthlySales[i].date.month &&
-                  createdAt.year == monthlySales[i].date.year) {
-                monthlySales[i] = DailyMetric(
-                  date: monthlySales[i].date,
-                  count: monthlySales[i].count + 1,
-                );
-                break;
-              }
-            }
-          }
-        } else if (status == 'failed' || status == 'refunded') {
-          failedOrders++;
-          failedTransactions++;
-        }
-        totalOrders++;
-      }
-    } catch (_) {}
-
-    double averageRating = 0;
-    int totalReviews = 0;
-    int positiveReviews = 0;
-    int negativeReviews = 0;
-
-    try {
-      final reviewSnap = await _firestore.collection('reviews').get();
-      totalReviews = reviewSnap.docs.length;
-      double totalRating = 0;
-      for (final doc in reviewSnap.docs) {
-        final rating = (doc.data()['rating'] as num?)?.toDouble() ?? 0;
-        totalRating += rating;
-        if (rating >= 4) positiveReviews++;
-        if (rating <= 2) negativeReviews++;
-      }
-      averageRating = totalReviews > 0 ? totalRating / totalReviews : 0;
-    } catch (_) {}
-
-    topProducts.sort((a, b) => b.viewCount.compareTo(a.viewCount));
-
-    return SellerAnalytics(
-      sellerId: 'app',
-      totalProducts: totalProducts,
-      totalProductViews: totalProductViews,
-      genderBreakdown: genderBreakdown,
-      locationBreakdown: locationBreakdown,
-      ageBreakdown: ageBreakdown,
-      monthlyEarnings: monthlyEarnings,
-      totalOrders: totalOrders,
-      successfulOrders: successfulOrders,
-      failedOrders: failedOrders,
-      totalTransactions: totalTransactions,
-      successfulTransactions: successfulTransactions,
-      failedTransactions: failedTransactions,
-      averageRating: averageRating,
-      totalReviews: totalReviews,
-      positiveReviews: positiveReviews,
-      negativeReviews: negativeReviews,
-      topProducts: topProducts.take(10).toList(),
-      monthlySales: monthlySales,
-      lastUpdated: DateTime.now(),
-    );
-  }
 
   // ── Admin: Load App-Wide Analytics ────────────────────────────────────
 

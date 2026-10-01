@@ -15,6 +15,7 @@ class CommentService {
   final NotificationService _notif = NotificationService();
 
   static const Duration _pollInterval = Duration(seconds: 8);
+  static const Duration _maxPollInterval = Duration(seconds: 60);
 
   CollectionReference _commentsRef(String productId) =>
       _db.collection('products').doc(productId).collection('comments');
@@ -318,6 +319,12 @@ class CommentService {
     if (ApiConfig.kUseCommentsApi) {
       return _pollStream<List<ProductComment>>(
         () => _fetchCommentsApi(productId),
+        fingerprint: (items) => items
+            .map(
+              (c) =>
+                  '${c.id}:${c.createdAt.microsecondsSinceEpoch}:${c.replyCount}:${c.text.hashCode}',
+            )
+            .join('|'),
       );
     }
     return _commentsRef(productId)
@@ -340,6 +347,12 @@ class CommentService {
     if (ApiConfig.kUseCommentsApi) {
       return _pollStream<List<CommentReply>>(
         () => _fetchRepliesApi(commentId),
+        fingerprint: (items) => items
+            .map(
+              (r) =>
+                  '${r.id}:${r.createdAt.microsecondsSinceEpoch}:${r.text.hashCode}',
+            )
+            .join('|'),
       );
     }
     return _repliesRef(productId, commentId)
@@ -359,21 +372,54 @@ class CommentService {
         );
   }
 
-  // The Firestore reads live stream; the Postgres reads poll every few seconds
-  // until the widget cancels. The Stream contract the widget sees is unchanged:
-  // `T` here is the full list type (`List<ProductComment>` etc), so the widget
-  // still receives whole snapshots just like the Firestore `snapshots()`.
-  Stream<T> _pollStream<T>(Future<T?> Function() fetch) {
+  // The Firestore reads live stream; the Postgres reads poll until the widget
+  // cancels. The Stream contract the widget sees is unchanged: `T` here is
+  // the full list type (`List<ProductComment>` etc), so the widget still
+  // receives whole snapshots just like the Firestore `snapshots()`. The delay
+  // backs off while responses are unchanged, so an idle product page costs one
+  // request per minute instead of one every eight seconds.
+  Stream<T> _pollStream<T>(
+    Future<T?> Function() fetch, {
+    String Function(T value)? fingerprint,
+  }) {
     late StreamController<T> controller;
     Timer? timer;
+    var delay = _pollInterval;
+    String? lastFingerprint;
+
+    void schedule() {
+      timer = Timer(delay, () async {
+        final data = await fetch();
+        if (!controller.hasListener) return;
+        if (data != null) {
+          final key = fingerprint?.call(data);
+          if (key == null || key != lastFingerprint) {
+            controller.add(data);
+            lastFingerprint = key;
+            delay = _pollInterval;
+          } else {
+            final doubled = delay.inSeconds * 2;
+            delay = Duration(
+              seconds: doubled.clamp(
+                _pollInterval.inSeconds,
+                _maxPollInterval.inSeconds,
+              ),
+            );
+          }
+        }
+        schedule();
+      });
+    }
+
     controller = StreamController<T>.broadcast(
       onListen: () async {
-        timer = Timer.periodic(_pollInterval, (_) async {
-          final data = await fetch();
-          if (data != null && controller.hasListener) controller.add(data);
-        });
         final initial = await fetch();
-        if (initial != null && controller.hasListener) controller.add(initial);
+        if (initial != null && controller.hasListener) {
+          controller.add(initial);
+          lastFingerprint = fingerprint?.call(initial);
+        }
+        delay = _pollInterval;
+        schedule();
       },
       onCancel: () {
         timer?.cancel();

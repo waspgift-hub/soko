@@ -63,7 +63,8 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
   const lock = await acquireLock(`otp:${orderId}`, 60);
 
   try {
-    return await store.$transaction(async (tx) => {
+    let mirroredOrder = null;
+    const result = await store.$transaction(async (tx) => {
       const current = order ?? (await tx.order.findUnique({ where: { id: orderId } }));
       if (!current) throw httpError(404, 'ORDER_NOT_FOUND');
 
@@ -84,6 +85,7 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
           where: { id: orderId },
           data: { status: ORDER_STATES.OTP_PENDING, statusChangedBy: issuedBy },
         });
+        mirroredOrder = { ...current, status: ORDER_STATES.OTP_PENDING };
       }
 
       // Invalidate any prior active credentials for this order
@@ -141,8 +143,11 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
 
       return { otp, qrToken, qrPayload, expiresAt, credentialId: otpCredential.id, qrCredentialId: qrCredential.id };
     });
+
+    if (mirroredOrder) await syncLegacyOrderStatus(mirroredOrder);
+    return result;
   } finally {
-    if (!lock.skipped) await releaseLock(`otp:${orderId}`);
+    if (lock.acquired) await releaseLock(`otp:${orderId}`, lock.token);
   }
 }
 
@@ -196,7 +201,7 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
     }
     return result;
   } finally {
-    if (!lock.skipped) await releaseLock(`complete:${orderId}`);
+    if (lock.acquired) await releaseLock(`complete:${orderId}`, lock.token);
   }
 }
 
@@ -247,7 +252,7 @@ async function verifyQrAndComplete({ orderId, token, verifiedBy }) {
     }
     return result;
   } finally {
-    if (!lock.skipped) await releaseLock(`complete:${orderId}`);
+    if (lock.acquired) await releaseLock(`complete:${orderId}`, lock.token);
   }
 }
 

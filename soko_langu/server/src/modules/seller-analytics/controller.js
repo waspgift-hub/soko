@@ -108,7 +108,7 @@ async function getSellerAnalyticsOverview(req, res) {
     });
 
     let totalProductViews = 0;
-    for (const p of products) totalProductViews += snapshotViews(p.snapshotapse);
+    for (const p of products) totalProductViews += snapshotViews(p.snapshot);
     const totalProducts = products.length;
     let boostImpressions = 0;
     let boostClicks = 0;
@@ -139,17 +139,18 @@ async function getSellerAnalyticsOverview(req, res) {
     let successfulOrders = 0;
     let failedOrders = 0;
     let monthlyEarnings = 0;
+    const currentMonthKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
     for (const o of orders) {
       const amount = toNum(o.totalAmount);
       if (PAID.includes(o.status)) {
         successfulOrders++;
-        monthlyEarnings += amount;
         const d = o.createdAt;
         const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
         if (salesByKey[key] !== undefined) {
           salesByKey[key]++;
           earningsByKey[key] += amount;
         }
+        if (key === currentMonthKey) monthlyEarnings += amount;
       } else if (FAILED.includes(o.status)) {
         failedOrders++;
       }

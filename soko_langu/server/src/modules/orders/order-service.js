@@ -175,7 +175,7 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
   const lock = await acquireLock(`dispatch:${orderId}`, 60);
 
   try {
-    return await store.$transaction(async (tx) => {
+    const updated = await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.sellerId !== sellerId) throw httpError(403, 'FORBIDDEN');
@@ -230,8 +230,11 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
 
       return updated;
     });
+
+    await syncLegacyOrderStatus(updated);
+    return updated;
   } finally {
-    if (!lock.skipped) await releaseLock(`dispatch:${orderId}`);
+    if (lock.acquired) await releaseLock(`dispatch:${orderId}`, lock.token);
   }
 }
 
@@ -244,7 +247,7 @@ async function markDelivered({ orderId, actorId }) {
   const lock = await acquireLock(`deliver:${orderId}`, 60);
 
   try {
-    return await store.$transaction(async (tx) => {
+    const updated = await store.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
 
@@ -286,8 +289,11 @@ async function markDelivered({ orderId, actorId }) {
 
       return updated;
     });
+
+    await syncLegacyOrderStatus(updated);
+    return updated;
   } finally {
-    if (!lock.skipped) await releaseLock(`deliver:${orderId}`);
+    if (lock.acquired) await releaseLock(`deliver:${orderId}`, lock.token);
   }
 }
 
@@ -349,7 +355,7 @@ async function completeOrder({ orderId, actorId = 'system', method = 'OTP_VERIFY
     await syncLegacyOrderStatus(order.order);
     return order;
   } finally {
-    if (!lock.skipped) await releaseLock(`complete:${orderId}`);
+    if (lock.acquired) await releaseLock(`complete:${orderId}`, lock.token);
   }
 }
 
