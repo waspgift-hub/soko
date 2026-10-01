@@ -6,9 +6,19 @@ import '../services/exchange_rate_service.dart';
 import '../utils/network_error.dart';
 
 extension ContextTr on BuildContext {
-  String tr(String key, [String? _]) {
+  /// Resolves a translation key in the app's current language.
+  ///
+  /// [fallback] is used when the key is missing from every language map. It was
+  /// previously discarded (`[String? _]`), which silently broke every call site
+  /// that passed one — 282 of them — leaving those strings to render as
+  /// `humanizeKey()` output, i.e. English words shown to Swahili speakers.
+  String tr(String key, [String? fallback]) {
     final config = AppConfig.of(this);
-    return LocalizationService.translate(key, config.langCode);
+    return LocalizationService.translate(
+      key,
+      config.langCode,
+      fallback: fallback,
+    );
   }
 
   /// Renders a user-facing error in the app language. [translateError]
