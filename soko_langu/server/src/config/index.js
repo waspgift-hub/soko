@@ -24,6 +24,10 @@ const config = {
     bucketVideos: process.env.R2_BUCKET_VIDEOS || 'soko-vibe-videos',
     bucketThumbnails: process.env.R2_BUCKET_THUMBNAILS || 'soko-vibe-thumbnails',
     bucketBackups: process.env.R2_BUCKET_BACKUPS || 'soko-vibe-backups',
+    // KYC identity documents live in their own bucket that has no public surface
+    // at all: no custom domain, r2.dev disabled, and no binding in the media
+    // Worker. Reads only ever go through a short-lived presigned GET.
+    bucketKyc: process.env.R2_BUCKET_KYC || 'soko-vibe-kyc',
     publicUrl: process.env.R2_PUBLIC_URL || 'https://media.sokovibe.co.tz',
   },
   

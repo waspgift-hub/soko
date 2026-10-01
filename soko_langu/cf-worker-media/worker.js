@@ -20,26 +20,47 @@
  */
 
 // key prefix -> R2 binding
-const BUCKETS = [
+const BUCKET_FOR_PREFIX = [
   { prefix: 'images', binding: 'IMAGES' },
   { prefix: 'videos', binding: 'VIDEOS' },
   { prefix: 'thumbnails', binding: 'THUMBNAILS' },
   { prefix: 'backups', binding: 'BACKUPS' },
 ];
 
+// KYC identity documents (passport/ID, selfie) must never be reachable through
+// this Worker. Two independent reasons, and both must hold:
+//
+//  1. There is NO `kyc` binding below. Even a routing bug on this file cannot
+//     read the private bucket, because the binding does not exist in this
+//     deployment at all.
+//  2. The prefix is still refused explicitly below rather than falling through to
+//     the "unknown namespace" 404, so the refusal is intentional and greppable
+//     instead of an accident of the bucket map.
+//
+// The only supported read path is a short-lived presigned GET minted by the API
+// after it authorises the caller (`GET /api/v1/kyc/documents/:id/read-url` for
+// the owner, `GET /api/v1/admin/kyc/:userId/:id/read-url` for a reviewer). Those
+// URLs point at R2 directly and do not traverse this Worker.
+const DENIED_PREFIXES = ['kyc'];
+
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const ONE_HOUR = 'public, max-age=3600';
 
 function bindingFor(key) {
   const seg = key.split('/')[0];
-  const hit = BUCKETS.find((b) => b.prefix === seg);
-  return hit ? hit.binding : null;
+  if (DENIED_PREFIXES.includes(seg)) return { denied: true };
+  const hit = BUCKET_FOR_PREFIX.find((b) => b.prefix === seg);
+  return hit ? { binding: hit.binding } : { unknown: true };
 }
 
-function errorResponse(status, message) {
+function errorResponse(status, message, extraHeaders) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      ...(extraHeaders || {}),
+    },
   });
 }
 
@@ -55,10 +76,13 @@ export default {
     const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
     if (!key) return errorResponse(400, 'missing_key');
 
-    const bindingName = bindingFor(key);
-    if (!bindingName) return errorResponse(404, 'unknown_media_namespace');
+    const target = bindingFor(key);
+    if (target.denied) {
+      return errorResponse(403, 'private_media_namespace', { 'x-media-denied': 'kyc' });
+    }
+    if (target.unknown) return errorResponse(404, 'unknown_media_namespace');
 
-    const bucket = env[bindingName];
+    const bucket = env[target.binding];
     if (!bucket) return errorResponse(500, 'bucket_unavailable');
 
     // Range support: Flutter's video player and Safari both request byte

@@ -6,6 +6,14 @@ compatibility_date = "2024-09-01"
 # first path segment (`images/`, `videos/`, `thumbnails/`, `backups/`) so the
 # storage layout never leaks into URLs and one cache serves every kind.
 #
+# There is deliberately NO binding for the KYC identity bucket
+# (soko-vibe-kyc). Identity documents are not public media: they are read only
+# through short-lived presigned GET URLs that the API mints after authorising the
+# caller. Leaving the bucket unbound here means this Worker cannot serve those
+# objects even if its routing logic were changed by mistake — the deny is
+# structural, not just a check in worker.js. Do not add a KYC binding to this
+# file.
+#
 # DNS: a proxied CNAME for `media` must exist on the zone; this Worker route
 # intercepts the request at the edge, so the CNAME target is never contacted.
 [[r2_buckets]]

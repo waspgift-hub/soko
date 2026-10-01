@@ -25,7 +25,7 @@ router.post(
   requireActive,
   validate({
     body: z.object({
-      kind: z.enum(['image', 'video', 'thumbnail']),
+      kind: z.enum(['image', 'video', 'thumbnail', 'kyc']),
       contentType: z.string().min(1).max(100),
       ownerType: z.enum(OWNER_TYPES),
       ownerId: OWNER_ID,
@@ -37,19 +37,26 @@ router.post(
       contentType: req.body.contentType,
       ownerType: req.body.ownerType,
       ownerId: req.body.ownerId,
+      // KYC uploads are filed under the caller's own uid regardless of what the
+      // body asked for (see upload-service.createUploadSession).
+      callerUid: req.user && req.user.firebaseUid,
     });
     // Queue a post-upload processing job (image thumbnail / video transcode).
     // Best-effort: upload URL already returned, job failure never blocks it.
+    // KYC documents are never thumbnailed: a derived copy of an identity
+    // document in the public thumbnails bucket would undo the whole point.
     try {
-      const { getMediaQueue } = require('../../services/queue');
-      const queue = getMediaQueue();
-      await queue.add(req.body.kind === 'video' ? 'video-transcode' : 'image', {
-        r2Key: session.r2Key,
-        thumbnailR2Key: session.thumbnailR2Key || null,
-        ownerType: req.body.ownerType,
-        ownerId: req.body.ownerId,
-        kind: req.body.kind,
-      });
+      if (req.body.kind !== 'kyc') {
+        const { getMediaQueue } = require('../../services/queue');
+        const queue = getMediaQueue();
+        await queue.add(req.body.kind === 'video' ? 'video-transcode' : 'image', {
+          r2Key: session.r2Key,
+          thumbnailR2Key: session.thumbnailR2Key || null,
+          ownerType: req.body.ownerType,
+          ownerId: req.body.ownerId,
+          kind: req.body.kind,
+        });
+      }
     } catch (e) {
       console.error('[MEDIA] queue failed:', e.message);
     }

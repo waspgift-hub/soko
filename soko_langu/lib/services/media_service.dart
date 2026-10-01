@@ -94,4 +94,20 @@ class MediaService {
   }) {
     return uploadImage(XFile(file.path), owner: owner);
   }
+
+  /// Uploads a KYC identity document to the private store.
+  ///
+  /// Returns the object key, not a URL — see [R2MediaService.uploadKycImage].
+  /// Kept out of [uploadImage] on purpose: identity documents must never share a
+  /// code path with public marketplace media, where a mistaken flag or owner
+  /// would publish a passport photo.
+  static Future<String> uploadKycImage(XFile file) {
+    if (!_useR2) {
+      throw NetworkError(
+        message: 'KYC documents require private R2 storage',
+        userMessage: 'Tafadhali jaribu tena',
+      );
+    }
+    return R2MediaService.uploadKycImage(file);
+  }
 }

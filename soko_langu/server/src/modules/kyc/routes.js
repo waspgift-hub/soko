@@ -2,29 +2,74 @@ const { Router } = require('express');
 const { authenticate, authenticateAdmin } = require('../../middleware/auth');
 const kycService = require('./kyc-service');
 const { writeAudit, auditFromReq } = require('../../services/audit');
+const { otpSendGuard, otpVerifyGuard, releaseOtpClaim } = require('../../middleware/otpGuard');
+const { presignKycDocument, DOCUMENT_IDS } = require('../media/kyc-documents');
 
 const router = Router();
+
+// Answers a send attempt honestly. Every KYC OTP send route used to reply
+// { success: true } regardless of whether the SMS/mail actually went out, so the
+// app told the seller to wait for a code that was never delivered. A failed
+// delivery now also gives back the guard's cooldown and quota slot, because the
+// user is about to hit "resend" and must not be punished for our gateway fault.
+async function respondToOtpSend(res, req, result, errorCode) {
+  if (!result || !result.sent) {
+    await releaseOtpClaim(req);
+    return res.status(502).json({
+      success: false,
+      error: { code: errorCode, message: 'OTP haukuweza kutumwa. Jaribu tena.' },
+    });
+  }
+  return res.json({ success: true, data: result });
+}
 
 // ---------------------------------------------------------------------------
 // App-facing (Firebase-authenticated, owner-only)
 // ---------------------------------------------------------------------------
 
+// Temporary read URL for the CALLER'S OWN KYC document.
+//
+// There is deliberately no user id in the path: the row is looked up by the
+// verified session's uid, so there is no identifier a caller could swap to reach
+// another seller's passport. `expectOwnerUid` re-checks ownership inside the
+// resolver as defence in depth.
+//
+// Without this the seller cannot see the document they just submitted, because
+// the stored column is a private key and has no public URL.
+router.get('/documents/:documentId/read-url', authenticate, async (req, res) => {
+  const uid = req.user.firebaseUid;
+  try {
+    const result = await presignKycDocument({
+      userId: uid,
+      documentId: req.params.documentId,
+      expectOwnerUid: uid,
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    res.status(e.status || 500).json({
+      success: false,
+      error: { code: e.code || 'KYC_DOCUMENT_READ_FAILED' },
+    });
+  }
+});
+
 // Send a phone OTP (SMS). body: { value }   -> { success, sent, expiresInSec }
-router.post('/verify/phone/send', authenticate, async (req, res) => {
+router.post('/verify/phone/send', authenticate, otpSendGuard('phone', 'value'), async (req, res) => {
   try {
     const result = await kycService.sendContactOtp({
       userId: req.firebaseUid,
       channel: 'phone',
       value: req.body?.value,
     });
-    res.json({ success: true, data: result });
+    return respondToOtpSend(res, req, result, 'KYC_PHONE_OTP_SEND_FAILED');
   } catch (e) {
+    await releaseOtpClaim(req);
     res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_PHONE_OTP_SEND_FAILED', message: e.message } });
   }
 });
 
 // Verify a phone OTP. body: { value, otp }   -> { success, verified }
-router.post('/verify/phone/confirm', authenticate, async (req, res) => {
+router.post('/verify/phone/confirm', authenticate, otpVerifyGuard('phone', 'value'), async (req, res) => {
   try {
     const result = await kycService.verifyContactOtp({
       userId: req.firebaseUid,
@@ -39,21 +84,22 @@ router.post('/verify/phone/confirm', authenticate, async (req, res) => {
 });
 
 // Send an email OTP. body: { value }         -> { success, sent, expiresInSec }
-router.post('/verify/email/send', authenticate, async (req, res) => {
+router.post('/verify/email/send', authenticate, otpSendGuard('email', 'value'), async (req, res) => {
   try {
     const result = await kycService.sendContactOtp({
       userId: req.firebaseUid,
       channel: 'email',
       value: req.body?.value,
     });
-    res.json({ success: true, data: result });
+    return respondToOtpSend(res, req, result, 'KYC_EMAIL_OTP_SEND_FAILED');
   } catch (e) {
+    await releaseOtpClaim(req);
     res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_EMAIL_OTP_SEND_FAILED', message: e.message } });
   }
 });
 
 // Verify an email OTP. body: { value, otp }  -> { success, verified }
-router.post('/verify/email/confirm', authenticate, async (req, res) => {
+router.post('/verify/email/confirm', authenticate, otpVerifyGuard('email', 'value'), async (req, res) => {
   try {
     const result = await kycService.verifyContactOtp({
       userId: req.firebaseUid,
@@ -84,28 +130,30 @@ router.get('/status/:userId', authenticate, async (req, res) => {
 
 // Send a KYC contact OTP (phone => SMS, email => mailer). `channel` is
 // 'phone' or 'email'; `value` is the raw contact to verify.
-router.post('/verify/phone', authenticate, async (req, res) => {
+router.post('/verify/phone', authenticate, otpSendGuard('phone', 'value'), async (req, res) => {
   try {
     const result = await kycService.sendContactOtp({
       userId: req.firebaseUid,
       channel: 'phone',
       value: req.body?.value,
     });
-    res.json({ success: true, data: result });
+    return respondToOtpSend(res, req, result, 'KYC_OTP_SEND_FAILED');
   } catch (e) {
+    await releaseOtpClaim(req);
     res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_OTP_SEND_FAILED', message: e.message } });
   }
 });
 
-router.post('/verify/email', authenticate, async (req, res) => {
+router.post('/verify/email', authenticate, otpSendGuard('email', 'value'), async (req, res) => {
   try {
     const result = await kycService.sendContactOtp({
       userId: req.firebaseUid,
       channel: 'email',
       value: req.body?.value,
     });
-    res.json({ success: true, data: result });
+    return respondToOtpSend(res, req, result, 'KYC_OTP_SEND_FAILED');
   } catch (e) {
+    await releaseOtpClaim(req);
     res.status(e.status || 400).json({ success: false, error: { code: e.code || 'KYC_OTP_SEND_FAILED', message: e.message } });
   }
 });

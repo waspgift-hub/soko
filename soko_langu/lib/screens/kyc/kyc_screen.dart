@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../services/api_config.dart';
 import '../../services/kyc_service.dart';
 import '../../services/media_service.dart';
 import '../../widgets/google_loading.dart';
@@ -47,6 +50,10 @@ class _KycScreenState extends State<KycScreen> {
   String? _reviewNotes;
   String? _kycIdImageUrl;
   String? _kycSelfieUrl;
+  // Short-lived signed URLs for the documents above. Null while loading or when
+  // the server refuses — the raw key is never rendered directly.
+  String? _idDocReadUrl;
+  String? _selfieReadUrl;
   XFile? _idImageFile;
   XFile? _selfieFile;
   XFile? _videoFile;
@@ -127,6 +134,35 @@ class _KycScreenState extends State<KycScreen> {
       }
       _prefillFromKyc(kyc, user);
     });
+    // The stored columns hold private object keys, so a displayable URL has to
+    // be minted per session. Legacy Cloudinary rows are absolute URLs already and
+    // are used as-is.
+    await _resolveDocumentUrls();
+  }
+
+  /// Fetches signed read URLs for the caller's own KYC documents.
+  Future<void> _resolveDocumentUrls() async {
+    final idKey = _kycIdImageUrl;
+    final selfieKey = _kycSelfieUrl;
+    String? idUrl;
+    String? selfieUrl;
+
+    if (idKey != null && idKey.startsWith('kyc/')) {
+      idUrl = await _documentReadUrl('idImage');
+    } else if (idKey != null) {
+      idUrl = idKey;
+    }
+    if (selfieKey != null && selfieKey.startsWith('kyc/')) {
+      selfieUrl = await _documentReadUrl('selfie');
+    } else if (selfieKey != null) {
+      selfieUrl = selfieKey;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _idDocReadUrl = idUrl;
+      _selfieReadUrl = selfieUrl;
+    });
   }
 
   /// Refills the form from a previous (rejected) application so the seller
@@ -162,13 +198,38 @@ class _KycScreenState extends State<KycScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
-      return await MediaService.uploadImage(
-        file,
-        folder: 'kyc/${user.uid}',
-        owner: MediaOwner.user,
-      );
+      // Identity documents go to the PRIVATE kyc/ namespace and come back as an
+      // object key, never a public URL — the store it lands in has no public
+      // read path, so a URL here would be a leak or would 404.
+      return await MediaService.uploadKycImage(file);
     } catch (e) {
       debugPrint('Upload error: $e');
+      return null;
+    }
+  }
+
+  /// Short-lived signed URL for one of the caller's own KYC documents.
+  ///
+  /// The KYC row stores an object key, so it cannot be handed to an [Image]
+  /// widget directly. Only the owner can mint this URL, and only for their own
+  /// documents; it stops working on its own after the server's short TTL.
+  Future<String?> _documentReadUrl(String documentId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
+      final token = await user.getIdToken();
+      final res = await http.get(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/api/v1/kyc/documents/$documentId/read-url',
+        ),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>?;
+      return data?['url'] as String?;
+    } catch (e) {
+      debugPrint('KYC document read-url failed: $e');
       return null;
     }
   }
@@ -597,7 +658,7 @@ class _KycScreenState extends State<KycScreen> {
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(_kycIdImageUrl!, height: 150, fit: BoxFit.cover),
+                  child: Image.network(_idDocReadUrl!, height: 150, fit: BoxFit.cover),
                 ),
               ],
             ],
@@ -803,7 +864,7 @@ class _KycScreenState extends State<KycScreen> {
                 label: context.tr('kyc_passport_image'),
                 icon: Icons.credit_card,
                 file: _idImageFile,
-                imageUrl: _kycIdImageUrl,
+                imageUrl: _idDocReadUrl,
                 onPick: () => _pickImage(isSelfie: false),
               ),
             ),
@@ -813,7 +874,7 @@ class _KycScreenState extends State<KycScreen> {
                 label: context.tr('your_selfie'),
                 icon: Icons.face,
                 file: _selfieFile,
-                imageUrl: _kycSelfieUrl,
+                imageUrl: _selfieReadUrl,
                 onPick: () => _pickImage(isSelfie: true),
               ),
             ),

@@ -157,7 +157,38 @@ class R2MediaService {
     return _publicUrl(session['key']! as String);
   }
 
-  /// Compresses and uploads a video to R2.
+  /// Uploads an identity document (passport/ID, selfie) to the private KYC store.
+  ///
+  /// Returns the object KEY, deliberately not a URL. KYC documents have no
+  /// public read path at all — the media Worker refuses the `kyc/` namespace and
+  /// the bucket has no public surface — so a URL here would be either dead on
+  /// arrival or a leak. The app stores the key on the KYC row and asks
+  /// `GET /api/v1/kyc/documents/:id/read-url` for a short-lived signed URL
+  /// whenever it needs to display the document.
+  static Future<String> uploadKycImage(XFile xfile) async {
+    final uploadFile = File(xfile.path);
+    final ext = _extensionFor(uploadFile);
+    final contentType = _contentTypeFor(ext);
+
+    // No lossy compression: a reviewer has to be able to read the document, and
+    // the access control here is the private bucket, not the file size.
+    final session = await _createUploadSession(
+      kind: 'kyc',
+      contentType: contentType,
+      ownerType: 'user',
+      ownerId: _ownerId(),
+    );
+
+    await _putToR2(
+      url: session['uploadUrl']! as String,
+      bytes: await uploadFile.readAsBytes(),
+      contentType: contentType,
+    );
+
+    return session['key']! as String;
+  }
+
+/// Compresses and uploads a video to R2.
   static Future<String> uploadVideo(
     XFile xfile, {
     String ownerType = 'product',
