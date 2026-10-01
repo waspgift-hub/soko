@@ -99,19 +99,18 @@ async function sha256(text) {
 async function buildCacheKey(request, meta, rule) {
   const url = new URL(request.url);
   const searchText = url.search.length > 0 ? '?' + url.search : '';
+  // Method is part of the key so a GET and a POST rule that ever land on the
+  // same path cannot share an entry.
+  const prefix = `${rule.ttl}:${meta.method}`;
   if (rule.keyBody) {
     const body = await request.clone().text();
-    return `${rule.ttl}:${meta.pathname}${searchText}#${await sha256(body)}`;
+    return `${prefix}:${meta.pathname}${searchText}#${await sha256(body)}`;
   }
   if (rule.keyAuth) {
     const auth = request.headers.get('Authorization') || '';
-    return `${rule.ttl}:${meta.pathname}${searchText}#${await sha256(auth)}`;
+    return `${prefix}:${meta.pathname}${searchText}#${await sha256(auth)}`;
   }
-  return `${rule.ttl}:${meta.pathname}${searchText}`;
-}
-
-function isCached(method, pathname) {
-  return CACHE_RULES.some((r) => r.match({ method, pathname }));
+  return `${prefix}:${meta.pathname}${searchText}`;
 }
 
 // Scanner/probe paths that never exist on this API. Answered at the edge so
@@ -169,7 +168,7 @@ async function edgeRateLimit(request, env, ctx) {
 // Security headers applied to every response the edge returns. The origin sets
 // its own CSP for HTML pages; the edge layer only adds transport/embedding
 // guards that are safe for both JSON and HTML.
-function withSecurityHeaders(res) {
+function withSecurityHeaders(res, edgeCache) {
   const headers = new Headers(res.headers);
   headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains');
   headers.set('x-content-type-options', 'nosniff');
@@ -177,6 +176,7 @@ function withSecurityHeaders(res) {
   headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   headers.delete('x-powered-by');
   headers.delete('server');
+  if (edgeCache) headers.set('x-edge-cache', edgeCache);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
@@ -221,12 +221,39 @@ export default {
     }
 
     // 4. Cached flow with stale-while-revalidate.
+    //
+    // A cache bug must never be able to take the API offline, so every failure
+    // below degrades to a plain proxied response instead of throwing.
     const cache = caches.default;
     const cacheKeyFinal = await buildCacheKey(request, meta, rule);
-    // Include the resolved origin in the key: the same path served from
-    // different regions must not share a cache entry with a foreign origin.
-    const cacheUrl = new URL(`${origin}${cacheKeyFinal}`);
-    const keyWithPath = new Request(cacheUrl, { method: method });
+
+    // Synthetic, stable cache-key URL. Two hard requirements:
+    //  1. It MUST be a GET Request. Cloudflare's Cache API only matches and
+    //     stores GET: `cache.match()` on a POST Request misses every time and
+    //     `cache.put()` rejects it. The original code used `{ method: method }`,
+    //     so all four POST search routes were never cached — every app open hit
+    //     Render and tripped `searchLimiter` (30/min) into 429s, emptying the
+    //     trending / most-rated carousels.
+    //  2. The key MUST be encoded into the PATH, never concatenated onto the
+    //     origin. `new URL(origin + ttl + pathname)` built a malformed authority
+    //     (`…onrender.com3600:/api/…`); folding the method in turned the second
+    //     colon into a non-numeric port, `new URL()` threw, and every request
+    //     through the edge returned 500.
+    // `.invalid` is reserved by RFC 2606 and can never resolve — fine, because
+    // this URL is only ever a cache key and is never fetched.
+    let keyWithPath;
+    try {
+      // The resolved origin is folded into the key so the same path served from
+      // different regions never shares an entry with a foreign origin.
+      const cacheUrl = new URL('https://soko-edge-cache.invalid/k/');
+      cacheUrl.pathname = `/k/${encodeURIComponent(`${origin}|${cacheKeyFinal}`)}`;
+      keyWithPath = new Request(cacheUrl, { method: 'GET' });
+    } catch (e) {
+      return withSecurityHeaders(
+        await proxyFetch(request, url, origin, env),
+        'MISS-NOKEY',
+      );
+    }
 
     const cachedRes = await cache.match(keyWithPath);
     if (cachedRes) {
@@ -234,23 +261,29 @@ export default {
       const ageMs = Date.now() - fetchAt;
       if (ageMs <= rule.ttl * 1000) {
         // Fresh hit — serve straight from the edge.
-        return withSecurityHeaders(cloneResponse(cachedRes));
+        return withSecurityHeaders(cloneResponse(cachedRes, 'HIT'));
       }
       // Stale hit — serve immediately, revalidate in background.
-      ctx.waitUntil(revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin, env));
-      return withSecurityHeaders(cloneResponse(cachedRes));
+      ctx.waitUntil(revalidateAndStore(cache, keyWithPath, request, url, rule, origin, env));
+      return withSecurityHeaders(cloneResponse(cachedRes, 'STALE'));
     }
 
     // Cold miss — fetch from origin and store.
     const originRes = await proxyFetch(request, url, origin, env);
-    if (originRes.status === 200) {
-      ctx.waitUntil(cache.put(keyWithPath, tagResponse(originRes.clone())));
+    if (originRes.status !== 200) {
+      // Never cache an error. A stored 429 would keep serving RATE_LIMITED to
+      // every user for the whole TTL, turning a transient origin blip into an
+      // outage that lasts far longer than the blip.
+      return withSecurityHeaders(originRes, 'MISS-ORIGIN-ERROR');
     }
-    return withSecurityHeaders(originRes);
+    // A failed store must not surface as an unhandled rejection: the response
+    // is already correct, only the next request pays origin cost again.
+    ctx.waitUntil(cache.put(keyWithPath, tagResponse(originRes.clone())).catch(() => {}));
+    return withSecurityHeaders(originRes, 'MISS');
   },
 };
 
-async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin, env) {
+async function revalidateAndStore(cache, keyWithPath, request, url, rule, origin, env) {
   try {
     const originRes = await proxyFetch(request, url, origin, env);
     if (originRes.status === 200) {
@@ -299,7 +332,9 @@ function tagResponse(res) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-function cloneResponse(res) {
+function cloneResponse(res, edgeCache) {
   // Fresh clones keep the edge stamp for metrics.
-  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
+  const headers = new Headers(res.headers);
+  headers.set('x-edge-cache', edgeCache || 'HIT');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }

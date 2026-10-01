@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
-import '../../theme/app_motion.dart';
 
-/// Premium auth text field: 20dp radius, soft glass fill, floating label and
-/// a 2px primary border that animates in on focus. Form validation errors
-/// render inline below the field via the enclosing [Form].
-class AuthTextField extends StatefulWidget {
+import '../ds/standard_input_field.dart';
+
+/// Auth-surface input. Thin adapter over the design-system
+/// [StandardInputField] so every field on login, register, forgot-password and
+/// OTP screens shares one set of dimensions, padding and validation chrome.
+///
+/// This widget used to hand-roll its own glass container, floating label and a
+/// hard-coded `contentPadding: EdgeInsets.symmetric(vertical: 22)`, which made
+/// fields ~90dp tall — tall enough to overflow the register form once the
+/// keyboard opened on a small phone, and duplicated for no reason what the DS
+/// already owns ([DsFieldSize], [DsFieldVariant], focus/error animation).
+/// Kept as a separate class because auth needs `autofillHints` and an explicit
+/// suffix slot for the password / resend controls the DS does not own.
+///
+/// [DsFieldVariant.flat] is deliberate: auth fields sit on the raised AuthCard
+/// surface, where the DS reserves its extruded shadow for flat backgrounds and
+/// a second shadow would fight the card's own elevation.
+class AuthTextField extends StatelessWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final String label;
@@ -21,6 +32,10 @@ class AuthTextField extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final void Function(String)? onFieldSubmitted;
   final bool enabled;
+
+  /// Density of the field. Defaults to [DsFieldSize.lg] because auth is a
+  /// primary, thumb-driven surface — the one place a taller target is right.
+  final DsFieldSize size;
 
   const AuthTextField({
     super.key,
@@ -38,107 +53,28 @@ class AuthTextField extends StatefulWidget {
     this.onChanged,
     this.onFieldSubmitted,
     this.enabled = true,
+    this.size = DsFieldSize.lg,
   });
 
   @override
-  State<AuthTextField> createState() => _AuthTextFieldState();
-}
-
-class _AuthTextFieldState extends State<AuthTextField> {
-  late final FocusNode _focus = widget.focusNode ?? FocusNode();
-  late final ValueNotifier<bool> _focused = ValueNotifier(false);
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(_onFocusChanged);
-  }
-
-  void _onFocusChanged() {
-    _focused.value = _focus.hasFocus;
-  }
-
-  @override
-  void dispose() {
-    _focus.removeListener(_onFocusChanged);
-    if (widget.focusNode == null) _focus.dispose();
-    _focused.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ValueListenableBuilder<bool>(
-      valueListenable: _focused,
-      builder: (context, focused, _) {
-        return AnimatedContainer(
-          duration: Motion.pressSpringBack,
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(AppRadius2.xl),
-            border: Border.all(
-              color: focused ? cs.primary : cs.brandBorder,
-              width: focused ? 2 : 1,
-            ),
-            boxShadow: focused
-                ? [
-                    BoxShadow(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      blurRadius: 22,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : null,
-          ),
-          child: TextFormField(
-            controller: widget.controller,
-            focusNode: _focus,
-            enabled: widget.enabled,
-            obscureText: widget.obscureText,
-            keyboardType: widget.keyboardType,
-            textInputAction: widget.textInputAction,
-            autofillHints: widget.autofillHints,
-            validator: widget.validator,
-            onChanged: widget.onChanged,
-            onFieldSubmitted: widget.onFieldSubmitted,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
-            decoration: InputDecoration(
-              labelText: widget.label,
-              hintText: widget.hint,
-              prefixIcon: widget.prefixIcon == null
-                  ? null
-                  : Icon(
-                      widget.prefixIcon,
-                      size: 24,
-                      color: focused ? cs.primary : cs.onSurfaceVariant,
-                    ),
-              suffixIcon: widget.suffix,
-              floatingLabelStyle: TextStyle(
-                color: focused ? cs.primary : cs.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-              errorStyle: TextStyle(
-                color: cs.error,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-              // Container renders the border, so the field itself stays borderless.
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              errorBorder: InputBorder.none,
-              focusedErrorBorder: InputBorder.none,
-              isDense: false,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 22,
-              ),
-            ),
-          ),
-        );
-      },
+    return StandardInputField(
+      controller: controller,
+      focusNode: focusNode,
+      label: label,
+      hint: hint,
+      prefixIcon: prefixIcon,
+      suffix: suffix,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      validator: validator,
+      onChanged: onChanged,
+      onSubmitted: onFieldSubmitted,
+      enabled: enabled,
+      variant: DsFieldVariant.flat,
+      size: size,
     );
   }
 }

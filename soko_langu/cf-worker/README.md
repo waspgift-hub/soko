@@ -21,6 +21,31 @@ payments, escrow, auth all go to the origin untouched.
 Stale-while-revalidate: an expired entry is served instantly and refreshed in
 the background, so a burst of users never thunders into Render.
 
+### Verifying the cache actually works
+
+Every cached route returns an `x-edge-cache` header. Two identical requests must
+show `MISS` then `HIT`:
+
+```bash
+curl -si -X POST -H 'content-type: application/json' -d '{}' \
+  https://api.sokovibe.co.tz/api/search/trending | grep -i x-edge-cache
+```
+
+| Value | Meaning |
+|---|---|
+| `MISS` | cold — fetched from Render, now stored |
+| `HIT` | served from the edge; Render never saw the request |
+| `STALE` | served from edge while refreshing in background |
+| `MISS-ORIGIN-ERROR` | origin returned non-200; **never cached**, so a 429 or 500 expires immediately instead of poisoning the cache for the whole TTL |
+| `MISS-NOKEY` | cache key could not be built — degraded to a proxied response |
+
+If a cached POST route keeps returning `MISS`, the cache key is broken, not the
+origin. Two rules govern the key and both were violated at one point: the key
+Request must be `GET` (the Cache API refuses to store or match anything else —
+this is why the four POST search routes were silently never cached and every app
+open tripped the origin's 30/min search limiter into 429s), and the key must be
+URL-encoded into a path rather than concatenated onto the origin string.
+
 ## Edge protections (all in `worker.js`, no dashboard clicks needed)
 
 - **Scanner/probe blocking** — `/.env`, `/.git/*`, `/wp-*`, `*.php`,
@@ -78,8 +103,10 @@ Then create a DNS record in the Cloudflare dashboard for `sokovibe.co.tz`:
 
 ```bash
 curl -si https://api.sokovibe.co.tz/health
+curl -si -X POST -H 'content-type: application/json' -d '{}' \
+  https://api.sokovibe.co.tz/api/search/trending | grep -i x-edge-cache
 curl -si -H "Authorization: Bearer <token>" https://api.sokovibe.co.tz/api/trust/passport/<sellerId>
-# second request ~1s later should show `cf-cache-status: HIT` and `x-soko-edge: 1`
+# repeat each: the second call must show `x-edge-cache: HIT` and `x-soko-edge: 1`
 ```
 
 ## Point the app at it
