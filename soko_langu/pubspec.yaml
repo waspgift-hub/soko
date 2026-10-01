@@ -83,6 +83,13 @@ dependencies:
   video_player: ^2.9.2
   webview_flutter: ^4.13.0
   on_audio_query: ^2.9.0
+  # Audio goes through just_audio rather than video_player: only just_audio can
+  # hand playback to audio_service, which is what supplies the notification,
+  # lock-screen controls and background playback. video_player stays for video.
+  just_audio: ^0.9.42
+  audio_service: ^0.18.18
+  audio_session: ^0.1.25
+  rxdart: ^0.28.0
   flutter_animate: ^4.5.0
   flutter_staggered_animations: ^1.1.1
   speech_to_text: ^7.0.0

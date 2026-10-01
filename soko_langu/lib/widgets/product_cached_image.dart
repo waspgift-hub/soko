@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/soko_cache_manager.dart';
@@ -18,6 +20,7 @@ import 'ds/ds.dart';
 /// - Optional hero animation for product detail transitions
 class ProductCachedImage extends StatelessWidget {
   final String? url;
+  final String? placeholderUrl;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -28,6 +31,7 @@ class ProductCachedImage extends StatelessWidget {
   const ProductCachedImage({
     super.key,
     this.url,
+    this.placeholderUrl,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -39,7 +43,6 @@ class ProductCachedImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final placeholder = _buildPlaceholder(cs);
 
     if (url == null || url!.isEmpty) {
       return _wrapWithHero(_buildFallback(cs));
@@ -56,8 +59,28 @@ class ProductCachedImage extends StatelessWidget {
           fit: fit,
           fadeInDuration: const Duration(milliseconds: 300),
           fadeOutDuration: const Duration(milliseconds: 100),
-          placeholder: (_, _) => placeholder,
+          placeholder: (_, _) => _buildImagePlaceholder(cs),
           errorWidget: (_, _, _) => errorWidget ?? _buildFallback(cs),
+        ),
+      ),
+    );
+  }
+
+  /// Blurred low-res preview while the full image loads (Facebook-style),
+  /// falling back to shimmer when no compressed variant exists.
+  Widget _buildImagePlaceholder(ColorScheme cs) {
+    final low = placeholderUrl;
+    if (low == null || low.isEmpty) return _buildPlaceholder(cs);
+    return Container(
+      color: cs.surfaceContainerLow,
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Image.network(
+          low,
+          fit: fit,
+          width: width,
+          height: height,
+          errorBuilder: (_, _, _) => _buildPlaceholder(cs),
         ),
       ),
     );

@@ -169,10 +169,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void _shareProduct(Product product) {
     final price =
         '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
+    final url = DeepLinkService.productShareUrl(product.id);
     final text =
+        "$url\n"
         "${product.name}\n"
-        "${context.trParams('share_price_line', {'price': price})}\n"
-        "${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(product.id)}";
+        "${context.trParams('share_price_line', {'price': price})}";
     SharePlus.instance.share(ShareParams(text: text));
   }
 
@@ -225,167 +226,239 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (product.images.isNotEmpty)
-                SizedBox(
-                  width: double.infinity,
-                  height: MediaQuery.of(context).size.width,
-                  child: Stack(
-                    children: [
-                      Hero(
-                        tag: 'product-img-${product.id}',
-                        child: PageView.builder(
-                          controller: _imageController,
-                          itemCount: product.images.length,
-                          onPageChanged: (index) {
-                            setState(() => _currentImageIndex = index);
-                          },
-                          itemBuilder: (context, index) {
-                            return Semantics(
-                              button: true,
-                              label: context.tr('view_full_image'),
-                              onTap: () => _showFullScreenImage(
-                                context,
-                                product.images,
-                                index,
-                              ),
-                              child: GestureDetector(
-                                excludeFromSemantics: true,
-                                onTap: () => _showFullScreenImage(
-                                  context,
-                                  product.images,
-                                  index,
-                                ),
-                                child: ProductCachedImage(
-                                url: product.images[index],
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            );
-                          },
-                        ),
-                      ),
-                      // Bottom gradient overlay
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        height: 80,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.5),
-                                Colors.transparent,
-                              ],
+              if (product.images.isNotEmpty || (product.videoUrl ?? '').isNotEmpty)
+                Builder(
+                  builder: (context) {
+                    final videoUrl = product.videoUrl ?? '';
+                    final hasVideo = videoUrl.isNotEmpty;
+                    final slideCount =
+                        product.images.length + (hasVideo ? 1 : 0);
+                    final onVideoSlide =
+                        hasVideo && _currentImageIndex == product.images.length;
+                    return SizedBox(
+                      width: double.infinity,
+                      height: MediaQuery.of(context).size.width,
+                      child: Stack(
+                        children: [
+                          Hero(
+                            tag: 'product-img-${product.id}',
+                            child: PageView.builder(
+                              controller: _imageController,
+                              itemCount: slideCount,
+                              onPageChanged: (index) {
+                                setState(() => _currentImageIndex = index);
+                              },
+                              itemBuilder: (context, index) {
+                                if (hasVideo && index == product.images.length) {
+                                  // keeps the seller's original file — transcode job is a stub,
+                                  // so nothing recompresses the video before playback
+                                  return ProductVideoPlayer(
+                                    url: videoUrl,
+                                    autoPlay: true,
+                                    height:
+                                        MediaQuery.of(context).size.width,
+                                  );
+                                }
+                                final imageUrl = product.images[index];
+                                return Semantics(
+                                  button: true,
+                                  label: context.tr('view_full_image'),
+                                  onTap: () => _showFullScreenImage(
+                                    context,
+                                    product.images,
+                                    index,
+                                  ),
+                                  child: GestureDetector(
+                                    excludeFromSemantics: true,
+                                    onTap: () => _showFullScreenImage(
+                                      context,
+                                      product.images,
+                                      index,
+                                    ),
+                                    child: ProductCachedImage(
+                                      url: imageUrl,
+                                      // low-res Cloudinary preview while full quality loads;
+                                      // R2 has no on-the-fly variants yet, so those keep shimmer
+                                      placeholderUrl:
+                                          imageUrl.contains('cloudinary.com')
+                                              ? getThumbnailUrl(imageUrl,
+                                                  width: 80)
+                                              : null,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                        ),
-                      ),
-                      // Dot indicators
-                      if (product.images.length > 1)
-                        Positioned(
-                          bottom: 12,
-                          left: 0,
-                          right: 0,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(
-                              product.images.length,
-                              (index) => AnimatedContainer(
-                                duration:
-                                    const Duration(milliseconds: 200),
-                                margin: const EdgeInsets.symmetric(
-                                    horizontal: 3),
-                                width: _currentImageIndex == index
-                                    ? 24
-                                    : 6,
-                                height: 6,
+                          // Bottom gradient overlay (image legibility only — hidden while video plays)
+                          if (!onVideoSlide)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              height: 80,
+                              child: Container(
                                 decoration: BoxDecoration(
-                                  borderRadius:
-                                      BorderRadius.circular(3),
-                                  color: _currentImageIndex == index
-                                      ? Colors.white
-                                      : Colors.white
-                                          .withValues(alpha: 0.5),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 0.5),
+                                      Colors.transparent,
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      // Image counter badge
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color:
-                                  Colors.white.withValues(alpha: 0.2),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.photo_library,
-                                size: 12,
-                                color: Colors.white
-                                    .withValues(alpha: 0.8),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${_currentImageIndex + 1}/${product.images.length}',
-                                style: TextStyle(
-                                  color: Colors.white
-                                      .withValues(alpha: 0.9),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                          // Dot indicators
+                          if (slideCount > 1)
+                            Positioned(
+                              bottom: 12,
+                              left: 0,
+                              right: 0,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(
+                                  slideCount,
+                                  (index) => AnimatedContainer(
+                                    duration:
+                                        const Duration(milliseconds: 200),
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 3),
+                                    width: _currentImageIndex == index
+                                        ? 24
+                                        : 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      borderRadius:
+                                          BorderRadius.circular(3),
+                                      color: _currentImageIndex == index
+                                          ? Colors.white
+                                          : Colors.white
+                                              .withValues(alpha: 0.5),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ],
+                            ),
+                          // Slide counter badge
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color:
+                                      Colors.white.withValues(alpha: 0.2),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    onVideoSlide
+                                        ? Icons.videocam
+                                        : Icons.photo_library,
+                                    size: 12,
+                                    color: Colors.white
+                                        .withValues(alpha: 0.8),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_currentImageIndex + 1}/$slideCount',
+                                    style: TextStyle(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.9),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
+                          // Fullscreen hint (image slides only)
+                          if (!onVideoSlide)
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      Colors.black.withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.fullscreen,
+                                  size: 14,
+                                  color:
+                                      Colors.white.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ),
+                          // Video label chip
+                          if (onVideoSlide)
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      Colors.black.withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.videocam,
+                                      size: 14,
+                                      color: Colors.white
+                                          .withValues(alpha: 0.8),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Video',
+                                      style: TextStyle(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.9),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          // Soko Vibe watermark (image slides only)
+                          if (!onVideoSlide)
+                            Positioned(
+                              bottom: 18,
+                              left: 12,
+                              child: IgnorePointer(
+                                child: SokoVibeWatermark(compact: false),
+                              ),
+                            ),
+                        ],
                       ),
-                      // Fullscreen hint icon
-                      Positioned(
-                        top: 12,
-                        left: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.fullscreen,
-                            size: 14,
-                            color:
-                                Colors.white.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ),
-                      // Soko Vibe watermark
-                      Positioned(
-                        bottom: 18,
-                        left: 12,
-                        child: IgnorePointer(
-                          child: SokoVibeWatermark(compact: false),
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 )
               else
                 Container(
@@ -408,8 +481,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ],
                   ),
                 ),
-              if (product.videoUrl != null && product.videoUrl!.isNotEmpty)
-                ProductVideoPlayer(url: product.videoUrl!),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(

@@ -102,11 +102,8 @@ class ProfileMiniPlayer extends StatelessWidget {
                             StreamBuilder<ProfileMediaState>(
                               stream: media.stateStream,
                               builder: (context, playSnap) {
-                                final playing =
-                                    playSnap.data ==
-                                        ProfileMediaState.playing ||
-                                    (playSnap.data == null &&
-                                        media.video?.value.isPlaying == true);
+                                final playing = media.isPlaying ||
+                                    playSnap.data == ProfileMediaState.playing;
                                 return IconButton(
                                   iconSize: 28,
                                   icon: Icon(

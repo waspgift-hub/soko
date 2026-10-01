@@ -47,14 +47,20 @@ String _fmtMs(int ms) {
   return d.inHours > 0 ? '${d.inHours}:$m:$s' : '$m:$s';
 }
 
-ProfileMediaItem _songItem(LocalSong s) => ProfileMediaItem(
-      id: 'local:${s.id}',
-      title: s.artist.isEmpty || s.artist == 'Unknown'
-          ? s.title
-          : '${s.title} — ${s.artist}',
-      videoUrl: '',
-      localPath: s.path,
-    );
+  ProfileMediaItem _songItem(LocalSong s) => ProfileMediaItem(
+        id: 'local:${s.id}',
+        title: s.artist.isEmpty || s.artist == 'Unknown'
+            ? s.title
+            : '${s.title} - ${s.artist}',
+        videoUrl: '',
+        localPath: s.path,
+        // Feed the media notification real metadata so the lock screen shows
+        // artist/album instead of the combined display title.
+        artist: s.artist == 'Unknown' ? '' : s.artist,
+        album: s.album == 'Unknown' ? '' : s.album,
+        duration:
+            s.durationMs > 0 ? Duration(milliseconds: s.durationMs) : null,
+      );
 
 class _LocalSongsTab extends StatefulWidget {
   const _LocalSongsTab();

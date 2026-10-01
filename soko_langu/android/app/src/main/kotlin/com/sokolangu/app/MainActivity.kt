@@ -15,12 +15,15 @@ import android.provider.MediaStore
 import android.appwidget.AppWidgetManager
 import android.util.Log
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+// AudioServiceActivity keeps the FlutterActivity lineage (it subclasses it) and
+// adds the media-button receiver wiring audio_service needs. FragmentActivity
+// would break the Flutter embedding, so it is deliberately not used here.
+class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "soko_lang/video_query"
     private var pendingRoute: String? = null
     private var initialSharePaths: List<String>? = null

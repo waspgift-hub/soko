@@ -44,6 +44,7 @@ import 'services/balance_privacy_service.dart';
 import 'services/interstitial_ad_service.dart';
 import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
+import 'services/media_audio_handler.dart';
 import 'services/receive_share_service.dart';
 import 'services/security_service.dart';
 import 'services/server_keep_alive.dart';
@@ -133,6 +134,14 @@ void main() async {
     } catch (e) {
       debugPrint('LocalNotification: init failed — $e');
     }
+  }
+
+  // --- Media session (background audio + notification controls) ---
+  // Must be registered before the first queue is built: the audio engine is
+  // chosen at play time and never used if the service failed to start.
+  // Web has no audio_service platform implementation, so skip it there.
+  if (!kIsWeb) {
+    await initSokoMediaAudio();
   }
 
   runApp(const SokoVibeApp());

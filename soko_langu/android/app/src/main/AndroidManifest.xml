@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14 requires the type-specific permission for any foreground
+         service that plays media; declaring only FOREGROUND_SERVICE throws
+         SecurityException when audio_service promotes itself. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <application
         android:label="Soko Vibe"

@@ -5,8 +5,15 @@ import 'package:video_player/video_player.dart';
 /// Lazy-initializes on first frame so the gallery stays responsive.
 class ProductVideoPlayer extends StatefulWidget {
   final String url;
+  final bool autoPlay;
+  final double? height;
 
-  const ProductVideoPlayer({super.key, required this.url});
+  const ProductVideoPlayer({
+    super.key,
+    required this.url,
+    this.autoPlay = false,
+    this.height,
+  });
 
   @override
   State<ProductVideoPlayer> createState() => _ProductVideoPlayerState();
@@ -21,11 +28,19 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer> {
     super.initState();
     _controller = VideoPlayerController.networkUrl(
       Uri.parse(widget.url),
-    )..initialize().then((_) {
-        if (mounted) setState(() {});
-      }).catchError((_) {
-        if (mounted) setState(() => _failed = true);
-      });
+    );
+    _controller!.addListener(_onTick);
+    _controller!.initialize().then((_) {
+      if (!mounted) return;
+      setState(() {});
+      if (widget.autoPlay) _controller?.play();
+    }).catchError((_) {
+      if (mounted) setState(() => _failed = true);
+    });
+  }
+
+  void _onTick() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -74,7 +89,7 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer> {
     }
     return Container(
       color: Colors.black,
-      height: MediaQuery.of(context).size.width * 9 / 16,
+      height: widget.height ?? MediaQuery.of(context).size.width * 9 / 16,
       child: child,
     );
   }

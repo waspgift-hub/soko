@@ -3,6 +3,7 @@ import 'dart:io' show File;
 
 import 'package:video_player/video_player.dart';
 
+import 'media_audio_handler.dart';
 import 'media_utils.dart';
 import 'youtube_utils.dart';
 
@@ -17,12 +18,24 @@ class ProfileMediaItem {
   /// reads the file directly — no network involved.
   final String? localPath;
 
+  /// ID3 metadata, when the source has it. Used for the media notification and
+  /// lock-screen controls; empty values are left out of the [MediaItem].
+  final String artist;
+  final String album;
+
+  /// Known length, when the source exposes it up front. Lets the notification
+  /// render a seek bar before the player has loaded the file.
+  final Duration? duration;
+
   const ProfileMediaItem({
     required this.id,
     required this.title,
     required this.videoUrl,
     this.thumbnailUrl,
     this.localPath,
+    this.artist = '',
+    this.album = '',
+    this.duration,
   });
 
   bool get isLocalFile => localPath != null && localPath!.isNotEmpty;
@@ -32,8 +45,9 @@ class ProfileMediaItem {
   /// YouTube never serves directly playable mp4 URLs.
   bool get isYouTube => !isLocalFile && isYouTubeUrl(videoUrl);
 
-  /// True for audio files (mp3, m4a, ...). They play through the same engine
-  /// as video, but the UI renders an artwork card instead of a surface.
+  /// True for audio files (mp3, m4a, ...). When the whole queue is audio it
+  /// plays through just_audio so it can keep playing in the background; a
+  /// mixed or broken setup falls back to the video engine.
   bool get isAudio =>
       !isYouTube &&
       (isAudioUrl(videoUrl) ||
@@ -48,11 +62,19 @@ enum ProfileMediaState { idle, loading, playing, paused, completed, error }
 /// Queue repeat behaviour, same three modes Namida offers.
 enum QueueRepeatMode { off, all, one }
 
+/// Which engine currently owns playback. Audio and video have separate owners
+/// (just_audio vs video_player) and every transport call must dispatch to the
+/// right one, hence an explicit flag rather than guessing from [current].
+enum _MediaEngine { none, video, audio }
+
 /// Queue + playback controller for the profile media section.
 ///
-/// Owns the [VideoPlayerController] lifecycle (one active controller at a
-/// time, disposed before the next item loads) and broadcasts state, index,
-/// position and duration so any widget can render without polling.
+/// Audio-only queues play through [MediaAudioHandler] (just_audio +
+/// audio_service) so playback survives the app going to the background and
+/// surfaces in the notification and lock screen. Video and YouTube items — and
+/// audio on a device where the media session could not start — use the
+/// original [VideoPlayerController] path. Both engines feed the same streams,
+/// so widgets never need to know which one is active.
 class ProfileMediaController {
   List<ProfileMediaItem> _queue = const [];
   int _index = 0;
@@ -61,6 +83,18 @@ class ProfileMediaController {
   bool _disposed = false;
   bool _completionFired = false;
   String? _error;
+
+  _MediaEngine _engine = _MediaEngine.none;
+  ProfileMediaState _currentState = ProfileMediaState.idle;
+
+  /// Audio-engine mirrors of the streams, kept locally so seekBy and the
+  /// toggle button can read them synchronously.
+  bool _audioPlaying = false;
+  Duration _audioPosition = Duration.zero;
+  Duration _audioDuration = Duration.zero;
+  bool _audioAttached = false;
+  String? _loadedAudioSignature;
+  final List<StreamSubscription<Object?>> _audioSubs = [];
 
   /// Playback speeds offered by the speed chip. Same steps Namida exposes in
   /// its player speed selector (settings.player.speeds).
@@ -95,6 +129,20 @@ class ProfileMediaController {
       _sleepEndsAt?.difference(DateTime.now());
   bool get isCurrentYouTube => current?.isYouTube ?? false;
   bool get isCurrentAudio => current?.isAudio ?? false;
+
+  /// True when playback is owned by just_audio. Full-screen UI branches on
+  /// this to show the audio player instead of the video inline player.
+  bool get isAudioEngine => _engine == _MediaEngine.audio;
+
+  /// Single playback signal for the UI, valid on both engines. Widgets use it
+  /// instead of peeking at `video?.value`, which is null for audio.
+  bool get isPlaying => _currentState == ProfileMediaState.playing;
+
+  /// Current playback position, valid on both engines. Lets a widget read the
+  /// position synchronously (e.g. to sync lyrics) without waiting for a tick.
+  Duration get position => _engine == _MediaEngine.audio
+      ? _audioPosition
+      : (_video?.value.position ?? Duration.zero);
   String? get error => _error;
   VideoPlayerController? get video => _video;
 
@@ -126,8 +174,14 @@ class ProfileMediaController {
   /// so a background product-list update never restarts playback.
   Future<void> setQueue(List<ProfileMediaItem> items, {int startAt = 0}) async {
     final keepId = current?.id;
+    final wasPlaying = isPlaying;
     _queue = List.unmodifiable(items);
+    _loadedAudioSignature = null;
     if (_queue.isEmpty) {
+      if (_engine == _MediaEngine.audio) {
+        await MediaAudioHandler.instance.release();
+        _engine = _MediaEngine.none;
+      }
       await _teardownVideo();
       _index = 0;
       _emitAll(ProfileMediaState.idle, Duration.zero, Duration.zero);
@@ -138,17 +192,48 @@ class ProfileMediaController {
       final kept = _queue.indexWhere((e) => e.id == keepId);
       if (kept != -1) at = kept;
     }
-    await playAt(at, autoplay: _video?.value.isPlaying ?? false);
+    await playAt(at, autoplay: wasPlaying);
   }
 
   Future<void> playAt(int i, {bool autoplay = true}) async {
     if (_queue.isEmpty || _disposed) return;
+    final wasAudio = _engine == _MediaEngine.audio;
     _index = i.clamp(0, _queue.length - 1);
     _indexStream.add(_index);
-    await _teardownVideo();
     _completionFired = false;
     _error = null;
     final item = _queue[_index];
+
+    if (_useAudioEngine) {
+      _attachAudio();
+      await _teardownVideo();
+      _engine = _MediaEngine.audio;
+      _audioPosition = Duration.zero;
+      _audioDuration = item.duration ?? Duration.zero;
+      _emitAll(ProfileMediaState.loading, Duration.zero, _audioDuration);
+      final handler = MediaAudioHandler.instance;
+      final signature = _audioSignature();
+      if (signature != _loadedAudioSignature) {
+        _loadedAudioSignature = signature;
+        await handler.loadQueue(
+          _queue.map(_toAudioTrack).toList(growable: false),
+          startIndex: _index,
+          autoplay: autoplay,
+          repeatMode: _audioRepeatMode,
+        );
+      } else {
+        await handler.skipToIndex(_index, autoplay: autoplay);
+      }
+      return;
+    }
+
+    if (wasAudio) {
+      // Leaving audio for a video item: stop the background player so both
+      // engines never sound at once.
+      await MediaAudioHandler.instance.pause();
+    }
+    _engine = _MediaEngine.video;
+    await _teardownVideo();
     if (item.isYouTube) {
       // YouTube items render the nocookie embed in a WebView — there is no
       // video_player engine to drive, so position ticks and completion
@@ -190,6 +275,10 @@ class ProfileMediaController {
   }
 
   Future<void> play() async {
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance.play();
+      return;
+    }
     final c = _video;
     if (c == null) {
       if (_queue.isEmpty) return;
@@ -205,11 +294,23 @@ class ProfileMediaController {
   }
 
   Future<void> pause() async {
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance.pause();
+      return;
+    }
     await _video?.pause();
     if (!_disposed) _state.add(ProfileMediaState.paused);
   }
 
   Future<void> toggle() async {
+    if (_engine == _MediaEngine.audio) {
+      if (_audioPlaying) {
+        await pause();
+      } else {
+        await play();
+      }
+      return;
+    }
     if (_video?.value.isPlaying == true) {
       await pause();
     } else {
@@ -223,12 +324,21 @@ class ProfileMediaController {
   Future<void> previous() => playAt(previousIndex(_index, _queue.length));
 
   Future<void> seekTo(Duration position) async {
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance.seek(position);
+      return;
+    }
     await _video?.seekTo(position);
   }
 
   /// Relative seek that never leaves [0, duration]. Used by the double-tap
   /// zones so a -10s tap at 0:03 lands on 0:00 instead of throwing.
   Future<void> seekBy(Duration delta) async {
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance
+          .seek(clampSeek(_audioPosition, delta, _audioDuration));
+      return;
+    }
     final c = _video;
     if (c == null || !c.value.isInitialized) return;
     await c.seekTo(clampSeek(c.value.position, delta, c.value.duration));
@@ -244,7 +354,11 @@ class ProfileMediaController {
 
   Future<void> setSpeed(double speed) async {
     _speed = speed;
-    await _video?.setPlaybackSpeed(speed);
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance.setSpeed(speed);
+    } else {
+      await _video?.setPlaybackSpeed(speed);
+    }
     if (!_disposed) _speedStream.add(speed);
   }
 
@@ -256,6 +370,9 @@ class ProfileMediaController {
   Future<void> cycleQueueRepeatMode() async {
     const order = [QueueRepeatMode.all, QueueRepeatMode.one, QueueRepeatMode.off];
     _repeatMode = order[(order.indexOf(_repeatMode) + 1) % order.length];
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance.applyRepeatMode(_audioRepeatMode);
+    }
     if (!_disposed) _repeatStream.add(_repeatMode);
   }
 
@@ -295,7 +412,11 @@ class ProfileMediaController {
 
   Future<void> toggleMute() async {
     _muted = !_muted;
-    await _video?.setVolume(_muted ? 0 : 1);
+    if (_engine == _MediaEngine.audio) {
+      await MediaAudioHandler.instance.setPlayerVolume(_muted ? 0 : 1);
+    } else {
+      await _video?.setVolume(_muted ? 0 : 1);
+    }
     if (!_disposed) _mutedStream.add(_muted);
   }
 
@@ -326,10 +447,88 @@ class ProfileMediaController {
 
   void _emitAll(ProfileMediaState s, Duration pos, Duration dur) {
     if (_disposed) return;
+    _currentState = s;
     _state.add(s);
     _indexStream.add(_index);
     _position.add(pos);
     _duration.add(dur);
+  }
+
+  /// True when the whole queue is audio and the media session is available.
+  ///
+  /// The engine cannot render video, so a mixed queue would have to swap
+  /// owners mid-play and lose the notification queue; mixed queues therefore
+  /// stay on video_player.
+  bool get _useAudioEngine {
+    if (_queue.isEmpty) return false;
+    if (!MediaAudioHandler.instance.isReady) return false;
+    return _queue.every((e) => e.isAudio);
+  }
+
+  String _audioSignature() => _queue.map((e) => e.id).join('|');
+
+  AudioRepeatMode get _audioRepeatMode => switch (_repeatMode) {
+        QueueRepeatMode.off => AudioRepeatMode.off,
+        QueueRepeatMode.all => AudioRepeatMode.all,
+        QueueRepeatMode.one => AudioRepeatMode.one,
+      };
+
+  AudioTrack _toAudioTrack(ProfileMediaItem item) => AudioTrack(
+        id: item.id,
+        title: item.title,
+        artist: item.artist,
+        album: item.album,
+        url: item.isLocalFile ? item.localPath! : item.videoUrl,
+        isLocalFile: item.isLocalFile,
+        artworkUrl: item.thumbnailUrl,
+        duration: item.duration,
+      );
+
+  /// Subscribes once to the handler's streams. Listeners only act while the
+  /// audio engine owns playback, so a later video load is unaffected.
+  void _attachAudio() {
+    if (_audioAttached) return;
+    final handler = MediaAudioHandler.instance;
+    if (!handler.isReady) return;
+    _audioAttached = true;
+    _audioSubs.add(handler.indexStream.listen((i) {
+      if (_engine != _MediaEngine.audio || _disposed) return;
+      if (i != _index) {
+        _index = i;
+        _indexStream.add(i);
+      }
+    }));
+    _audioSubs.add(handler.positionStream.listen((p) {
+      if (_engine != _MediaEngine.audio || _disposed) return;
+      _audioPosition = p;
+      _position.add(p);
+    }));
+    _audioSubs.add(handler.durationStream.listen((d) {
+      if (_engine != _MediaEngine.audio || _disposed) return;
+      _audioDuration = d;
+      _duration.add(d);
+    }));
+    _audioSubs.add(handler.playingStream.listen((p) {
+      if (_engine != _MediaEngine.audio || _disposed) return;
+      _audioPlaying = p;
+      _currentState =
+          p ? ProfileMediaState.playing : ProfileMediaState.paused;
+      _state.add(_currentState);
+    }));
+    _audioSubs.add(handler.completedStream.listen((_) {
+      if (_engine != _MediaEngine.audio || _disposed) return;
+      // Advancing is left to the player's loop mode; emitting completed lets
+      // the UI show the end state without double-skipping.
+      _currentState = ProfileMediaState.completed;
+      _state.add(ProfileMediaState.completed);
+    }));
+    _audioSubs.add(handler.errorStream.listen((id) {
+      if (_engine != _MediaEngine.audio || _disposed) return;
+      final match = _queue.where((e) => e.id == id);
+      _error = match.isNotEmpty ? match.first.title : current?.title;
+      _currentState = ProfileMediaState.error;
+      _state.add(ProfileMediaState.error);
+    }));
   }
 
   Future<void> _teardownVideo() async {
@@ -346,6 +545,10 @@ class ProfileMediaController {
     _disposed = true;
     _sleepTimer?.cancel();
     _sleepTicker?.cancel();
+    for (final sub in _audioSubs) {
+      await sub.cancel();
+    }
+    _audioSubs.clear();
     await _teardownVideo();
     await _state.close();
     await _indexStream.close();

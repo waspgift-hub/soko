@@ -572,10 +572,10 @@ class SessionMediaPlayerState extends State<SessionMediaPlayer> {
             StreamBuilder<ProfileMediaState>(
               stream: _media.stateStream,
               builder: (context, stateSnap) {
-                final playing =
-                    stateSnap.data == ProfileMediaState.playing ||
-                    (_media.video?.value.isPlaying == true &&
-                        stateSnap.data != ProfileMediaState.paused);
+                // isPlaying is synchronous and valid on both engines; the
+                // stream keeps the button rebuilding as state changes.
+                final playing = _media.isPlaying ||
+                    stateSnap.data == ProfileMediaState.playing;
                 return IconButton.filled(
                   tooltip: playing ? 'Pause' : 'Play',
                   icon: Icon(playing ? Icons.pause : Icons.play_arrow),
