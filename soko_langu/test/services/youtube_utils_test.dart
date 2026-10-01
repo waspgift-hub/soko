@@ -60,4 +60,14 @@ void main() {
       expect(embed.contains('autoplay=1'), isTrue);
     });
   });
+
+  group('youTubeEmbedHtml', () {
+    test('embeds the video id with error and state channels', () {
+      final html = youTubeEmbedHtml('dQw4w9WgXcQ');
+      expect(html.contains('dQw4w9WgXcQ'), isTrue);
+      expect(html.contains('iframe_api'), isTrue);
+      expect(html.contains('YouTubeError'), isTrue);
+      expect(html.contains('YouTubeState'), isTrue);
+    });
+  });
 }

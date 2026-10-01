@@ -45,3 +45,41 @@ bool isYouTubeUrl(String url) => youTubeIdFromUrl(url) != null;
 /// videos keeps tracking and end-screen upsells out of the marketplace.
 String youTubeEmbedUrl(String videoId) =>
     'https://www.youtube-nocookie.com/embed/$videoId?rel=0&playsinline=1&autoplay=1';
+
+/// Local HTML wrapper around the official YouTube IFrame Player API.
+///
+/// A bare iframe URL fails silently (or with a cryptic "video player
+/// configuration error", code 153) when a video can't be embedded. The API
+/// wrapper reports `onError` codes and playback states back through the
+/// `YouTubeError` / `YouTubeState` JavaScript channels so the app can show a
+/// friendly fallback (or auto-advance on end) instead of a dead frame.
+String youTubeEmbedHtml(String videoId) {
+  return '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}#p{position:absolute;top:0;left:0;width:100%;height:100%}</style>
+</head>
+<body><div id="p"></div>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+var player;
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('p', {
+    height: '100%', width: '100%', videoId: '$videoId',
+    playerVars: { rel: 0, playsinline: 1, autoplay: 1 },
+    events: {
+      onError: function (e) { YouTubeError.postMessage(String(e.data)); },
+      onStateChange: function (e) { YouTubeState.postMessage(String(e.data)); }
+    }
+  });
+}
+</script>
+</body>
+</html>
+''';
+}
+
+/// IFrame API state codes we care about (YT.PlayerState.ENDED).
+const youTubeStateEnded = '0';

@@ -445,7 +445,12 @@ class SessionMediaPlayerState extends State<SessionMediaPlayer> {
       return _ytThumbnail(item, dimmed: true);
     }
     if (_isMobileEmbed) {
-      return _YouTubeEmbed(key: ValueKey(id), videoId: id);
+      return _YouTubeEmbed(
+        key: ValueKey(id),
+        videoId: id,
+        fallbackUrl: item.videoUrl,
+        onEnded: _media.next,
+      );
     }
     return _ytThumbnail(item, dimmed: false);
   }
@@ -805,14 +810,24 @@ class SessionMediaPlayerState extends State<SessionMediaPlayer> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => Scaffold(
+        builder: (dialogContext) => Scaffold(
           backgroundColor: Colors.black,
           appBar: AppBar(
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
-            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          body: Center(child: _YouTubeEmbed(videoId: id)),
+          body: Center(
+            child: _YouTubeEmbed(
+              videoId: id,
+              fallbackUrl: item.videoUrl,
+              onEnded: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
         ),
       ),
     );
@@ -875,8 +890,15 @@ class SessionMediaPlayerState extends State<SessionMediaPlayer> {
 /// one — because the iframe can't be paused from Dart.
 class _YouTubeEmbed extends StatefulWidget {
   final String videoId;
+  final String fallbackUrl;
+  final VoidCallback? onEnded;
 
-  const _YouTubeEmbed({super.key, required this.videoId});
+  const _YouTubeEmbed({
+    super.key,
+    required this.videoId,
+    required this.fallbackUrl,
+    this.onEnded,
+  });
 
   @override
   State<_YouTubeEmbed> createState() => _YouTubeEmbedState();
@@ -884,6 +906,7 @@ class _YouTubeEmbed extends StatefulWidget {
 
 class _YouTubeEmbedState extends State<_YouTubeEmbed> {
   late final WebViewController _controller;
+  String? _errorCode;
 
   @override
   void initState() {
@@ -891,12 +914,62 @@ class _YouTubeEmbedState extends State<_YouTubeEmbed> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
-      ..loadRequest(Uri.parse(youTubeEmbedUrl(widget.videoId)));
+      ..addJavaScriptChannel(
+        'YouTubeError',
+        onMessageReceived: (msg) {
+          if (mounted) setState(() => _errorCode = msg.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'YouTubeState',
+        onMessageReceived: (msg) {
+          if (msg.message == youTubeStateEnded) widget.onEnded?.call();
+        },
+      )
+      ..loadHtmlString(youTubeEmbedHtml(widget.videoId));
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_errorCode != null) return _unplayableFallback();
     return WebViewWidget(controller: _controller);
+  }
+
+  /// Codes 101/150/153 all mean the same thing to a viewer: the owner or
+  /// YouTube won't let this video play inside another app (this is the
+  /// "video player configuration error" users used to see raw). Offer the
+  /// official exit instead of a dead frame.
+  Widget _unplayableFallback() {
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.block, color: Colors.white70, size: 40),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                context.tr('yt_unplayable'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () async {
+                final uri = Uri.tryParse(widget.fallbackUrl);
+                if (uri != null) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: Text(context.tr('watch_on_youtube')),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
