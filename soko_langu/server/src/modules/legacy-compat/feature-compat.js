@@ -58,6 +58,23 @@ const PAID_STATUSES = new Set([
 // hold statuses are NOT credits: money is still in pendingEscrow until release.
 const SELLER_CREDIT_STATUSES = new Set(['delivered', 'delivery_confirmed', 'completed']);
 
+/**
+ * Resolve the acting user for a token-authenticated route.
+ *
+ * The verified ID token is the only authority on identity, so `decoded.uid`
+ * wins. Older app builds additionally echoed `userId` in the request body; a
+ * *different* value is a forgery attempt and is still refused, but its absence
+ * is not an error. Requiring the echo broke every boost purchase at commit
+ * 81fb4f4 (the client dropped the field, the guard kept demanding it, and the
+ * route answered 403 "User ID mismatch" before any payment was attempted).
+ */
+function resolveRequestIdentity(decoded, claimedUserId) {
+  const uid = decoded && decoded.uid;
+  if (!uid) return { ok: false };
+  if (claimedUserId && claimedUserId !== uid) return { ok: false };
+  return { ok: true, userId: uid };
+}
+
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
 const notifLangCache = new Map();
 
@@ -443,7 +460,7 @@ async function failStalePendingBoosts(db) {
 }
 
 // ─── Router ─────────────────────────────────────────────────────────────
-module.exports = function ({ admin: fbAdmin, db }) {
+function createFeatureCompatRouter({ admin: fbAdmin, db }) {
   const A = fbAdmin || admin;
 
   function verifyToken(header) {
@@ -883,10 +900,12 @@ module.exports = function ({ admin: fbAdmin, db }) {
       let decoded;
       try { decoded = await A.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
-      const { productId, tier, amount, durationDays, phone, userId, productName, productImage, productPrice, paymentMethod } = req.body;
-      if (!userId || decoded.uid !== userId) {
+      const { productId, tier, amount, durationDays, phone, productName, productImage, productPrice, paymentMethod } = req.body;
+      const identity = resolveRequestIdentity(decoded, req.body.userId);
+      if (!identity.ok) {
         return res.status(403).json({ error: 'User ID mismatch' });
       }
+      const { userId } = identity;
 
       // Cancel stale pending boosts for same user+product so they don't get stuck
       if (db && userId && productId) {
@@ -2279,4 +2298,7 @@ module.exports = function ({ admin: fbAdmin, db }) {
   });
 
   return router;
-};
+}
+
+module.exports = createFeatureCompatRouter;
+module.exports.resolveRequestIdentity = resolveRequestIdentity;
