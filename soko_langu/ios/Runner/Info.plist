@@ -34,6 +34,8 @@
 	<string>Photo library access is used to select product images and profile photos</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allows saving product images to your photo library</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Music library access is used to play songs stored on your device</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Location is used to set your location for product listings</string>
 	<key>CFBundleURLTypes</key>

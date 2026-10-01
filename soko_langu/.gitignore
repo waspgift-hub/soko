@@ -37,6 +37,12 @@ migrate_working_dir/
 # Node
 node_modules/
 
+# Wrangler build cache and local secrets for the Workers (cf-worker/,
+# cf-worker-ai/). AI_EDGE_KEY belongs in `wrangler secret put`, never in a
+# committed .dev.vars, but the ignore keeps an accident from being committable.
+.wrangler/
+.dev.vars
+
 # Symbolication related
 app.*.symbols
 
@@ -55,6 +61,22 @@ server/last_push_id.txt
 server/server.err
 *.err
 
+# NOTE: android/key.properties and android/**/*.jks are already covered by
+# android/.gitignore. They are left there deliberately — committing either would
+# let anyone sign an update the Play Store accepts as this app.
+
 # Soko Vibe legal PDFs (large, not versioned)
 /*PERSONAL_DATA_PROTECTION*.pdf
 /*THE_PERSONAL_DATA_PROTECTION*.pdf
+
+# Kilo agent toolchain: the whole directory is local scaffolding. agents/ and
+# skills/ are third-party tooling, worktrees/ are throwaway checkouts that would
+# bloat the repo, and kilo.jsonc points at whichever MCP servers the local
+# machine happens to run.
+/.kilo/
+
+# Test-only mutation harnesses. These deliberately rewrite source files to prove a
+# regression suite can fail, so they must never be run from an import or a CI step
+# that does not expect a transiently broken tree.
+/server/test/mutate-refund.js
+/server/test/verify-refund-mutations.js

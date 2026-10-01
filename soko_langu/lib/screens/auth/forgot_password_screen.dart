@@ -66,12 +66,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _sendResetLink() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _isLoading = true; _serverError = null; });
+    setState(() {
+      _isLoading = true;
+      _serverError = null;
+    });
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
-      );
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text.trim());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -103,20 +104,30 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _sendPhoneOtp() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!await RateLimiter.canProceed(action: 'forgot_password_otp', cooldown: const Duration(seconds: 45))) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please wait before requesting another code')),
-      );
+    if (!await RateLimiter.canProceed(
+      action: 'forgot_password_otp',
+      cooldown: Duration(seconds: kOtpResendCooldownSeconds),
+    )) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Please wait before requesting another code')));
       return;
     }
-    setState(() { _isLoading = true; _serverError = null; });
+    setState(() {
+      _isLoading = true;
+      _serverError = null;
+    });
 
     try {
       final normalized = _normalizePhone(_phoneController.text.trim());
       final resp = await http.post(
         Uri.parse(ApiConfig.v1('/auth/send-otp')),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': normalized, 'langCode': await LocalizationService().getLanguage()}),
+        body: jsonEncode({
+          'phone': normalized,
+          'langCode': await LocalizationService().getLanguage(),
+        }),
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode != 200 || result['sent'] != true) {
@@ -127,7 +138,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         setState(() => _otpSent = true);
         await RateLimiter.record('forgot_password_otp');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', _phoneController.text.trim()))),
+          SnackBar(
+            content: Text(
+              context.tr('otp_sent_to').replaceAll('{0}', _phoneController.text.trim()),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -147,7 +162,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _serverError = context.tr('password_length'));
       return;
     }
-    setState(() { _isLoading = true; _serverError = null; });
+    setState(() {
+      _isLoading = true;
+      _serverError = null;
+    });
 
     try {
       final normalized = _normalizePhone(_phoneController.text.trim());
@@ -199,7 +217,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(
-            left: 24, right: 24, top: 8,
+            left: 24,
+            right: 24,
+            top: 8,
             bottom: MediaQuery.of(context).padding.bottom + 20,
           ),
           child: Form(
@@ -207,21 +227,38 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: Column(
               children: [
                 Container(
-                  width: 80, height: 80,
+                  width: 80,
+                  height: 80,
                   decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.06), shape: BoxShape.circle,
+                    color: cs.primary.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.lock_reset_rounded, size: 40, color: cs.primary),
                 ),
                 const SizedBox(height: 20),
-                Text(context.tr('reset_password'), style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(
+                  context.tr('reset_password'),
+                  style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                Text(context.tr('enter_email_reset_hint'), textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+                Text(
+                  context.tr('enter_email_reset_hint'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                ),
                 const SizedBox(height: 24),
                 SegmentedButton<int>(
                   segments: [
-                    ButtonSegment(value: 0, label: Text(context.tr('email')), icon: Icon(Icons.email_outlined)),
-                    ButtonSegment(value: 1, label: Text(context.tr('phone')), icon: Icon(Icons.phone_android)),
+                    ButtonSegment(
+                      value: 0,
+                      label: Text(context.tr('email')),
+                      icon: Icon(Icons.email_outlined),
+                    ),
+                    ButtonSegment(
+                      value: 1,
+                      label: Text(context.tr('phone')),
+                      icon: Icon(Icons.phone_android),
+                    ),
                   ],
                   selected: {_methodIndex},
                   onSelectionChanged: (v) => setState(() {
@@ -240,12 +277,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     onFieldSubmitted: (_) => _sendResetLink(),
                     decoration: InputDecoration(
                       hintText: context.tr('enter_email'),
-                      prefixIcon: Icon(Icons.email_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                        color: cs.onSurface.withValues(alpha: 0.59),
+                      ),
                       filled: true,
                       fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.outlineVariant),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.outlineVariant),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.primary, width: 2),
+                      ),
                     ),
                     validator: _emailValidator,
                   ),
@@ -257,12 +306,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       textInputAction: TextInputAction.done,
                       decoration: InputDecoration(
                         hintText: context.tr('phone_field_hint'),
-                        prefixIcon: Icon(Icons.phone_android, color: cs.onSurface.withValues(alpha: 0.59)),
+                        prefixIcon: Icon(
+                          Icons.phone_android,
+                          color: cs.onSurface.withValues(alpha: 0.59),
+                        ),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.primary, width: 2),
+                        ),
                       ),
                       validator: _phoneValidator,
                     ),
@@ -272,14 +333,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       keyboardType: TextInputType.number,
                       maxLength: 6,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 8),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 8,
+                      ),
                       decoration: InputDecoration(
                         hintText: '000000',
                         counterText: '',
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.primary, width: 2),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -290,12 +361,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       validator: Validators.password,
                       decoration: InputDecoration(
                         hintText: context.tr('new_password'),
-                        prefixIcon: Icon(Icons.lock_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
+                        prefixIcon: Icon(
+                          Icons.lock_outlined,
+                          color: cs.onSurface.withValues(alpha: 0.59),
+                        ),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.primary, width: 2),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -311,12 +394,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       },
                       decoration: InputDecoration(
                         hintText: context.tr('repeat_new_password'),
-                        prefixIcon: Icon(Icons.lock_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
+                        prefixIcon: Icon(
+                          Icons.lock_outlined,
+                          color: cs.onSurface.withValues(alpha: 0.59),
+                        ),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.outlineVariant),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: cs.primary, width: 2),
+                        ),
                       ),
                     ),
                   ],
@@ -329,13 +424,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error, size: 18),
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error,
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(_serverError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13))),
+                          Expanded(
+                            child: Text(
+                              _serverError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -349,7 +458,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       : Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
-                            gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.tertiary]),
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.primary,
+                                Theme.of(context).colorScheme.tertiary,
+                              ],
+                            ),
                           ),
                           child: ElevatedButton(
                             onPressed: _methodIndex == 0
@@ -358,13 +472,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             child: Text(
                               _methodIndex == 0
                                   ? context.tr('send_reset_link')
-                                  : (_otpSent ? context.tr('change_password', 'Change Password') : context.tr('send_otp')),
-                              style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 16, fontWeight: FontWeight.bold),
+                                  : (_otpSent
+                                        ? context.tr('change_password', 'Change Password')
+                                        : context.tr('send_otp')),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.surface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),

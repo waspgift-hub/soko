@@ -7,6 +7,7 @@
 // return shapes are unchanged so routes, admin routes, and finance-jobs keep
 // their contracts.
 const { getFirebaseFirestore } = require('../../config/firebase');
+const { resolvePayoutPhone } = require('../../services/payout-phone');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
 const commerceStore = require('../../services/commerce-store');
@@ -129,7 +130,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
     const committed = await ref.get();
     return { withdrawal: commerceStore.serializeWithdrawal(committed), wallet: updatedWallet };
   } finally {
-    if (!lock.skipped) await releaseLock(`withdraw:${sellerId}`);
+    if (lock.acquired) await releaseLock(`withdraw:${sellerId}`, lock.token);
   }
 }
 
@@ -167,7 +168,7 @@ async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
 
     return commerceStore.serializeWithdrawal(await ref.get());
   } finally {
-    if (!lock.skipped) await releaseLock(`withdraw:${withdrawalId}`);
+    if (lock.acquired) await releaseLock(`withdraw:${withdrawalId}`, lock.token);
   }
 }
 
@@ -205,7 +206,7 @@ async function confirmPayout({ withdrawalId, providerPayoutId }) {
 
     return { ...current, status: 'completed', providerPayoutId: providerPayoutId || current.providerPayoutId };
   } finally {
-    if (!lock.skipped) await releaseLock(`withdraw:${withdrawalId}`);
+    if (lock.acquired) await releaseLock(`withdraw:${withdrawalId}`, lock.token);
   }
 }
 
@@ -252,7 +253,7 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0 }) {
     void prior;
     return { alreadyMigrated: false, sellerId, amount: amt };
   } finally {
-    if (!lock.skipped) await releaseLock(`legacy:${sellerId}`);
+    if (lock.acquired) await releaseLock(`legacy:${sellerId}`, lock.token);
   }
 }
 
@@ -260,15 +261,22 @@ async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0 }) {
  * Resolves the phone number a withdrawal pays out to: the phone captured at
  * request time wins; legacy rows fall back to the seller's user profile phone.
  */
+// Thin wrapper kept because callers (and tests) already depend on this name.
+// The lookup itself lives in services/payout-phone: the Firestore `users`
+// collection is keyed by Firebase UID, so the previous version — which used
+// withdrawal.sellerId, a database UUID — could never find the document and
+// every seller without a database phone was refused a payout.
 async function withdrawalPayoutPhone(withdrawal, { db, userPhone } = {}) {
   if (withdrawal.phoneNumber) return withdrawal.phoneNumber;
   if (userPhone) return userPhone;
-  if (withdrawal.seller?.user?.phone) return withdrawal.seller.user.phone;
-  if (!db || !withdrawal.sellerId) return null;
-  const snap = await db.collection('users').doc(String(withdrawal.sellerId)).get();
-  if (!snap.exists) return null;
-  const u = snap.data();
-  return u.phone || u.phoneNumber || null;
+  if (withdrawal.seller && withdrawal.seller.user && withdrawal.seller.user.phone) {
+    return withdrawal.seller.user.phone;
+  }
+  return resolvePayoutPhone({
+    db,
+    firebaseUid: withdrawal.seller && withdrawal.seller.user && withdrawal.seller.user.firebaseUid,
+    userId: withdrawal.sellerId,
+  });
 }
 
 async function listWithdrawals(sellerId) {

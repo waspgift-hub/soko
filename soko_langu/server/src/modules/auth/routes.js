@@ -11,8 +11,8 @@ const { sendOtp, verifyOtp, sendEmailOtp, verifyEmailOtp, checkPhone, checkEmail
 // one NAT would exhaust its whole budget for a campus of genuine users.
 router.post('/send-otp', otpSendGuard('phone'), verifyAppCheck, validate(schemas.sendOtp), sendOtp);
 router.post('/verify-otp', otpVerifyLimiter, validate(schemas.verifyOtp), verifyOtp);
-router.post('/send-email-otp', otpSendGuard('email'), verifyAppCheck, sendEmailOtp);
-router.post('/verify-email-otp', otpVerifyLimiter, verifyEmailOtp);
+router.post('/send-email-otp', otpSendGuard('email'), verifyAppCheck, validate(schemas.sendEmailOtp), sendEmailOtp);
+router.post('/verify-email-otp', otpVerifyLimiter, validate(schemas.verifyEmailOtp), verifyEmailOtp);
 router.post('/check-phone', authLimiter, checkPhone);
 router.post('/check-email', authLimiter, checkEmail);
 router.post('/phone-login', otpVerifyLimiter, validate(schemas.phoneLogin), phoneLogin);

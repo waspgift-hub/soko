@@ -79,6 +79,31 @@ routes without ever reaching Render:
 Once live, point `ApiConfig.baseUrl` at the edge URL. The mobile-to-origin
 hop becomes edge-to-origin only on cache miss.
 
+## Workers AI edge (cf-worker-ai/)
+
+A second, separate Worker that is the last provider in the AI failover chain
+(`server/src/modules/ai/ai-gateway.js`): groq → gemini → cloudflare. It exists
+because the Workers AI binding has to be called from Cloudflare, and because it
+keeps the AI assistant answering when a vendor key is rate limited or out of
+credit.
+
+- Speaks OpenAI Chat Completions in and out, so it needs no client or tool-loop
+  change; the model catalogue is `cf-worker-ai/wrangler.toml` `[vars]`, not the
+  server's env.
+- Serves chat and Whisper, so voice search has a second backend.
+- Text only: `supportsModel` rejects the vision model so identifyImage keeps
+  using Gemini rather than getting an answer with the image silently dropped.
+- Auth is one shared key (`AI_EDGE_KEY` secret ⇄ server `CF_AI_KEY`) and there is
+  no DNS route, so the endpoint is not publicly discoverable. Do not put the
+  Cloudflare API token on Render.
+- Deploy: `wrangler deploy && wrangler secret put AI_EDGE_KEY` from
+  `cf-worker-ai/`. Measured Workers AI behaviour and the smoke-test commands are
+  in `cf-worker-ai/README.md`.
+
+Cost control: it is last in `AI_PROVIDER_ORDER`, so it is only paid for when the
+free tiers above it are exhausted. Keep it that way unless gpt-oss measurably
+beats Groq on latency or quality for the assistant's Swahili answers.
+
 ## Origin resilience (2026 tier)
 
 Added so the origin survives a 10M-user spike instead of degrading:

@@ -1,6 +1,20 @@
 const { z } = require('zod');
 const { jsonError } = require('../utils/http');
 
+// The app sends the code as `otp` on some screens and `code` on others, so both
+// are accepted — but exactly one is REQUIRED. Left optional, a body with
+// neither passed schema validation and produced a generic "auth_otp_invalid",
+// which reads to the user as "your code was wrong" when they never sent one.
+const OTP_VALUE = z.string().regex(/^\d{6}$/, 'OTP must be 6 digits');
+const withOtp = (extra = {}) => z.object({
+  ...extra,
+  otp: OTP_VALUE.optional(),
+  code: OTP_VALUE.optional(),
+}).refine((v) => Boolean(v.otp || v.code), {
+  message: 'OTP code is required',
+  path: ['otp'],
+});
+
 // Validation schemas
 const schemas = {
   // Auth schemas
@@ -9,22 +23,29 @@ const schemas = {
     langCode: z.enum(['sw', 'en']).optional(),
   }),
 
-  verifyOtp: z.object({
-    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
-    otp: z.string().length(6, 'OTP must be 6 digits').optional(),
-    code: z.string().length(6, 'OTP must be 6 digits').optional(),
+  // The email OTP routes previously had no schema at all, so sendEmailOtp
+  // validated the address by hand and answered `{ error: 'Valid email required' }`
+  // — a human sentence in the field every other route uses for a machine code,
+  // which the app cannot switch on.
+  sendEmailOtp: z.object({
+    email: z.string().email('Invalid email address'),
+    langCode: z.enum(['sw', 'en']).optional(),
   }),
 
-  phoneLogin: z.object({
-    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
-    otp: z.string().length(6, 'OTP must be 6 digits').optional(),
-    code: z.string().length(6, 'OTP must be 6 digits').optional(),
+  verifyEmailOtp: withOtp({
+    email: z.string().email('Invalid email address'),
   }),
 
-  resetPasswordByPhone: z.object({
+  verifyOtp: withOtp({
     phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
-    otp: z.string().length(6, 'OTP must be 6 digits').optional(),
-    code: z.string().length(6, 'OTP must be 6 digits').optional(),
+  }),
+
+  phoneLogin: withOtp({
+    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
+  }),
+
+  resetPasswordByPhone: withOtp({
+    phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
     newPassword: z.string().min(8, 'Password must be at least 8 characters'),
   }),
 

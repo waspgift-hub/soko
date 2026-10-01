@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
+// RepeatMode also exists in flutter/material (AnimationController); hide it so
+// QueueRepeatMode usages below resolve without a prefix.
+import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -51,23 +53,26 @@ class ProfileMediaSection extends StatelessWidget {
             )
             .toList();
         if (items.isEmpty) return const SizedBox.shrink();
-        return _MediaPlayer(
+        return SessionMediaPlayer(
           key: ValueKey(items.map((e) => e.id).join(',')),
           items: items,
           sellerId: sellerId,
           sellerName: sellerName,
-        );
-      },
+        );      },
     );
   }
 }
 
-class _MediaPlayer extends StatefulWidget {
-  final List<ProfileMediaItem> items;
+/// Shared inline player driven by the session controller (Namida miniplayer
+/// architecture: one engine, many surfaces). Pass [items] to load a seller
+/// queue; pass null to follow whatever the session is already playing (music
+/// now-playing screen). Empty live queue renders a placeholder.
+class SessionMediaPlayer extends StatefulWidget {
+  final List<ProfileMediaItem>? items;
   final String sellerId;
   final String sellerName;
 
-  const _MediaPlayer({
+  const SessionMediaPlayer({
     super.key,
     required this.items,
     required this.sellerId,
@@ -75,12 +80,11 @@ class _MediaPlayer extends StatefulWidget {
   });
 
   @override
-  State<_MediaPlayer> createState() => _MediaPlayerState();
+  State<SessionMediaPlayer> createState() => SessionMediaPlayerState();
 }
 
-class _MediaPlayerState extends State<_MediaPlayer> {
-  ProfileMediaController get _media =>
-      ProfileMediaSession.instance.controller;
+class SessionMediaPlayerState extends State<SessionMediaPlayer> {
+  ProfileMediaController get _media => ProfileMediaSession.instance.controller;
   StreamSubscription<Duration>? _posSub;
   Duration _lastPosition = Duration.zero;
   Timer? _seekTimer;
@@ -93,26 +97,39 @@ class _MediaPlayerState extends State<_MediaPlayer> {
     super.initState();
     ProfileMediaSession.instance.enterInlinePlayer();
     _posSub = _media.positionStream.listen((p) => _lastPosition = p);
-    ProfileMediaSession.instance.playSellerQueue(
-      sellerId: widget.sellerId,
-      sellerName: widget.sellerName,
-      items: widget.items,
-    );
+    _syncQueue(null, widget.items);
   }
 
   @override
-  void didUpdateWidget(_MediaPlayer oldWidget) {
+  void didUpdateWidget(SessionMediaPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final before = oldWidget.items.map((e) => e.id).join(',');
-    final after = widget.items.map((e) => e.id).join(',');
-    if (before != after) {
-      ProfileMediaSession.instance.playSellerQueue(
-        sellerId: widget.sellerId,
-        sellerName: widget.sellerName,
-        items: widget.items,
-      );
-    }
+    _syncQueue(oldWidget.items, widget.items);
   }
+
+  /// Pushes [items] into the session when this surface owns the queue (seller
+  /// profile). Null means "follow the live session queue" (now-playing), so
+  /// nothing is loaded here — the caller already set it.
+  void _syncQueue(
+    List<ProfileMediaItem>? before,
+    List<ProfileMediaItem>? after,
+  ) {
+    if (after == null) return;
+    final oldIds = (before ?? const <ProfileMediaItem>[])
+        .map((e) => e.id)
+        .join(',');
+    final newIds = after.map((e) => e.id).join(',');
+    if (oldIds == newIds && before != null) return;
+    ProfileMediaSession.instance.playSellerQueue(
+      sellerId: widget.sellerId,
+      sellerName: widget.sellerName,
+      items: after,
+    );
+  }
+
+  /// The queue this surface renders: the owned list, or the live session
+  /// queue when following (music now-playing).
+  List<ProfileMediaItem> get _effectiveItems =>
+      widget.items ?? _media.queue;
 
   @override
   void dispose() {
@@ -150,6 +167,17 @@ class _MediaPlayerState extends State<_MediaPlayer> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (_effectiveItems.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Text(
+            context.tr('no_music'),
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
@@ -171,7 +199,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '${widget.items.length}',
+                  '${_effectiveItems.length}',
                   style: TextStyle(
                     color: scheme.primary,
                     fontWeight: FontWeight.w700,
@@ -209,24 +237,22 @@ class _MediaPlayerState extends State<_MediaPlayer> {
             if (item != null && item.isYouTube) {
               return _buildYouTubeStage(item);
             }
+            if (item != null && item.isAudio) {
+              return _buildAudioStage(item);
+            }
             final vc = _media.video;
             if (vc == null) {
-              return const Center(
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              );
+              return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
             }
             return ValueListenableBuilder<VideoPlayerValue>(
               valueListenable: vc,
               builder: (context, value, _) {
                 if (!value.isInitialized) {
-                  return const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  );
+                  return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
                 }
                 return GestureDetector(
                   onTap: _media.toggle,
-                  onDoubleTapDown: (details) =>
-                      _onDoubleTapSeek(details.localPosition),
+                  onDoubleTapDown: (details) => _onDoubleTapSeek(details.localPosition),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -240,24 +266,15 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                       ),
                       if (!value.isPlaying)
                         const Center(
-                          child: Icon(
-                            Icons.play_circle_fill,
-                            size: 56,
-                            color: Colors.white,
-                          ),
+                          child: Icon(Icons.play_circle_fill, size: 56, color: Colors.white),
                         ),
                       if (_seekFeedback > 0)
                         Align(
-                          alignment: _seekForward
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
+                          alignment: _seekForward ? Alignment.centerRight : Alignment.centerLeft,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: Colors.black54,
                                 borderRadius: BorderRadius.circular(20),
@@ -266,9 +283,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    _seekForward
-                                        ? Icons.forward_10
-                                        : Icons.replay_10,
+                                    _seekForward ? Icons.forward_10 : Icons.replay_10,
                                     color: Colors.white,
                                   ),
                                   const SizedBox(width: 4),
@@ -309,11 +324,119 @@ class _MediaPlayerState extends State<_MediaPlayer> {
     );
   }
 
+  /// Artwork card for audio items. Same engine as video, but there is no
+  /// picture to show, so the product thumbnail plus a live equalizer mark
+  /// stand in. Tap toggles, double-tap seeks, exactly like video.
+  Widget _buildAudioStage(ProfileMediaItem item) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: _media.toggle,
+      onDoubleTapDown: (details) => _onDoubleTapSeek(details.localPosition),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              scheme.primary.withValues(alpha: 0.30),
+              Colors.black87,
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: item.thumbnailUrl != null
+                        ? Image.network(item.thumbnailUrl!, fit: BoxFit.cover)
+                        : Container(
+                            color: Colors.black54,
+                            child: const Icon(
+                              Icons.music_note,
+                              color: Colors.white,
+                              size: 48,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      StreamBuilder<ProfileMediaState>(
+                        stream: _media.stateStream,
+                        builder: (context, stateSnap) {
+                          final playing =
+                              stateSnap.data == ProfileMediaState.playing;
+                          return Icon(
+                            playing ? Icons.graphic_eq : Icons.music_note,
+                            color: Colors.white,
+                            size: 32,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        context.tr('audio_track'),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_seekFeedback > 0)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_seekForward ? '+' : '-'}$_seekFeedback s',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Embedded player for YouTube URLs. Mobile renders the nocookie iframe in
   /// a WebView; desktop and web fall back to the thumbnail + external launch
   /// because webview_flutter has no desktop implementation.
-  bool get _isMobileEmbed =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  bool get _isMobileEmbed => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   Widget _buildYouTubeStage(ProfileMediaItem item) {
     final id = youTubeIdFromUrl(item.videoUrl);
@@ -343,19 +466,12 @@ class _MediaPlayerState extends State<_MediaPlayer> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 10,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   decoration: BoxDecoration(
                     color: dimmed ? Colors.grey : Colors.red,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    color: Colors.white,
-                    size: 32,
-                  ),
+                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 32),
                 ),
                 if (!dimmed) ...[
                   const SizedBox(height: 8),
@@ -451,7 +567,8 @@ class _MediaPlayerState extends State<_MediaPlayer> {
             StreamBuilder<ProfileMediaState>(
               stream: _media.stateStream,
               builder: (context, stateSnap) {
-                final playing = stateSnap.data == ProfileMediaState.playing ||
+                final playing =
+                    stateSnap.data == ProfileMediaState.playing ||
                     (_media.video?.value.isPlaying == true &&
                         stateSnap.data != ProfileMediaState.paused);
                 return IconButton.filled(
@@ -487,10 +604,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                   onPressed: _media.cycleSpeed,
                   child: Text(
                     whole ? '${speed.toInt()}x' : '${speed}x',
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
                   ),
                 );
               },
@@ -528,9 +642,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                   tooltip: active
                       ? 'Sleep in ${_fmtSleep(remaining)} — tap to change'
                       : 'Sleep timer',
-                  icon: Icon(
-                    active ? Icons.bedtime : Icons.bedtime_outlined,
-                  ),
+                  icon: Icon(active ? Icons.bedtime : Icons.bedtime_outlined),
                   color: active ? scheme.primary : scheme.onSurfaceVariant,
                   onPressed: _openSleepSheet,
                 );
@@ -549,12 +661,13 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                 );
               },
             ),
-            IconButton(
-              tooltip: 'Fullscreen',
-              icon: const Icon(Icons.fullscreen),
-              color: scheme.onSurfaceVariant,
-              onPressed: item == null ? null : () => _openFullscreen(item),
-            ),
+            if (item != null && !item.isAudio)
+              IconButton(
+                tooltip: 'Fullscreen',
+                icon: const Icon(Icons.fullscreen),
+                color: scheme.onSurfaceVariant,
+                onPressed: () => _openFullscreen(item),
+              ),
           ],
         );
       },
@@ -562,7 +675,8 @@ class _MediaPlayerState extends State<_MediaPlayer> {
   }
 
   Widget _buildUpNext(BuildContext context) {
-    if (widget.items.length < 2) return const SizedBox.shrink();
+    final queue = _effectiveItems;
+    if (queue.length < 2) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,10 +700,10 @@ class _MediaPlayerState extends State<_MediaPlayer> {
               final current = idxSnap.data ?? 0;
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: widget.items.length,
+                itemCount: queue.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, i) {
-                  final item = widget.items[i];
+                  final item = queue[i];
                   final active = i == current;
                   return AnimationConfiguration.staggeredList(
                     position: i,
@@ -599,55 +713,56 @@ class _MediaPlayerState extends State<_MediaPlayer> {
                       child: FadeInAnimation(
                         child: GestureDetector(
                           onTap: () => _media.playAt(i),
-                    child: SizedBox(
-                      width: 140,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  if (item.thumbnailUrl != null)
-                                    Image.network(item.thumbnailUrl!, fit: BoxFit.cover)
-                                  else
-                                    Container(color: Colors.black87),
-                                  Container(color: Colors.black26),
-                                  Center(
-                                    child: Icon(
-                                      active ? Icons.equalizer : Icons.play_arrow,
-                                      color: Colors.white,
-                                      size: 28,
+                          child: SizedBox(
+                            width: 140,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        if (item.thumbnailUrl != null)
+                                          Image.network(item.thumbnailUrl!, fit: BoxFit.cover)
+                                        else
+                                          Container(color: Colors.black87),
+                                        Container(color: Colors.black26),
+                                        Center(
+                                          child: Icon(
+                                            active ? Icons.equalizer : Icons.play_arrow,
+                                            color: Colors.white,
+                                            size: 28,
+                                          ),
+                                        ),
+                                        if (active)
+                                          Positioned.fill(
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: scheme.primary, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  if (active)
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: scheme.primary, width: 2),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ));
+                  );
                 },
               );
             },
@@ -695,11 +810,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
           appBar: AppBar(
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
-            title: Text(
-              item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           body: Center(child: _YouTubeEmbed(videoId: id)),
         ),
@@ -751,6 +862,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
     if (d.inSeconds < 60) return '${d.inSeconds}s';
     return '${d.inMinutes}m';
   }
+
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -808,14 +920,16 @@ class _FullscreenMediaState extends State<_FullscreenMedia> {
   void initState() {
     super.initState();
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.item.videoUrl))
-      ..initialize().then((_) async {
-        if (!mounted) return;
-        await _controller?.seekTo(widget.startAt);
-        await _controller?.play();
-        setState(() {});
-      }).catchError((_) {
-        if (mounted) setState(() => _failed = true);
-      });
+      ..initialize()
+          .then((_) async {
+            if (!mounted) return;
+            await _controller?.seekTo(widget.startAt);
+            await _controller?.play();
+            setState(() {});
+          })
+          .catchError((_) {
+            if (mounted) setState(() => _failed = true);
+          });
   }
 
   @override
@@ -842,17 +956,14 @@ class _FullscreenMediaState extends State<_FullscreenMedia> {
         child: _failed
             ? const Text('Video haijafunguka', style: TextStyle(color: Colors.white))
             : (c == null || !c.value.isInitialized)
-                ? const CircularProgressIndicator(color: Colors.white)
-                : GestureDetector(
-                    onTap: () {
-                      c.value.isPlaying ? c.pause() : c.play();
-                      setState(() {});
-                    },
-                    child: AspectRatio(
-                      aspectRatio: c.value.aspectRatio,
-                      child: VideoPlayer(c),
-                    ),
-                  ),
+            ? const CircularProgressIndicator(color: Colors.white)
+            : GestureDetector(
+                onTap: () {
+                  c.value.isPlaying ? c.pause() : c.play();
+                  setState(() {});
+                },
+                child: AspectRatio(aspectRatio: c.value.aspectRatio, child: VideoPlayer(c)),
+              ),
       ),
     );
   }

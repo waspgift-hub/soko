@@ -25,18 +25,15 @@ import 'otp_screen.dart';
 class RegisterScreen extends StatefulWidget {
   /// E.164 phone to prefill (used when arriving from the login OTP flow).
   final String? initialPhone;
+
   /// Formatted `+255 ...` phone shown when [initialPhone] is set.
   final String? displayPhone;
+
   /// True when the number was already verified on the OtpScreen; creation
   /// then proceeds without re-sending an OTP.
   final bool otpVerified;
 
-  const RegisterScreen({
-    super.key,
-    this.initialPhone,
-    this.displayPhone,
-    this.otpVerified = false,
-  });
+  const RegisterScreen({super.key, this.initialPhone, this.displayPhone, this.otpVerified = false});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -97,10 +94,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Theme.of(context).colorScheme.error,
-        content: Text(msg),
-      ),
+      SnackBar(backgroundColor: Theme.of(context).colorScheme.error, content: Text(msg)),
     );
   }
 
@@ -141,10 +135,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _sendOtpFlow() async {
-    if (!await RateLimiter.canProceed(action: 'register_otp', cooldown: const Duration(seconds: 45))) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please wait before requesting another code')),
-      );
+    if (!await RateLimiter.canProceed(
+      action: 'register_otp',
+      cooldown: Duration(seconds: kOtpResendCooldownSeconds),
+    )) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Please wait before requesting another code')));
       return;
     }
     final raw = _phoneController.text.trim();
@@ -188,10 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<String?> _verifyForRegistration(
-    BuildContext ctx,
-    String otp,
-  ) async {
+  Future<String?> _verifyForRegistration(BuildContext ctx, String otp) async {
     final notifier = ctx.read<AuthNotifier>();
     final ok = await notifier.verifyPhoneOtp(_normalizedPhone!, otp);
     if (!ok) return ctx.tr(notifier.error ?? 'auth_otp_invalid');
@@ -215,24 +210,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       if (emailText.isNotEmpty) {
-        await notifier.register(
-          email: emailText,
-          password: password,
-          displayName: name,
-        );
+        await notifier.register(email: emailText, password: password, displayName: name);
         final user = FirebaseAuth.instance.currentUser;
         if (user != null && phone != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .update({'phone': phone});
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+            'phone': phone,
+          });
         }
       } else {
-        await notifier.registerWithPhone(
-          phone: phone!,
-          password: password,
-          displayName: name,
-        );
+        await notifier.registerWithPhone(phone: phone!, password: password, displayName: name);
       }
 
       final user = FirebaseAuth.instance.currentUser;
@@ -292,15 +278,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       subtitle: context.tr('signup_subtitle'),
       leading: _BackButton(),
       footer: TextButton(
-        onPressed: _isLoading
-            ? null
-            : () => context.go(AppRoutes.login),
+        onPressed: _isLoading ? null : () => context.go(AppRoutes.login),
         child: Text(
           context.tr('already_have_account'),
-          style: TextStyle(
-            color: cs.primary,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
         ),
       ),
       child: AuthCard(
@@ -334,10 +315,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 14),
               if (!widget.otpVerified) ...[
-                AuthPhoneField(
-                  controller: _phoneController,
-                  validator: _phoneValidator,
-                ),
+                AuthPhoneField(controller: _phoneController, validator: _phoneValidator),
               ] else ...[
                 _ReadOnlyPhone(displayPhone: _displayPhone),
               ],
@@ -347,14 +325,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 label: context.tr('password'),
                 suffix: IconButton(
                   icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     size: 20,
                     color: cs.onSurfaceVariant,
                   ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.next,
@@ -375,14 +350,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 label: context.tr('confirm_password'),
                 suffix: IconButton(
                   icon: Icon(
-                    _obscureConfirm
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+                    _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     size: 20,
                     color: cs.onSurfaceVariant,
                   ),
-                  onPressed: () =>
-                      setState(() => _obscureConfirm = !_obscureConfirm),
+                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                 ),
                 obscureText: _obscureConfirm,
                 textInputAction: TextInputAction.done,
@@ -396,10 +368,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               Text(
                 context.tr('password_min_hint'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
               _TermsRow(
@@ -409,9 +378,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
               DsButton(
-                label: widget.otpVerified
-                    ? context.tr('register')
-                    : context.tr('send_otp'),
+                label: widget.otpVerified ? context.tr('register') : context.tr('send_otp'),
                 onPressed: _isLoading ? null : _onSubmit,
                 loading: _isLoading,
                 icon: widget.otpVerified
@@ -425,18 +392,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Expanded(child: Divider(color: cs.brandBorder)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        context.tr('or'),
-                        style: TextStyle(color: cs.onSurfaceVariant),
-                      ),
+                      child: Text(context.tr('or'), style: TextStyle(color: cs.onSurfaceVariant)),
                     ),
                     Expanded(child: Divider(color: cs.brandBorder)),
                   ],
                 ),
                 const SizedBox(height: 16),
-                _GoogleRegisterButton(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
-                ),
+                _GoogleRegisterButton(onPressed: _isLoading ? null : _signInWithGoogle),
               ],
             ],
           ),
@@ -481,10 +443,7 @@ class _ReadOnlyPhone extends StatelessWidget {
           Expanded(
             child: Text(
               displayPhone ?? '',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
           Icon(Icons.lock_outline, size: 18, color: cs.primary),
@@ -499,57 +458,36 @@ class _TermsRow extends StatelessWidget {
   final bool enabled;
   final ValueChanged<bool?> onChanged;
 
-  const _TermsRow({
-    required this.accepted,
-    required this.enabled,
-    required this.onChanged,
-  });
+  const _TermsRow({required this.accepted, required this.enabled, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Checkbox(
-          value: accepted,
-          activeColor: cs.primary,
-          onChanged: enabled ? onChanged : null,
-        ),
+        Checkbox(value: accepted, activeColor: cs.primary, onChanged: enabled ? onChanged : null),
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               children: [
                 TextSpan(text: context.tr('accept_terms_prefix', 'I ACCEPT THE ')),
                 WidgetSpan(
                   child: GestureDetector(
-                    onTap: enabled
-                        ? () => context.push(AppRoutes.termsOfService)
-                        : null,
+                    onTap: enabled ? () => context.push(AppRoutes.termsOfService) : null,
                     child: Text(
                       context.tr('terms_of_service').toUpperCase(),
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
                 TextSpan(text: context.tr('accept_terms_separator', ' AND ')),
                 WidgetSpan(
                   child: GestureDetector(
-                    onTap: enabled
-                        ? () => context.push(AppRoutes.privacyPolicy)
-                        : null,
+                    onTap: enabled ? () => context.push(AppRoutes.privacyPolicy) : null,
                     child: Text(
                       context.tr('privacy_policy').toUpperCase(),
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -581,9 +519,7 @@ class _GoogleRegisterButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide.none,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: cs.surface.withValues(alpha: 0.4),
         ),
         icon: ClipRRect(
@@ -594,17 +530,12 @@ class _GoogleRegisterButton extends StatelessWidget {
             width: 22,
             height: 22,
             fit: BoxFit.contain,
-            errorBuilder: (_, _, _) =>
-                const Icon(Icons.g_mobiledata, size: 22),
+            errorBuilder: (_, _, _) => const Icon(Icons.g_mobiledata, size: 22),
           ),
         ),
         label: Text(
           context.tr('continue_google'),
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
-          ),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
         ),
       ),
     );

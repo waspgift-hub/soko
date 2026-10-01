@@ -31,5 +31,11 @@ analyzer:
   exclude:
     - integration_test/**
 
+# AGENTS.md allows code up to 100 columns, so the formatter is pinned to the same
+# width. Without this, `dart format` defaults to 80 and rewraps the whole tree,
+# producing a mass diff that silently contradicts the documented convention.
+formatter:
+  page_width: 100
+
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

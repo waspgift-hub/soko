@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -86,7 +87,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final ProductService _productService = ProductService();
   final ImagePicker _picker = ImagePicker();
 
-  List<Category> _categories = CategoryService.getCategories();
+  // getCategories() is a Stream (Firestore snapshots, or the HTTP v1 tree), so
+  // it cannot seed a field. The static tree is the correct seed here: it renders
+  // the dropdown on the first frame with no network wait, and _loadCategories()
+  // swaps in the live list once it arrives. Seeding from the stream's first
+  // emission instead would leave the category dropdown empty and un-tappable
+  // until the network answered, and `orElse: () => _categories.first` in
+  // _updateSubcategories() would throw on the empty list.
+  List<Category> _categories = getDefaultCategories().where((c) => c.isActive).toList();
 
   List<String> get _allDistricts => kRegionDistricts.values
       .expand((d) => d)
@@ -96,12 +104,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   bool get _isEditing => widget.product != null;
 
+  StreamSubscription<List<Category>>? _categoriesSub;
+
   @override
   void initState() {
     super.initState();
     _updateSubcategories();
     if (_isEditing) _prefillFields();
     _handleInitialSharedMedia();
+    _loadCategories();
+  }
+
+  /// Replaces the static seed with the live category list.
+  ///
+  /// Guarded on mounted and on a non-empty result: a Firestore error or an empty
+  /// collection must leave the static tree in place, because the dropdown's
+  /// `orElse: () => _categories.first` throws on an empty list.
+  void _loadCategories() {
+    _categoriesSub = CategoryService().watchCategories().listen((cats) {
+      if (!mounted || cats.isEmpty) return;
+      setState(() {
+        _categories = cats.where((c) => c.isActive).toList();
+        if (_categories.isEmpty) return;
+        _updateSubcategories();
+      });
+    }, onError: (_) {
+      // Static seed stays; the seller can still post under the default tree.
+    });
   }
 
   void _prefillFields() {
@@ -163,7 +192,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           lower.endsWith('.webm') ||
           lower.endsWith('.3gp');
       if (isVideo) {
-        if (_videoFile == null) _videoFile = XFile(p);
+        _videoFile ??= XFile(p);
       } else {
         if (_newImages.length + _existingImages.length < 5) {
           _newImages.add(XFile(p));
@@ -178,6 +207,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   void dispose() {
+    // Cancel the Firestore category subscription before tearing down state, or
+    // an in-flight snapshot calls setState on a disposed State.
+    _categoriesSub?.cancel();
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();

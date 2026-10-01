@@ -7,8 +7,9 @@
 // Resend HTTP call returns in ~1s.
 //
 // Cloudflare Email Sending (CF token) and nodemailer/SMTP remain as fallbacks
-// for deployments/token setups that pre-date Resend. Reaching a fallback never
-// costs the request: every channel is awaited under a hard timeout.
+// for deployments/token setups that pre-date Resend, and they are genuinely
+// tried in turn — sendMail() walks the configured channels and returns on the
+// first that actually delivers.
 
 const nodemailer = require('nodemailer');
 
@@ -91,7 +92,25 @@ async function sendViaCloudflare(to, subject, html) {
   if (body && body.success === false) {
     throw new Error(`Cloudflare email rejected: ${(body.errors || []).map((e) => e.message).join('; ').slice(0, 200)}`);
   }
-  return body;
+
+  // A 200 is NOT proof of delivery. The API answers 200 with
+  // result.permanent_bounces / result.suppressed_recipients populated when the
+  // address bounced or is on the suppression list — the mail never arrives. The
+  // old code ignored those and reported success, so an OTP email to a dead
+  // address looked sent, the code stayed in the store, and the user waited out
+  // a cooldown for a message that was never going to arrive.
+  const result = (body && body.result) || {};
+  const undelivered = [
+    ...(result.permanent_bounces || []),
+    ...(result.suppressed_recipients || []),
+  ];
+  if (undelivered.length) {
+    throw new Error(`Cloudflare email not delivered to ${undelivered.join(', ')}`);
+  }
+  if (!result.message_id) {
+    throw new Error('Cloudflare email returned no message_id');
+  }
+  return result;
 }
 
 // Resend API: HTTPS beats SMTP from Render (see file header). The api async
@@ -118,33 +137,45 @@ async function sendViaResend(to, subject, html) {
   return res.json();
 }
 
+// Every channel that is configured gets tried in turn, and the first one that
+// actually delivers wins. The previous version returned false on the FIRST
+// error, so the fallbacks described in the file header never ran: one Cloudflare
+// hiccup (or a 409 while Email Sending setup was still in progress) silently
+// cut off all email, including OTPs, with Resend credentials sitting unused.
 async function sendMail(to, subject, html) {
-  try {
-    if (cloudFlareConfigured()) {
-      await withTimeout(sendViaCloudflare(to, subject, html));
-      console.log(`[MAILER] sent via Cloudflare to ${to}`);
-      return true;
-    }
-    if (resendConfigured()) {
-      await withTimeout(sendViaResend(to, subject, html));
-      console.log(`[MAILER] sent via Resend to ${to}`);
-      return true;
-    }
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.error('[MAILER] neither Cloudflare nor Resend nor SMTP configured');
-      return false;
-    }
-    await withTimeout(getTransporter().sendMail({
+  const channels = [];
+  // Resend first: sokovibe.co.tz is DNS-verified there, so recipients see
+  // no-reply@sokovibe.co.tz and the call is a single HTTPS POST that answers
+  // in ~1s.
+  if (resendConfigured()) channels.push(['Resend', () => sendViaResend(to, subject, html)]);
+  if (cloudFlareConfigured()) channels.push(['Cloudflare', () => sendViaCloudflare(to, subject, html)]);
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    channels.push(['SMTP', () => getTransporter().sendMail({
       from: process.env.SMTP_FROM || 'Soko Vibe <no-reply@sokovibe.co.tz>',
       to,
       subject,
       html,
-    }));
-    return true;
-  } catch (e) {
-    console.error('[MAILER] send failed:', e.message);
+    })]);
+  }
+
+  if (!channels.length) {
+    console.error('[MAILER] no channel configured (need RESEND_API_KEY, or CLOUDFLARE_API_TOKEN, or SMTP)');
     return false;
   }
+
+  const failures = [];
+  for (const [name, attempt] of channels) {
+    try {
+      await withTimeout(attempt());
+      console.log(`[MAILER] sent via ${name} to ${to}`);
+      return true;
+    } catch (e) {
+      console.error(`[MAILER] ${name} failed:`, e.message);
+      failures.push(`${name}: ${e.message}`);
+    }
+  }
+  console.error(`[MAILER] all channels failed for ${to}: ${failures.join(' | ')}`);
+  return false;
 }
 
 module.exports = { sendMail };

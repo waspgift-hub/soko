@@ -82,6 +82,7 @@ dependencies:
   open_file: ^3.5.10
   video_player: ^2.9.2
   webview_flutter: ^4.13.0
+  on_audio_query: ^2.9.0
   flutter_animate: ^4.5.0
   flutter_staggered_animations: ^1.1.1
   speech_to_text: ^7.0.0

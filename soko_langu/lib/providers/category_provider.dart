@@ -20,15 +20,21 @@ class CategoryProvider extends ChangeNotifier {
   String? get error => _error;
 
   CategoryProvider() {
+    // Seed from the tree that ships in the binary so the first frame already
+    // has categories; watchCategories() then refreshes from Firestore/HTTP.
+    // Seeding from the stream alone left the category screens on a skeleton
+    // until the network answered, for a list the app already carries.
+    _categories = CategoryService.getCategories();
+    _loading = false;
     _listen();
   }
 
   void _listen() {
-    _service.getCategories().listen(
+    _service.watchCategories().listen(
       (cats) {
-        // fallback to defaults if Firestore empty
+        // Fall back to the shipped tree if the remote list comes back empty.
         if (cats.isEmpty) {
-          _categories = cat_model.getDefaultCategories().where((c) => c.isActive).toList();
+          _categories = CategoryService.getCategories();
         } else {
           _categories = cats;
         }

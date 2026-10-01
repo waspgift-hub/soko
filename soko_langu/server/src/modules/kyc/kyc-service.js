@@ -10,7 +10,7 @@ const { clickpesaCollect, clickpesaCreateBillPayOrder, calcGatewayFee } = requir
 // Contact (phone/email) verification OTPs reuse the same store the auth login
 // flow uses, so a seller never has two unrelated OTP systems. SMS goes through
 // the real sms-service (Meseji → Notify Africa); email through the SMTP mailer.
-const { saveOtp, getOtp, markUsed, bumpAttempts } = require('../../services/otp-store');
+const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp } = require('../../services/otp-store');
 const smsService = require('../../services/sms-service');
 const { sendMail } = require('../../services/mailer');
 
@@ -485,13 +485,19 @@ async function sendContactOtp({ userId, channel, value }) {
     const clean = cleanPhoneForOtp(value);
     if (!clean) throw httpError(400, 'KYC_PHONE_INVALID', 'Invalid phone number');
     const smsText = `Soko Vibe KYC code: ${otp}. Inatumika dakika 5.`;
-    await saveOtp(`kyc:phone:${userId}`, hashContactOtp(otp), CONTACT_OTP_TTL_SECONDS);
+    const key = `kyc:phone:${userId}`;
+    await saveOtp(key, hashContactOtp(otp), CONTACT_OTP_TTL_SECONDS);
     const sent = await smsService.sendSms(clean, smsText);
+    // A store entry for a code the seller never received only lets a later,
+    // unrelated verification attempt race against it. The route answers 502 and
+    // returns the guard's cooldown/quota slot when this is falsy.
+    if (!sent) await clearOtp(key);
     return { sent, expiresInSec: CONTACT_OTP_TTL_SECONDS, phone: clean };
   }
   const email = cleanEmailForOtp(value);
   if (!email || !email.includes('@')) throw httpError(400, 'KYC_EMAIL_INVALID', 'Invalid email address');
-  await saveOtp(`kyc:email:${userId}`, hashContactOtp(otp), CONTACT_OTP_TTL_SECONDS);
+  const key = `kyc:email:${userId}`;
+  await saveOtp(key, hashContactOtp(otp), CONTACT_OTP_TTL_SECONDS);
   const subject = 'Soko Vibe — Uthibitisho wa anwani';
   const html = `
     <html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto">
@@ -501,6 +507,10 @@ async function sendContactOtp({ userId, channel, value }) {
       <p>Inaisha kwa dakika 5. Usiishirikishe na mtu yeyote.</p>
     </body></html>`;
   const sent = await sendMail(email, subject, html);
+  // sendMail now treats a 200 with permanent_bounces/suppressed_recipients as a
+  // failure, so a bounced or suppressed address lands here rather than being
+  // reported as delivered.
+  if (!sent) await clearOtp(key);
   return { sent, expiresInSec: CONTACT_OTP_TTL_SECONDS, email };
 }
 
@@ -514,7 +524,12 @@ async function verifyContactOtp({ userId, channel, value, otp }) {
   const attempts = await bumpAttempts(key);
   if (attempts > 5) throw httpError(400, 'KYC_OTP_LIMIT', 'Jaribio nyingi mno — tuma OTP mpya');
   const hashed = hashContactOtp(String(otp || ''));
-  const a = Buffer.from(record.value);
+  // `otpHash`, not `value`: otp-store.saveOtp persists { otpHash, expiresAt,
+  // used, attempts }, so record.value was always undefined and
+  // Buffer.from(undefined) threw a TypeError that the route turned into
+  // "KYC_PHONE_OTP_INVALID" no matter which code the user typed. KYC
+  // verification could never succeed.
+  const a = Buffer.from(record.otpHash);
   const b = Buffer.from(hashed);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     throw httpError(400, 'KYC_OTP_INVALID', 'OTP si sahihi');

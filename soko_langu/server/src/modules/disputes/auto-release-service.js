@@ -99,7 +99,7 @@ async function autoRelease({ orderId, triggeredBy = 'system' }) {
       return { status: 'AUTO_RELEASED', order: completedOrder, missingSafeguards: [] };
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`autorelease:${orderId}`);
+    if (lock.acquired) await releaseLock(`autorelease:${orderId}`, lock.token);
   }
 }
 

@@ -28,7 +28,7 @@ Notify.notifyAdmins = async () => null;
 // refundOnCancel for a recording spy before loading order-service, which
 // destructures it at require time.
 const refundService = require('../src/modules/refunds/refund-service');
-const { refundOnCancel } = refundService;
+const { refundOnCancel, requestRefund, processRefund } = refundService;
 
 const cancelCalls = [];
 refundService.refundOnCancel = async (args) => {
@@ -91,6 +91,23 @@ function createFakePrisma(seed = {}) {
     return out;
   }
 
+  // Prisma's atomic update operators. A plain Object.assign would store the
+  // literal { increment: 500 } object in the field instead of adding to it,
+  // which would make escrow arithmetic assertions silently meaningless.
+  function applyData(row, data) {
+    for (const [key, value] of Object.entries(data)) {
+      if (value && typeof value === 'object' && !(value instanceof Date)) {
+        if ('increment' in value) row[key] = (Number(row[key]) || 0) + value.increment;
+        else if ('decrement' in value) row[key] = (Number(row[key]) || 0) - value.decrement;
+        else if ('set' in value) row[key] = value.set;
+        else row[key] = value;
+      } else {
+        row[key] = value;
+      }
+    }
+    return row;
+  }
+
   const api = {
     $transaction: async (fn) => fn(api),
 
@@ -109,7 +126,7 @@ function createFakePrisma(seed = {}) {
       },
       update: async ({ where, data }) => {
         const row = store.order.find((r) => whereMatch(r, where));
-        Object.assign(row, data);
+        applyData(row, data);
         return row;
       },
       count: async () => store.order.length,
@@ -135,7 +152,7 @@ function createFakePrisma(seed = {}) {
       findUnique: async ({ where } = {}) => store.escrowHold.find((r) => whereMatch(r, where)) ?? null,
       update: async ({ where, data }) => {
         const row = store.escrowHold.find((r) => whereMatch(r, where));
-        Object.assign(row, data);
+        applyData(row, data);
         return row;
       },
     },
@@ -158,7 +175,7 @@ function createFakePrisma(seed = {}) {
       },
       update: async ({ where, data }) => {
         const row = store.refund.find((r) => whereMatch(r, where));
-        Object.assign(row, data);
+        applyData(row, data);
         return { ...row };
       },
     },
@@ -185,6 +202,8 @@ function createFakePrisma(seed = {}) {
     },
 
     escrowTransaction: {
+      findFirst: async ({ where = {} } = {}) => store.escrowTransaction.find((r) => whereMatch(r, where)) ?? null,
+      findMany: async ({ where = {} } = {}) => store.escrowTransaction.filter((r) => whereMatch(r, where)),
       create: async ({ data }) => {
         const row = { id: `et-${++seq}`, ...data };
         store.escrowTransaction.push(row);
@@ -368,3 +387,100 @@ test('pre-escrow cancel goes through the state machine, no refund', async () => 
   assert.equal(state.store._store.order[0].status, 'CANCELLED');
   assert.equal(cancelCalls.length, before, 'no refund for pre-escrow cancel');
 });
+
+// ---------------------------------------------------------------------------
+// processRefund (admin path): money-safety ordering.
+//
+// This path had no coverage, which is how it got away with marking a full
+// refund REFUNDED and the escrow hold released_to_buyer inside the transaction
+// that commits BEFORE the provider payout. A failed payout therefore left the
+// books claiming the buyer had been paid while the money never left ClickPesa,
+// on an order that could no longer be retried.
+// ---------------------------------------------------------------------------
+function seedRefundRequest(amount = null) {
+  const seed = seedEscrowOrder();
+  seed.refund = [{
+    id: 'r-1',
+    orderId: 'o1',
+    paymentId: 'pay-1',
+    amount: 50000n,
+    mode: 'full',
+    status: 'pending',
+    reason: 'Buyer asked for money back',
+    correlationId: 'refund_SV202609170001',
+    createdAt: new Date('2026-09-17T11:00:00Z'),
+  }];
+  return seed;
+}
+
+test('processRefund reaches REFUNDED only after the payout succeeds', async () => {
+  providerPayout(seedRefundRequest());
+  const result = await processRefund({ refundId: 'r-1', processedBy: 'admin-1' });
+
+  assert.equal(result.refund.status, 'completed');
+  assert.equal(result.order.status, 'REFUNDED');
+
+  const store = state.store._store;
+  assert.equal(store.order[0].status, 'REFUNDED');
+  assert.equal(store.escrowHold[0].status, 'released_to_buyer');
+  assert.equal(store.escrowHold[0].releasedToBuyer, 50000n);
+  assert.equal(state.payoutCalls.length, 1, 'the payout must be attempted');
+});
+
+test('a failed payout leaves the order REFUND_PENDING and the escrow unreleased', async () => {
+  setProvider(async () => { throw new Error('PAYOUT_DOWN'); });
+  state.store = createFakePrisma(seedRefundRequest());
+
+  const result = await processRefund({ refundId: 'r-1', processedBy: 'admin-1' });
+
+  // Assert the STORED rows, not the snapshot processRefund returns: it returns
+  // the record as it stood when the transaction set it to PROCESSING, while
+  // markRefundFailed updates the row afterwards. What matters is that the
+  // persisted state is retryable, and that nothing claims the money moved.
+  const store = state.store._store;
+  assert.equal(store.refund[0].status, 'failed');
+  assert.match(store.refund[0].lastError, /PAYOUT_DOWN/);
+
+  // The order must NOT be REFUNDED: that state means the buyer has the money.
+  assert.notEqual(store.order[0].status, 'REFUNDED');
+  assert.equal(store.order[0].status, 'REFUND_PENDING');
+  // And the escrow must not claim the money was released to the buyer.
+  assert.notEqual(store.escrowHold[0].status, 'released_to_buyer');
+  assert.equal(store.escrowHold[0].releasedToBuyer, 0n);
+  assert.equal(store.escrowHold[0].releasedAt, null);
+  assert.equal(store.payoutTransaction.length, 0, 'no payout was recorded');
+  assert.equal(result.finalState, 'REFUND_PENDING');
+});
+
+test('REFUND_PENDING stays refundable so a failed payout can be retried', () => {
+  // The retry depends on this: if the failure parked the order somewhere
+  // ineligible, an admin could not retry and the buyer would be owed money with
+  // no way to release it.
+  assert.ok(refundService.isRefundableEscrowState('REFUND_PENDING'));
+});
+
+test('a failed payout can be retried through processRefund', async () => {
+  setProvider(async () => { throw new Error('PAYOUT_DOWN'); });
+  state.store = createFakePrisma(seedRefundRequest());
+  await processRefund({ refundId: 'r-1', processedBy: 'admin-1' });
+  assert.equal(state.store._store.order[0].status, 'REFUND_PENDING');
+
+  // Provider recovers; the second attempt must complete the refund.
+  providerPayout(state.store._store ? seedFromStore(state.store._store) : null);
+  const retry = await processRefund({ refundId: 'r-1', processedBy: 'admin-1' });
+  assert.equal(retry.refund.status, 'completed');
+  assert.equal(state.store._store.order[0].status, 'REFUNDED');
+});
+
+// Rebuilds a seed from the live fake store so the retry runs against the state
+// the failed attempt actually left behind, not a fresh fixture.
+function seedFromStore(store) {
+  return {
+    order: store.order,
+    user: store.user,
+    sellerProfile: store.sellerProfile,
+    escrowHold: store.escrowHold,
+    refund: store.refund,
+    payment: store.payment,
+  };
+}

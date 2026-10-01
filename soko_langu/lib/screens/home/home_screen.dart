@@ -133,9 +133,14 @@ class _HomeScreenState extends State<HomeScreen>
     // A silent snapshot stream (dead network, cold Firestore persistence)
     // would leave the category skeleton up forever — cap it so the grid always
     // resolves to data or an explicit retry UI within a few seconds.
+    //
+    // onError replaces the error with the shipped tree rather than leaving the
+    // grid on an error card: the app already carries a complete category list,
+    // so a Firestore outage must degrade to it, not to a dead end.
     _categoryStream = _categoryService
-        .getCategories()
-        .timeout(const Duration(seconds: 12));
+        .watchCategories()
+        .timeout(const Duration(seconds: 12))
+        .handleError((Object _) => CategoryService.getCategories());
   }
 
   void _reloadCategories() {

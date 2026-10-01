@@ -1,6 +1,7 @@
 const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
+const { resolvePayoutPhone } = require('../../services/payout-phone');
 const { OrderStateMachine, ORDER_STATES, canonicalStatusOf } = require('../orders/order-state-machine');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');
@@ -115,7 +116,7 @@ async function requestRefund({ orderId, requestedBy, role, reason, amount }) {
       return refund;
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`refundreq:${orderId}`);
+    if (lock.acquired) await releaseLock(`refundreq:${orderId}`, lock.token);
   }
 }
 
@@ -126,13 +127,15 @@ async function processRefund({ refundId, processedBy = 'system' }) {
   const lock = await acquireLock(`refund:${refundId}`, 60);
 
   try {
-    const { refund, order, escrowHold, finalState } = await store.$transaction(async (tx) => {
+    const { refund, order, escrowHold, finalState, completed } = await store.$transaction(async (tx) => {
       const refundRecord = await tx.refund.findUnique({
         where: { id: refundId },
         include: { order: true },
       });
       if (!refundRecord) throw httpError(404, 'REFUND_NOT_FOUND');
-      if (refundRecord.status === REFUND_STATES.COMPLETED) return { completed: true };
+      if (refundRecord.status === REFUND_STATES.COMPLETED) {
+        return { completed: true, refund: refundRecord, order: refundRecord.order };
+      }
       if (refundRecord.status === REFUND_STATES.PROCESSING) {
         return { processing: true, refund: refundRecord, order: refundRecord.order };
       }
@@ -147,7 +150,13 @@ async function processRefund({ refundId, processedBy = 'system' }) {
       }
 
       const escrowHoldRecord = await tx.escrowHold.findFirst({
-        where: { orderId: orderRecord.id, status: { in: ['holding', 'disputed'] } },
+        // 'refunding' is included only here, on the processing/retry path. The
+        // lookups that CREATE a new refund deliberately exclude it so a second
+        // refund cannot be opened while one is in flight (that would be a double
+        // refund); this one must accept it, otherwise a payout that failed leaves
+        // the hold stranded in a state no retry can find and the buyer is owed
+        // money with no way to release it.
+        where: { orderId: orderRecord.id, status: { in: ['refunding', 'holding', 'disputed'] } },
       });
       if (!escrowHoldRecord) throw httpError(409, 'REFUND_ESCROW_UNAVAILABLE');
 
@@ -156,6 +165,25 @@ async function processRefund({ refundId, processedBy = 'system' }) {
         throw httpError(400, 'INSUFFICIENT_ESCROW');
       }
 
+      // Phase A runs BEFORE the provider payout, so it must only RESERVE money.
+      // For either mode the order parks in REFUND_PENDING and the escrow hold
+      // moves to 'refunding' with the amount reserved on the hold itself.
+      //
+      // This used to branch by mode, and both branches were wrong:
+      //   full    -> the order stayed REFUND_PENDING, but a REFUND_TO_BUYER
+      //              ledger row was still written here, so finalizeRefunded
+      //              wrote a SECOND row for the same referenceId and the escrow
+      //              ledger double-counted every full refund.
+      //   partial -> the order jumped straight to IN_ESCROW and releasedToBuyer
+      //              was incremented BEFORE the payout was attempted, so a failed
+      //              payout left the books claiming the buyer had been paid. The
+      //              hold also stayed 'holding', so a concurrent settle could pay
+      //              the seller the refunded amount. finalizeRefunded then tried
+      //              IN_ESCROW -> REFUNDED, which the state machine rejects, so
+      //              the transaction rolled back and the admin call 500'd *after*
+      //              the buyer had already been paid.
+      // Uniform reservation fixes all three; the mode only decides where
+      // finalizeRefunded puts the order afterwards.
       const machine = new OrderStateMachine(orderRecord.status);
       if (orderRecord.status !== ORDER_STATES.REFUND_PENDING) {
         machine.transition(ORDER_STATES.REFUND_PENDING, {
@@ -164,39 +192,21 @@ async function processRefund({ refundId, processedBy = 'system' }) {
           reason: 'Refund initiated',
         });
       }
-      const final = refundRecord.mode === 'full'
-        ? ORDER_STATES.REFUNDED
-        : ORDER_STATES.IN_ESCROW;
-      machine.transition(final, { actor: 'admin', actorId: processedBy, reason: 'Refund processed' });
 
-      if (refundRecord.mode === 'full') {
-        await tx.escrowHold.update({
-          where: { id: escrowHoldRecord.id },
-          data: {
-            status: 'released_to_buyer',
-            releasedToBuyer: escrowHoldRecord.amount,
-            releasedAt: new Date(),
-          },
-        });
-      } else {
-        await tx.escrowHold.update({
-          where: { id: escrowHoldRecord.id },
-          data: { releasedToBuyer: { increment: refundRecord.amount } },
-        });
-      }
-
-      await tx.escrowTransaction.create({
+      await tx.escrowHold.update({
+        where: { id: escrowHoldRecord.id },
         data: {
-          escrowHoldId: escrowHoldRecord.id,
-          type: 'REFUND_TO_BUYER',
-          amount: refundRecord.amount,
-          referenceId: refundId,
+          status: 'refunding',
+          // Carried to Phase C so the partial path knows how much to release
+          // once the hold flips back out of 'refunding'.
+          refundingAmount: refundRecord.amount,
+          refundingId: refundId,
         },
       });
 
       await tx.order.update({
         where: { id: orderRecord.id },
-        data: { status: final, statusChangedBy: processedBy },
+        data: { status: ORDER_STATES.REFUND_PENDING, statusChangedBy: processedBy },
       });
 
       const updatedRefund = await tx.refund.update({
@@ -211,21 +221,65 @@ async function processRefund({ refundId, processedBy = 'system' }) {
 
       return {
         refund: updatedRefund,
-        order: { ...orderRecord, status: final },
+        order: { ...orderRecord, status: ORDER_STATES.REFUND_PENDING },
         escrowHold: escrowHoldRecord,
-        finalState: final,
+        finalState: ORDER_STATES.REFUND_PENDING,
       };
     });
 
-    if (refund.completed) return { refund };
-    if (refund.processing) {
+    // The payout already succeeded on an earlier run but finalize never landed
+    // (crash between disburseRefund and Phase C). Healing here is what makes the
+    // flow crash-safe: without it the COMPLETED refund short-circuits on every
+    // future call and the order stays REFUND_PENDING forever.
+    if (completed) {
+      // Look the order up by id rather than reading the relation that Phase A
+      // happened to include. The relation is absent on some store
+      // implementations, and silently treating "no order" as "nothing to do"
+      // returned early and left the order parked in REFUND_PENDING forever.
+      const orderNow = await store.order.findUnique({ where: { id: refund.orderId } });
+      if (!orderNow || orderNow.status !== ORDER_STATES.REFUND_PENDING) {
+        return { refund, order: orderNow };
+      }
+      const healed = await finalizeRefunded({
+        orderId: orderNow.id,
+        actorId: processedBy,
+        refundRecord: refund,
+      });
+      await syncLegacyOrderStatus(healed);
+      return { refund, order: healed, healed: true };
+    }
+    if (refund && refund.processing) {
       return { refund, processing: true };
     }
 
-    await disburseRefund(refund);
-    return { refund, order, escrowHold, finalState };
+    // Push the money to the buyer, then — and only then — close out the order.
+    // A full refund used to be marked REFUNDED inside the transaction above,
+    // which runs BEFORE the payout: if the payout then failed, the order was
+    // already terminal REFUNDED and the escrow already said released_to_buyer,
+    // so the platform's books claimed the buyer had been paid when the money
+    // never left the ClickPesa account, with no way to retry. Now the order
+    // stays REFUND_PENDING (a refundable state) and this Phase C, shared with
+    // the buyer-cancel path, is the only route to REFUNDED.
+    // The transaction returns { refund: <record>, order, escrowHold, finalState },
+    // so the destructured `refund` IS the Refund row and is what disburseRefund
+    // needs. The two early returns above can yield `{ completed: true }` /
+    // `{ processing: true }` with no record, hence the guards.
+    const disburseResult = await disburseRefund(refund);
+
+    if (disburseResult && disburseResult.status === REFUND_STATES.COMPLETED) {
+      const finalized = await finalizeRefunded({
+        orderId: order.id,
+        actorId: processedBy,
+        refundRecord: disburseResult,
+      });
+      await syncLegacyOrderStatus(finalized);
+      const completedRefund = await store.refund.findUnique({ where: { id: refundId } });
+      return { refund: completedRefund, order: finalized, escrowHold, finalState: ORDER_STATES.REFUNDED };
+    }
+
+    return { refund, order, escrowHold, finalState: ORDER_STATES.REFUND_PENDING };
   } finally {
-    if (!lock.skipped) await releaseLock(`refund:${refundId}`);
+    if (lock.acquired) await releaseLock(`refund:${refundId}`, lock.token);
   }
 }
 
@@ -240,7 +294,16 @@ async function disburseRefund(refund) {
   if (!orderRecord) return markRefundFailed(refund, 'ORDER_NOT_FOUND');
 
   const buyerUser = await store.user.findUnique({ where: { id: orderRecord.buyerId } });
-  if (!buyerUser || !buyerUser.phone) {
+  // The buyer's phone is resolved through the shared helper rather than read
+  // straight off the database row: a Google sign-in buyer has phone NULL there
+  // while the Firestore user document has it, and without this the refund was
+  // refused with BUYER_NO_PHONE even though a reachable number existed.
+  const payoutPhone = await resolvePayoutPhone({
+    dbPhone: buyerUser && buyerUser.phone,
+    firebaseUid: buyerUser && buyerUser.firebaseUid,
+    userId: orderRecord.buyerId,
+  });
+  if (!payoutPhone) {
     await markRefundFailed(refund, 'BUYER_NO_PHONE');
     await notifyRefundAdmin(`Refund ${refund.id} blocked: mnunuzi hana namba ya simu`, { refundId: refund.id, orderId: refund.orderId });
     return null;
@@ -252,7 +315,7 @@ async function disburseRefund(refund) {
     const payout = await provider.initiatePayout({
       amount: Number(refund.amount),
       orderReference: refund.correlationId,
-      phoneNumber: buyerUser.phone,
+      phoneNumber: payoutPhone,
     });
 
     await store.payoutTransaction.create({
@@ -264,6 +327,10 @@ async function disburseRefund(refund) {
       },
     });
 
+    // Marks only that the money left. The order/escrow finalization is the
+    // CALLER's job (finalizeRefunded), because that is what keeps "REFUNDED"
+    // behind a confirmed payout. disburseRefund deliberately does not touch
+    // the order state itself.
     const completed = await store.refund.update({
       where: { id: refund.id },
       data: { status: REFUND_STATES.COMPLETED, processedAt: new Date() },
@@ -409,46 +476,95 @@ async function refundOnCancel({ orderId, actorId, role, reason }) {
     await syncLegacyOrderStatus(orderNow);
     return { refund: refundNow, order: orderNow };
   } finally {
-    if (!lock.skipped) await releaseLock(`cancelrefund:${orderId}`);
+    if (lock.acquired) await releaseLock(`cancelrefund:${orderId}`, lock.token);
   }
 }
 
-// Escrow + order move to REFUNDED only once the payout is confirmed. Shared by
-// Phase C and the crash-heal path (money moved, finalize never ran).
+// Escrow + order move to their terminal state only once the payout is confirmed.
+// Shared by Phase C and the crash-heal path (money moved, finalize never ran).
+//
+// This is mode-aware, which it previously was not. It unconditionally drove the
+// order to REFUNDED and released the ENTIRE hold, so a partial refund either
+// threw (IN_ESCROW -> REFUNDED is not a legal transition, rolling the
+// transaction back *after* the buyer had been paid) or, had the order still been
+// REFUND_PENDING, marked a partially-refunded order as fully refunded and
+// released escrow the buyer was never owed.
 async function finalizeRefunded({ orderId, actorId, refundRecord }) {
   const store = getStore();
+  const isFull = refundRecord.mode === 'full';
+
   return store.$transaction(async (tx) => {
+    // 'refunding' is the state Phase A parks the hold in while the payout is in
+    // flight. It must be accepted here or the finalize could not find the very
+    // hold it is supposed to release. A hold still in 'holding' is also accepted
+    // for the heal path, where a crash landed after the payout but before the
+    // reservation was visible.
     const escrowHold = await tx.escrowHold.findFirst({
-      where: { orderId, status: { in: ['holding'] } },
+      where: { orderId, status: { in: ['refunding', 'holding'] } },
     });
     const orderRecord = await tx.order.findUnique({ where: { id: orderId } });
-    if (orderRecord.status !== ORDER_STATES.REFUNDED) {
+
+    // A full refund ends the order; a partial one returns it to escrow so the
+    // remaining balance can still be settled to the seller.
+    const settledStatus = isFull ? ORDER_STATES.REFUNDED : ORDER_STATES.IN_ESCROW;
+    if (orderRecord.status !== settledStatus) {
       const machine = new OrderStateMachine(orderRecord.status);
-      machine.transition(ORDER_STATES.REFUNDED, {
-        actor: 'system', actorId, reason: 'Refund to buyer completed',
+      machine.transition(settledStatus, {
+        actor: 'system', actorId,
+        reason: isFull ? 'Refund to buyer completed' : 'Partial refund to buyer completed',
       });
       await tx.order.update({
         where: { id: orderId },
-        data: { status: ORDER_STATES.REFUNDED, statusChangedBy: actorId },
+        data: { status: settledStatus, statusChangedBy: actorId },
       });
     }
+
     if (escrowHold) {
-      await tx.escrowHold.update({
-        where: { id: escrowHold.id },
-        data: {
-          status: 'released_to_buyer',
-          releasedToBuyer: escrowHold.amount,
-          releasedAt: new Date(),
-        },
+      if (isFull) {
+        await tx.escrowHold.update({
+          where: { id: escrowHold.id },
+          data: {
+            status: 'released_to_buyer',
+            releasedToBuyer: escrowHold.amount,
+            releasedAt: new Date(),
+            refundingAmount: null,
+            refundingId: null,
+          },
+        });
+      } else {
+        // Only the refunded slice is released, and the hold goes back to
+        // 'holding' so the rest of the balance stays settleable. Phase A left
+        // releasedToBuyer untouched, so it is incremented here — after the money
+        // actually moved.
+        await tx.escrowHold.update({
+          where: { id: escrowHold.id },
+          data: {
+            status: 'holding',
+            releasedToBuyer: { increment: refundRecord.amount },
+            refundingAmount: null,
+            refundingId: null,
+          },
+        });
+      }
+
+      // Written exactly once, here, after the payout is confirmed. Phase A no
+      // longer creates this row; when it did, every full refund recorded two
+      // REFUND_TO_BUYER entries for the same referenceId and the escrow ledger
+      // double-counted the refund. The existing-row check additionally makes the
+      // heal path safe to re-run.
+      const alreadyRecorded = await tx.escrowTransaction.findFirst({
+        where: { referenceId: refundRecord.id, type: 'REFUND_TO_BUYER' },
       });
-      await tx.escrowTransaction.create({
-        data: {
-          escrowHoldId: escrowHold.id,
-          type: 'REFUND_TO_BUYER',
-          amount: refundRecord.amount,
-          referenceId: refundRecord.id,
-        },
-      });
+      if (!alreadyRecorded) {
+        await tx.escrowTransaction.create({
+          data: {
+            escrowHoldId: escrowHold.id,
+            type: 'REFUND_TO_BUYER',
+            amount: refundRecord.amount,
+            referenceId: refundRecord.id,
+          },
+        });
+      }
     }
     return tx.order.findUnique({ where: { id: orderId } });
   });

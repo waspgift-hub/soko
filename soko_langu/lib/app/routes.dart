@@ -58,6 +58,8 @@ class AppRoutes {
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';
+  static const String music = '/music';
+  static const String nowPlaying = '/music/now-playing';
 
   // Deep-link / share routes (aliases that map to canonical screens)
   static const String userProfileAlias = '/profile';

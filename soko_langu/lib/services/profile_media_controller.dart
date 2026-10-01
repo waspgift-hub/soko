@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io' show File;
 
 import 'package:video_player/video_player.dart';
 
+import 'media_utils.dart';
 import 'youtube_utils.dart';
 
 /// One playable entry in the profile media queue.
@@ -11,17 +13,31 @@ class ProfileMediaItem {
   final String videoUrl;
   final String? thumbnailUrl;
 
+  /// Absolute device path for songs stored on the phone. When set, playback
+  /// reads the file directly — no network involved.
+  final String? localPath;
+
   const ProfileMediaItem({
     required this.id,
     required this.title,
     required this.videoUrl,
     this.thumbnailUrl,
+    this.localPath,
   });
+
+  bool get isLocalFile => localPath != null && localPath!.isNotEmpty;
 
   /// True when the URL is a YouTube link. Those play through the embedded
   /// YouTube player (WebView) instead of the video_player engine, because
   /// YouTube never serves directly playable mp4 URLs.
-  bool get isYouTube => isYouTubeUrl(videoUrl);
+  bool get isYouTube => !isLocalFile && isYouTubeUrl(videoUrl);
+
+  /// True for audio files (mp3, m4a, ...). They play through the same engine
+  /// as video, but the UI renders an artwork card instead of a surface.
+  bool get isAudio =>
+      !isYouTube &&
+      (isAudioUrl(videoUrl) ||
+          (isLocalFile && isAudioUrl(localPath!)));
 }
 
 /// Playback states exposed to the UI. Mirrors the handler-state idea Namida
@@ -78,6 +94,7 @@ class ProfileMediaController {
   Duration? get sleepRemaining =>
       _sleepEndsAt?.difference(DateTime.now());
   bool get isCurrentYouTube => current?.isYouTube ?? false;
+  bool get isCurrentAudio => current?.isAudio ?? false;
   String? get error => _error;
   VideoPlayerController? get video => _video;
 
@@ -140,7 +157,12 @@ class ProfileMediaController {
       return;
     }
     _emitAll(ProfileMediaState.loading, Duration.zero, Duration.zero);
-    final controller = VideoPlayerController.networkUrl(Uri.parse(item.videoUrl));
+    final VideoPlayerController controller;
+    if (item.isLocalFile) {
+      controller = VideoPlayerController.file(File(item.localPath!));
+    } else {
+      controller = VideoPlayerController.networkUrl(Uri.parse(item.videoUrl));
+    }
     _video = controller;
     controller.addListener(_onTick);
     try {

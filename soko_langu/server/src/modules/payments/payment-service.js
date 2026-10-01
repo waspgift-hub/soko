@@ -1,6 +1,7 @@
 const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('./provider-factory');
+const { PaymentError } = require('./payment-errors');
 const config = require('../../config');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { sameAmount } = require('../../utils/money');
@@ -85,7 +86,7 @@ async function initiatePayment({
       return { payment, providerInstruction: providerResponse.raw };
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`payment:${orderId}`);
+    if (lock.acquired) await releaseLock(`payment:${orderId}`, lock.token);
   }
 }
 
@@ -135,6 +136,21 @@ async function confirmCollection({
           const provider = getProvider(payment.provider);
           const statusResp = await provider.queryCollectionStatus(orderReference);
           if (statusResp.status !== 'completed') {
+            // A customer-side decline is not an order fault and must not leave
+            // the order stuck in PAYMENT_PENDING forever. Measured live: a buyer
+            // with an empty wallet produces status FAILED and the reason lives
+            // only in the gateway's `message` field.
+            if (statusResp.status === 'failed') {
+              throw new PaymentError({
+                code: 'CUSTOMER_PAYMENT_FAILED',
+                message: statusResp.failureReason
+                  || 'Malipo yamekataliwa. Hakuna salio lililofanyika.',
+                provider: payment.provider,
+                status: 402,
+                providerReference: statusResp.providerPaymentId,
+                retryable: true,
+              });
+            }
             throw httpError(409, `PAYMENT_NOT_VERIFIED:${statusResp.status}`);
           }
           providerPaymentId = statusResp.providerPaymentId;
@@ -177,7 +193,7 @@ async function confirmCollection({
       result = { status: 'VERIFIED', order: updatedOrder, escrowHold };
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`collection:${orderReference}`);
+    if (lock.acquired) await releaseLock(`collection:${orderReference}`, lock.token);
   }
 
   // Presentation mirror AFTER commit
@@ -258,7 +274,10 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
           amount: normalized.amount,
         });
       } else if (normalized.status === 'failed') {
-        await markPaymentFailed(normalized.orderReference);
+        await markPaymentFailed(normalized.orderReference, {
+          reason: normalized.failureReason,
+          providerPaymentId: normalized.providerPaymentId,
+        });
       }
       await outbox.markWebhookProcessed(event);
     } catch (err) {
@@ -270,11 +289,11 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
 
     return { received: true, webhookId };
   } finally {
-    if (!lock.skipped) await releaseLock(`webhook:${dedupKey}`);
+    if (lock.acquired) await releaseLock(`webhook:${dedupKey}`, lock.token);
   }
 }
 
-async function markPaymentFailed(orderReference) {
+async function markPaymentFailed(orderReference, { reason = null, providerPaymentId = null } = {}) {
   const store = getStore();
   const lock = await acquireLock(`fail:${orderReference}`, 60);
   let result;
@@ -284,23 +303,51 @@ async function markPaymentFailed(orderReference) {
         where: { orderNumber: orderReference },
       });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+
+      const payment = await tx.payment.findFirst({
+        where: { orderId: order.id, status: { in: ['initiated', 'pending'] } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (payment) {
+        // No failureReason column on `payments`, and adding one would mean a
+        // migration on the money table. The reason is not lost: the gateway's
+        // full message is already persisted verbatim in the webhook event's
+        // rawPayload by outbox.recordWebhookEvent before this runs, and it is
+        // logged here where an operator reads it.
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'failed',
+            providerPaymentId: providerPaymentId || payment.providerReference,
+          },
+        });
+        if (reason) {
+          console.warn(`[payment] ${orderReference} declined: ${reason}`);
+        }
+      }
+
       if (order.status !== ORDER_STATES.PAYMENT_PENDING) {
         result = { status: 'SKIPPED', order };
         return;
       }
+
+      // Back to AWAITING_ESCROW_PAYMENT, not FAILED. The money never moved and
+      // the cause is on the buyer's side (no balance, wrong PIN, prompt
+      // dismissed), so the order must stay payable. Parking it in FAILED meant
+      // the buyer had no way to try again and the seller had a dead order.
       const machine = new OrderStateMachine(order.status);
-      machine.transition(ORDER_STATES.FAILED, {
+      machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {
         actor: 'system',
-        reason: 'Provider reported collection failure',
+        reason: reason ? `Collection failed: ${reason}` : 'Collection failed, retryable',
       });
       const updated = await tx.order.update({
         where: { id: order.id },
-        data: { status: ORDER_STATES.FAILED },
+        data: { status: ORDER_STATES.AWAITING_ESCROW_PAYMENT },
       });
-      result = { status: 'FAILED', order: updated };
+      result = { status: 'FAILED', order: updated, reason };
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`fail:${orderReference}`);
+    if (lock.acquired) await releaseLock(`fail:${orderReference}`, lock.token);
   }
 
   if (result && result.status === 'FAILED') {

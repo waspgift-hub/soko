@@ -21,7 +21,7 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { getStore } = require('../../config/database');
 const { getFirebaseAuth, getFirebaseFirestore } = require('../../config/firebase');
 const { optionalAuth } = require('../../middleware/auth');
-const { paymentService } = require('../payments/payment-service');
+const paymentService = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
@@ -286,7 +286,13 @@ router.post('/create-marketplace-payment-link', optionalAuth, resolveShopBuyer, 
       phoneNumber: phone,
     });
   } catch (e) {
-    throw httpError(502, e.message || 'PAYMENT_INITIATION_FAILED');
+    // Keep the service's own status for a client mistake: collapsing a 409
+    // INVALID_ORDER_STATE or a 404 ORDER_NOT_FOUND into 502 tells the buyer the
+    // payment gateway is broken when the real problem is that the seller has not
+    // quoted shipping yet, which is fixable by reloading. Only a genuine
+    // upstream failure becomes a 502.
+    const status = e.status && e.status >= 400 && e.status < 500 ? e.status : 502;
+    throw httpError(status, e.message || 'PAYMENT_INITIATION_FAILED');
   }
 
   return res.json({

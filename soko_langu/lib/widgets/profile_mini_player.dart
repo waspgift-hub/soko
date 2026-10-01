@@ -39,9 +39,9 @@ class ProfileMiniPlayer extends StatelessWidget {
                 elevation: 4,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: session.sellerId == null
+                  onTap: session.returnRoute == null
                       ? null
-                      : () => context.push('/seller/${session.sellerId}'),
+                      : () => context.push(session.returnRoute!),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,

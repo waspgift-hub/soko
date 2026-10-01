@@ -103,7 +103,7 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
       return { orderId, quote, validation, updatedOrder };
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`shipping:${orderId}`);
+    if (lock.acquired) await releaseLock(`shipping:${orderId}`, lock.token);
   }
 }
 
@@ -149,7 +149,7 @@ async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
       return updatedOrder;
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`shipping:${orderId}`);
+    if (lock.acquired) await releaseLock(`shipping:${orderId}`, lock.token);
   }
 }
 
@@ -189,7 +189,7 @@ async function blockQuote({ orderId, blockedBy, reason }) {
       return updatedOrder;
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`shipping:${orderId}`);
+    if (lock.acquired) await releaseLock(`shipping:${orderId}`, lock.token);
   }
 }
 

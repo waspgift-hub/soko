@@ -34,8 +34,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       final extraEmail = GoRouterState.of(context).extra is Map
           ? (GoRouterState.of(context).extra as Map)['email'] as String?
           : null;
-      _email = extraEmail ??
-          FirebaseAuth.instance.currentUser?.email;
+      _email = extraEmail ?? FirebaseAuth.instance.currentUser?.email;
     }
   }
 
@@ -47,10 +46,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _sendOtp() async {
     if (_email == null || _email!.isEmpty) return;
+    // Re-entrancy is already prevented by the notifier's `sending` state, which
+    // disables this button in build(). The old empty catch swallowed the failure
+    // entirely, so a 429 or a bounced address left the user tapping a button
+    // that would never send anything.
     try {
       await context.read<AuthNotifier>().sendEmailOtp(_email!);
     } catch (_) {
-      // failure is already shown by the banner, which reads AuthNotifier.error
+      // AuthNotifier.error is surfaced by the banner; rethrowing here would
+      // surface the same failure twice.
     }
   }
 
@@ -83,9 +87,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 return SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
                     child: Padding(
                       padding: const EdgeInsets.all(30),
                       child: Column(
@@ -99,9 +101,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            sent
-                                ? context.tr('enter_otp')
-                                : context.tr('verify_email_title'),
+                            sent ? context.tr('enter_otp') : context.tr('verify_email_title'),
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -146,20 +146,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                 hintText: '000000',
                                 counterText: '',
                                 filled: true,
-                                fillColor: cs.surfaceContainerHighest
-                                    .withValues(alpha: 0.5),
+                                fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: cs.outlineVariant,
-                                  ),
+                                  borderSide: BorderSide(color: cs.outlineVariant),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: cs.primary,
-                                    width: 2,
-                                  ),
+                                  borderSide: BorderSide(color: cs.primary, width: 2),
                                 ),
                               ),
                             ),
@@ -168,9 +162,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                               width: double.infinity,
                               height: 50,
                               child: ElevatedButton(
-                                onPressed:
-                                    notifier.emailOtpState ==
-                                        EmailOtpState.verifying
+                                onPressed: notifier.emailOtpState == EmailOtpState.verifying
                                     ? null
                                     : _verifyOtp,
                                 style: ElevatedButton.styleFrom(
@@ -180,13 +172,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                                child:
-                                    notifier.emailOtpState ==
-                                        EmailOtpState.verifying
-                                    ? const GoogleLoading(
-                                        size: 20,
-                                        strokeWidth: 2,
-                                      )
+                                child: notifier.emailOtpState == EmailOtpState.verifying
+                                    ? const GoogleLoading(size: 20, strokeWidth: 2)
                                     : Text(
                                         context.tr('verified_continue'),
                                         style: TextStyle(
@@ -201,10 +188,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                             TextButton(
                               onPressed: sending ? null : _sendOtp,
                               child: sending
-                                  ? const GoogleLoading(
-                                      size: 20,
-                                      strokeWidth: 2,
-                                    )
+                                  ? const GoogleLoading(size: 20, strokeWidth: 2)
                                   : Text(
                                       context.tr('resend_otp'),
                                       style: TextStyle(color: cs.primary),
@@ -225,10 +209,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                   ),
                                 ),
                                 child: sending
-                                    ? const GoogleLoading(
-                                        size: 20,
-                                        strokeWidth: 2,
-                                      )
+                                    ? const GoogleLoading(size: 20, strokeWidth: 2)
                                     : Text(
                                         context.tr('send_otp'),
                                         style: TextStyle(
@@ -250,19 +231,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    color: cs.error,
-                                    size: 18,
-                                  ),
+                                  Icon(Icons.error_outline, color: cs.error, size: 18),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       context.tr(error),
-                                      style: TextStyle(
-                                        color: cs.error,
-                                        fontSize: 13,
-                                      ),
+                                      style: TextStyle(color: cs.error, fontSize: 13),
                                     ),
                                   ),
                                 ],
@@ -277,9 +251,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                             },
                             child: Text(
                               context.tr('use_different_account'),
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.6),
-                              ),
+                              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
                             ),
                           ),
                         ],

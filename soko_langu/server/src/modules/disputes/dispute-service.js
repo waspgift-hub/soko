@@ -84,7 +84,7 @@ async function fileDispute({ orderId, filedBy, reason, description, role }) {
       return dispute;
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`dispute:${orderId}`);
+    if (lock.acquired) await releaseLock(`dispute:${orderId}`, lock.token);
   }
 }
 
@@ -160,7 +160,7 @@ async function resolveDispute({ disputeId, resolvedBy, resolution, note, buyerAm
       return updated;
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`dispute:${disputeId}`);
+    if (lock.acquired) await releaseLock(`dispute:${disputeId}`, lock.token);
   }
 }
 

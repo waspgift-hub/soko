@@ -96,6 +96,12 @@ const STATE_TRANSITIONS = {
   ],
   [ORDER_STATES.PAYMENT_PENDING]: [
     ORDER_STATES.PAYMENT_PROCESSING,
+    // A customer-side decline is not the end of the order. Measured live: a
+    // buyer whose M-Pesa is empty gets "You do not have enough balance" and the
+    // only correct next step is topping up and tapping Pay again, which was
+    // impossible while the sole exits were FAILED (order dead) or waiting for a
+    // callback that will never arrive.
+    ORDER_STATES.AWAITING_ESCROW_PAYMENT,
     ORDER_STATES.FAILED,
     ORDER_STATES.ESCROW_HELD,
     ORDER_STATES.IN_ESCROW,

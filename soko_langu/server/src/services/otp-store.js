@@ -93,4 +93,22 @@ async function bumpAttempts(key) {
   return bump(record);
 }
 
-module.exports = { saveOtp, getOtp, markUsed, bumpAttempts };
+// Removes an OTP that was stored but never delivered. Called when the SMS/email
+// send fails AFTER the code was saved: leaving the record in place would make
+// the user's next attempt collide with the 60s send cooldown (burned by the
+// failed attempt) even though no code ever reached them, so a provider outage
+// would lock users out for a minute per failed send.
+async function clearOtp(key) {
+  try {
+    const redis = getRedis();
+    if (redis) {
+      await withTimeout(redis.del(redisKey(key)));
+    }
+  } catch (e) {
+    console.error('[OTP-STORE] redis clear failed:', e.message);
+  }
+  memory.delete(key);
+  return true;
+}
+
+module.exports = { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp };

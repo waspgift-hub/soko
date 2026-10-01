@@ -1,5 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Cooldown before a one-time code may be re-sent, in seconds.
+///
+/// MUST equal the server's `OTP_COOLDOWN_MS` (60s, see
+/// `server/src/middleware/otpGuard.js`). The server claims its cooldown in
+/// middleware *before* it attempts delivery, so any shorter client countdown
+/// lets the user tap "resend" into a guaranteed 429. Three screens had this
+/// hardcoded to 45 independently, which is why it lives in one constant now.
+const int kOtpResendCooldownSeconds = 60;
+
 class RateLimiter {
   RateLimiter._();
 
@@ -28,7 +37,8 @@ class RateLimiter {
     return prefs.getInt('$_prefix${action}_count') ?? 0;
   }
 
-  static Future<void> incrementAttempt(String action, {
+  static Future<void> incrementAttempt(
+    String action, {
     int maxAttempts = 5,
     Duration window = const Duration(minutes: 15),
   }) async {

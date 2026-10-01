@@ -57,11 +57,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
             ),
             Expanded(
               child: StreamBuilder<List<Category>>(
-                stream: CategoryService().getCategories(),
+                // initialData is the tree compiled into the app, so the grid
+                // paints on the first frame instead of a skeleton. The stream is
+                // only the refresh path; the waiting branch below is now
+                // unreachable in practice, which is the point — a list the app
+                // already ships must never be gated behind the network.
+                stream: CategoryService().watchCategories(),
+                initialData: CategoryService.getCategories(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const _LoadingGrid();
-                  }
                   if (snapshot.hasError) {
                     return _ErrorView(
                       onRetry: () => setState(() {}),
@@ -434,31 +437,6 @@ class _PremiumCategoryCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LoadingGrid extends StatelessWidget {
-  const _LoadingGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return GridView.builder(
-      padding: const EdgeInsets.all(AppInsets.lg),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: _gridColumns(context),
-        crossAxisSpacing: AppInsets.md,
-        mainAxisSpacing: AppInsets.md,
-        childAspectRatio: 0.72,
-      ),
-      itemCount: 8,
-      itemBuilder: (context, _) => Container(
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(24),
         ),
       ),
     );

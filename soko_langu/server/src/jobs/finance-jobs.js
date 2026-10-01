@@ -153,7 +153,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
       summary.failed += 1;
       console.error('[FINANCE] expireStalePayments order', order.id, e.message);
     } finally {
-      if (!lock.skipped) await releaseLock(`expire:${order.id}`);
+      if (lock.acquired) await releaseLock(`expire:${order.id}`, lock.token);
     }
   }
   return summary;

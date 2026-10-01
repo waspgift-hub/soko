@@ -1,10 +1,11 @@
 const crypto = require('crypto');
 const { getFirebaseAuth } = require('../../config/firebase');
 const { getStore } = require('../../config/database');
-const { saveOtp, getOtp, markUsed, bumpAttempts } = require('../../services/otp-store');
+const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp } = require('../../services/otp-store');
 const { sendMail } = require('../../services/mailer');
 const { buildOtpEmail } = require('../../services/email-templates');
 const { deliverPhoneOtp } = require('../../services/otp-delivery');
+const { releaseOtpClaim } = require('../../middleware/otpGuard');
 const accountStore = require('../../services/account-store');
 
 const OTP_TTL_SECONDS = 300; // 5 minutes
@@ -42,6 +43,13 @@ async function sendOtp(req, res) {
     });
     if (!delivery.delivered) {
       console.error('[AUTH] send-otp delivery failed for', clean);
+      // The code never reached the user. Both halves of the guard claim have to
+      // go: the stored hash (so it cannot be verified later) AND the cooldown
+      // plus quota slot the middleware already consumed. Rolling back only the
+      // hash left the user waiting out a 60-second cooldown and one of just 3
+      // quota slots for a message the backend failed to send.
+      await clearOtp(`phone:${clean}`);
+      await releaseOtpClaim(req);
       return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
@@ -99,7 +107,9 @@ async function sendEmailOtp(req, res) {
     const { email } = req.body;
 
     if (!email || !email.includes('@')) {
-      return res.status(400).json({ error: 'Valid email required' });
+      // Machine code, not a sentence: the app switches on `error`, and every
+      // other auth route answers with a code like this.
+      return res.status(400).json({ error: 'auth_invalid_email' });
     }
     const cleanEmail = email.trim().toLowerCase();
     const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
@@ -115,6 +125,12 @@ async function sendEmailOtp(req, res) {
     });
     const sent = await sendMail(cleanEmail, subject, html);
     if (!sent) {
+      // The code never arrived (every channel failed, or the address bounced /
+      // is suppressed). Drop the stored hash AND give back the cooldown and the
+      // quota slot the guard already claimed, so the user can retry at once
+      // instead of waiting on a 60s cooldown for a message that was never sent.
+      await clearOtp(`email:${cleanEmail}`);
+      await releaseOtpClaim(req);
       return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
@@ -150,6 +166,34 @@ async function checkEmailCode(cleanEmail, otpValue) {
   return { ok: true };
 }
 
+// Flags the Firebase user's address as verified after an OTP check succeeded.
+//
+// Best-effort by design: the OTP proof has already been consumed and is
+// authoritative, so a Firebase write failure must NOT turn a successful
+// verification into an error the user sees and retries with a spent code. The
+// flag is a convenience mirror for the app, not the source of truth — the OTP
+// store is. Failures are logged loudly instead.
+async function markFirebaseEmailVerified(cleanEmail) {
+  try {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      console.warn('[AUTH] Firebase not configured; skipping emailVerified flag for', cleanEmail);
+      return false;
+    }
+    const user = await auth.getUserByEmail(cleanEmail);
+    if (user.emailVerified) return true;
+    await auth.updateUser(user.uid, { emailVerified: true });
+    return true;
+  } catch (err) {
+    // NOT_FOUND here is expected: the address may have an OTP but no account
+    // (a verification-before-registration flow), so it is not an error.
+    const code = err && err.code ? String(err.code) : '';
+    if (code === 'auth/user-not-found') return false;
+    console.error('[AUTH] failed to set emailVerified for', cleanEmail, '-', err.message);
+    return false;
+  }
+}
+
 // Verify email OTP
 async function verifyEmailOtp(req, res) {
   try {
@@ -160,6 +204,14 @@ async function verifyEmailOtp(req, res) {
 
     const check = await checkEmailCode(cleanEmail, otpValue);
     if (!check.ok) return res.status(400).json({ error: check.error });
+
+    // Prove the address in Firebase too. This handler used to answer
+    // { valid: true } and nothing else, so a user who proved control of their
+    // mailbox stayed emailVerified:false in Firebase forever: the app's
+    // isEmailVerified() check (repositories/auth_repository.dart) kept reporting
+    // "not verified", and any server-side policy that trusts that flag — or a
+    // later `requireEmailVerified` — would reject a genuinely verified user.
+    await markFirebaseEmailVerified(cleanEmail);
 
     res.json({
       success: true,

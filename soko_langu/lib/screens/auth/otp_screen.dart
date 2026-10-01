@@ -28,6 +28,10 @@ class OtpScreen extends StatefulWidget {
   final String displayPhone;
   final OtpVerifier verify;
   final void Function(BuildContext context) onSuccess;
+  // 60s, not 45s: the server's OTP guard claims a 60-second cooldown
+  // (OTP_COOLDOWN_MS) before it even attempts delivery, so a shorter client
+  // countdown reliably produced a 429 on resend and the user saw an error with
+  // no way to know they simply had to wait longer.
   final int resendSeconds;
 
   const OtpScreen({
@@ -36,7 +40,7 @@ class OtpScreen extends StatefulWidget {
     required this.displayPhone,
     required this.verify,
     required this.onSuccess,
-    this.resendSeconds = 45,
+    this.resendSeconds = 60,
   });
 
   @override
@@ -186,8 +190,20 @@ class _OtpScreenState extends State<OtpScreen> {
         _otpKey.currentState?.clear();
         setState(() => _errorMessage = null);
       }
-    } catch (_) {
-      // sendPhoneOtp consumes the error into notifier.error; nothing to rethrow.
+    } catch (e) {
+      // sendPhoneOtp normally folds the failure into notifier.error, but this
+      // screen must not stay silent: a swallowed 429 (or a gateway failure that
+      // never reached the user) left the button spinning with no explanation and
+      // the old code still inside, so the user retried blindly. The timer is
+      // deliberately NOT restarted, because the server claims its cooldown
+      // before it attempts delivery — restarting it here would invite another
+      // guaranteed 429.
+      if (mounted) {
+        setState(() {
+          _errorMessage = context.trError(e);
+          _errorTick++;
+        });
+      }
     } finally {
       if (mounted) setState(() => _resending = false);
     }
@@ -206,10 +222,7 @@ class _OtpScreenState extends State<OtpScreen> {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 350),
             child: _success
-                ? _SuccessView(
-                    key: const ValueKey('success'),
-                    displayPhone: widget.displayPhone,
-                  )
+                ? _SuccessView(key: const ValueKey('success'), displayPhone: widget.displayPhone)
                 : Column(
                     key: const ValueKey('form'),
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -264,17 +277,10 @@ class _OtpScreenState extends State<OtpScreen> {
                         Center(
                           child: TextButton.icon(
                             onPressed: _applyClipboardCode,
-                            icon: Icon(
-                              Icons.content_paste_go,
-                              size: 18,
-                              color: cs.primary,
-                            ),
+                            icon: Icon(Icons.content_paste_go, size: 18, color: cs.primary),
                             label: Text(
                               context.tr('paste_otp'),
-                              style: TextStyle(
-                                color: cs.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
@@ -301,25 +307,23 @@ class _OtpScreenState extends State<OtpScreen> {
                                 ),
                               )
                             : _canResend
-                                ? TextButton.icon(
-                                    onPressed: _resend,
-                                    icon: const Icon(Icons.refresh, size: 18),
-                                    label: Text(context.tr('resend_code')),
-                                  )
-                                : Text(
-                                    _resendLabel,
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                            ? TextButton.icon(
+                                onPressed: _resend,
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: Text(context.tr('resend_code')),
+                              )
+                            : Text(
+                                _resendLabel,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                       ),
                       const SizedBox(height: AppSpacing.s2),
                       Center(
                         child: TextButton(
-                          onPressed: _verifying
-                              ? null
-                              : () => Navigator.of(context).maybePop(),
+                          onPressed: _verifying ? null : () => Navigator.of(context).maybePop(),
                           child: Text(
                             context.tr('change_phone'),
                             style: TextStyle(
@@ -371,29 +375,16 @@ class _SuccessView extends StatelessWidget {
           Text(
             context.tr('verified'),
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: cs.onSurface,
-            ),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface),
           ),
           const SizedBox(height: AppSpacing.s2),
           Text(
             displayPhone,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ),
+            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: AppSpacing.s5),
-          const SizedBox(
-            width: 120,
-            child: SokoVibeThreeDotLoader(
-              size: 26,
-              dotSize: 6,
-            ),
-          ),
+          const SizedBox(width: 120, child: SokoVibeThreeDotLoader(size: 26, dotSize: 6)),
         ],
       ),
     );

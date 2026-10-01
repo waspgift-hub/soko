@@ -36,10 +36,26 @@ class AiProvider {
 
   /**
    * Whether [transcribe] is implemented. Gemini's OpenAI-compatible surface
-   * covers chat only, so voice search stays Groq-exclusive with no fallback.
+   * covers chat only; Groq and the Cloudflare Workers AI Worker both serve
+   * Whisper, so voice search has somewhere to fail over to.
    */
   get supportsTranscription() {
     return false;
+  }
+
+  /**
+   * Whether this provider can serve [modelId], the client-facing model id.
+   *
+   * The gateway skips a provider that returns false instead of calling it and
+   * failing. The case that makes this necessary: the app asks for a vision model
+   * (identifyImage sends `llama-3.2-90b-vision-preview`), and a text-only
+   * provider handed the same request would have to drop the image and then answer
+   * from the remaining prompt — a confident wrong answer instead of an error.
+   *
+   * @param {string} modelId - model id as sent by the Flutter client
+   */
+  supportsModel(_modelId) {
+    return true;
   }
 
   /**

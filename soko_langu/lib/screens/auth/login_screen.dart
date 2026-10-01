@@ -12,6 +12,7 @@ import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/rate_limiter.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/ds/ds_button.dart';
@@ -63,7 +64,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _startResendCountdown() {
     _resendTimer?.cancel();
-    setState(() => _resendLeft = 45);
+    // Matches the server's OTP guard cooldown (OTP_COOLDOWN_MS = 60s). At 45s the
+    // button unlocked while the server still held the cooldown, so every resend
+    // tap produced a 429.
+    setState(() => _resendLeft = kOtpResendCooldownSeconds);
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
@@ -100,9 +104,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await context.read<AuthNotifier>().login(
-            _emailController.text.trim(),
-            _passwordController.text.trim(),
-          );
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
       await _saveAccount('email');
       if (mounted) context.go(AppRoutes.home);
     } catch (e) {
@@ -160,7 +164,10 @@ class _LoginScreenState extends State<LoginScreen> {
         final key = notifier.error?.toString() ?? '';
         _showError(
           key == 'auth_user_not_found' || key == 'auth_message_user_not_found'
-              ? context.tr('email_not_registered', 'Akaunti haikupatikana kwa barua pepe hii. Jisajili kwanza.')
+              ? context.tr(
+                  'email_not_registered',
+                  'Akaunti haikupatikana kwa barua pepe hii. Jisajili kwanza.',
+                )
               : context.trError(e),
         );
       }
@@ -180,11 +187,12 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(context.tr('no_account'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400)),
+          Text(
+            context.tr('no_account'),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+          ),
           TextButton(
-            onPressed: _isLoading
-                ? null
-                : () => context.push(AppRoutes.register),
+            onPressed: _isLoading ? null : () => context.push(AppRoutes.register),
             child: Text(
               context.tr('create_account'),
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -246,8 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (v == null || v.trim().isEmpty) {
                           return context.tr('enter_email_please');
                         }
-                        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                            .hasMatch(v.trim())) {
+                        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
                           return context.tr('invalid_email');
                         }
                         return null;
@@ -256,10 +263,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, animation) => FadeScaleTransition(
-                        scale: animation,
-                        child: child,
-                      ),
+                      transitionBuilder: (child, animation) =>
+                          FadeScaleTransition(scale: animation, child: child),
                       child: _buildMethodField(),
                     ),
                     const SizedBox(height: 24),
@@ -268,9 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? context.tr('login')
                           : context.tr('verify'),
                       loading: _isLoading,
-                      onPressed: _method == _LoginMethod.password
-                          ? _onPasswordLogin
-                          : _onOtpLogin,
+                      onPressed: _method == _LoginMethod.password ? _onPasswordLogin : _onOtpLogin,
                       height: 58, // match 58dp fields so button row aligns
                     ),
                   ],
@@ -297,17 +300,11 @@ class _LoginScreenState extends State<LoginScreen> {
             obscureText: _obscurePassword,
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.password],
-            validator: (v) => (v == null || v.isEmpty)
-                ? context.tr('enter_password')
-                : null,
+            validator: (v) => (v == null || v.isEmpty) ? context.tr('enter_password') : null,
             suffix: IconButton(
-              onPressed: () => setState(
-                () => _obscurePassword = !_obscurePassword,
-              ),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
+                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                 size: 20,
                 color: cs.onSurfaceVariant,
               ),
@@ -317,9 +314,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: _isLoading
-                  ? null
-                  : () => context.push(AppRoutes.forgotPassword),
+              onPressed: _isLoading ? null : () => context.push(AppRoutes.forgotPassword),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 minimumSize: Size.zero,
@@ -327,11 +322,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Text(
                 context.tr('forgot_password'),
-                style: TextStyle(
-                  color: cs.primary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w500),
               ),
             ),
           ),
@@ -354,11 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Text(
             context.tr('enter_otp_email_sent'),
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w400,
-            ),
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, fontWeight: FontWeight.w400),
           ),
           const SizedBox(height: 12),
           AuthTextField(
@@ -368,14 +355,12 @@ class _LoginScreenState extends State<LoginScreen> {
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.oneTimeCode],
-            validator: (v) => (v == null || v.length != 6)
-                ? context.tr('enter_otp_6_digits')
-                : null,
+            validator: (v) =>
+                (v == null || v.length != 6) ? context.tr('enter_otp_6_digits') : null,
             onFieldSubmitted: (_) => _onOtpLogin(),
             suffix: _resendLeft > 0
                 ? Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Center(
                       child: Text(
                         '${_resendLeft}s',
@@ -434,9 +419,7 @@ class _MethodSwitcher extends StatelessWidget {
             curve: Curves.easeInOutCubic,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             decoration: BoxDecoration(
-              color: selected
-                  ? cs.primary.withValues(alpha: 0.12)
-                  : Colors.transparent,
+              color: selected ? cs.primary.withValues(alpha: 0.12) : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selected ? cs.primary : cs.brandBorder,
@@ -447,11 +430,7 @@ class _MethodSwitcher extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: selected ? cs.primary : cs.onSurfaceVariant,
-                ),
+                Icon(icon, size: 18, color: selected ? cs.primary : cs.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -473,17 +452,9 @@ class _MethodSwitcher extends StatelessWidget {
 
     return Row(
       children: [
-        option(
-          _LoginMethod.password,
-          context.tr('login_with_email'),
-          Icons.lock_outline_rounded,
-        ),
+        option(_LoginMethod.password, context.tr('login_with_email'), Icons.lock_outline_rounded),
         const SizedBox(width: 12),
-        option(
-          _LoginMethod.otp,
-          context.tr('login_with_otp'),
-          Icons.verified_outlined,
-        ),
+        option(_LoginMethod.otp, context.tr('login_with_otp'), Icons.verified_outlined),
       ],
     );
   }
@@ -523,9 +494,7 @@ class _GoogleButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide.none,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: cs.surface.withValues(alpha: 0.4),
         ),
         icon: ClipRRect(
@@ -535,17 +504,12 @@ class _GoogleButton extends StatelessWidget {
             width: 22,
             height: 22,
             fit: BoxFit.contain,
-            errorBuilder: (_, _, _) =>
-                const Icon(Icons.g_mobiledata, size: 22),
+            errorBuilder: (_, _, _) => const Icon(Icons.g_mobiledata, size: 22),
           ),
         ),
         label: Text(
           context.tr('continue_google'),
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
-          ),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
         ),
       ),
     );

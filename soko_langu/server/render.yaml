@@ -57,6 +57,10 @@ services:
     #   - R2_* vars + R2_PUBLIC_URL for presigned media uploads.
     #   - CLICKPESA_* keys for payments/payouts; CRON_SECRET for cron routes;
     #     X_ADMIN_SECRET for the legacy admin compat surface.
+    #   - YOUTUBE_API_KEY: Google Cloud browser key with YouTube Data API v3
+    #     enabled (server-side only — never ships in the app). Powers music
+    #     search; without it /api/v1/youtube/search answers 503 and the app
+    #     hides the YouTube tab gracefully.
 
   - type: worker
     name: soko-langu-worker

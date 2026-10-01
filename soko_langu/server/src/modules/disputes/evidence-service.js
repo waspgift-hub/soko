@@ -51,7 +51,7 @@ async function addEvidence({ disputeId, submittedBy, type, r2Key, description })
       return evidence;
     });
   } finally {
-    if (!lock.skipped) await releaseLock(`evidence:${disputeId}`);
+    if (lock.acquired) await releaseLock(`evidence:${disputeId}`, lock.token);
   }
 }
 

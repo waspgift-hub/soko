@@ -1,15 +1,21 @@
 const GroqProvider = require('./groq-provider');
 const GeminiProvider = require('./gemini-provider');
+const CloudflareAiProvider = require('./cf-ai-provider');
 const { isFailoverWorthy } = require('./upstream');
 const { createBreaker } = require('../../utils/circuit-breaker');
 
 // Failover order. Overridable via AI_PROVIDER_ORDER so a region where Groq is
 // unreachable can be flipped to Gemini-first with an env change and no deploy.
-const DEFAULT_ORDER = ['groq', 'gemini'];
+//
+// cloudflare is last because it is our own Worker next to the model rather than a
+// vendor API: gpt-oss is the same weight family Groq serves, so it is a
+// like-for-like substitution, but Groq is faster and cheaper at equal output.
+const DEFAULT_ORDER = ['groq', 'gemini', 'cloudflare'];
 
 const REGISTRY = {
   groq: () => new GroqProvider(),
   gemini: () => new GeminiProvider(),
+  cloudflare: () => new CloudflareAiProvider(),
 };
 
 const breakers = new Map();
@@ -113,6 +119,10 @@ async function chat(body, options = {}) {
       attempted.push(`${name}(unconfigured)`);
       continue;
     }
+    if (!provider.supportsModel(body.model)) {
+      attempted.push(`${name}(no ${body.model})`);
+      continue;
+    }
     hadConfiguredProvider = true;
 
     try {
@@ -147,15 +157,53 @@ async function chat(body, options = {}) {
 }
 
 /**
- * Speech-to-text. Groq-only: Gemini's OpenAI-compatible surface exposes no
- * audio/transcriptions endpoint, so there is nothing to fail over to and this
- * surfaces the Groq error directly.
+ * Speech-to-text, with the same failover semantics as [chat].
+ *
+ * Historically Groq-only, because Gemini's OpenAI-compatible surface exposes no
+ * audio/transcriptions endpoint and there was no second backend to hand off to.
+ * Workers AI serves the same Whisper model, so voice search now survives a Groq
+ * rate limit instead of failing the mic tap outright.
  */
 async function transcribe({ audioBase64, model, language }) {
-  const provider = providerFor('groq');
-  return callThroughBreaker('groq', () =>
-    provider.transcribe({ audioBase64, model, language })
-  );
+  const attempted = [];
+  let lastError = null;
+  let hadConfiguredProvider = false;
+
+  for (const name of providerOrder()) {
+    const provider = providerFor(name);
+    if (!provider.isConfigured) {
+      attempted.push(`${name}(unconfigured)`);
+      continue;
+    }
+    if (!provider.supportsTranscription) continue;
+    hadConfiguredProvider = true;
+
+    try {
+      const text = await callThroughBreaker(name, () =>
+        provider.transcribe({ audioBase64, model, language })
+      );
+      if (attempted.length) {
+        console.warn(
+          `[ai] transcribed by ${name} after failover from: ${attempted.join(', ')}`
+        );
+      }
+      return text;
+    } catch (err) {
+      if (!isFailoverWorthy(err)) throw err;
+      console.warn(
+        `[ai] ${name} transcription failed (${describeError(err)}): ${err.message}`
+      );
+      attempted.push(`${name}(${describeError(err)})`);
+      lastError = err;
+    }
+  }
+
+  if (!hadConfiguredProvider) {
+    const e = new Error('AI_NO_TRANSCRIPTION_PROVIDER_CONFIGURED');
+    e.code = 'AI_NO_PROVIDER';
+    throw e;
+  }
+  throw lastError;
 }
 
 /** Provider names and configuration state, for boot-time logging. */

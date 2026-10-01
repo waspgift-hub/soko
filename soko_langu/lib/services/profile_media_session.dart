@@ -16,6 +16,11 @@ class ProfileMediaSession {
 
   String? sellerId;
   String? sellerName;
+
+  /// Where the mini player returns on tap: the seller profile whose queue is
+  /// playing, or the music now-playing screen for on-device/YouTube music.
+  String? returnRoute;
+
   int _inlinePlayers = 0;
 
   bool get hasInlinePlayer => _inlinePlayers > 0;
@@ -28,6 +33,19 @@ class ProfileMediaSession {
   }) async {
     this.sellerId = sellerId;
     this.sellerName = sellerName;
+    returnRoute = '/seller/$sellerId';
+    await controller.setQueue(items, startAt: startAt);
+  }
+
+  /// Music (on-device songs, YouTube results) has no seller context — the
+  /// mini player returns to the now-playing screen instead.
+  Future<void> playMusicQueue({
+    required List<ProfileMediaItem> items,
+    int startAt = 0,
+  }) async {
+    sellerId = null;
+    sellerName = null;
+    returnRoute = '/music/now-playing';
     await controller.setQueue(items, startAt: startAt);
   }
 
@@ -42,5 +60,6 @@ class ProfileMediaSession {
     await controller.setQueue(const []);
     sellerId = null;
     sellerName = null;
+    returnRoute = null;
   }
 }

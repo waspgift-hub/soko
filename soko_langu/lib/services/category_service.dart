@@ -14,9 +14,49 @@ class CategoryService {
   Stream<List<Category>>? _cachedStream;
 
   // =========================
-  // GET ALL CATEGORIES
+  // SHIPPED TREE (static, synchronous)
   // =========================
-  Stream<List<Category>> getCategories() {
+  // The browsable roots, in taxonomy order, without the hidden legacy catch-all.
+  //
+  // Static and synchronous on purpose: the category tree is compiled into the
+  // app, so every screen can render it on its first frame. The remote stream in
+  // [watchCategories] is a refresh path layered on top, not a prerequisite — an
+  // async-only API is what previously forced the skeleton + retry UI onto the
+  // home strip and category grid just to show a list the app already has.
+  static List<Category> getCategories() => List.unmodifiable(_browsableRoots);
+
+  /// Every shipped category, including the hidden `others` catch-all that
+  /// [getCategories] omits. Use for lookups that must resolve legacy records.
+  static List<Category> get all => List.unmodifiable(_shipped);
+
+  /// Resolves a root id or a subcategory slug to the category that owns it.
+  ///
+  /// Subcategory ids are slugs while the owning category owns the products page,
+  /// so a product stored under a child slug has to resolve up to its root.
+  static Category? byId(String id) {
+    for (final c in _shipped) {
+      if (c.id == id) return c;
+      if (c.subcategories.any((s) => s.id == id)) return c;
+    }
+    return null;
+  }
+
+  static List<Category>? _shippedCache;
+
+  static List<Category> get _shipped =>
+      _shippedCache ??= getDefaultCategories();
+
+  static List<Category> get _browsableRoots => _shipped
+      .where((c) => c.isActive)
+      .toList(growable: false);
+
+  // =========================
+  // LIVE TREE (stream)
+  // =========================
+  /// Live categories from Firestore, or the HTTP v1 tree while the migration
+  /// flag is set. Callers that only need to render a list should prefer the
+  /// static [getCategories] and treat this as an optional refresh.
+  Stream<List<Category>> watchCategories() {
     if (ApiConfig.kUseCategoriesApi) {
       // v1 is HTTP, not a stream: resolve once from Postgres and replay the
       // cached tree; ProductApiClient keeps its own copy so the category pages
@@ -44,7 +84,7 @@ class CategoryService {
 
   List<Category> get cached => _cached ?? [];
 
-  /// Drops the cached Firestore category stream so the next [getCategories]
+  /// Drops the cached Firestore category stream so the next [watchCategories]
   /// call subscribes fresh. Used by the home screen retry UI after a
   /// stream timeout — a timed-out single-subscription stream cannot be reused.
   void invalidateCachedStream() {

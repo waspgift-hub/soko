@@ -1,0 +1,47 @@
+# Soko Vibe — Workers AI edge for the AI assistant.
+#
+# Separate from ../cf-worker (the API cache/proxy in front of Render) on
+# purpose: that one is a transparent proxy with a 10-rule cache whitelist, this
+# one holds a secret and calls a paid inference API. Mixing them would put
+# billable AI on the same code path as cacheable product reads.
+name = "soko-ai-edge"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# No [[routes]] on purpose. This Worker is server-to-server: the Node server on
+# Render calls it, and the Flutter app never learns the URL exists. Keeping it
+# off a sokovibe.co.tz hostname means there is no public DNS record to point a
+# scanner at — the shared key is the only thing standing between the internet
+# and a billable endpoint, so it should not be reachable from the internet at
+# all beyond the workers.dev host.
+#
+# To move it onto a hostname later, add a route and a proxied CNAME:
+#   [[routes]]
+#   pattern = "ai.sokovibe.co.tz"
+#   zone_name = "sokovibe.co.tz"
+
+# The Workers AI binding. `env.AI.run(model, input)` is the whole integration.
+[ai]
+binding = "AI"
+
+# Model catalogue. Client-facing ids (the Groq ids the Flutter app sends) are
+# mapped to Workers AI models in worker.js; these are the targets and the
+# fallbacks.
+[vars]
+# Reasoning model for normal chat. gpt-oss is the same weight family Groq
+# serves, so a failover lands on equivalent quality.
+AI_MODEL = "@cf/openai/gpt-oss-120b"
+# Non-reasoning model for tight token budgets. A reasoning model asked for fewer
+# tokens than its reasoning appetite returns `content: null`, so requests under
+# the threshold are routed here instead.
+AI_MODEL_LITE = "@cf/meta/llama-3.2-3b-instruct"
+# Voice search. Same model Groq uses by default, so transcription quality is
+# unchanged and Groq stops being a single point of failure for the mic button.
+AI_MODEL_WHISPER = "@cf/openai/whisper-large-v3-turbo"
+# Extra client-id -> model pairs, comma separated: "some/new-id=@cf/vendor/model".
+# Merged over the built-in map, so it can add or override entries.
+AI_MODEL_MAP = ""
+
+# AI_EDGE_KEY is a secret, not a var — set it with:
+#   wrangler secret put AI_EDGE_KEY
+# and give the Node server the same value in CF_AI_KEY.
