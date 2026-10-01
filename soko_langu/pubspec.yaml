@@ -81,6 +81,9 @@ dependencies:
   gal: ^2.3.2
   open_file: ^3.5.10
   video_player: ^2.9.2
+  webview_flutter: ^4.13.0
+  flutter_animate: ^4.5.0
+  flutter_staggered_animations: ^1.1.1
   speech_to_text: ^7.0.0
   mobile_scanner: ^6.0.0
   safe_text: ^2.1.7

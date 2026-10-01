@@ -8,7 +8,10 @@ import '../../services/user_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/rating_service.dart';
 import '../../extensions/context_tr.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+
 import '../../widgets/product_card.dart';
+import '../../widgets/profile_media_section.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/verified_badge.dart';
 import '../../app/routes.dart';
@@ -77,6 +80,14 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                 SliverToBoxAdapter(child: _buildRatingSection(context)),
                 SliverToBoxAdapter(child: _buildActions(context)),
                 SliverToBoxAdapter(
+                  child: ProfileMediaSection(
+                    productsStream:
+                        productService.getProductsBySeller(widget.sellerId),
+                    sellerId: widget.sellerId,
+                    sellerName: widget.sellerName,
+                  ),
+                ),
+                SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Text(
@@ -124,12 +135,21 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                             childAspectRatio: Responsive.cardAspectRatio(context),
                           ),
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => ProductCard(
-                          product: products[index],
-                          flashSale: _flashSales[products[index].id],
-                          onTap: () => context.push(
-                            '${AppRoutes.productDetail}/${products[index].id}',
-                            extra: products[index],
+                        (context, index) => AnimationConfiguration.staggeredGrid(
+                          position: index,
+                          duration: const Duration(milliseconds: 375),
+                          columnCount: Responsive.gridColumns(context),
+                          child: ScaleAnimation(
+                            child: FadeInAnimation(
+                              child: ProductCard(
+                                product: products[index],
+                                flashSale: _flashSales[products[index].id],
+                                onTap: () => context.push(
+                                  '${AppRoutes.productDetail}/${products[index].id}',
+                                  extra: products[index],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                         childCount: products.length,

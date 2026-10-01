@@ -16,6 +16,7 @@ import '../main.dart';
 import '../theme/neumorphic.dart';
 import '../utils/responsive.dart';
 import 'auth_wall.dart';
+import 'profile_mini_player.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -143,7 +144,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ? null
           : Column(
               mainAxisSize: MainAxisSize.min,
-              children: [_buildGlassNavBar(cs)],
+              children: [const ProfileMiniPlayer(), _buildGlassNavBar(cs)],
             ),
     );
   }
