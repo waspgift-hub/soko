@@ -325,4 +325,26 @@ describe('KYC read endpoints over HTTP', () => {
     // authenticate/optionalAuth populated from the database, never from a header.
     assert.strictEqual(call({ headers: { 'x-role': 'admin' }, user: { role: 'user' } }).passed, false);
   });
+
+  // The browser panel must call the read-url endpoint rather than assume a
+  // public URL exists for a KYC object.
+  test('the admin panel requests signed URLs instead of using stored values', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require.resolve('../admin/admin.js'),
+      'utf8',
+    );
+    assert.ok(
+      src.includes('/api/v1/admin/kyc/'),
+      'panel should call the KYC read-url endpoint',
+    );
+    assert.ok(
+      !/src\s*=\s*["'][^"']*\b_idImageUrl\b/.test(src),
+      'panel must not render a stored KYC field directly as a src',
+    );
+    assert.ok(
+      !src.includes('_kyc[') || !/idImageUrl[^\n]{0,40}<img/.test(src),
+      'panel must not put a stored KYC value straight into an <img> tag',
+    );
+  });
 });

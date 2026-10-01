@@ -40,11 +40,73 @@ class _AdminKycDocumentViewScreenState
 
   String get _uid => widget.user['uid'] as String? ?? '';
 
+  /// KYC column -> document id used by the read-url endpoint.
+  static const _signableDocs = <String, String>{
+    'idImageUrl': 'idImage',
+    'selfieUrl': 'selfie',
+    'shopVideoUrl': 'shopVideo',
+  };
+
+  /// Short-lived signed URLs, resolved once per screen open. Private KYC objects
+  /// have no public URL, so the raw key stored on the row can never be rendered
+  /// directly. Anything the endpoint refuses is simply left out — a reviewer
+  /// seeing "no document" is correct, and better than showing a broken image or,
+  /// worse, a public link.
+  final Map<String, String> _signedUrls = {};
+
   @override
   void initState() {
     super.initState();
     _kyc = widget.user['kyc'] as Map<String, dynamic>? ?? {};
     _loadFromFirestore();
+  }
+
+  Future<void> _resolveSignedUrls() async {
+    if (_uid.isEmpty) return;
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token == null || _uid.isEmpty) return;
+
+    final resolved = <String, String>{};
+    for (final entry in _signableDocs.entries) {
+      final stored = _kyc[entry.key];
+      // Only private-namespace values need signing. Absolute URLs are legacy
+      // Cloudinary rows and are used as-is.
+      if (stored is! String || !stored.startsWith('kyc/')) continue;
+      try {
+        final resp = await http.get(
+          Uri.parse(
+            '${ApiConfig.baseUrl}/api/v1/admin/kyc/$_uid/${entry.value}/read-url',
+          ),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (resp.statusCode != 200) continue;
+        final body = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+        final url = (body['data'] as Map<String, dynamic>?)?['url'] as String?;
+        if (url != null && url.isNotEmpty) resolved[entry.key] = url;
+      } catch (_) {
+        // Leave unresolved; the tile renders as unavailable.
+      }
+    }
+
+    if (!mounted || resolved.isEmpty) return;
+    setState(() => _signedUrls.addAll(resolved));
+  }
+
+  /// Displayable value for a KYC column.
+///
+/// - a private `kyc/…` key resolves to a short-lived signed URL from the API;
+///   the raw key itself is never rendered, because it has no public route;
+/// - an absolute http(s) value is a legacy Cloudinary row and still renders;
+/// - anything else (relative key, empty) is not renderable and returns null.
+  String? _displayUrl(String field) {
+    final signed = _signedUrls[field];
+    if (signed != null) return signed;
+    final stored = _kyc[field];
+    if (stored is String &&
+        (stored.startsWith('http://') || stored.startsWith('https://'))) {
+      return stored;
+    }
+    return null;
   }
 
   Future<void> _loadFromFirestore() async {
@@ -66,6 +128,7 @@ class _AdminKycDocumentViewScreenState
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+    await _resolveSignedUrls();
   }
 
   List<KycDocument> get _documents {
@@ -77,9 +140,9 @@ class _AdminKycDocumentViewScreenState
       }
     }
 
-    add(context.tr('id_document'), _kyc['idImageUrl']);
+    add(context.tr('id_document'), _displayUrl('idImageUrl'));
     add(context.tr('id_document'), _kyc['idDocumentUrl']);
-    add(context.tr('selfie'), _kyc['selfieUrl']);
+    add(context.tr('selfie'), _displayUrl('selfieUrl'));
     add(context.tr('document'), _kyc['addressProofUrl']);
     add(context.tr('document'), _kyc['businessLicenseUrl']);
     final rawDocs = _kyc['documents'];
@@ -362,7 +425,7 @@ class _AdminKycDocumentViewScreenState
   /// The seller's shop video, reviewed fullscreen before approval. Absent
   /// for legacy submissions — the section simply hides.
   Widget _buildShopVideoSection(ColorScheme cs) {
-    final url = _kyc['shopVideoUrl'] as String? ?? '';
+    final url = _displayUrl('shopVideoUrl') ?? '';
     if (url.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

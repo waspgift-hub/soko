@@ -453,6 +453,7 @@ const ACTIONS = {
   kycApprove(args) { kycReview(args.uid, args.name, 'approve'); },
   kycReject(args) { kycReview(args.uid, args.name, 'reject'); },
   kycRevoke(args) { kycReview(args.uid, args.name, 'revoke'); },
+  kycDocs(args) { kycViewDocuments(args.uid, args.name); },
   revenueWithdraw() { revenueWithdraw(); },
   fsUnFlag(args) { fsUnFlagAcc(args.uid, args.name); },
   viewFsProduct(args) { viewFsProduct(args.id, args.name); },
@@ -2177,10 +2178,14 @@ async function loadKycList(f) {
         let actions = '<span class="dim">—</span>';
         if (st === 'pending') {
           actions =
+            '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button> ' +
             '<button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali</button> ' +
             '<button class="btn sm danger" data-fn="kycReject" data-args=\'' + args + '\'>Kataa</button>';
         } else if (st === 'approved') {
-          actions = '<button class="btn sm" data-fn="kycRevoke" data-args=\'' + args + '\'>Futa (Revoke)</button>';
+          actions = '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button> ' +
+            '<button class="btn sm" data-fn="kycRevoke" data-args=\'' + args + '\'>Futa (Revoke)</button>';
+        } else if (st !== 'none') {
+          actions = '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button>';
         }
         return '<tr>' +
           '<td>' + avatarOf({ displayName: u.displayName, avatarUrl: '', email: u.email }) + ' <b>' + esc(u.displayName || '—') + '</b><div class="dim">' + esc(u.email || '') + ' · ' + esc(u.phone || '') + '</div></td>' +
@@ -2195,6 +2200,52 @@ async function loadKycList(f) {
     body.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>';
   }
   bindSection('kyc'); touch(); icons();
+}
+// KYC documents live in a private bucket with no public URL, so the panel asks
+// the API for a short-lived signed link per document every time this is opened.
+// Nothing is cached here: the URLs expire in minutes and must never be stored.
+const KYC_DOC_KINDS = [
+  { id: 'idImage', label: 'Picha ya kitambulisho' },
+  { id: 'selfie', label: 'Selfie' },
+  { id: 'shopVideo', label: 'Video ya duka' },
+];
+async function kycViewDocuments(uid, name) {
+  openModal(
+    '<div class="modalhead"><h3>Hakiki za KYC</h3><button class="btn sm" onclick="closeModal()">Funga</button></div>' +
+    '<div class="dim" style="margin-bottom:10px">' + esc(name || uid) + '</div>' +
+    '<div class="card" id="kycDocsBody"><div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div></div>' +
+    '<div class="dim" style="margin-top:12px;font-size:12px">' +
+    'Viungo hivi vina muda wa dakika 5 kisha zinaisha kwa wenyewe. Huhifadhiwi.' +
+    '</div>',
+  );
+  const body = $('kycDocsBody');
+  if (!body) return;
+  const cards = [];
+  for (const k of KYC_DOC_KINDS) {
+    cards.push(
+      '<div style="margin-bottom:14px"><div class="dim" style="font-size:12px;margin-bottom:6px">' + esc(k.label) + '</div>' +
+      '<div class="sectionempty" data-kyc-slot="' + k.id + '"><div class="spinner" style="width:20px;height:20px;margin:0 auto"></div></div></div>',
+    );
+  }
+  body.innerHTML = cards.join('');
+  for (const k of KYC_DOC_KINDS) {
+    const slot = body.querySelector('[data-kyc-slot="' + k.id + '"]');
+    if (!slot) continue;
+    try {
+      const j = await getJSON('/api/v1/admin/kyc/' + encodeURIComponent(uid) + '/' + k.id + '/read-url');
+      const url = j && j.data && j.data.url;
+      if (!url) { slot.innerHTML = '<div class="dim">Hakuna</div>'; continue; }
+      if (k.id === 'shopVideo') {
+        slot.innerHTML = '<video controls preload="metadata" src="' + esc(url) + '" style="max-width:100%;border-radius:12px"></video>';
+      } else {
+        slot.innerHTML = '<a href="' + esc(url) + '" target="_blank" rel="noopener"><img src="' + esc(url) + '" alt="' + esc(k.label) + '" style="max-width:100%;border-radius:12px" loading="lazy"></a>';
+      }
+    } catch (e) {
+      // 404 = never submitted, 409 = predates private storage. Both are normal
+      // states for a reviewer; only surface the message, never a link.
+      slot.innerHTML = '<div class="dim">' + esc((e && e.message) || 'Imeshindwa kupakua') + '</div>';
+    }
+  }
 }
 async function kycReview(uid, name, action) {
   if (action === 'reject') {
