@@ -18,7 +18,8 @@ import '../../app/routes.dart';
 import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/ad_banner.dart';
+import '../../services/ads/ad_config.dart';
+import '../../widgets/ads/ad_slot.dart';
 
 class CategoryProductsScreen extends StatefulWidget {
   final Category category;
@@ -134,16 +135,19 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
     return const {};
   }
 
+  /// Build the Firestore query using the canonical [category.id] (doc ID)
+  /// as the permanent identifier. The [category.name] is display-only and
+  /// may change; the query always uses the stable category ID.
   Stream<List<Product>> _stream() {
     if (_selectedSubcategory == null) {
-      return _productService.getProductsByCategory(
-        widget.category.name,
+      return _productService.getProductsByCategoryId(
+        widget.category.id,
         aliases: _catAliases,
       );
     }
-    return _productService.getProductsByCategoryAndSubcategory(
-      widget.category.name,
-      _selectedSubcategory!,
+    return _productService.getProductsByCategoryAndSubcategoryId(
+      widget.category.id,
+      subcategory: _selectedSubcategory!,
       categoryAliases: _catAliases,
       subcategoryAliases: _currentSubAliases(),
     );
@@ -202,7 +206,10 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
             ),
         ],
       ),
-      bottomNavigationBar: const AdBanner(),
+      bottomNavigationBar: const AdSlot(
+        placement: AdPlacement.categoryProductsFooter,
+        variant: AdSlotVariant.pinnedFooter,
+      ),
       body: SafeArea(
         child: StreamBuilder<List<Product>>(
           stream: _stream(),
@@ -329,6 +336,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
             child: art != null
                 ? CategoryImage(
                     imageUrl: art,
+                    categoryId: widget.category.id,
                     fallback: categoryIconFor(
                       icon: widget.category.icon,
                       slug: widget.category.id,
@@ -412,6 +420,8 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
           return _SubTile(
             label: config.langCode == 'en' ? sub.name : sub.nameSw,
             imageUrl: sub.image,
+            categoryId: widget.category.id,
+            subcategoryId: sub.id,
             fallback: categoryIconFor(slug: sub.id, name: sub.name),
             selected: _selectedSubcategory == sub.name,
             onTap: () => setState(() => _selectedSubcategory = sub.name),
@@ -629,6 +639,8 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
 class _SubTile extends StatelessWidget {
   final String label;
   final String? imageUrl;
+  final String? categoryId;
+  final String? subcategoryId;
   final IconData fallback;
   final bool selected;
   final VoidCallback onTap;
@@ -636,6 +648,8 @@ class _SubTile extends StatelessWidget {
   const _SubTile({
     required this.label,
     this.imageUrl,
+    this.categoryId,
+    this.subcategoryId,
     required this.fallback,
     required this.selected,
     required this.onTap,
@@ -667,6 +681,8 @@ class _SubTile extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: CategoryImage(
                 imageUrl: imageUrl,
+                categoryId: categoryId,
+                subcategoryId: subcategoryId,
                 fallback: fallback,
                 iconSize: 24,
                 memCacheSize: 112,

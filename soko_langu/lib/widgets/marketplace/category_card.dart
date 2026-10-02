@@ -5,10 +5,15 @@ import 'category_image.dart';
 
 /// Category card with image-first artwork and icon fallback.
 ///
-/// Shows a square photo tile with centered label underneath. Used in the
-/// home grid and category screens.
+/// Shows a square photo tile with centered label underneath. Used by the home
+/// screen strip; the category explorer has its own larger tiles. Artwork is
+/// resolved by [categoryId] against the installed artwork pack.
 class CategoryCard extends StatelessWidget {
   final String name;
+
+  /// Stable taxonomy id, used to look up downloaded artwork.
+  final String? categoryId;
+
   final String? imageUrl;
   final IconData icon;
   final VoidCallback onTap;
@@ -16,6 +21,7 @@ class CategoryCard extends StatelessWidget {
   const CategoryCard({
     super.key,
     required this.name,
+    this.categoryId,
     this.imageUrl,
     this.icon = Icons.category_rounded,
     required this.onTap,
@@ -44,6 +50,7 @@ class CategoryCard extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: CategoryImage(
                 imageUrl: imageUrl,
+                categoryId: categoryId,
                 fallback: icon,
                 memCacheSize: 128,
               ),

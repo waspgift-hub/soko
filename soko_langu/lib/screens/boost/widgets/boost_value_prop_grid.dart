@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-import '../../extensions/context_tr.dart';
-import '../../theme/app_dimens.dart';
+import '../../../extensions/context_tr.dart';
+import '../../../theme/app_dimens.dart';
 import '../boost_tiers.dart';
 
 /// The full boost menu as a two-column grid, shown above the packages so the

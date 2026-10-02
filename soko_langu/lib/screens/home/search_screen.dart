@@ -22,6 +22,8 @@ import '../../models/discovery_filters.dart';
 import '../../services/search_intent.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/animations/soko_animated_art.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../widgets/ads/blue_tick_badge.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/soko_vibe_watermark.dart';
@@ -29,6 +31,7 @@ import '../../widgets/soko_widgets.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
+import '../../services/ads/ad_config.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -238,7 +241,7 @@ class _SearchScreenState extends State<SearchScreen>
       _hasSearched = true;
       _searchFailed = false;
       _suggestions = [];
-      _sortKey = 'best'; // new query → fresh server ranking
+      _sortKey = 'best'; // new query ? fresh server ranking
     });
 
     _historyService.addQuery(q);
@@ -257,6 +260,16 @@ class _SearchScreenState extends State<SearchScreen>
         _searchFailed = false;
       });
       _maybeLoadAiSummary(resp);
+      // Completing a search is the one deliberate interruption point on this
+      // screen: the user has finished typing and is about to read results, so
+      // there is no half-finished action to destroy. The AdManager decides
+      // whether it may actually fire.
+      if (resp.results.isNotEmpty && _selectedTab == 'all') {
+        AdTransitions.showInterstitial(
+          context,
+          AdPlacement.interstitialSearchComplete,
+        );
+      }
     } catch (_) {
       if (mounted && seq == _searchSeq) {
         setState(() {
@@ -268,7 +281,7 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   /// Fires a non-blocking, DB-grounded AI summary for the settled results.
-  /// Results render immediately; the summary arrives async (§60 progressive
+  /// Results render immediately; the summary arrives async (?60 progressive
   /// update) and silently disappears on failure or on an empty result set.
   Future<void> _maybeLoadAiSummary(SearchResponse resp) async {
     final products = resp.results.where((r) => r.type == 'product').toList();
@@ -276,12 +289,12 @@ class _SearchScreenState extends State<SearchScreen>
 
     // AI keeps search priority even when the catalog has no DB match: a
     // grounded not-found context (buildNotFoundCatalogContext) turns an empty
-    // result into sourced suggestions instead of a silent dead-end (§62 AI
+    // result into sourced suggestions instead of a silent dead-end (?62 AI
     // priority, G-catalog notFoundInApp). Nothing below may invent facts.
     final hasMatches = resp.total > 0 && products.isNotEmpty;
     if (!hasMatches) {
       // No DB-grounded rows: answer with an explicitly-labelled, off-app
-      // guidance fallback so the buyer still gets useful direction (§62.
+      // guidance fallback so the buyer still gets useful direction (?62.
       setState(() {
         _aiSummary = null;
         _aiSummaryLoading = false;
@@ -395,7 +408,7 @@ class _SearchScreenState extends State<SearchScreen>
       id: id.isNotEmpty ? id : name,
       name: name,
       nameSw: name,
-      icon: '📦',
+      icon: '??',
       image: image,
       subcategories: const [],
     );
@@ -794,7 +807,7 @@ class _SearchScreenState extends State<SearchScreen>
                     if (s.price != null) ...[
                       const SizedBox(width: 6),
                       Text(
-                        '· ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
+                        '? ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
                         style: TextStyle(
                           fontSize: Responsive.scaleFont(context, 11),
                           color: cs.onSurfaceVariant,
@@ -849,7 +862,8 @@ class _SearchScreenState extends State<SearchScreen>
     }
     final qs = params.isEmpty ? '' : '?${params.join('&')}';
     context.push(
-      '${AppRoutes.categoryProducts}/${model.name}$qs',
+      '${AppRoutes.categoryProducts}'
+      '/${Uri.encodeComponent(model.name)}$qs',
       extra: model,
     );
   }
@@ -884,10 +898,19 @@ class _SearchScreenState extends State<SearchScreen>
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.all(horizontalPadding),
-      itemCount: head.length + results.length,
+      itemCount: head.length + results.length + 1,
       itemBuilder: (_, i) {
         if (i < head.length) {
           return head[i];
+        }
+        if (i == head.length + results.length) {
+          // Footer placement: the last item of a long result list is the least
+          // intrusive position, is never above the fold, and cannot be mistaken
+          // for a marketplace result.
+          return const AdSlot(
+            placement: AdPlacement.searchResultsFooter,
+            variant: AdSlotVariant.feedGap,
+          );
         }
         final r = results[i - head.length];
         // Support tap, doubleTap (quick preview), longPress (share)
@@ -901,8 +924,8 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  // Compact DB-grounded AI summary (§8/§9/§62). Hidden until content arrives or
-  // when generation failed — search results must never depend on it.
+  // Compact DB-grounded AI summary (?8/?9/?62). Hidden until content arrives or
+  // when generation failed ? search results must never depend on it.
   Widget? _buildAiSummaryCard(ColorScheme cs, SearchResponse resp) {
     if (_aiSummaryFailed || _aiSummaryQuery != resp.query.trim()) return null;
     if (!_aiSummaryLoading && _aiSummary == null) return null;
@@ -992,15 +1015,15 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   // Headers above results: auto-applied typo correction notice + chips for the
-  // structured filters the server pulled out of free text ("≤ 800K · DSM").
+  // structured filters the server pulled out of free text ("= 800K ? DSM").
   Widget _buildResultMeta(SearchResponse resp, ColorScheme cs) {
     final detected = resp.detected;
     final maxPrice = detected['maxPrice'];
     final minPrice = detected['minPrice'];
     final location = detected['location'];
     final chips = <String>[
-      if (maxPrice is num) '≤ ${context.formatPrice(maxPrice.toDouble())}',
-      if (minPrice is num) '≥ ${context.formatPrice(minPrice.toDouble())}',
+      if (maxPrice is num) '= ${context.formatPrice(maxPrice.toDouble())}',
+      if (minPrice is num) '= ${context.formatPrice(minPrice.toDouble())}',
       if (location is String && location.isNotEmpty) location,
     ];
 
@@ -1071,8 +1094,8 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  // G11 sort switcher (Best Match / Lowest / Highest). Nearest (§42) is
-  // deferred until location consent exists — excluded from the chip set.
+  // G11 sort switcher (Best Match / Lowest / Highest). Nearest (?42) is
+  // deferred until location consent exists ? excluded from the chip set.
   Widget _buildSortRow(ColorScheme cs) {
     final sorts = <(String, String, IconData)>[
       ('best', context.tr('sort_best_match'), Icons.recommend_rounded),
@@ -1231,15 +1254,10 @@ class _SearchScreenState extends State<SearchScreen>
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (r.kycApproved)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: Icon(
-                              Icons.verified,
-                              size: 14,
-                              color: cs.primary,
-                            ),
-                          ),
+                        // Blue Tick beside the product title. Resolved from trusted state rather than
+                        // from r.kycApproved, which is a denormalised product
+                        // field a seller could previously write directly.
+                        BlueTickBadge(sellerId: r.sellerId, size: 14),
                         if (r.isBoosted)
                           Container(
                             margin: const EdgeInsets.only(left: 4),
@@ -1303,7 +1321,7 @@ class _SearchScreenState extends State<SearchScreen>
                         [
                           r.sellerName,
                           r.location,
-                        ].where((x) => x != null && x.isNotEmpty).join(' · '),
+                        ].where((x) => x != null && x.isNotEmpty).join(' ? '),
                         style: TextStyle(
                           fontSize: 11,
                           color: cs.onSurfaceVariant,
@@ -1400,7 +1418,7 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   // G12 quick-start queries: localized premium examples + real trending terms
-  // (deduped) so a first-time user can search without typing (spec §56-style
+  // (deduped) so a first-time user can search without typing (spec ?56-style
   // "phone under 500k" phrasing). Tapping performs the search immediately.
   List<String> _suggestedQueries() {
     final statics = [
@@ -1878,6 +1896,9 @@ class _SearchScreenState extends State<SearchScreen>
       imageUrl: r.image ?? '',
       rating: r.rating ?? 0,
       reviewCount: r.reviewCount ?? 0,
+      // The Blue Tick resolves from trusted backend state; r.kycApproved is a
+      // denormalised hint only and no longer drives the badge.
+      sellerId: r.id,
       kycVerified: r.kycApproved,
       onTap: () => context.push(
         '${AppRoutes.publicProfile}/${r.id}',

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../models/order_model.dart';
 import '../services/order_api.dart';
 import '../services/local_cache_service.dart';
@@ -71,23 +73,25 @@ class OrderRepository {
     await LocalCacheService.invalidateOrder(orderId);
     return result;
   }
-
-  /// Watches a single order for real-time updates (Cache-Aside).
+/// Watches a single order for real-time updates (Cache-Aside).
+  ///
+  /// The `orders` doc supplies metadata and lifecycle status while the matching
+  /// `transactions` doc supplies payment/escrow state. [OrderData.fromFirestore]
+  /// merges the two so every screen reading this stream sees one canonical
+  /// state instead of a buyer view and a seller view that disagree.
   Stream<OrderData> watchOrder(String orderId) async* {
-    // 1. Emit cached version
+    // 1. Emit the cached snapshot so the screen paints before the network.
     final cached = await LocalCacheService.getCachedOrder(orderId);
     if (cached != null) yield cached;
 
-    // 2. Poll API for fresh state (since API is HTTP, not WebSocket)
-    while (true) {
-      try {
-        final fresh = await _apiClient.fetchOrder(orderId);
-        if (fresh != null) {
-          await LocalCacheService.saveOrder(fresh);
-          yield fresh;
-        }
-      } catch (_) {}
-      await Future.delayed(const Duration(seconds: 10));
+    // 2. Follow the authoritative doc from then on. `includeMetadataChanges` is
+    // deliberately off: pending-server writes would re-emit identical orders.
+    final ref = FirebaseFirestore.instance.collection('orders').doc(orderId);
+    await for (final snap in ref.snapshots()) {
+      // A deleted order ends the stream rather than emitting a fabricated empty
+      // one — a zero-amount order would render as a real TZS 0 receipt.
+      if (!snap.exists) return;
+      yield OrderData.fromFirestore(snap.id, snap.data() ?? const {});
     }
   }
 

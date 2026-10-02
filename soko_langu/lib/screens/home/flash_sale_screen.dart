@@ -6,7 +6,8 @@ import '../../services/flash_sale_service.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/ad_banner.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../services/ads/ad_config.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/chat_utils.dart';
@@ -24,44 +25,112 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
     with WidgetsBindingObserver {
   final FlashSaleService _service = FlashSaleService();
   Timer? _timer;
-  int _refreshKey = 0;
+
+  // The sale LIST is subscribed once and held in state.
+  //
+  // Previously `stream:` was built inline inside build() and keyed on
+  // `_refreshKey`, while a 1 Hz timer drove setState. So the screen opened a
+  // fresh Firestore listener — a full re-read of the flash_sales collection —
+  // once every second, for as long as it was on screen. That is the single most
+  // expensive realtime pattern in the app.
+  //
+  // Now: one subscription for the list; the 1 Hz timer only repaints the
+  // countdown text. A resume re-subscribes deliberately, and the active-sale
+  // window is re-evaluated in place rather than by re-reading the collection.
+  StreamSubscription<List<FlashSale>>? _sub;
+  List<FlashSale>? _sales;
+  Object? _error;
+  bool _loading = true;
+  DateTime _now = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _now = DateTime.now();
+    _subscribe();
+    // 1 Hz for the countdown only. No network, no subscription churn.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
     });
+  }
+
+  void _subscribe() {
+    _sub?.cancel();
+    _sub = _service.getActiveFlashSalesAtNow(_now).listen(
+      (sales) {
+        if (!mounted) return;
+        setState(() {
+          _sales = sales;
+          _loading = false;
+          _error = null;
+        });
+      },
+      onError: (e) {
+        if (!mounted) return;
+        setState(() {
+          _error = e;
+          _loading = false;
+        });
+      },
+    );
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _sub?.cancel();
+    _sub = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A flash sale can start or end while the app was backgrounded, so the
+    // active set is genuinely stale on resume. Re-subscribing once here is
+    // correct; doing it every second was not.
     if (state == AppLifecycleState.resumed && mounted) {
-      setState(() => _refreshKey++);
+      setState(() => _now = DateTime.now());
+      _subscribe();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: cs.surfaceContainerLow,
+        body: const Center(child: GoogleLoading(size: 32)),
+      );
+    }
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: cs.surfaceContainerLow,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 48, color: cs.outline),
+              const SizedBox(height: 12),
+              Text(context.tr('loading_error')),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _subscribe,
+                child: Text(context.tr('retry', 'Retry')),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: cs.surfaceContainerLow,
-      body: StreamBuilder<List<FlashSale>>(
-        key: ValueKey('flash_sale_$_refreshKey'),
-        stream: _service.getActiveFlashSalesAtNow(DateTime.now()),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: GoogleLoading(size: 32));
-          }
-          final sales = snapshot.data!;
+      body: Builder(
+        builder: (context) {
+          final sales = _sales ?? const <FlashSale>[];
           if (sales.isEmpty) {
             return Center(
               child: Column(
@@ -131,7 +200,10 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
           );
         },
       ),
-      bottomNavigationBar: const AdBanner(),
+      bottomNavigationBar: const AdSlot(
+        placement: AdPlacement.flashSaleFooter,
+        variant: AdSlotVariant.pinnedFooter,
+      ),
     );
   }
 
@@ -297,7 +369,9 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
 
   Widget _buildSaleCard(FlashSale sale) {
     final cs = Theme.of(context).colorScheme;
-    final remaining = sale.endTime.difference(DateTime.now());
+    // Reads the ticker's `_now` so the countdown repaints from the single 1 Hz
+    // setState rather than each card calling DateTime.now() independently.
+    final remaining = sale.endTime.difference(_now);
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
     final secs = remaining.inSeconds.remainder(60);

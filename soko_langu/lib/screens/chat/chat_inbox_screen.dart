@@ -8,10 +8,10 @@ import '../../services/local_cache_service.dart';
 import '../../services/shortcut_service.dart';
 import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/verified_badge.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/animations/soko_animated_art.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/ads/blue_tick_badge.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
@@ -347,6 +347,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                     final tile = _ChatListTile(
                       name: name,
                       photo: photo,
+                      // The Blue Tick is resolved from trusted state by
+                      // BlueTickBadge; kycApproved remains a display hint only.
+                      peerId: otherId,
                       kycApproved: _userKyc[otherId] ?? false,
                       lastMessage: room.lastMessage,
                       lastTimestamp: room.lastTimestamp,
@@ -645,6 +648,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
 class _ChatListTile extends StatelessWidget {
   final String name;
   final String photo;
+  final String? peerId;
   final bool kycApproved;
   final String? lastMessage;
   final DateTime? lastTimestamp;
@@ -664,6 +668,7 @@ class _ChatListTile extends StatelessWidget {
   const _ChatListTile({
     required this.name,
     required this.photo,
+    this.peerId,
     this.kycApproved = false,
     this.lastMessage,
     this.lastTimestamp,
@@ -746,7 +751,7 @@ class _ChatListTile extends StatelessWidget {
                                     child: Icon(Icons.favorite, size: 14, color: cs.error),
                                   ),
                                 Flexible(child: Text(name, style: TextStyle(fontWeight: unreadCount > 0 ? FontWeight.w700 : FontWeight.w600, fontSize: 16, color: cs.onSurface))),
-                                if (kycApproved) VerifiedBadge(size: 14),
+                                BlueTickBadge(sellerId: peerId ?? '', size: 14),
                               ],
                             ),
                           ),

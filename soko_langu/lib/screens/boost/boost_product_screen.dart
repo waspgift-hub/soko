@@ -177,7 +177,12 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
     unawaited(
       Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute<void>(
-          builder: (_) => BoostProgressOverlay(tier: _tier),
+          builder: (_) => BoostProgressOverlay(
+            tier: _tier,
+            methodLabel: _method == BoostPayMethod.billpay
+                ? context.tr('boost_pay_billpay')
+                : context.tr('boost_pay_ussd'),
+          ),
           fullscreenDialog: true,
         ),
       ),
@@ -275,7 +280,6 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
             : _product == null
                 ? const _NoProducts()
                 : ListView(
-                    controller: _scrollCtrl,
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.s4,
                       AppSpacing.s2,
@@ -372,21 +376,14 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _ProductPicker extends StatelessWidget {
-  const _ProductPicker({
-    required this.products,
-    required this.selectedId,
-    required this.controller,
-  });
+  const _ProductPicker({required this.products, required this.selectedId});
 
   final List<Product> products;
   final String? selectedId;
-  final ScrollController controller;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final selectedId = selectedIdArg;
-    final sheetTheme = Theme.of(context);
 
     return DraggableScrollableSheet(
       expand: false,
@@ -395,7 +392,7 @@ class _ProductPicker extends StatelessWidget {
       maxChildSize: 0.92,
       builder: (context, scrollCtrl) => Container(
         decoration: BoxDecoration(
-          color: sheetTheme.colorScheme.surface,
+          color: scheme.surface,
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(AppRadius2.xxl),
           ),
@@ -548,7 +545,7 @@ class _NoProducts extends StatelessWidget {
               icon: Icons.add_rounded,
               variant: DsButtonVariant.secondary,
               fullWidth: false,
-              onPressed: () => context.push(AppRoutes.sellProduct),
+              onPressed: () => context.push(AppRoutes.addProduct),
             ),
           ],
         ),

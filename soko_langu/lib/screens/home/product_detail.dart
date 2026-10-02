@@ -11,10 +11,8 @@ import '../../services/localization_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/product_cached_image.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
-import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
@@ -31,6 +29,11 @@ import '../../widgets/ds/ds.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../widgets/soko_vibe_watermark.dart';
 import '../../widgets/product_video_player.dart';
+import '../../services/ads/ad_config.dart';
+import '../../models/seller_verification.dart';
+import '../../services/seller_verification_service.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../widgets/ads/blue_tick_badge.dart';
 
 // ignore: unused_element
 Color? _hexToColor(String? hex) {
@@ -63,6 +66,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   int _currentImageIndex = 0;
 
   UserProfile? _sellerProfile;
+  SellerVerification? _sellerVerification;
+  StreamSubscription<SellerVerification?>? _kycSubscription;
   bool _processing = false;
   FlashSale? _flashSale;
   Timer? _flashTimer;
@@ -82,6 +87,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       AnalyticsService().trackProductView(widget.product.id);
     }
     RecentlyViewedService.instance.add(widget.product.id);
+    // Set up real-time KYC status stream for this seller
+    _kycSubscription = SellerVerificationService()
+        .resolve(widget.product.sellerId)
+        .asStream()
+        .listen((verification) {
+      if (mounted) {
+        setState(() {
+          _sellerVerification = verification;
+        });
+      }
+    });
   }
 
   String _lastDisplay = '';
@@ -115,13 +131,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _loadSellerProfile() async {
     final profile = await _userService.getProfile(widget.product.sellerId);
-    if (mounted) setState(() => _sellerProfile = profile);
+    // Trusted verification snapshot, resolved independently of the profile read
+    // so a revocation is reflected even if the profile cache is stale.
+    final verification =
+        await SellerVerificationService().resolve(widget.product.sellerId);
+    if (!mounted) return;
+    setState(() {
+      _sellerProfile = profile;
+      _sellerVerification = verification;
+    });
   }
 
   @override
   void dispose() {
     _flashTimer?.cancel();
     _flashStreamSub?.cancel();
+    _kycSubscription?.cancel();
     _imageController.dispose();
     super.dispose();
   }
@@ -757,8 +782,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
-                                            if (product.sellerKycApproved)
-                                              VerifiedBadge(size: 14),
+                                            // Blue Tick from trusted state, plus the word-level pill used on
+                                            // store pages so verification is
+                                            // unambiguous.
+                                            BlueTickBadge(
+                                              sellerId: product.sellerId,
+                                              size: 14,
+                                            ),
+                                            const SizedBox(width: 5),
+                                            BlueTickPill(
+                                              verification: _sellerVerification,
+                                              compact: true,
+                                            ),
                                           ],
                                         ),
                                         const SizedBox(height: 12),
@@ -770,6 +805,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 ),
                               ),
                     const SizedBox(height: 20),
+                    // In-feed banner, deliberately placed above the reviews block
+                    // rather than at the end of the scroll view. The old
+                    // placement was the last child of the scroll view, which put
+                    // a 320x50 clickable ad directly above the pinned
+                    // Chat/Buy bar — a mis-tap opened an advertiser landing page
+                    // instead of buying, which is both a UX hazard and an AdMob
+                    // "ads adjacent to purchase controls" policy risk.
+                    const AdSlot(
+                      placement: AdPlacement.productDetailReviews,
+                      variant: AdSlotVariant.feedGap,
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: ReviewSection(
@@ -778,9 +824,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ),
                     const Divider(height: 32),
-                    CommentSection(productId: product.id),
-                    const Divider(height: 8),
-                    const AdBanner(),
+                    CommentSection(
+                      productId: product.id,
+                      sellerId: product.sellerId,
+                    ),
                   ],
                 ),
               ),

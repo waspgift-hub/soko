@@ -12,12 +12,13 @@ import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/permission_service.dart';
 import '../../widgets/account_switcher_sheet.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/soko_widgets.dart';
 import '../../app/routes.dart';
 import '../../utils/phone_utils.dart';
+import '../../services/ads/ad_config.dart';
+import '../../widgets/ads/ad_slot.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -311,6 +312,14 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: AppInsets.sm),
+                // In-feed banner above the action grid. Previously it sat between
+                // the Settings tile and the Logout button, so an accidental tap
+                // near a destructive control opened an advertiser page instead.
+                // Sensitive controls now keep clear vertical space.
+                const AdSlot(
+                  placement: AdPlacement.profileFooter,
+                  variant: AdSlotVariant.feedGap,
+                ),
                 // Action grid
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
@@ -326,11 +335,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                     onTap: () => context.push(AppRoutes.settings),
                     iconColor: cs.primary,
                   ),
-                ),
-                const SizedBox(height: AppInsets.lg),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  child: AdBanner(),
                 ),
                 const SizedBox(height: AppInsets.lg),
                 // Logout
@@ -502,4 +506,3 @@ class _ProfileSkeletonState extends State<_ProfileSkeleton>
     );
   }
 }
-

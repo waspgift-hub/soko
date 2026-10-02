@@ -6,6 +6,7 @@ import '../../models/review_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/soko_vibe_loading.dart';
+import '../../widgets/ads/blue_tick_badge.dart';
 
 class ProductReviewsScreen extends StatefulWidget {
   final String productId;
@@ -260,6 +261,7 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
               ...reviews.map((r) => _ReviewTile(
                     review: r,
                     isSeller: _isSeller,
+                    sellerId: _productSellerId,
                     onHelpful: () => _toggleHelpful(r),
                     onReply: _isSeller
                         ? () => _replyToReview(r)
@@ -370,11 +372,15 @@ class _StarRow extends StatelessWidget {
 class _ReviewTile extends StatelessWidget {
   final Review review;
   final bool isSeller;
+
+  /// uid of the product's seller, used to tag their replies in the thread.
+  final String? sellerId;
   final VoidCallback onHelpful;
   final VoidCallback? onReply;
   const _ReviewTile({
     required this.review,
     required this.isSeller,
+    this.sellerId,
     required this.onHelpful,
     this.onReply,
   });
@@ -410,9 +416,24 @@ class _ReviewTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      review.userName,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            review.userName,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        // Verified seller identity on the review itself, driven
+                        // by trusted state. Ordering, rating and the
+                        // isVerifiedPurchase chip below are untouched: a tick
+                        // never reorders or re-weights review content.
+                        BlueTickBadge(sellerId: review.userId, size: 13),
+                        if (sellerId != null && review.userId == sellerId) ...[
+                          const SizedBox(width: 5),
+                          _SellerTag(),
+                        ],
+                      ],
                     ),
                     if (review.isVerifiedPurchase) ...[
                       const SizedBox(height: 2),
@@ -561,5 +582,28 @@ class _ReviewTile extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     return "${dt.day}/${dt.month}/${dt.year}";
+  }
+}
+/// "Seller" tag marking the product owner's own review reply in a thread.
+/// Disclosure only — it does not affect rating, ordering or averages.
+class _SellerTag extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        context.tr('seller'),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: cs.primary,
+        ),
+      ),
+    );
   }
 }

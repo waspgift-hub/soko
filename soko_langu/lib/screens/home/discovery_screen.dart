@@ -16,6 +16,8 @@ import '../../widgets/dynamic_banner.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../services/ads/ad_config.dart';
 
 /// Discovery marketplace: product cards in a 2-column grid, tabs filter the
 /// same products stream. Follow controls live on the profile of each seller.
@@ -228,6 +230,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                             },
                             childCount: items.length,
                           ),
+                        ),
+                      ),
+                      // Footer placement only. Discovery already leads with a
+                      // first-party DynamicBanner, so a second in-feed ad here
+                      // would make the screen feel ad-heavy.
+                      const SliverToBoxAdapter(
+                        child: AdSlot(
+                          placement: AdPlacement.homeFeedFooter,
+                          variant: AdSlotVariant.feedGap,
                         ),
                       ),
                     ],

@@ -177,6 +177,7 @@ class StandardInputField extends StatefulWidget {
     this.suffix,
     this.suffixIcon,
     this.onSuffixTap,
+    this.suffixTooltip,
     this.showPasswordToggle = true,
     this.clearable = false,
     this.keyboard = DsKeyboard.text,
@@ -805,7 +806,7 @@ class _StandardInputFieldState extends State<StandardInputField> {
             : _iconButton(
                 key: const ValueKey('suffix'),
                 icon: widget.suffixIcon!,
-                tooltip: null,
+                tooltip: widget.suffixTooltip,
                 color: scheme.contentSecondary,
                 reduced: reduced,
                 onPressed: onTap,
@@ -871,9 +872,13 @@ class _StandardInputFieldState extends State<StandardInputField> {
       ),
       child: KeyedSubtree(
         key: key,
-        child: tooltip == null
-            ? button
-            : Tooltip(message: tooltip, child: button),
+        child: Semantics(
+          button: true,
+          label: tooltip,
+          child: tooltip == null
+              ? button
+              : Tooltip(message: tooltip, child: button),
+        ),
       ),
     );
   }

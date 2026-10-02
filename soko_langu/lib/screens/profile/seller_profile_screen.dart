@@ -13,6 +13,8 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/profile_media_section.dart';
 import '../../widgets/google_loading.dart';
+import '../../models/seller_verification.dart';
+import '../../services/seller_verification_service.dart';
 import '../../widgets/verified_badge.dart';
 import '../../app/routes.dart';
 import '../../utils/responsive.dart';
@@ -36,6 +38,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
   final FlashSaleService _flashSaleService = FlashSaleService();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
+  final SellerVerificationService _verificationService =
+      SellerVerificationService();
+  StreamSubscription<SellerVerification?>? _kycSubscription;
 
   @override
   void initState() {
@@ -43,11 +48,19 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
+    // Set up real-time KYC status stream
+    _kycSubscription = _verificationService
+        .resolve(widget.sellerId)
+        .asStream()
+        .listen((verification) {
+      // The isBlueTick() call triggers a rebuild via the VerifiedBadge widget
+    });
   }
 
   @override
   void dispose() {
     _flashSub?.cancel();
+    _kycSubscription?.cancel();
     super.dispose();
   }
 
@@ -282,8 +295,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              if (profile?.kycApproved == true)
-                const VerifiedBadge(size: 16),
+              if (profile?.kycApproved == true ||
+                  _verificationService.isBlueTick(widget.sellerId))
+                VerifiedBadge(size: 16),
             ],
           ),
           if (profile?.bio.isNotEmpty == true) ...[
@@ -331,7 +345,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
       child: StreamBuilder<SellerRating>(
-        stream: RatingService().streamSellerRating(widget.sellerId),
+        stream: RatingService.instance.streamSellerRating(widget.sellerId),
         builder: (context, snap) {
           final rating = snap.data;
           if (rating == null || rating.totalReviews == 0) {

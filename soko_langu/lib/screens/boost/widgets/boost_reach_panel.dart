@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
-import '../../theme/app_typography.dart';
-import '../../widgets/ds/ds.dart';
+import '../../../extensions/context_tr.dart';
+import '../../../theme/app_dimens.dart';
+import '../../../theme/app_motion.dart';
+import '../../../theme/app_typography.dart';
+import '../../../widgets/ds/ds.dart';
 import '../boost_tiers.dart';
 import 'boost_hero_panel.dart';
 
@@ -50,7 +50,11 @@ class BoostReachPanel extends StatelessWidget {
                   children: [
                     Text(
                       context.tr('boost_section_reach'),
-                      style: AppTypography.titleSmall(scheme.onSurface),
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     Text(
                       context.trParams('boost_reach_window', {

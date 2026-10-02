@@ -4,11 +4,19 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 
 /// Checkout totals block with line items and a fees note.
+///
+/// [commission] and [paymentFee] are separate lines because Terms 8.2b requires
+/// the commission to be shown before payment, and [paymentFee] is the fee
+/// ClickPesa actually quoted — the number that leaves the buyer's phone, not an
+/// estimate from the local tier table.
 class CheckoutSummary extends StatelessWidget {
   final double subtotal;
   final double delivery;
   final double discount;
   final double serviceFee;
+  final double commission;
+  final double paymentFee;
+  final bool quotePending;
   final Widget? action;
   final String? note;
 
@@ -18,6 +26,9 @@ class CheckoutSummary extends StatelessWidget {
     this.delivery = 0,
     this.discount = 0,
     this.serviceFee = 0,
+    this.commission = 0,
+    this.paymentFee = 0,
+    this.quotePending = false,
     this.action,
     this.note,
   });
@@ -25,7 +36,9 @@ class CheckoutSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final total = (subtotal + delivery + serviceFee - discount).clamp(0, double.infinity).toDouble();
+    final total = (subtotal + delivery + serviceFee + commission + paymentFee - discount)
+        .clamp(0, double.infinity)
+        .toDouble();
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.s4),
@@ -44,6 +57,29 @@ class CheckoutSummary extends StatelessWidget {
           if (serviceFee > 0) ...[
             const SizedBox(height: AppSpacing.s2),
             _line(context, cs, context.tr('service_fee'), context.formatPrice(serviceFee)),
+          ],
+          if (commission > 0) ...[
+            const SizedBox(height: AppSpacing.s2),
+            _line(context, cs, context.tr('soko_vibe_commission'), context.formatPrice(commission)),
+          ],
+          if (paymentFee > 0) ...[
+            const SizedBox(height: AppSpacing.s2),
+            _line(
+              context,
+              cs,
+              context.tr('mobile_money_fee', 'Mobile money fee'),
+              context.formatPrice(paymentFee),
+            ),
+          ],
+          if (quotePending) ...[
+            const SizedBox(height: AppSpacing.s2),
+            Text(
+              // Say so rather than silently omitting the fee: an omitted line
+              // would leave the buyer to discover the extra debit on their
+              // statement.
+              context.tr('calculating_payment_fee', 'Calculating mobile money fee...'),
+              style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurfaceVariant),
+            ),
           ],
           if (discount > 0) ...[
             const SizedBox(height: AppSpacing.s2),

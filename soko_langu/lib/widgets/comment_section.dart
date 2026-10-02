@@ -7,11 +7,23 @@ import '../services/profanity_filter.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_motion.dart';
 import 'google_loading.dart';
+import 'ads/blue_tick_badge.dart';
 import 'ds/ds.dart';
+import '../theme/design_tokens.dart';
 
 class CommentSection extends StatefulWidget {
   final String productId;
-  const CommentSection({super.key, required this.productId});
+
+  /// uid of the product's seller. Enables the "Seller" tag on the seller's own
+  /// comments, so a buyer can tell an answer from the shop owner apart from
+  /// another buyer.
+  final String? sellerId;
+
+  const CommentSection({
+    super.key,
+    required this.productId,
+    this.sellerId,
+  });
 
   @override
   State<CommentSection> createState() => _CommentSectionState();
@@ -22,6 +34,8 @@ class _CommentSectionState extends State<CommentSection> {
   final _commentController = TextEditingController();
   final _auth = FirebaseAuth.instance;
   late final Stream<List<ProductComment>> _commentsStream;
+
+  String? get _sellerId => widget.sellerId;
 
   @override
   void initState() {
@@ -230,6 +244,7 @@ class _CommentSectionState extends State<CommentSection> {
                     child: _CommentTile(
                       comment: comments[i],
                       productId: widget.productId,
+                      sellerId: _sellerId,
                       onReply: () => _showReplySheet(comments[i].id),
                     ),
                   ),
@@ -332,11 +347,15 @@ class _AnimatedCommentTileState extends State<_AnimatedCommentTile>
 class _CommentTile extends StatelessWidget {
   final ProductComment comment;
   final String productId;
+
+  /// uid of the product's seller, so a seller's own comment can be labelled.
+  final String? sellerId;
   final VoidCallback onReply;
 
   const _CommentTile({
     required this.comment,
     required this.productId,
+    this.sellerId,
     required this.onReply,
   });
 
@@ -383,6 +402,15 @@ class _CommentTile extends StatelessWidget {
                             color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
+                        // Consistent Blue Tick beside the author's identity in
+                        // every comment, including replies. No comment text is
+                        // reordered or re-weighted — this is a disclosure
+                        // badge only.
+                        BlueTickBadge(sellerId: comment.userId, size: 13),
+                        if (sellerId != null && comment.userId == sellerId) ...[
+                          const SizedBox(width: 5),
+                          _SellerTag(),
+                        ],
                         const Spacer(),
                         Text(
                           _formatTime(comment.createdAt),
@@ -665,5 +693,32 @@ class _CommentTile extends StatelessWidget {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
     return '${dt.day}/${dt.month}/${dt.year}';
+  }
+}
+
+/// "Seller" tag for the product owner's own comment or reply.
+///
+/// This is a disclosure of identity, not a ranking signal. The Blue Tick beside
+/// it stays a separate, independent badge so a seller can be identified as the
+/// shop owner without being KYC-verified, and vice versa.
+class _SellerTag extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(Ds.rSm),
+      ),
+      child: Text(
+        context.tr('seller'),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: cs.primary,
+        ),
+      ),
+    );
   }
 }

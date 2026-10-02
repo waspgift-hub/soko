@@ -1186,11 +1186,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final price = (d['productPrice'] ?? 0).toDouble();
     final shippingCost = (d['shippingCost'] as num?)?.toDouble();
     final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
+    final breakdown = TransactionFeeBreakdown(productPrice: price);
     final platformFee =
         (d['platformFee'] as num?)?.toDouble() ??
         (d['sokoLanguCommission'] as num?)?.toDouble() ??
-        (price * 0.035);
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
+        breakdown.platformFee;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? breakdown.processingFee;
     final discount = (d['discount'] as num?)?.toDouble();
     final txId =
         d['transactionId'] as String? ??
@@ -1744,7 +1745,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         _addrRow(
           cs,
           context.tr('soko_vibe_commission'),
-          '-TZS ${_nf(_safeInt(platformFee))}',
+          // No minus prefix: Terms 8.2c says this is paid by the buyer and is
+          // not deducted from the seller, so a "-" here misread as a payout cut.
+          'TZS ${_nf(_safeInt(platformFee))}',
         ),
       );
     }

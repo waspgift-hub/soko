@@ -321,6 +321,12 @@ trailing: Switch(
                 onTap: () => context.push(AppRoutes.help),
               ),
               _buildTile(
+                icon: Icons.image_outlined,
+                title: context.tr('artwork_pack_manage'),
+                subtitle: context.tr('artwork_pack_manage_body'),
+                onTap: () => context.push(AppRoutes.artworkPack),
+              ),
+              _buildTile(
                 icon: Icons.route_outlined,
                 title: context.tr('how_it_works'),
                 onTap: () => context.push(AppRoutes.orderFlow),

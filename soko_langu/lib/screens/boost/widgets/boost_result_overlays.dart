@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../app/routes.dart';
-import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
-import '../../theme/app_motion.dart';
-import '../../theme/app_typography.dart';
-import '../../widgets/ds/ds.dart';
+import '../../../app/routes.dart';
+import '../../../extensions/context_tr.dart';
+import '../../../theme/app_dimens.dart';
+import '../../../theme/app_motion.dart';
+import '../../../theme/app_typography.dart';
+import '../../../widgets/ds/ds.dart';
 import '../boost_tiers.dart';
 
 /// Waiting state while the collection webhook settles the payment.
@@ -64,7 +63,6 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final labels = [
       context.tr('boost_step_request'),
       context.tr('boost_step_approve'),
@@ -125,9 +123,19 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
                 ),
                 const SizedBox(height: AppSpacing.s2),
                 Text(
+                  widget.methodLabel,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: tierColor.withValues(alpha: 0.85),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+                Text(
                   context.trParams('boost_processing_body', {
                     'amount': context.formatPriceInt(
-                      tier.price,
+                      widget.tier.price,
                       currencyOverride: 'TZS',
                     ),
                   }),
@@ -250,7 +258,7 @@ class BoostBillPaySheet extends StatelessWidget {
               Expanded(
                 child: Text(
                   context.tr('boost_receipt_title'),
-                  style: AppTypography.headlineMedium(scheme.onSurface)
+                  style: AppTypography.screenTitle(scheme.onSurface)
                       .copyWith(fontSize: 19),
                 ),
               ),
@@ -357,8 +365,6 @@ class BoostSuccessOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     CelebrationOverlay.show(context);
 
     return Scaffold(

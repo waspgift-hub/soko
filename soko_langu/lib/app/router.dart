@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'app_transitions.dart';
+import '../services/ads/ad_manager.dart';
+import '../services/ads/ad_route_observer.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
 import '../screens/auth/login_screen.dart';
@@ -23,6 +25,7 @@ import '../screens/chat/group_chat_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/profile/public_profile_screen.dart';
 import '../screens/profile/settings_screen.dart';
+import '../screens/onboarding/artwork_pack_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 
 import '../screens/profile/wishlist_screen.dart';
@@ -41,6 +44,7 @@ import '../screens/auth/verify_email_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_kyc_screen.dart';
+import '../screens/admin/admin_ads_config_screen.dart';
 import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
@@ -67,6 +71,9 @@ import 'routes.dart';
 import 'app_state.dart' as app_state;
 import '../repositories/product_repository.dart'; // Added for V3 API loading
 import '../screens/search/user_search_screen.dart';
+import '../data/marketplace_taxonomy.dart';
+import '../models/category_model.dart';
+import '../services/category_service.dart';
 import '../services/username_service.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -111,6 +118,7 @@ final List<String> _adminOnlyRoutes = [
   AppRoutes.adminUserDetail,
   AppRoutes.adminReports,
   AppRoutes.adminKyc,
+  AppRoutes.adminAdsConfig,
   AppRoutes.adminBroadcast,
 ];
 
@@ -143,11 +151,34 @@ Set<String>? _queryBrandSet(GoRouterState state, String key) {
   return out.isEmpty ? null : out;
 }
 
+/// Resolves a category from a `:name` path segment using only data compiled
+/// into the app, so a deep link renders on the first frame without a network
+/// round trip.
+///
+/// Tries the stable id first, then the taxonomy's name/nameSw/aliases and every
+/// subcategory name/alias. That covers old shared URLs (which used display
+/// names) as well as id-based ones.
+Category? _resolveCategorySync(String raw) {
+  final decoded = Uri.decodeComponent(raw).trim();
+  if (decoded.isEmpty) return null;
+  final slug = decoded.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+
+  return CategoryService.byId(decoded) ??
+      CategoryService.byId(slug) ??
+      _categoryFromTaxonomy(resolveTaxonomyByName(decoded));
+}
+
+Category? _categoryFromTaxonomy(TaxonomyCategory? tax) =>
+    tax == null ? null : categoryFromTaxonomy(tax);
+
 GoRouter buildRouter() {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.home,
     refreshListenable: app_state.appStateNotifier,
+    // Publishes the on-top route to AdManager so critical flows (checkout,
+    // payment, OTP, KYC, disputes) can suppress every ad centrally.
+    observers: [AdRouteObserver(adManager)],
     redirect: (context, state) {
       if (!app_state.appStateNotifier.appInitialized) return null;
 
@@ -278,6 +309,11 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const SettingsScreen()),
       ),
       GoRoute(
+        path: AppRoutes.artworkPack,
+        pageBuilder: (context, state) =>
+            _premiumPage(const ArtworkPackScreen(allowDismiss: true)),
+      ),
+      GoRoute(
         path: AppRoutes.sellerDashboard,
         pageBuilder: (context, state) => _premiumPage(const SellerDashboardScreen()),
       ),
@@ -292,9 +328,34 @@ GoRouter buildRouter() {
       GoRoute(
         path: '${AppRoutes.categoryProducts}/:name',
         pageBuilder: (context, state) {
+          // In-app navigation carries the Category in `extra`. A cold deep
+          // link, an App Link, and the SEO/web fallback all arrive with no
+          // `extra` at all, so it is reconstructed from the stable taxonomy
+          // before the screen is built — the previous code cast a null
+          // `extra` into a non-nullable `Category` and threw at page build.
+          final extra = state.extra;
+          final resolved = extra is Category ? extra : _resolveCategorySync(
+            state.pathParameters['name'] ?? '',
+          );
+
+          if (resolved != null) {
+            return _premiumPage(
+              CategoryProductsScreen(
+                category: resolved,
+                initialSubcategory: state.uri.queryParameters['sub'],
+                initialBrands: _queryBrandSet(state, 'brands'),
+                initialAttributes: _queryAttrMap(state),
+                initialFlags: _queryBrandSet(state, 'flags'),
+              ),
+            );
+          }
+
+          // Unknown name and no live tree to fall back on yet: resolve
+          // asynchronously through the API/Firestore layer rather than
+          // rendering a permanently broken page.
           return _premiumPage(
-            CategoryProductsScreen(
-              category: state.extra as dynamic,
+            _CategoryProductsLoader(
+              name: state.pathParameters['name'] ?? '',
               initialSubcategory: state.uri.queryParameters['sub'],
               initialBrands: _queryBrandSet(state, 'brands'),
               initialAttributes: _queryAttrMap(state),
@@ -373,6 +434,11 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.adminKyc,
         pageBuilder: (context, state) => _premiumPage(const AdminKycScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.adminAdsConfig,
+        pageBuilder: (context, state) =>
+            _premiumPage(const AdminAdsConfigScreen()),
       ),
       GoRoute(
         path: AppRoutes.adminBroadcast,
@@ -570,7 +636,9 @@ GoRouter buildRouter() {
         path: '/category/:name',
         redirect: (context, state) {
           final name = state.pathParameters['name'] ?? '';
-          return '${AppRoutes.categoryProducts}/${Uri.encodeComponent(name)}';
+          final qs = state.uri.query;
+          return '${AppRoutes.categoryProducts}/'
+              '${Uri.encodeComponent(name)}$qs';
         },
       ),
     ],
@@ -638,6 +706,137 @@ class _MissingRouteData extends StatelessWidget {
                   onPressed: () => context.go(AppRoutes.home),
                   icon: const Icon(Icons.storefront_outlined),
                   label: Text(context.tr('back_to_shop', 'Rudi dukani')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fallback loader for a `/category-products/:name` deep link whose name is
+/// not in the compiled-in taxonomy — a category the API added after this build
+/// shipped. Resolves through the live category tree, then shows the standard
+/// recovery screen when even that has no match.
+class _CategoryProductsLoader extends StatefulWidget {
+  const _CategoryProductsLoader({
+    required this.name,
+    this.initialSubcategory,
+    this.initialBrands,
+    this.initialAttributes,
+    this.initialFlags,
+  });
+
+  final String name;
+  final String? initialSubcategory;
+  final Set<String>? initialBrands;
+  final Map<String, Set<String>>? initialAttributes;
+  final Set<String>? initialFlags;
+
+  @override
+  State<_CategoryProductsLoader> createState() => _CategoryProductsLoaderState();
+}
+
+class _CategoryProductsLoaderState extends State<_CategoryProductsLoader> {
+  late final Future<Category?> _future = _load();
+
+  Future<Category?> _load() async {
+    final decoded = Uri.decodeComponent(widget.name).trim();
+    try {
+      // A live tree may know this category even when the shipped taxonomy
+      // does not; `_resolveCategorySync` already covered the compiled-in case.
+      final cached = CategoryService().cached;
+      final hit = cached.where(
+        (c) =>
+            c.id == decoded ||
+            c.name.toLowerCase() == decoded.toLowerCase() ||
+            c.nameSw.toLowerCase() == decoded.toLowerCase(),
+      );
+      if (hit.isNotEmpty) return hit.first;
+      return await CategoryService().getCategoryById(decoded);
+    } catch (e) {
+      debugPrint('DeepLink Category Load Error: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Category?>(
+      future: _future,
+      builder: (context, snapshot) {
+        final category = snapshot.data;
+        if (category != null) {
+          return CategoryProductsScreen(
+            category: category,
+            initialSubcategory: widget.initialSubcategory,
+            initialBrands: widget.initialBrands,
+            initialAttributes: widget.initialAttributes,
+            initialFlags: widget.initialFlags,
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return const _MissingCategoryData();
+      },
+    );
+  }
+}
+
+/// Recovery screen for a category route that resolved to nothing. Mirrors
+/// `_MissingRouteData` with category-specific copy instead of a product hint.
+class _MissingCategoryData extends StatelessWidget {
+  const _MissingCategoryData();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(leading: const BackButton()),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.category_outlined,
+                size: 48,
+                color: cs.onSurfaceVariant,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                context.tr('loading_error'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr(
+                  'missing_category_hint',
+                  '-category haikupatikana. Rudi dukani kuchagua tena.',
+                ),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.category),
+                  icon: const Icon(Icons.grid_view_rounded),
+                  label: Text(context.tr('all_categories')),
                 ),
               ),
             ],

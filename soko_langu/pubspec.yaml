@@ -131,6 +131,10 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
+  # Category/subcategory photographs are deliberately NOT bundled here: they
+  # ship as the optional post-install Category Artwork Pack and are fetched from
+  # R2 (see lib/services/category_artwork/). The app renders icon fallbacks
+  # until that pack is downloaded.
   assets:
     - assets/
   #   - images/a_dot_ham.jpeg

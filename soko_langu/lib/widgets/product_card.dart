@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/surface_policy.dart';
 import 'soko_vibe_watermark.dart';
 import 'ds/ds.dart';
+import 'ads/blue_tick_badge.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -117,9 +118,15 @@ class ProductCard extends StatelessWidget {
                             style: TextStyle(fontWeight: FontWeight.w600, fontSize: nameSize, color: cs.onSurface),
                           ),
                         ),
-                        if (product.sellerKycApproved) ...[
+                        if (product.sellerId.isNotEmpty) ...[
                           SizedBox(width: 2 * scale),
-                          Icon(Icons.verified, size: 14 * scale, color: cs.successGreen),
+                          // Blue Tick from trusted state, replacing the inline
+                          // Icons.verified that trusted a client-writable
+                          // product field.
+                          BlueTickBadge(
+                            sellerId: product.sellerId,
+                            size: 14 * scale,
+                          ),
                         ],
                       ],
                     ),

@@ -12,7 +12,6 @@ import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/banner_rotator.dart';
 import '../../widgets/marketplace/category_card.dart';
 import '../../widgets/premium_widgets.dart';
@@ -31,6 +30,10 @@ import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
+import '../../services/category_artwork/category_artwork_service.dart';
+import '../onboarding/artwork_pack_screen.dart';
+import '../../services/ads/ad_config.dart';
+import '../../widgets/ads/ad_slot.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -106,6 +109,19 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  /// Offers the optional Category Artwork Pack on first run.
+  ///
+  /// Presented as a bottom sheet over an already-usable home screen: the
+  /// marketplace is browsable behind it on icon fallbacks, so this can never
+  /// gate the app. Skipped entirely once declined or once installed.
+  Future<void> _maybeOfferArtworkPack() async {
+    if (!mounted) return;
+    final service = CategoryArtworkService.instance;
+    if (service.promptDismissed) return;
+    if (service.status == ArtworkStatus.installed) return;
+    await ArtworkPackPrompt.maybeShow(context);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -114,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen>
     _subscribeFlashSales();
     _subscribeNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeOfferArtworkPack();
       final provider = context.read<ProductFeedProvider>();
       // Always ensure feed is fresh when coming to Home — previous logic
       // skipped refresh if products.isNotEmpty, so a product created via
@@ -673,6 +690,7 @@ class _HomeScreenState extends State<HomeScreen>
                           margin: const EdgeInsets.only(right: 14),
                           child: CategoryCard(
                             name: config.langCode == 'en' ? cat.name : cat.nameSw,
+                            categoryId: cat.id,
                             imageUrl: cat.displayImage,
                             icon: categoryIconFor(
                               icon: cat.icon,
@@ -680,7 +698,8 @@ class _HomeScreenState extends State<HomeScreen>
                               name: cat.name,
                             ),
                             onTap: () => context.push(
-                              '${AppRoutes.categoryProducts}/${cat.name}',
+                              '${AppRoutes.categoryProducts}'
+                              '/${Uri.encodeComponent(cat.name)}',
                               extra: cat,
                             ),
                           ),
@@ -707,7 +726,10 @@ class _HomeScreenState extends State<HomeScreen>
                       0,
                       MediaQuery.of(context).padding.bottom + 100,
                     ),
-                    child: const AdBanner(),
+                    child: const AdSlot(
+                      placement: AdPlacement.homeFeedFooter,
+                      variant: AdSlotVariant.feedGap,
+                    ),
                   ),
                 ),
               ],

@@ -32,6 +32,18 @@ bucket_name = "soko-vibe-thumbnails"
 binding = "BACKUPS"
 bucket_name = "soko-vibe-backups"
 
+# Optional post-install "Category Artwork Pack" (category + subcategory photos).
+# Public application data on purpose: the app downloads it without credentials,
+# and it is not user media, so it must not share a bucket with product uploads
+# whose keys follow the owner-scoped convention.
+#
+# Keys are `artwork/<version>/<relative path>`; the pack's own manifest.json is
+# the only index. Never put anything private here — this bucket is served
+# publicly at media.sokovibe.co.tz/artwork/*.
+[[r2_buckets]]
+binding = "ARTWORK"
+bucket_name = "soko-vibe-artwork"
+
 [[routes]]
 pattern = "media.sokovibe.co.tz/*"
 zone_name = "sokovibe.co.tz"

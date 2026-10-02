@@ -4,9 +4,9 @@ import 'package:share_plus/share_plus.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/deep_link_service.dart';
 import '../../services/localization_service.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/surface_policy.dart';
 import '../../services/product_service.dart';
+import '../ads/blue_tick_badge.dart';
 import '../soko_vibe_watermark.dart';
 import '../ds/ds.dart';
 
@@ -23,6 +23,14 @@ class CompactProductCard extends StatelessWidget {
   final double rating;
   final int reviewCount;
   final String? sellerName;
+
+  /// uid of the seller. Drives the Blue Tick, which is resolved from trusted
+  /// backend state by [BlueTickBadge].
+  final String sellerId;
+
+  /// Retained for backward compatibility with existing call sites. The badge is
+  /// no longer rendered from this flag because it originated as a client-writable
+  /// product field.
   final bool kycVerified;
   final VoidCallback onTap;
   final int discountPercent;
@@ -39,6 +47,7 @@ class CompactProductCard extends StatelessWidget {
     this.rating = 0,
     this.reviewCount = 0,
     this.sellerName,
+    this.sellerId = '',
     this.kycVerified = false,
     required this.onTap,
     this.discountPercent = 0,
@@ -190,9 +199,8 @@ class CompactProductCard extends StatelessWidget {
                                 style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant),
                               ),
                             ),
-                          if (kycVerified) ...[
-                            const SizedBox(width: 2),
-                            Icon(Icons.verified, size: 11, color: cs.successGreen),
+                          if (sellerId.isNotEmpty) ...[
+                            BlueTickBadge(sellerId: sellerId, size: 11),
                           ],
                         ],
                       ),

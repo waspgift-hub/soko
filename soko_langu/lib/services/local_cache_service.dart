@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/cached_product.dart';
 import '../models/cached_chat_room.dart';
@@ -20,6 +22,11 @@ class LocalCacheService {
   static const String _walletBox = 'cached_wallet';
 
   static bool _initialized = false;
+
+  /// Broadcasts each authoritative wallet snapshot so every listening screen
+  /// updates from one place. See [walletStream].
+  static final StreamController<WalletDetail> _walletCtrl =
+      StreamController<WalletDetail>.broadcast();
 
   /// Open all boxes and register adapters. Idempotent — safe to call multiple times.
   static Future<void> init() async {
@@ -63,6 +70,10 @@ class LocalCacheService {
 
   /// Remove stale entries.
   static Future<void> clearProducts() async => _products.clear();
+
+  /// Invalidate search cache when products change (add/edit/delete).
+  /// This ensures search results reflect current marketplace visibility rules.
+  static Future<void> invalidateSearchCache() async => _products.clear();
 
   /// Number of cached products.
   static int get productCount => _products.length;
@@ -223,12 +234,30 @@ class LocalCacheService {
   static Future<WalletDetail?> getCachedWallet() async =>
       _walletFromJson(_wallet.isEmpty ? null : _wallet.values.first);
 
-  /// Replace the wallet snapshot cache.
+  /// Replace the wallet snapshot cache and publish it to [walletStream].
   static Future<void> saveWallet(WalletDetail wallet) async {
     await _wallet.clear();
     await _wallet.put('current', _walletToJson(wallet));
+    if (!_walletCtrl.isClosed) _walletCtrl.add(wallet);
   }
 
   /// Drop the wallet cache (e.g. after a balance mutation).
+  ///
+  /// Clears the box without emitting: a mutation in flight must not flash a
+  /// stale or empty balance back to the UI. [WalletRepository] re-fetches and
+  /// calls [saveWallet] with the authoritative figures straight after.
   static Future<void> invalidateWallet() async => _wallet.clear();
+
+  /// Canonical wallet balance stream, shared by every screen that shows money.
+  ///
+  /// Emits the cached snapshot first so the UI paints without waiting on the
+  /// network, then pushes each new authoritative snapshot written by
+  /// [saveWallet]. One stream for all callers means a balance change reaches
+  /// the profile, the seller dashboard and the order screens together instead
+  /// of each holding its own copy.
+  static Stream<WalletDetail> walletStream() async* {
+    final cached = await getCachedWallet();
+    yield cached ?? WalletDetail.fromApi(const {});
+    yield* _walletCtrl.stream;
+  }
 }

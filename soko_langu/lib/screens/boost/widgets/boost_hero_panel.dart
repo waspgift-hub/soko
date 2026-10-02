@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../extensions/context_tr.dart';
-import '../../models/product_model.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
-import '../../theme/app_motion.dart';
-import '../../theme/app_typography.dart';
-import '../../widgets/ds/ds.dart';
-import '../../widgets/product_cached_image.dart';
+import '../../../extensions/context_tr.dart';
+import '../../../models/product_model.dart';
+import '../../../theme/app_dimens.dart';
+import '../../../theme/app_motion.dart';
+import '../../../theme/app_typography.dart';
+import '../../../widgets/ds/ds.dart';
+import '../../../widgets/product_cached_image.dart';
 
 /// Dark, always-dark hero that anchors the boost screen: the value proposition,
 /// a live preview of the listing once it is boosted, and the reassurance strip.
@@ -301,9 +300,9 @@ class _HeroReassuranceStrip extends StatelessWidget {
             ),
           ),
         ),
-        Text(
-          '•',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+        const Text(
+          '�',
+          style: TextStyle(color: Color(0x4DFFFFFF)),
         ),
         const SizedBox(width: AppSpacing.s2),
         Text(
@@ -319,7 +318,7 @@ class _HeroReassuranceStrip extends StatelessWidget {
 }
 
 /// Animated counting number used by the reach estimator.
-class CountUpText extends StatelessWidget {
+class CountUpText extends StatefulWidget {
   const CountUpText({
     super.key,
     required this.value,

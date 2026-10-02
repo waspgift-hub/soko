@@ -1,3 +1,5 @@
+import 'order_statuses.dart';
+
 /// Postgres order DTO from `/api/v1/orders`.
 ///
 /// Phase B/C bridge: mirrors the server's v2 order shape (money in BigInt is
@@ -94,6 +96,56 @@ class OrderData {
     );
   }
 
+  /// Firestore document snapshot → [OrderData].
+  /// Maps both [orders] and [transactions] collection fields, merging payment/
+  /// escrow state from the transactions doc when available, otherwise falls back
+  /// to the orders doc metadata.
+  factory OrderData.fromFirestore(String docId, Map<String, dynamic> data) {
+    final order = data['order'] is Map
+        ? Map<String, dynamic>.from(data['order'] as Map)
+        : <String, dynamic>{};
+    final tx = data['transaction'] is Map
+        ? Map<String, dynamic>.from(data['transaction'] as Map)
+        : <String, dynamic>{};
+
+    // Money stays in whole TZS as int. Truncating through double here would
+    // lose shillings on large orders and disagree with the server total.
+    int money(Object? v, [int fallback = 0]) {
+      if (v is int) return v;
+      if (v is num) return v.round();
+      if (v is String) return int.tryParse(v) ?? fallback;
+      return fallback;
+    }
+
+    final productPrice = money(order['productPrice'] ?? tx['productPrice']);
+    final createdAt = order['createdAt'] ?? tx['createdAt'];
+
+    return OrderData(
+      id: docId,
+      orderNumber: (order['orderNumber'] ?? tx['orderNumber'] ?? docId).toString(),
+      // Normalise so a legacy alias and its canonical form cannot render as
+      // two different states on two screens.
+      status: canonicalStatusOf(
+        (order['status'] ?? tx['status'] ?? 'pending').toString(),
+      ),
+      productName: (order['productName'] ?? tx['productName'] ?? '').toString(),
+      productImage: (order['productImage'] ?? tx['productImage'] ?? '').toString(),
+      productPrice: productPrice,
+      shippingFee: money(tx['shippingCost'] ?? order['shippingCost']),
+      totalAmount: money(tx['totalAmount'] ?? order['totalAmount'], productPrice),
+      platformCommission: money(tx['platformFee'] ?? order['platformFee']),
+      quantity: money(order['quantity'] ?? tx['quantity'], 1),
+      courierName: tx['courierName']?.toString(),
+      trackingNumber: tx['trackingNumber']?.toString(),
+      buyerName: (order['buyerName'] ?? tx['buyerName'] ?? '').toString(),
+      sellerName: (order['sellerName'] ?? tx['sellerName'] ?? '').toString(),
+      createdAt: _dateOf(createdAt),
+      paidAt: _dateOf(tx['paidAt']),
+      completedAt: _dateOf(tx['completedAt']),
+      cancelledAt: _dateOf(order['cancelledAt']),
+    );
+  }
+
   static String? _strOf(dynamic v) => v is String ? v : null;
 
   static int? _intOf(dynamic v) {
@@ -115,6 +167,12 @@ class OrderData {
   static DateTime? _dateOf(dynamic v) {
     if (v == null) return null;
     if (v is DateTime) return v.toLocal();
+    // Firestore Timestamp. Duck-typed through toDate() rather than importing
+    // cloud_firestore, which keeps this model unit-testable without Firebase.
+    try {
+      final d = v.toDate();
+      if (d is DateTime) return d.toLocal();
+    } catch (_) {}
     final parsed = DateTime.tryParse('$v');
     return parsed?.toLocal();
   }

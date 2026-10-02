@@ -61,12 +61,11 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
   bool _loadingExceptions = true;
   bool _loadingKyc = false;
 
-  @override
+@override
   void initState() {
     super.initState();
     _tabController = TabController(length: 11, vsync: this);
     _checkAdmin();
-    _loadFraudStats();
   }
 
   @override

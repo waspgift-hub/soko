@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
-import '../../theme/app_typography.dart';
-import '../../widgets/ds/ds.dart';
+import '../../../extensions/context_tr.dart';
+import '../../../theme/app_colors.dart';
+import '../../../theme/app_dimens.dart';
+import '../../../theme/app_typography.dart';
+import '../../../widgets/ds/ds.dart';
 import '../boost_tiers.dart';
 
 /// Sticky summary + pay bar.
@@ -65,7 +65,7 @@ class BoostCheckoutBar extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            '${context.tr('boost_tier_${tier.key}').toUpperCase()}  •  ${context.trParams('boost_days', {'count': '${tier.days}'})}',
+                            '${context.tr('boost_tier_${tier.key}').toUpperCase()}  ·  ${context.trParams('boost_days', {'count': '${tier.days}'})}',
                             style: AppTypography.statusChip(
                               scheme.onSurfaceVariant,
                             ),

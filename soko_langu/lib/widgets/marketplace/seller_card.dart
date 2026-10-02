@@ -1,17 +1,22 @@
-import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
 import '../../theme/app_dimens.dart';
+import '../ads/blue_tick_badge.dart';
 import '../ds/ds.dart';
 
 /// Compact seller tile for horizontal rails.
 ///
 /// Circle avatar with storefront badge, name, rating and optional verification.
-/// Intrinsic width (typically 100–120dp) for horizontal scrolling lists.
+/// Intrinsic width (typically 100?120dp) for horizontal scrolling lists.
 class SellerCard extends StatelessWidget {
   final String name;
   final String imageUrl;
   final double rating;
   final int reviewCount;
+  final String sellerId;
+  /// Retained for backward compatibility with existing call sites; the badge is
+  /// now rendered from trusted state via [BlueTickBadge], never from this flag.
   final bool kycVerified;
   final VoidCallback onTap;
   final Widget? trailing;
@@ -22,6 +27,7 @@ class SellerCard extends StatelessWidget {
     required this.imageUrl,
     this.rating = 0,
     this.reviewCount = 0,
+    this.sellerId = '',
     this.kycVerified = false,
     required this.onTap,
     this.trailing,
@@ -64,14 +70,14 @@ class SellerCard extends StatelessWidget {
                       ),
                       child: const Icon(Icons.storefront, size: 11, color: Colors.white),                    ),
                   ),
-                  if (kycVerified)
+                  if (sellerId.isNotEmpty)
                     Positioned(
                       left: -2,
                       bottom: -2,
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(color: cs.surface, shape: BoxShape.circle),
-                        child: Icon(Icons.verified, size: 16, color: cs.primary),
+child: BlueTickBadge(sellerId: sellerId, size: 16),
                       ),
                     ),
                 ],
@@ -97,6 +103,9 @@ class SellerCard extends StatelessWidget {
                       const SizedBox(width: 3),
                       Text('($reviewCount)', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
                     ],
+                    // Badge beside the seller name as well as on the avatar, so
+                    // the trust signal is legible at both glance targets.
+                    BlueTickBadge(sellerId: sellerId, size: 13),
                   ],
                 ),
               if (trailing != null) ...[

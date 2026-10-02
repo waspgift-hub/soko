@@ -25,6 +25,8 @@ import '../../widgets/order_status_config.dart';
 import 'package:go_router/go_router.dart';
 import '../../widgets/product_cached_image.dart';
 import '../../widgets/raise_dispute_dialog.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../services/ads/ad_config.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
   const MyPurchasesScreen({super.key});
@@ -46,6 +48,25 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   List<QueryDocumentSnapshot> _currentDocs = [];
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
+
+  // Memoised per buyer. Inline `stream:` in build() meant every rebuild opened a
+  // fresh listener on the buyer's `transactions` — and this screen rebuilds on
+  // selection changes, filter switches and each 3-second payment poll.
+  String? _txStreamKey;
+  Stream<QuerySnapshot>? _txStream;
+
+  Stream<QuerySnapshot> _transactionsFor(String uid) {
+    if (_txStreamKey != uid) {
+      _txStreamKey = uid;
+      _txStream = FirebaseFirestore.instance
+          .collection('transactions')
+          .where('buyerId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(150)
+          .snapshots();
+    }
+    return _txStream!;
+  }
 
   static const _filters = ['all', 'pending', 'active', 'completed', 'failed'];
 
@@ -1018,12 +1039,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('transactions')
-            .where('buyerId', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
-            .limit(150)
-            .snapshots(),
+        stream: _transactionsFor(user.uid),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting &&
               _isInitialLoad) {
@@ -1106,6 +1122,16 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                       childCount: docs.length,
                     ),
                   ),
+                // Footer placement after the last order card. Deliberately after the list and
+                // never pinned: an order list carries Pay / Confirm delivery /
+                // Dispute / Cancel controls, and an ad must never sit adjacent
+                // to a money or dispute action.
+                const SliverToBoxAdapter(
+                  child: AdSlot(
+                    placement: AdPlacement.ordersFooter,
+                    variant: AdSlotVariant.feedGap,
+                  ),
+                ),
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: _isSelectionMode && _selectedIds.isNotEmpty ? 80 : 32,
@@ -1165,8 +1191,9 @@ class _OrderGlassCard extends StatelessWidget {
     final price = (data['productPrice'] ?? 0).toDouble();
     final shippingCost = (data['shippingCost'] as num?)?.toDouble();
     final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? price;
-    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
-    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
+    final breakdown = TransactionFeeBreakdown(productPrice: price);
+    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? breakdown.platformFee;
+    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? breakdown.processingFee;
     final paymentMethod = data['paymentMethod'] as String? ?? 'ClickPesa';
     final sellerName = data['sellerName'] as String? ?? '';
     final sellerId = data['sellerId'] as String? ?? '';
@@ -1777,7 +1804,8 @@ class _OrderGlassCard extends StatelessWidget {
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
     final clickpesaFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
-    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (productPrice * 0.035);
+    final platformFee = (data['platformFee'] as num?)?.toDouble()
+        ?? TransactionFeeBreakdown(productPrice: productPrice).platformFee;
     final totalAmount =
         (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
     final buyerName = data['buyerName'] as String? ?? '';

@@ -12,6 +12,8 @@ import '../../widgets/safe_dropdown.dart';
 import '../../models/product_model.dart';
 import '../../models/order_statuses.dart';
 import '../../models/flash_sale_model.dart';
+import '../../models/transaction_model.dart';
+import '../../services/clickpesa_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/api_config.dart';
 import '../../widgets/input_field.dart';
@@ -59,6 +61,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   StreamSubscription<FlashSale?>? _flashSub;
   FlashSale? _flashSale;
 
+  /// Authoritative ClickPesa quote for this order: the commission and the
+  /// mobile-money fee the buyer will actually be charged.
+  ///
+  /// Null while the quote is in flight or if it failed — [_localCommission] and
+  /// [_localPaymentFee] then stand in, which under-quotes by the MNO fee but
+  /// never blocks checkout.
+  UssdPushFeeQuote? _quote;
+  bool _quotePending = false;
+  int _quoteSeq = 0;
+
+  /// Commission per Terms 8.2: 3.5% of the item price, paid by the buyer on
+  /// top. Rounded to whole TZS to match the server's Math.round, so the figure
+  /// on screen is the figure that gets charged.
+  double get _localCommission =>
+      (_lineTotal * TransactionFeeBreakdown.platformCommissionPercent)
+          .roundToDouble();
+
+  /// Fallback fee from the local ClickPesa tier table. Tiered on the full
+  /// charge (item + commission), which is what actually gets pushed.
+  double get _localPaymentFee =>
+      getUssdPushFee(_lineTotal + _localCommission);
+
+  double get _commission => _quote?.platformFee ?? _localCommission;
+  double get _paymentFee => _quote?.cheapestAvailableFee ?? _localPaymentFee;
+
   /// Price actually charged: active flash-sale price wins, otherwise the
   /// unit price chosen on product details (wholesale aware), else base.
   double get _effectivePrice =>
@@ -93,18 +120,73 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _regionCtrl.addListener(_onFormChanged);
     _streetCtrl.addListener(_onFormChanged);
     _phoneCtrl.addListener(_onFormChanged);
+    _refreshQuote();
+  }
+
+  /// Fetches ClickPesa's real fee for this order.
+  ///
+  /// Re-runs when the flash-sale price changes or the buyer finishes typing a
+  /// phone number, since both feed the amount being quoted. [_quoteSeq] drops
+  /// replies that arrive out of order, so a slow earlier quote cannot overwrite
+  /// a newer one.
+  Future<void> _refreshQuote() async {
+    // Cash on delivery moves no money through ClickPesa, so there is no
+    // mobile-money fee to quote — asking would invent one.
+    if (_paymentMethod != 'escrow') {
+      if (mounted) setState(() { _quote = null; _quotePending = false; });
+      return;
+    }
+    final phone = _phoneCtrl.text.trim();
+    if (phone.length < 9) {
+      if (mounted) setState(() => _quote = null);
+      return;
+    }
+    final seq = ++_quoteSeq;
+    if (mounted) setState(() => _quotePending = true);
+    final quote = await ClickPesaService.previewUssdPushFee(
+      productPrice: _lineTotal,
+      productId: widget.product.id,
+      phone: phone,
+      buyerId: FirebaseAuth.instance.currentUser?.uid,
+      shippingCost: _deliveryFee,
+      paymentMethod: 'ussd_push',
+    );
+    if (!mounted || seq != _quoteSeq) return;
+    setState(() {
+      _quote = quote;
+      _quotePending = false;
+    });
+  }
+
+  void _setPaymentMethod(String method) {
+    if (_paymentMethod == method) return;
+    setState(() => _paymentMethod = method);
+    // Switching to COD removes the fee, switching back needs a fresh quote.
+    _refreshQuote();
   }
 
   void _onFormChanged() {
     // Rebuild bottom CTA so it enables only when address + phone are valid.
     if (mounted) setState(() {});
+    // The phone number is part of what ClickPesa quotes (it identifies the
+    // payer), so a finished number needs a fresh quote.
+    if (_lastQuotedPhone != _phoneCtrl.text.trim()) {
+      _lastQuotedPhone = _phoneCtrl.text.trim();
+      _refreshQuote();
+    }
   }
+
+  String _lastQuotedPhone = '';
 
   void _subscribeFlashSale() {
     _flashSub = _flashSaleService
         .streamFlashSaleByProductId(widget.product.id)
         .listen((sale) {
-      if (mounted) setState(() => _flashSale = sale);
+      if (!mounted) return;
+      setState(() => _flashSale = sale);
+      // A flash sale changes the amount pushed, so the fee band may change with
+      // it — re-quote rather than showing the pre-sale figure.
+      _refreshQuote();
     });
   }
 
@@ -368,7 +450,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   label: context.tr('pay_escrow', 'Escrow (salama)'),
                   subtitle: context.tr('pay_escrow_sub', 'M-Pesa / Tigo / Airtel via push'),
                   selected: _paymentMethod == 'escrow',
-                  onTap: () => setState(() => _paymentMethod = 'escrow'),
+                  onTap: () => _setPaymentMethod('escrow'),
                 ),
                 const SizedBox(height: 10),
                 PaymentMethodTile(
@@ -376,7 +458,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   label: context.tr('pay_on_delivery', 'Malipo mkononi'),
                   subtitle: context.tr('pay_on_delivery_sub', 'Ikiwa muuzaji atakubali'),
                   selected: _paymentMethod == 'cod',
-                  onTap: () => setState(() => _paymentMethod = 'cod'),
+                  onTap: () => _setPaymentMethod('cod'),
                 ),
                 if (_latitude != null && _longitude != null) ...[
                   const SizedBox(height: 16),
@@ -787,6 +869,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           subtotal: _lineTotal,
           delivery: _deliveryFee,
           discount: discount,
+          commission: _commission,
+          paymentFee: _paymentFee,
+          quotePending: _quotePending,
           note: _deliveryFee == 0
               ? context.tr('shipping_quoted_later', 'Usafirishaji utathibitishwa na muuzaji')
               : (_flashSale != null ? context.tr('flash_sale_price', 'Flash sale price') : null),

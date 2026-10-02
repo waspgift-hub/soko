@@ -25,6 +25,9 @@ class SearchResult {
   final double? discount;
   final bool isBoosted;
 
+  /// uid of the seller. Drives the Blue Tick on a result row.
+  final String sellerId;
+
   SearchResult({
     required this.id,
     required this.type,
@@ -42,9 +45,17 @@ class SearchResult {
     this.kycApproved = false,
     this.discount,
     this.isBoosted = false,
+    this.sellerId = '',
   });
 
   factory SearchResult.fromMap(Map<String, dynamic> map) {
+    // Seller results are their own seller, so the row id doubles as the uid.
+    final sellerNested = (map['seller'] as Map?)?.cast<String, dynamic>();
+    final resolvedSellerId = (map['sellerId'] as String?) ??
+        sellerNested?['id'] as String? ??
+        ((map['sourceType'] ?? map['type']) == 'seller'
+            ? map['id'] as String? ?? ''
+            : '');
     return SearchResult(
       id: map['id'] as String? ?? '',
       type: map['type'] as String? ?? map['sourceType'] as String? ?? '',
@@ -62,6 +73,7 @@ class SearchResult {
       kycApproved: map['kycApproved'] as bool? ?? false,
       discount: (map['discount'] as num?)?.toDouble(),
       isBoosted: map['isBoosted'] as bool? ?? false,
+      sellerId: resolvedSellerId,
     );
   }
 
@@ -80,6 +92,7 @@ class SearchResult {
       location: p.location,
       isBoosted: p.isBoosted || p.isBoostedValid,
       kycApproved: p.sellerKycApproved,
+      sellerId: p.sellerId,
     );
   }
 }

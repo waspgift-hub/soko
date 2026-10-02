@@ -58,4 +58,13 @@ class WalletRepository {
   Future<List<WithdrawalData>> fetchWithdrawalHistory() async {
     return await _apiClient.fetchWithdrawals();
   }
+
+  /// Canonical wallet detail stream.
+  ///
+  /// All screens showing money read this one stream, so a balance change
+  /// (escrow release, withdrawal, payment) reaches every screen at once instead
+  /// of each holding a private copy. [watchWallet] remains the single-shot
+  /// cache-then-fetch read used where a live stream is unnecessary.
+  Stream<WalletDetail> watchWalletUnified() =>
+      LocalCacheService.walletStream();
 }

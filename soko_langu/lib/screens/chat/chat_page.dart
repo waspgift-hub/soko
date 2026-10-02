@@ -15,6 +15,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/call_seller_button.dart';
+import '../../widgets/ads/blue_tick_badge.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverId;
@@ -53,11 +54,10 @@ class _ChatPageState extends State<ChatPage> {
   String? _receiverPhone;
   String? _receiverPhoto;
   String? _receiverName;
-  bool _receiverKyc = false;
   bool _trustDismissed = false;
   StreamSubscription<UserProfile?>? _profileSub;
 
-  // Optimistic messages: tempId → Message
+  // Optimistic messages: tempId ? Message
   final Map<String, Message> _optimisticMsgs = {};
   final Set<String> _confirmedSends = {};
   final Set<String> _failedSends = {};
@@ -105,7 +105,6 @@ class _ChatPageState extends State<ChatPage> {
         _receiverPhone = profile.phone;
         _receiverPhoto = profile.profileImage;
         _receiverName = profile.displayName;
-        _receiverKyc = profile.kycApproved;
       });
     }
     _profileSub = _userService.streamProfile(widget.receiverId).listen((p) {
@@ -115,7 +114,6 @@ class _ChatPageState extends State<ChatPage> {
           _receiverPhone = p.phone;
           _receiverPhoto = p.profileImage;
           _receiverName = p.displayName;
-          _receiverKyc = p.kycApproved;
         }
       });
     });
@@ -245,7 +243,7 @@ class _ChatPageState extends State<ChatPage> {
         });
       } else {
         if (!mounted) return;
-        // ONLINE-ONLY: never fake a delivery or queue the message for later —
+        // ONLINE-ONLY: never fake a delivery or queue the message for later ?
         // the failed bubble keeps a manual retry and the user is told why.
         setState(() => _failedSends.add(tempId));
         ScaffoldMessenger.of(context).showSnackBar(
@@ -502,11 +500,10 @@ class _ChatPageState extends State<ChatPage> {
                               ),
                               overflow: TextOverflow.ellipsis),
                         ),
-                        if (_receiverKyc) ...[
-                          const SizedBox(width: 4),
-                          Icon(Icons.verified,
-                              size: 15, color: cs.primary),
-                        ],
+                        // Blue Tick from trusted state. `_receiverKyc` (the profile's denormalised
+                        // kyc.approved flag) no longer drives a badge, so a
+                        // revocation takes effect immediately.
+                        BlueTickBadge(sellerId: widget.receiverId, size: 15),
                       ],
                     ),
                     Row(
@@ -941,7 +938,7 @@ class _MessageBubble extends StatelessWidget {
 
     return GestureDetector(
       onHorizontalDragEnd: (details) {
-        // Swipe right → reply (trigger onReply)
+        // Swipe right ? reply (trigger onReply)
         if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
           onReply?.call();
         }
@@ -1173,7 +1170,7 @@ class _MessageBubble extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((e) {
+            children: ['??', '??', '??', '??', '??', '??'].map((e) {
               return GestureDetector(
                 onTap: () {
                   Navigator.pop(ctx);

@@ -23,8 +23,15 @@
 const BUCKET_FOR_PREFIX = [
   { prefix: 'images', binding: 'IMAGES' },
   { prefix: 'videos', binding: 'VIDEOS' },
-  { prefix: 'thumbnails', binding: 'THUMBNAILS' },
+  { prefix: 'thumbnails', binding: 'THUMBNASTS' },
   { prefix: 'backups', binding: 'BACKUPS' },
+  // Application artwork (category/subcategory photos the app downloads as an
+  // optional post-install pack). Public application data, not user uploads, so
+  // it lives in its own bucket rather than under `images/` where the
+  // `<kind>s/<ownerType>/<ownerId>/<uuid>` key convention applies. Key layout is
+  // `artwork/<version>/<relative path>`, and the app only ever reads paths
+  // listed in the pack's own manifest.
+  { prefix: 'artwork', binding: 'ARTWORK' },
 ];
 
 // KYC identity documents (passport/ID, selfie) must never be reachable through
@@ -45,12 +52,49 @@ const DENIED_PREFIXES = ['kyc'];
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const ONE_HOUR = 'public, max-age=3600';
+// Artwork manifests are small and change only on a pack release, but they MUST
+// stay revalidatable or a shipped app could never learn about an update.
+const MANIFEST = 'public, max-age=300, must-revalidate';
 
 function bindingFor(key) {
   const seg = key.split('/')[0];
   if (DENIED_PREFIXES.includes(seg)) return { denied: true };
   const hit = BUCKET_FOR_PREFIX.find((b) => b.prefix === seg);
   return hit ? { binding: hit.binding } : { unknown: true };
+}
+
+function isDeniedPrefix(key) {
+  return DENIED_PREFIXES.includes(key.split('/')[0]);
+}
+
+/**
+ * True when the client's If-None-Match list contains the current ETag.
+ *
+ * Compares on the quoted hash only, ignoring the `W/` weak prefix, and treats
+ * `*` as a match per RFC 9110.
+ */
+function etagMatches(ifNoneMatch, etag) {
+  if (!ifNoneMatch || !etag) return false;
+  const normalise = (v) => v.trim().replace(/^W\//, '');
+  const current = normalise(etag);
+  return ifNoneMatch
+    .split(',')
+    .map(normalise)
+    .some((candidate) => candidate === '*' || candidate === current);
+}
+
+/**
+ * Cache-Control for a key.
+ *
+ * `artwork/manifest.json` is the one object that must stay revalidatable: it is
+ * how a shipped app learns a newer pack exists, so an immutable header on it
+ * would strand users on an old pack indefinitely. Everything else is keyed by
+ * content/version and is genuinely immutable.
+ */
+function cacheControlFor(key) {
+  if (key.endsWith('manifest.json')) return MANIFEST;
+  if (key.startsWith('videos/')) return ONE_HOUR;
+  return IMMUTABLE;
 }
 
 function errorResponse(status, message, extraHeaders) {
@@ -98,7 +142,14 @@ export default {
     const cacheKey = new Request(cacheKeyUrl.toString(), { method: 'GET' });
     const cache = caches.default;
 
-    if (!isPartial && request.method === 'GET') {
+    const inm = request.headers.get('if-none-match');
+
+    // A conditional request bypasses the Cache API entirely. Reading the
+    // object and comparing ETags ourselves is deterministic, whereas letting a
+    // cached response answer the conditional depends on the cached copy
+    // carrying a readable validator — and when it does not, the client silently
+    // re-downloads the body on every poll.
+    if (!isPartial && request.method === 'GET' && !inm) {
       const cached = await cache.match(cacheKey);
       if (cached) return cached;
     }
@@ -114,6 +165,20 @@ export default {
 
     if (!object) return errorResponse(404, 'media_not_found');
 
+    // Answer the conditional here, before any body is read into a Response.
+    // Without this the client's validator is ignored and every periodic
+    // manifest poll re-transfers the whole file.
+    if (inm && !isPartial && etagMatches(inm, object.httpEtag)) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          ETag: object.httpEtag,
+          'Cache-Control': cacheControlFor(key),
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
     // `httpMetadata` is what makes the browser apply our Cache-Control; without
     // it R2 returns its own default (short) and revalidates on every view.
     const headers = new Headers();
@@ -128,7 +193,14 @@ export default {
       headers.set('Content-Type', object.key?.endsWith('.webp') ? 'image/webp' : 'application/octet-stream');
     }
     if (!headers.has('Cache-Control')) {
-      headers.set('Cache-Control', key.startsWith('videos/') ? ONE_HOUR : IMMUTABLE);
+      headers.set('Cache-Control', cacheControlFor(key));
+    }
+    // The artwork pack's own contract wins over whatever a previous PUT
+    // stored. Without this, an object written with a long max-age would pin
+    // the manifest as effectively immutable and clients would never see a
+    // new pack.
+    if (key.startsWith('artwork/')) {
+      headers.set('Cache-Control', cacheControlFor(key));
     }
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('X-Content-Type-Options', 'nosniff');

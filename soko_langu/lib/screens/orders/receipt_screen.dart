@@ -80,8 +80,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final productDetails = d['productDetails'] as String? ?? '';
             final price = (d['productPrice'] ?? 0).toDouble();
             final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
-            final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
-            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
+            // Single source of truth for the rate: TransactionFeeBreakdown owns
+            // the 3.5% figure so a rate change propagates to every screen.
+            final breakdown = TransactionFeeBreakdown(productPrice: price);
+            final platformFee =
+                (d['platformFee'] as num?)?.toDouble() ?? breakdown.platformFee;
+            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? breakdown.processingFee;
             final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + clickpesaFee);
             final buyerName = d['buyerName'] as String? ?? '';
             final sellerName = d['sellerName'] as String? ?? '';
@@ -132,12 +136,14 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     String paymentMethod, String? transactionReference,
     String? courierName, String? driverPhone, String? trackingNumber,
   ) {
-    // Seller receives = price - platformFee (what seller actually gets);
-    // prefer the stored field when the server recorded the true payout.
+    // Terms of Service 8.2: the 3.5% commission is charged to the BUYER on top
+    // of the product price, so the seller is paid the full product price. The
+    // old fallback of `price - platformFee` contradicted the terms and showed
+    // a lower payout than order_detail_screen for the same order.
     final storedSellerReceives = (d['sellerReceives'] as num?)?.toDouble();
     final sellerReceives = (storedSellerReceives != null && storedSellerReceives > 0)
         ? storedSellerReceives
-        : price - platformFee;
+        : TransactionFeeBreakdown(productPrice: price).sellerReceives;
 
     return Container(
       decoration: BoxDecoration(

@@ -9,6 +9,7 @@ import '../../services/payment_service.dart';
 import '../../services/widget_service.dart';
 import '../../services/balance_privacy_service.dart';
 import '../../services/seller_earnings_service.dart';
+import '../../services/seller_verification_service.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/product_model.dart';
@@ -29,12 +30,51 @@ class SellerDashboardScreen extends StatefulWidget {
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   final ProductService _productService = ProductService();
   final PaymentService _paymentService = PaymentService();
+  final SellerVerificationService _verificationService = SellerVerificationService();
   bool _isAdmin = false;
+
+  // Held rather than rebuilt inline. This screen rebuilds whenever the admin flag,
+  // the transaction stream or the product stream emits, and each of those used
+  // to re-issue a wallet HTTP request (`SellerEarningsService().getEarnings()`)
+  // or re-open a Firestore listener on the seller document.
+  SellerEarningsService? _earningsService;
+  Future<SellerEarningsData>? _earningsFuture;
+  String? _earningsUid;
+  String? _userStreamKey;
+  Stream<DocumentSnapshot>? _userDocStream;
 
   @override
   void initState() {
     super.initState();
     _loadAdminStatus();
+    // Initialize verification service for KYC/Blue Tick
+    _verificationService.refreshSelf(listen: true);
+  }
+
+  @override
+  void dispose() {
+    _verificationService.dispose();
+    _earningsService?.dispose();
+    super.dispose();
+  }
+
+  Future<SellerEarningsData> _earningsFor() {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (_earningsUid != uid) {
+      _earningsService?.dispose();
+      _earningsUid = uid;
+      _earningsService = SellerEarningsService();
+      _earningsFuture = _earningsService!.getEarnings();
+    }
+    return _earningsFuture ??= SellerEarningsService().getEarnings();
+  }
+
+  Stream<DocumentSnapshot> _userDocStreamFor(String uid) {
+    if (_userStreamKey != uid) {
+      _userStreamKey = uid;
+      _userDocStream = FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+    }
+    return _userDocStream!;
   }
 
   Future<void> _loadAdminStatus() async {
@@ -365,8 +405,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           if (tx.platformFee > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
-                              child: Text('${context.tr('comm', 'Comm:')} -TZS ${tx.platformFee.toStringAsFixed(0)}',
-                                  style: TextStyle(fontSize: 10, color: cs.error)),
+                              // Shown without a minus and in a neutral tone:
+                              // Terms 8.2c means this is not deducted from the
+                              // seller, so red-minus read as a lost payout.
+                              child: Text('${context.tr('comm', 'Comm:')} TZS ${tx.platformFee.toStringAsFixed(0)}',
+                                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
                             ),
                         ],
                       ),
@@ -448,7 +491,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       // Postgres wallet is the money source of truth in this mode; the Firestore
       // sellerBalance snapshot would show stale/empty amounts.
       return FutureBuilder<SellerEarningsData>(
-        future: SellerEarningsService().getEarnings(),
+        future: _earningsFor(),
         builder: (context, snap) {
           final data = snap.data ?? const SellerEarningsData();
           return _earningsCardBody(
@@ -461,7 +504,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       );
     }
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+      stream: _userDocStreamFor(uid),
       builder: (context, snap) {
         final d = snap.data?.data() as Map<String, dynamic>?;
         return _earningsCardBody(

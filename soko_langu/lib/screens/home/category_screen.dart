@@ -12,6 +12,8 @@ import '../../utils/category_icons.dart';
 import '../../widgets/marketplace/category_image.dart';
 import '../../widgets/inputs/soko_search_bar.dart';
 import '../../widgets/staggered_fade_in.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../services/ads/ad_config.dart';
 
 /// Visual marketplace explorer: search, popular categories, then the full
 /// responsive grid. Images lead, names stay visible for accessibility.
@@ -150,7 +152,11 @@ class _Explorer extends StatelessWidget {
           const SizedBox(height: AppInsets.sm),
         ],
         _SectionTitle(
-          title: searching ? context.tr('results') : context.tr('all_categories'),
+          title: searching
+              ? context.tr('results')
+              // 'all_categories' is used by the artwork-pack recovery screen,
+              // which is a different phrase; this is the explorer's heading.
+              : context.tr('all_categories_explorer'),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -182,11 +188,13 @@ class _Explorer extends StatelessWidget {
                     name: config.langCode == 'en' ? cat.name : cat.nameSw,
                     langEn: config.langCode == 'en',
                     onTap: () => context.push(
-                      '${AppRoutes.categoryProducts}/${cat.name}',
+                      '${AppRoutes.categoryProducts}'
+                      '/${Uri.encodeComponent(cat.name)}',
                       extra: cat,
                     ),
                     onSubTap: (sub) => context.push(
-                      '${AppRoutes.categoryProducts}/${cat.name}'
+                      '${AppRoutes.categoryProducts}'
+                      '/${Uri.encodeComponent(cat.name)}'
                       '?sub=${Uri.encodeComponent(sub.name)}',
                       extra: cat,
                     ),
@@ -195,6 +203,13 @@ class _Explorer extends StatelessWidget {
               );
             },
           ),
+        ),
+        // Footer placement: after the full category grid, so the ad is the last
+        // thing on a long explorer list and never sits between two tappable
+        // category cards.
+        const AdSlot(
+          placement: AdPlacement.categoriesFooter,
+          variant: AdSlotVariant.feedGap,
         ),
         SizedBox(
           height: MediaQuery.of(context).padding.bottom + AppInsets.lg,
@@ -239,7 +254,7 @@ class _PopularCard extends StatelessWidget {
     final config = AppConfig.of(context);
     return GestureDetector(
       onTap: () => context.push(
-        '${AppRoutes.categoryProducts}/${category.name}',
+        '${AppRoutes.categoryProducts}/${Uri.encodeComponent(category.name)}',
         extra: category,
       ),
       child: Container(
@@ -257,15 +272,16 @@ class _PopularCard extends StatelessWidget {
             Expanded(
               child: SizedBox(
                 width: double.infinity,
-                child: CategoryImage(
-                  imageUrl: category.displayImage,
-                  fallback: categoryIconFor(
-                    icon: category.icon,
-                    slug: category.id,
-                    name: category.name,
-                  ),
-                  memCacheSize: 320,
-                ),
+child: CategoryImage(
+              imageUrl: category.displayImage,
+              categoryId: category.id,
+              fallback: categoryIconFor(
+                icon: category.icon,
+                slug: category.id,
+                name: category.name,
+              ),
+              memCacheSize: 320,
+            ),
               ),
             ),
             Padding(
@@ -327,6 +343,7 @@ class _PremiumCategoryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(24),
                   child: CategoryImage(
                     imageUrl: artwork,
+                    categoryId: category.id,
                     fallback: categoryIconFor(
                       icon: category.icon,
                       slug: category.id,

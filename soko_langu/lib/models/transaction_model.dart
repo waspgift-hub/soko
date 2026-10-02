@@ -10,11 +10,22 @@ const List<(int, int, int)> ussdPushFeeTiers = [
   (1000000, 1999999, 7210), (2000000, 3000000, 7960),
 ];
 
+/// Fee ClickPesa adds on top of the amount for a USSD push.
+///
+/// [amount] must be the value actually pushed to ClickPesa — the product price
+/// plus the Soko Vibe commission — because the tiers are banded on the charge,
+/// not on the item price.
 double getUssdPushFee(double amount) {
+  // Below the smallest published tier there is no chargeable USSD push, so the
+  // fee is zero. Falling through to the top tier charged 7,960 on a 300 TZS
+  // purchase, a 2,653% fee.
+  if (amount < ussdPushFeeTiers.first.$1) return 0;
   for (final tier in ussdPushFeeTiers) {
     if (amount >= tier.$1 && amount <= tier.$2) return tier.$3.toDouble();
   }
-  return 7960.0;
+  // Above the top published band: hold at that band's fee rather than repeating
+  // its number in two places where they could drift apart.
+  return ussdPushFeeTiers.last.$3.toDouble();
 }
 
 class TransactionFeeBreakdown {
@@ -27,15 +38,42 @@ class TransactionFeeBreakdown {
   final double totalAmount;
   final double sellerReceives;
 
-  TransactionFeeBreakdown({required this.productPrice})
-    : processingFee = getUssdPushFee(productPrice),
-      platformFee = productPrice * platformCommissionPercent,
-      payoutFee = 0,
-      // processingFee is what ClickPesa charges the customer ON TOP of the amount
-      // (not pre-added to what we send), so totalAmount excludes it.
-      totalFees = productPrice * platformCommissionPercent,
-      totalAmount = productPrice + (productPrice * platformCommissionPercent),
-      sellerReceives = productPrice;
+  /// [quotedProcessingFee] is the fee ClickPesa actually quoted for this charge
+  /// via the preview endpoint. It wins over the local tier table because the
+  /// table only knows ClickPesa's own fee — it cannot see the MNO fee that
+  /// ClickPesa charges "in addition", and it drifts whenever ClickPesa reprices.
+  factory TransactionFeeBreakdown({
+    required double productPrice,
+    double? quotedProcessingFee,
+  }) {
+    // Round to whole TZS. The server computes commission as
+    // `Math.round(price * percent)`, so leaving this as a raw double makes the
+    // app quote a fractional shilling the server never charges
+    // (100000 * 0.035 == 3500.0000000000005 in IEEE754).
+    final platformFee =
+        (productPrice * platformCommissionPercent).roundToDouble();
+    // Tier the processing fee on the full charge, not the item price: a 95,000
+    // item is pushed as 98,325 (commission included), which crosses into a
+    // higher band, so pricing off productPrice under-quoted the buyer.
+    final totalAmount = productPrice + platformFee;
+    return TransactionFeeBreakdown._(
+      productPrice: productPrice,
+      platformFee: platformFee,
+      totalAmount: totalAmount,
+      processingFee: quotedProcessingFee ?? getUssdPushFee(totalAmount),
+    );
+  }
+
+  TransactionFeeBreakdown._({
+    required this.productPrice,
+    required this.platformFee,
+    required this.totalAmount,
+    required this.processingFee,
+  })  : payoutFee = 0,
+        // processingFee is what ClickPesa charges the customer ON TOP of the
+        // amount (not pre-added to what we send), so totalAmount excludes it.
+        totalFees = platformFee,
+        sellerReceives = productPrice;
 
   Map<String, dynamic> toMap() => {
     'productPrice': productPrice,

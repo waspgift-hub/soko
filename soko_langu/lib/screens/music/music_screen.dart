@@ -10,11 +10,14 @@ import '../../services/music_library_service.dart';
 import '../../services/profile_media_controller.dart';
 import '../../services/profile_media_session.dart';
 import '../../services/youtube_search_service.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../theme/app_dimens.dart';
+import '../../services/ads/ad_config.dart';
 
 /// Music hub: songs stored on the user's own phone plus YouTube search.
 /// Local playback is fully offline; YouTube search goes through the
 /// server-side proxy (key never ships in the app) and playback uses the
-/// official nocookie embed — no downloading, no ToS breach.
+/// official nocookie embed ? no downloading, no ToS breach.
 class MusicScreen extends StatelessWidget {
   const MusicScreen({super.key});
 
@@ -161,9 +164,20 @@ class _LocalSongsTabState extends State<_LocalSongsTab>
       return Center(child: Text(context.tr('no_songs_found')));
     }
     return ListView.separated(
-      itemCount: songs.length,
+      itemCount: songs.length + 1,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
+        if (i == songs.length) {
+          // Footer placement: after the last track so the ad is never between
+          // two tappable rows and never interferes with playback controls.
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppInsets.lg),
+            child: AdSlot(
+              placement: AdPlacement.musicFeedFooter,
+              variant: AdSlotVariant.feedGap,
+            ),
+          );
+        }
         final s = songs[i];
         return ListTile(
           leading: const CircleAvatar(child: Icon(Icons.music_note)),

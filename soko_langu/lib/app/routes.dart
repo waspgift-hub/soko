@@ -16,6 +16,10 @@ class AppRoutes {
   static const String notificationPreferences = '/notification-preferences';
   static const String settings = '/settings';
 
+  /// Optional post-install download of category artwork. Reachable from
+  /// settings and shown as a prompt after first launch; never required.
+  static const String artworkPack = '/artwork-pack';
+
   static const String publicProfile = '/public-profile';
   static const String search = '/search';
   static const String category = '/category';
@@ -38,6 +42,7 @@ class AppRoutes {
   static const String kyc = '/kyc';
   static const String report = '/report';
   static const String adminKyc = '/admin/kyc';
+  static const String adminAdsConfig = '/admin/ads-config';
   static const String adminBroadcast = '/admin/broadcast';
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';

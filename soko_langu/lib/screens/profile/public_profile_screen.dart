@@ -6,7 +6,6 @@ import '../../services/user_service.dart';
 import '../../services/product_service.dart';
 import '../../services/rating_service.dart';
 import '../../models/product_model.dart';
-import '../../widgets/verified_badge.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/glass_container.dart'; // ignore: unused_import
 import '../../widgets/google_loading.dart';
@@ -20,7 +19,14 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/call_seller_button.dart';
+import '../../widgets/ads/ad_slot.dart';
+import '../../widgets/ads/blue_tick_badge.dart';
+import '../../theme/design_tokens.dart';
+import '../../models/seller_verification.dart';
+import '../../services/seller_verification_service.dart';
+import '../../services/ads/ad_config.dart';
 import '../../services/share_service.dart';
+import 'package:provider/provider.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -42,6 +48,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
 
+  /// Trusted verification snapshot for the seller on this page. Subscribing
+  /// means a revocation removes the badge without a restart.
+  SellerVerification? _verification;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +62,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
+    _loadVerification();
+  }
+
+  Future<void> _loadVerification() async {
+    final v =
+        await context.read<SellerVerificationService>().resolve(widget.userId);
+    if (!mounted) return;
+    setState(() => _verification = v);
   }
 
   @override
@@ -182,24 +200,41 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         ),
                       );
                     }
-                    return SliverGrid(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: Responsive.gridColumns(context),
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: Responsive.cardAspectRatio(context),
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => ProductCard(
-                          product: products[index],
-                          flashSale: _flashSales[products[index].id],
-                          onTap: () => context.push(
-                            '${AppRoutes.productDetail}/${products[index].id}',
-                            extra: products[index],
+                    return SliverMainAxisGroup(
+                      slivers: [
+                        SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: Responsive.gridColumns(context),
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio:
+                                Responsive.cardAspectRatio(context),
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => ProductCard(
+                              product: products[index],
+                              flashSale: _flashSales[products[index].id],
+                              onTap: () => context.push(
+                                '${AppRoutes.productDetail}/${products[index].id}',
+                                extra: products[index],
+                              ),
+                            ),
+                            childCount: products.length,
                           ),
                         ),
-                        childCount: products.length,
-                      ),
+                        // Footer placement: below the seller's catalogue so the
+                        // ad never competes with a product card, and inside the
+                        // same scroll view so it is built lazily.
+                        const SliverToBoxAdapter(
+                          child: AdSlot(
+                            placement: AdPlacement.sellerProfileFooter,
+                            variant: AdSlotVariant.feedGap,
+                            topMargin: Ds.sp5,
+                            bottomMargin: Ds.sp7,
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -287,8 +322,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (profile?.kycApproved == true)
-                    const VerifiedBadge(size: 16),
+                  // Blue Tick from trusted state plus a word-level pill, so the store
+                  // page carries an unmistakable verification statement next to
+                  // the seller's name.
+                  BlueTickBadge(sellerId: widget.userId, size: 16),
+                  const SizedBox(width: 6),
+                  BlueTickPill(verification: _verification),
                 ],
               ),
               if (profile?.bio.isNotEmpty == true) ...[
@@ -425,7 +464,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: StreamBuilder<SellerRating>(
-        stream: RatingService().streamSellerRating(widget.userId),
+        stream: RatingService.instance.streamSellerRating(widget.userId),
         builder: (context, snap) {
           final rating = snap.data;
           if (rating == null || rating.totalReviews == 0) {
@@ -544,7 +583,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: StreamBuilder<SellerRating>(
-        stream: RatingService().streamSellerRating(widget.userId),
+        stream: RatingService.instance.streamSellerRating(widget.userId),
         builder: (context, snap) {
           final rating = snap.data;
           if (rating == null || rating.totalReviews == 0) {

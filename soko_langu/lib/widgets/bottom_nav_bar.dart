@@ -11,7 +11,8 @@ import '../services/chat_service.dart';
 import '../models/chat_room.dart';
 import '../app/routes.dart';
 import '../extensions/context_tr.dart';
-import '../main.dart';
+import '../services/ads/ad_config.dart';
+import '../services/ads/ad_manager.dart';
 import '../theme/neumorphic.dart';
 import '../utils/responsive.dart';
 import 'auth_wall.dart';
@@ -28,7 +29,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   int _maxVisitedIndex = 0;
-  Timer? _adTimer;
   final UserService _userService = UserService();
   String? _profilePhotoUrl;
   int _unreadTotal = 0;
@@ -62,21 +62,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       requireAuth(context);
       return;
     }
+    if (index == _currentIndex) return;
     HapticFeedback.selectionClick();
     setState(() {
       _currentIndex = index;
       if (index > _maxVisitedIndex) _maxVisitedIndex = index;
     });
+    // A tab switch is a deliberate, low-frequency navigation transition, so it is
+    // one of the few places an interstitial may fire. The AdManager decides
+    // whether it actually shows — this replaces the old route-blind one-minute
+    // Timer.periodic that could land on top of checkout or a payment sheet.
+    adManagerOf(context).showInterstitial(AdPlacement.interstitialTabSwitch);
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    interstitialAdService.load();
-    _adTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      interstitialAdService.tryShow();
-    });
     _loadProfilePhoto();
     _subscribeUnread();
   }
@@ -105,15 +107,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _adTimer?.cancel();
     _chatSub?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Resuming only warms the ad caches. It never presents an ad: the old
+    // implementation fired tryShow() on every resume from a timer mounted in
+    // this shell, which stayed mounted across every pushed route — so an
+    // interstitial could surface in the middle of a payment or KYC form.
     if (state == AppLifecycleState.resumed) {
-      interstitialAdService.tryShow();
+      adManagerOf(context).onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      adManagerOf(context).onAppPaused();
     }
   }
 

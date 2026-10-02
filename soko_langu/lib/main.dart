@@ -15,7 +15,6 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'package:safe_text/safe_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,13 +41,16 @@ import 'repositories/product_repository.dart';
 import 'services/notification_service.dart';
 import 'services/local_notification_service.dart';
 import 'services/balance_privacy_service.dart';
-import 'services/interstitial_ad_service.dart';
+import 'services/ads/ad_manager.dart';
+import 'services/seller_verification_service.dart';
 import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/media_audio_handler.dart';
 import 'services/receive_share_service.dart';
 import 'services/security_service.dart';
 import 'services/server_keep_alive.dart';
+import 'services/category_artwork/category_artwork_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
@@ -58,6 +60,12 @@ import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
 import 'widgets/premium_background.dart';
 
+// SharedPreferences keys for the optional Category Artwork Pack. The pack is
+// never required: these only decide whether the user is asked again.
+const String _kArtworkPromptDismissed = 'artwork_pack_prompt_dismissed';
+const String _kArtworkAutoChecked = 'artwork_pack_checked';
+const String _kArtworkLastCheckMs = 'artwork_pack_last_check_ms';
+
 // ---------------------------------------------------------------------------
 // Global singletons — scoped to app lifetime, lazily resolved where possible.
 // ---------------------------------------------------------------------------
@@ -65,7 +73,6 @@ import 'widgets/premium_background.dart';
 final NotificationService notificationService = NotificationService();
 final LocalizationService localizationService = LocalizationService();
 final SecurityService securityService = SecurityService();
-final InterstitialAdService interstitialAdService = InterstitialAdService();
 final ThemeManager themeManager = ThemeManager();
 final GoRouter appRouter = router_lib.buildRouter();
 
@@ -278,6 +285,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   }
 
   void _onAppStateAuthChange() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    // Ad eligibility is per-account. Handing the new uid to AdManager clears the
+    // previous account's persisted frequency counters and cached creatives, then
+    // re-reads trusted verification state, so a second account on this device can
+    // never inherit the first account's Blue Tick exemption.
+    unawaited(adManager.onAccountChanged(uid));
+
     if (app_state.appStateNotifier.isAuthenticated) {
       // resume any private deep link that was held for auth
       DeepLinkService.instance.consumePendingAfterAuth();
@@ -482,10 +496,56 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
       _setupNotificationCallbacks();
 
+      // Category artwork pack (optional post-install download). Runs after the
+      // app is usable and deliberately never blocks: local state is read
+      // first, the remote check is fire-and-forget, and every failure path
+      // leaves the marketplace on icon fallbacks.
+      _initArtworkPack(prefs);
+
+      // AdMob bootstrap. Fire-and-forget so a slow or failing SDK never delays
+      // the marketplace; AdManager gates every load on its own readiness flag.
+      unawaited(adManager.initialize());
+
       // Background services (fire-and-forget)
       _initBackgroundServices(prefs);
     } catch (e) {
       debugPrint('_initApp: error — $e');
+    }
+  }
+
+  /// Warms local artwork state, then schedules a low-frequency remote version
+  /// check. The first-launch prompt is shown by the home screen, not from here,
+  /// so the marketplace is already on screen when it appears.
+  Future<void> _initArtworkPack(SharedPreferences prefs) async {
+    final service = CategoryArtworkService.instance;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      service.setAppVersion(info.version);
+    } catch (_) {
+      // Without a version the minAppVersion gate cannot reject the pack, which
+      // is the safe direction to fail.
+    }
+    await service.initialize();
+
+    // Don't re-offer the prompt to someone who already declined.
+    service.setPromptDismissed(prefs.getBool(_kArtworkPromptDismissed) ?? false);
+
+    // A large pack must not trigger an implicit mobile-data download on every
+    // cold start; only a small incremental update is fetched in the background.
+    if ((prefs.getBool(_kArtworkAutoChecked) ?? false)) {
+      final last = prefs.getInt(_kArtworkLastCheckMs) ?? 0;
+      final elapsed = DateTime.now().millisecondsSinceEpoch - last;
+      if (elapsed < const Duration(hours: 12).inMilliseconds) return;
+    }
+
+    // Only stamp the throttle once a manifest was actually parsed; a failed check
+    // must be retried on the next launch instead of being suppressed for 12h.
+    if (service.remoteManifest != null) {
+      await prefs.setBool(_kArtworkAutoChecked, true);
+      await prefs.setInt(
+        _kArtworkLastCheckMs,
+        DateTime.now().millisecondsSinceEpoch,
+      );
     }
   }
 
@@ -631,14 +691,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         debugPrint('AppCheck: failed — $e');
       }
 
-      // AdMob
-      try {
-        await MobileAds.instance
-            .initialize()
-            .timeout(const Duration(seconds: 12));
-      } catch (e) {
-        debugPrint('AdMob: failed — $e');
-      }
+      // AdMob: bootstrapped by AdManager, which also gates every load on SDK
+      // readiness and user eligibility. Initializing the SDK here directly used
+      // to race the first banner load, so a creative could request before the
+      // SDK was ready.
 
       // Security (root/jailbreak detection)
       try {
@@ -713,6 +769,15 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         Provider.value(value: _authRepository),
         Provider.value(value: _onboardingService),
         ChangeNotifierProvider.value(value: _authNotifier),
+        // Trusted KYC / Blue Tick state. One instance feeds both the Blue Tick
+        // badges and — through AdManager — the ad exemption, so they can never
+        // disagree about whether a seller is verified.
+        ChangeNotifierProvider<SellerVerificationService>.value(
+          value: sellerVerificationService,
+        ),
+        // Single owner of every ad in the app. Screens resolve it with
+        // context.watch<AdManager>(); nothing else imports google_mobile_ads.
+        ChangeNotifierProvider<AdManager>.value(value: adManager),
       ],
       // M3 Expressive dynamic color: OS schemes (Android 12+ wallpaper,
       // desktop accents) flow into ThemeManager, which falls back to the

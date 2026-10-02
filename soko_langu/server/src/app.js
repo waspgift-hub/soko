@@ -33,6 +33,10 @@ const adminRouter = require('./modules/admin/routes');
 // gate (secret OR database-verified admin role) is the one that runs; the
 // secret-only `authenticateAdmin` on adminRouter is left untouched.
 const adminKycRouter = require('./modules/admin/kyc-documents-routes');
+// Advertising configuration and Blue Tick grant/revoke. Mounted before the
+// general admin router so these routes are reachable without going through the
+// broader admin surface; the router carries its own authenticateAdmin gate.
+const adsAdminRouter = require('./modules/ads/routes');
 const productRouter = require('./modules/products/routes');
 const referralRouter = require('./modules/referrals/routes');
 const moderationRouter = require('./modules/moderation/routes');
@@ -195,8 +199,13 @@ app.use(cors({
 // the old 10mb let an unauthenticated client force a 10mb JSON parse per request.
 app.use(express.json({ limit: '1mb' }));
 
-// Request timeout
+// Request timeout + start timestamp.
+//
+// `_startTime` is recorded here (before any route work) and consumed by both
+// the metrics middleware and the error handler, so a latency number and the log
+// line for the same failure always agree.
 app.use((req, res, next) => {
+  req._startTime = Date.now();
   res.setTimeout(20000, () => {
     jsonError(res, { status: 504, code: 'REQUEST_TIMED_OUT', message: 'Request timed out' });
   });
@@ -319,6 +328,7 @@ app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/share', sharingRouter);
 app.use('/api/v1/trust', trustRouter);
 app.use('/api/v1/admin/kyc', adminKycRouter);
+app.use('/api/v1/admin', adsAdminRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/products', productRouter);
 app.use('/api/v1/referrals', referralRouter);
@@ -385,13 +395,53 @@ app.use((req, res) => {
 });
 
 // Error handler
+//
+// Every line is correlated by `requestId`, which the client already receives in
+// the error envelope (utils/http.js:14). Before this, the handler logged only
+// `err.message`, so a user reporting "it failed, here is my ID SF-abc123" could
+// not be matched to a single line in the logs. The ID is now the first field.
 app.use((err, req, res, next) => {
-  console.error('[ERROR]', err.message);
+  const startedAt = req._startTime || Date.now();
+  const durationMs = Date.now() - startedAt;
+  const status = err.status || err.statusCode || 500;
+
+  console.error(
+    JSON.stringify({
+      level: 'error',
+      requestId: req.id || null,
+      method: req.method,
+      path: req.originalUrl || req.url,
+      status,
+      errorName: err.name || 'Error',
+      // The message can contain an operator id or a provider payload; it is
+      // the single most useful field for triage and this stream is not shipped
+      // to clients, so it stays in full.
+      message: err.message,
+      durationMs,
+      ...(err.code ? { code: err.code } : {}),
+      ...(err.lockReason ? { lockReason: err.lockReason } : {}),
+      ...(process.env.NODE_ENV !== 'production' && err.stack
+        ? { stack: err.stack.split('\n').slice(0, 6).join('\n') }
+        : {}),
+    }),
+  );
+
+  // A lock or Redis outage is transient by nature: tell the client to retry
+  // instead of showing a generic failure.
+  if (err.code === 'LOCK_UNAVAILABLE' || err.code === 'REDIS_UNAVAILABLE') {
+    res.setHeader('Retry-After', '5');
+  }
+
   const isDev = config.nodeEnv === 'development';
   jsonError(res, {
-    status: err.status || 500,
+    status,
     code: err.code || 'INTERNAL_ERROR',
-    message: isDev ? err.message : 'Internal server error',
+    message:
+      status === 503 && !isDev
+        ? 'Service temporarily unavailable, please retry'
+        : isDev
+          ? err.message
+          : 'Internal server error',
   });
 });
 

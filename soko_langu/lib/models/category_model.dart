@@ -3,32 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/marketplace_taxonomy.dart';
 import '../utils/category_icons.dart';
 
-/// Bundled category artwork. Drop a photo at the matching path to replace
-/// the icon fallback; missing files fall back to icons automatically.
-class CategoryArtwork {
-  static const _dir = 'assets/images/categories';
-  static const electronics = '$_dir/electronics.jpg';
-  static const computers = '$_dir/computers.jpg';
-  static const phones = '$_dir/phones.jpg';
-  static const fashion = '$_dir/fashion.jpg';
-  static const shoesBags = '$_dir/shoes_bags.jpg';
-  static const health = '$_dir/health.jpg';
-  static const homeGarden = '$_dir/home_garden.jpg';
-  static const kitchen = '$_dir/kitchen.jpg';
-  static const automotive = '$_dir/automotive.jpg';
-  static const building = '$_dir/building.jpg';
-  static const agriculture = '$_dir/agriculture.jpg';
-  static const food = '$_dir/food.jpg';
-  static const maternal = '$_dir/maternal.jpg';
-  static const sports = '$_dir/sports.jpg';
-  static const books = '$_dir/books.jpg';
-  static const jewelry = '$_dir/jewelry.jpg';
-  static const solar = '$_dir/solar.jpg';
-  static const hobbies = '$_dir/hobbies.jpg';
-  static const pets = '$_dir/pets.jpg';
-  static const services = '$_dir/services.jpg';
-}
-
 class Category {
   final String id;
   final String name;

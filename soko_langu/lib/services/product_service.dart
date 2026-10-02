@@ -12,6 +12,7 @@ import 'api_config.dart';
 import 'product_api.dart';
 import 'localization_service.dart';
 import '../utils/network_error.dart';
+import 'local_cache_service.dart';
 
 const List<String> knownBrands = [
   'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell',
@@ -70,6 +71,48 @@ class ProductService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final ProductApiClient _api = ProductApiClient();
+
+  // Many widgets call `ProductService()` inside build() and then pass the result
+  // to a StreamBuilder. A new instance per build meant any per-instance cache was
+  // always cold, so the HTTP-backed `stream*` methods below issued one API request
+  // per rebuild. One shared instance keeps those caches warm.
+  static ProductService? _shared;
+
+  factory ProductService() => _shared ??= ProductService._internal();
+
+  ProductService._internal();
+
+  /// A cached, replaying single-value stream keyed by seller.
+  ///
+  /// The HTTP path is one request, not a live listener, so the result is memoised
+  /// and replayed to later subscribers. Without this, opening a seller profile
+  /// re-fetched their whole catalogue on every rebuild.
+  final Map<String, Stream<List<Product>>> _sellerProductStreams = {};
+
+  Stream<List<Product>> _cachedSellerProducts(
+    String sellerId,
+    Future<List<Product>> Function() fetch,
+  ) {
+    return _sellerProductStreams.putIfAbsent(sellerId, () {
+      final ctrl = StreamController<List<Product>>.broadcast();
+      List<Product>? last;
+      fetch().then((v) {
+        last = v;
+        if (!ctrl.isClosed) ctrl.add(v);
+      }).catchError((_) {
+        // Leave the widget on its loading/empty state rather than emitting an
+        // error that StreamBuilder would render as a crash.
+      });
+      // Replay for a widget that mounts after the fetch already resolved.
+      final originalOnListen = ctrl.onListen;
+      ctrl.onListen = () {
+        originalOnListen?.call();
+        final snapshot = last;
+        if (snapshot != null) scheduleMicrotask(() => ctrl.add(snapshot));
+      };
+      return ctrl.stream;
+    });
+  }
 
   Future<String> uploadImage(XFile xfile) async {
     return MediaService.uploadImage(xfile, folder: 'products', owner: MediaOwner.product);
@@ -159,7 +202,13 @@ class ProductService {
       step = 'save-product';
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
-      bool sellerKycApproved = true;
+      // Mirrors the verified KYC state already read above. This used to be
+      // hardcoded `true`, so every newly listed product shipped with
+      // sellerKycApproved:true and rendered a green tick for a seller who had
+      // never been verified. It is a denormalised copy of a server-owned flag
+      // for search/badging only — the authoritative Blue Tick is resolved from
+      // trusted state by SellerVerificationService, never from this field.
+      final bool sellerKycApproved = kycApproved;
 
       if (userDoc.exists) {
         final data = userDoc.data()!;
@@ -191,6 +240,9 @@ class ProductService {
             imageMetadata: imageMetadata,
             videoUrl: resolvedVideoUrl,
           );
+          // Invalidate on the API path too, not just the Firestore fallback —
+          // the listing is new either way.
+          LocalCacheService.invalidateSearchCache();
           return id;
         } catch (apiError) {
           // Rescue path: a broken/partial API write falls back to the legacy
@@ -199,6 +251,10 @@ class ProductService {
         }
       }
 
+      // A new listing changes what search and the feed should return, so drop
+      // the cached snapshot. Must happen before the return that ends the
+      // method — placed after it, this was unreachable dead code.
+      LocalCacheService.invalidateSearchCache();
       return await _writeProduct(
         user.uid, name, description, price, currency, imageUrls,
         category, subcategory, stock, sellerName, sellerPhone,
@@ -790,6 +846,100 @@ class ProductService {
       _sortByBoosted(products);
       return products;
     });
+}
+  
+  /// Firestore-paginated query using [categoryId] (Firestore doc ID = permanent UUID)
+  /// as the canonical identifier. Survives category-name changes.
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProductsByCategoryId(
+    String categoryId, {
+    String? subcategory,
+    int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    var query = _db
+        .collection("products")
+        .where('categoryId', isEqualTo: categoryId)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (subcategory != null) {
+      query = query.where('subcategory', isEqualTo: subcategory);
+    }
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    final snapshot = await query.get();
+    final products = snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .toList();
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
+  }
+
+  /// Live products for a category, keyed on the permanent [categoryId]
+  /// (Firestore doc ID) instead of the display name, so renaming a category
+  /// never empties the page. [aliases] carries legacy name spellings for rows
+  /// tagged before the id existed, keeping those listings reachable.
+  Stream<List<Product>> getProductsByCategoryId(
+    String categoryId, {
+    Set<String>? aliases,
+  }) {
+    final categories = <String>{categoryId, ...?aliases}.toList();
+    final firestore = _db
+        .collection("products")
+        .where('categoryId', whereIn: categories)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Product.fromFirestore(doc))
+            .toList());
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
+  }
+
+  /// Firestore-paginated query using [categoryId] + optional subcategory,
+  /// with alias support for legacy category names.
+  Stream<List<Product>> getProductsByCategoryAndSubcategoryId(
+    String categoryId, {
+    String? subcategory,
+    Set<String>? categoryAliases,
+    Set<String>? subcategoryAliases,
+  }) {
+    // Legacy rows stored the category name alongside the id, so aliases are
+    // unioned in to catch listings written before the id existed.
+    final categories = <String>{categoryId, ...?categoryAliases}.toList();
+    // Drop the null: a `whereIn` list must hold only real values, and a null
+    // entry would match docs whose subcategory is unset instead of meaning
+    // "do not filter by subcategory".
+    final subcategories = <String>{
+      ...?subcategoryAliases,
+      if (subcategory != null && subcategory.isNotEmpty) subcategory,
+    }.toList();
+
+    var query = _db
+        .collection("products")
+        .where('categoryId', whereIn: categories)
+        .where('isActive', isEqualTo: true);
+    if (subcategories.isNotEmpty) {
+      query = query.where('subcategory', whereIn: subcategories);
+    }
+    final firestore = query
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+    });
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
   }
 
   Stream<List<Product>> searchProducts(String query) {
@@ -947,13 +1097,13 @@ class ProductService {
 
   Stream<List<Product>> getProductsBySeller(String sellerId) {
     if (ApiConfig.kUseProductsApi) {
-      return Stream.fromFuture(() async {
+      return _cachedSellerProducts(sellerId, () async {
         try {
           return await _api.fetchSellerProducts(sellerId);
         } catch (_) {
           return <Product>[];
         }
-      }());
+      });
     }
     return _db
         .collection("products")
@@ -1116,6 +1266,8 @@ class ProductService {
           originalError: e,
         );
     }
+    // Invalidate search cache so dependent screens see updated products
+    LocalCacheService.invalidateSearchCache();
   }
 
   Future<void> deleteProduct(String productId) async {
@@ -1143,6 +1295,8 @@ class ProductService {
         final body = jsonDecode(response.body);
         throw Exception(body['error'] ?? 'Delete failed');
       }
+      // Invalidate search cache so homepage/feed/search reflect product removal
+      LocalCacheService.invalidateSearchCache();
     } catch (e) {
       throw NetworkError(
           message: "Delete failed: $e",
