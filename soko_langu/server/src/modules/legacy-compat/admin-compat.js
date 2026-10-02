@@ -935,26 +935,33 @@ router.post('/kyc/review', async (req, res) => {
 // ---- KYC all statuses (admin) ----
 // ---- KYC all, filterable by state + searchable + paginated ----
 //
-// The panel needs to review every state, not just pending, and it needs to
-// find a specific applicant. Firestore cannot search across displayName/email
-// and kyc.status in one query, so: narrow by state first, then filter the page
-// in JS, and keep scanning while paging so a small page slice cannot silently
-// hide matches that sit further down. This trades a bounded scan for a
-// predictable answer — the admin queue is small and human-paced.
+// The panel needs to review every state and find a specific applicant.
+//
+// Firestore cannot search across displayName/email and kyc.status in one query,
+// and ordering by kyc.submittedAt alongside the kyc.status 'in' filter needs a
+// composite index that does not exist — that combination fails the request
+// outright with FAILED_PRECONDITION. So: keep the single-field filter (which
+// uses the built-in index), page it with offset, sort in JS, then slice. The
+// queue is small and human-paced, so a bounded read beats an index migration
+// that has to be built before the panel works again.
 const KYC_STATUSES = ['pending', 'approved', 'rejected', 'revoked'];
 const KYC_PAGE_SCAN = 200;
+const KYC_MAX_SCAN = 2000;
 
-function kycMatches(doc, needle) {
+function kycTimeMs(v) {
+  if (!v) return 0;
+  if (typeof v === 'object') {
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    if (typeof v.toDate === 'function') return v.toDate().getTime();
+    if (typeof v._seconds === 'number') return v._seconds * 1000;
+  }
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function kycMatches(d, needle) {
   if (!needle) return true;
-  const d = doc.data();
-  const hay = [
-    doc.id,
-    d.displayName,
-    d.email,
-    d.phone,
-    d.kyc && d.kyc.fullName,
-    d.kyc && d.kyc.idNumber,
-  ]
+  const hay = [d.uid, d.displayName, d.email, d.phone, d.kyc && d.kyc.fullName, d.kyc && d.kyc.idNumber]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -962,41 +969,46 @@ function kycMatches(doc, needle) {
 }
 
 async function collectKyc({ status, q, limit, skip }) {
-  const base = db.collection('users').where('kyc.status', 'in', KYC_STATUSES).orderBy('kyc.submittedAt', 'desc');
   const needle = String(q || '').trim().toLowerCase();
-  const want = Number(limit) || 50;
+  const want = Math.max(1, Number(limit) || 50);
   const offset = Math.max(0, Number(skip) || 0);
-  const out = [];
-  let scanned = 0;
-  let last = null;
-  let total = 0;
+  const matched = [];
 
-  // Walk in pages of KYC_PAGE_SCAN. `scanned` bounds the work; `total` counts
-  // everything that matched so the pager can report an honest total.
-  while (scanned < 4000) {
-    let q2 = base.limit(KYC_PAGE_SCAN);
-    if (last) q2 = q2.startAfter(last);
-    const snap = await q2.get();
+  let scanned = 0;
+  while (scanned < KYC_MAX_SCAN) {
+    const take = Math.min(KYC_PAGE_SCAN, KYC_MAX_SCAN - scanned);
+    const snap = await db.collection('users')
+      .where('kyc.status', 'in', KYC_STATUSES)
+      .offset(scanned)
+      .limit(take)
+      .get();
     scanned += snap.docs.length;
     for (const doc of snap.docs) {
-      if (status && status !== 'all' && doc.data().kyc.status !== status) continue;
-      if (!kycMatches(doc, needle)) continue;
-      total++;
-      if (out.length >= offset && out.length < offset + want) {
-        out.push({
-          uid: doc.id,
-          displayName: doc.data().displayName || '',
-          email: doc.data().email || '',
-          phone: doc.data().phone || '',
-          kyc: doc.data().kyc || {},
-        });
-      }
+      const d = doc.data();
+      if (status && status !== 'all' && d.kyc.status !== status) continue;
+      const row = {
+        uid: doc.id,
+        displayName: d.displayName || '',
+        email: d.email || '',
+        phone: d.phone || '',
+        kyc: d.kyc || {},
+        _t: kycTimeMs(d.kyc && d.kyc.submittedAt),
+      };
+      if (!kycMatches(row, needle)) continue;
+      matched.push(row);
     }
-    if (snap.docs.length < KYC_PAGE_SCAN) break;
-    last = snap.docs[snap.docs.length - 1];
+    if (snap.docs.length < take) break;
   }
 
-  return { rows: out, total };
+  matched.sort((a, b) => b._t - a._t);
+  const rows = matched.slice(offset, offset + want).map((r) => ({
+    uid: r.uid,
+    displayName: r.displayName,
+    email: r.email,
+    phone: r.phone,
+    kyc: r.kyc,
+  }));
+  return { rows, total: matched.length, truncated: scanned >= KYC_MAX_SCAN };
 }
 
 router.get('/kyc/all', async (req, res) => {
@@ -1004,14 +1016,18 @@ router.get('/kyc/all', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const { rows, total } = await collectKyc({
+    const { rows, total, truncated } = await collectKyc({
       status: req.query.status,
       q: req.query.q,
       limit: req.query.limit,
       skip: req.query.skip,
     });
-    res.json({ all: rows, total, states: KYC_STATUSES });
+    res.json({ all: rows, total, states: KYC_STATUSES, truncated: Boolean(truncated) });
   } catch (e) {
+    // Log the real cause: a bare 500 here hid a Firestore index requirement
+    // (FAILED_PRECONDITION on kyc.status + kyc.submittedAt) that only surfaced
+    // as "Internal server error" in the panel.
+    console.error('[KYC][LIST]', e && e.code ? e.code : '', e && e.message ? e.message : e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
