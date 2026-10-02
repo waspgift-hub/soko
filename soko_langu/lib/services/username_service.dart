@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Username / handle validation + availability helpers.
 ///
@@ -13,6 +14,7 @@ class UsernameService {
   static final instance = UsernameService._();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   static const int minLength = 3;
   static const int maxLength = 20;
@@ -91,8 +93,11 @@ class UsernameService {
     final err = validate(raw);
     if (err != null) return false;
     try {
+      // `userPublic`, not `users`: these are collection-wide equality queries, so
+      // firestore.rules denies them on the private doc (owner-or-admin only).
+      // The projection carries username / usernameLower for exactly this lookup.
       final snap = await _db
-          .collection('users')
+          .collection('userPublic')
           .where('usernameLower', isEqualTo: norm)
           .limit(5)
           .get();
@@ -105,7 +110,7 @@ class UsernameService {
       // fallback to legacy username field
       try {
         final snap2 = await _db
-            .collection('users')
+            .collection('userPublic')
             .where('username', isEqualTo: norm)
             .limit(5)
             .get();
@@ -139,10 +144,13 @@ class UsernameService {
   Future<String?> resolveToUid(String raw) async {
     final norm = normalize(raw);
     if (norm.isEmpty) return null;
-    // first try as usernameLower
+    // Resolves against the public projection. A username is public data by
+    // definition (it is the handle people share), so this does not need — and
+    // under the tightened rules must not use — read access to another user's
+    // private document.
     try {
       final snap = await _db
-          .collection('users')
+          .collection('userPublic')
           .where('usernameLower', isEqualTo: norm)
           .limit(1)
           .get();
@@ -150,15 +158,14 @@ class UsernameService {
     } catch (_) {}
     try {
       final snap2 = await _db
-          .collection('users')
+          .collection('userPublic')
           .where('username', isEqualTo: norm)
           .limit(1)
           .get();
       if (snap2.docs.isNotEmpty) return snap2.docs.first.id;
     } catch (_) {}
-    // fallback: maybe raw is already uid
-    final doc = await _db.collection('users').doc(raw).get();
-    if (doc.exists) return raw;
+    // fallback: maybe raw is already uid. Only the caller's own doc is readable.
+    if (raw == _auth.currentUser?.uid) return raw;
     return null;
   }
 }

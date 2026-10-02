@@ -24,19 +24,15 @@ function idx(collectionGroup, fields) {
 const additions = [];
 
 // ── userPublic ────────────────────────────────────────────────────────────
-// Client user search does a prefix range scan on these three fields
-// (lib/services/user_service.dart searchUsers). Single-field range queries are
-// auto-indexed, but they are declared here so the requirement is explicit in
-// the repository rather than relying on out-of-band behaviour.
-for (const f of ['usernameLower', 'username', 'displayNameLower']) {
-  if (idx('userPublic', [{ fieldPath: f, order: 'ASCENDING' }])) {
-    additions.push({
-      collectionGroup: 'userPublic',
-      queryScope: 'COLLECTION',
-      fields: [{ fieldPath: f, order: 'ASCENDING' }],
-    });
-  }
-}
+// Intentionally nothing. Client user search (lib/services/user_service.dart
+// searchUsers) prefix-scans usernameLower / username / displayNameLower, and
+// those need NO composite index: a single-field range query is served by
+// Firestore's automatic single-field indexes.
+//
+// Declaring them anyway is not merely redundant — `firebase deploy` rejects the
+// whole index file with:
+//   "this index is not necessary, configure using single field index controls"
+// so an unnecessary entry blocks every other index in the file from deploying.
 
 // ── money-path list queries the pushed-down store now issues ──────────────
 // firestore-store pushes `where` + `orderBy` to Firestore, so each of these

@@ -815,36 +815,6 @@
       ]
     },
     {
-      "collectionGroup": "userPublic",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "usernameLower",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userPublic",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "username",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userPublic",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "displayNameLower",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "walletTransactions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -957,16 +927,6 @@
       ]
     },
     {
-      "collectionGroup": "orders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "orderNumber",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "payments",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1005,16 +965,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "payoutTransactions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "withdrawalId",
-          "order": "ASCENDING"
         }
       ]
     },
@@ -1066,6 +1016,38 @@
       "fields": [
         {
           "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "campaignEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "eventType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "campaignEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "eventType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ipAddress",
           "order": "ASCENDING"
         },
         {

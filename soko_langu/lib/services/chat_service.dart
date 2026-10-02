@@ -32,7 +32,12 @@ class ChatService {
 
   Future<String> getUserName(String uid) async {
     try {
-      final doc = await _db.collection('users').doc(uid).get();
+      // Reads `userPublic/{uid}`, not `users/{uid}`. A chat partner's display
+      // name is marketplace-visible data, and firestore.rules scopes the private
+      // doc to its owner — so this read was guaranteed to fail for every
+      // conversation with someone else, silently degrading the chat list to raw
+      // uid prefixes.
+      final doc = await _db.collection('userPublic').doc(uid).get();
       if (!doc.exists) return uid.substring(0, 8);
       final data = doc.data()!;
       return (data['displayName'] as String?)?.trim() ??
