@@ -26,6 +26,8 @@ import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/soko_vibe_watermark.dart';
 import '../../widgets/soko_widgets.dart';
+import '../../widgets/ds/ds.dart';
+import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -53,8 +55,13 @@ class _SearchScreenState extends State<SearchScreen>
   SearchResponse? _response;
   bool _loading = false;
   bool _hasSearched = false;
+  bool _searchFailed = false;
   String _selectedTab = 'all';
   Timer? _debounce;
+
+  // Monotonic request id. Every search bumps it; a response is applied only if
+  // it still matches, so a slow earlier query can never overwrite a newer one.
+  int _searchSeq = 0;
 
   // AI search summary (G10): DB-grounded, async, never blocks results.
   String? _aiSummary;
@@ -203,7 +210,7 @@ class _SearchScreenState extends State<SearchScreen>
     final text = _searchCtrl.text.trim();
     if (text.length >= 2) {
       _debounce = Timer(
-        const Duration(milliseconds: 200),
+        const Duration(milliseconds: 350),
         () => _fetchSuggestions(text),
       );
     } else {
@@ -225,9 +232,11 @@ class _SearchScreenState extends State<SearchScreen>
     if (q.isEmpty) return;
 
     _focusNode.unfocus();
+    final seq = ++_searchSeq;
     setState(() {
       _loading = true;
       _hasSearched = true;
+      _searchFailed = false;
       _suggestions = [];
       _sortKey = 'best'; // new query → fresh server ranking
     });
@@ -241,15 +250,20 @@ class _SearchScreenState extends State<SearchScreen>
         type: _selectedTab,
         pageSize: 30,
       );
-      if (mounted) {
-        setState(() {
-          _response = resp;
-          _loading = false;
-        });
-        _maybeLoadAiSummary(resp);
-      }
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _response = resp;
+        _loading = false;
+        _searchFailed = false;
+      });
+      _maybeLoadAiSummary(resp);
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && seq == _searchSeq) {
+        setState(() {
+          _loading = false;
+          _searchFailed = true;
+        });
+      }
     }
   }
 
@@ -441,6 +455,9 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _clearField() {
     _searchCtrl.clear();
+    // Invalidate in-flight responses so clearing mid-search cannot repopulate
+    // the field the user just emptied.
+    _searchSeq++;
     setState(() {
       _suggestions = [];
       _response = null;
@@ -634,6 +651,10 @@ class _SearchScreenState extends State<SearchScreen>
       return const Center(child: GoogleLoadingPage());
     }
 
+    if (_searchFailed && _response == null) {
+      return _buildSearchError(cs);
+    }
+
     if (_suggestions.isNotEmpty && !_hasSearched) {
       return _buildSuggestions(cs);
     }
@@ -655,6 +676,41 @@ class _SearchScreenState extends State<SearchScreen>
         await _loadMostRated();
       },
       child: _buildInitialState(cs),
+    );
+  }
+
+  /// A failed search previously fell through to the discovery panel, which
+  /// looks like results for the query. Surface the failure with a retry instead.
+  Widget _buildSearchError(ColorScheme cs) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppInsets.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off, size: 48, color: cs.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              context.tr('search_failed_title'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.tr('search_failed_body'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            DsButton(
+              label: context.tr('retry'),
+              icon: Icons.refresh_rounded,
+              height: 48,
+              onPressed: _performSearch,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
@@ -162,56 +163,60 @@ class AuthOtpFieldState extends State<AuthOtpField>
               return SizedBox(
                 width: widget.boxSize,
                 height: widget.boxSize * 1.25,
-                child: AnimatedContainer(
-                  duration: Motion.cardPress,
-                  curve: Curves.easeOutCubic,
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                      color: borderColor,
-                      width: 1.5,
-                    ),
-                    boxShadow: widget.errorTick > 0
-                        ? [BoxShadow(color: cs.error.withValues(alpha: 0.18), blurRadius: 16)]
-                        : null,
-                  ),
-                  child: Focus(
-                    onKeyEvent: (node, event) {
-                      final isBackspace =
-                          event is KeyDownEvent &&
-                          event.logicalKey == LogicalKeyboardKey.backspace;
-                      if (isBackspace && _controllers[index].text.isEmpty) {
-                        _onBackspace(index);
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: TextField(
-                      controller: _controllers[index],
-                      focusNode: _focusNodes[index],
-                      enabled: widget.enabled,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      textAlign: TextAlign.center,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
-                      ],
-                      onChanged: (value) => _onChanged(index, value),
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0,
-                        color: cs.onSurface,
+                child: Semantics(
+                  label: context.trParams('otp_digit_position', {'n': '${index + 1}'}),
+                  textField: true,
+                  child: AnimatedContainer(
+                    duration: Motion.cardPress,
+                    curve: Curves.easeOutCubic,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: borderColor,
+                        width: 1.5,
                       ),
-                      decoration: const InputDecoration(
-                        counterText: '',
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
+                      boxShadow: widget.errorTick > 0
+                          ? [BoxShadow(color: cs.error.withValues(alpha: 0.18), blurRadius: 16)]
+                          : null,
+                    ),
+                    child: Focus(
+                      onKeyEvent: (node, event) {
+                        final isBackspace =
+                            event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.backspace;
+                        if (isBackspace && _controllers[index].text.isEmpty) {
+                          _onBackspace(index);
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        controller: _controllers[index],
+                        focusNode: _focusNodes[index],
+                        enabled: widget.enabled,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        textAlign: TextAlign.center,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
+                        onChanged: (value) => _onChanged(index, value),
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                          color: cs.onSurface,
+                        ),
+                        decoration: const InputDecoration(
+                          counterText: '',
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                        ),
                       ),
                     ),
                   ),

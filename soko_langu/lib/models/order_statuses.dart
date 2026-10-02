@@ -171,7 +171,8 @@ enum TrustStage {
   hold,
   logistics,
   verification,
-  settlement;
+  settlement,
+  terminal;
 
   /// i18n key shared with order_flow_screen for the stage label.
   String get labelKey => switch (this) {
@@ -182,7 +183,47 @@ enum TrustStage {
     TrustStage.logistics => 'phase_label_logistics',
     TrustStage.verification => 'phase_label_verification',
     TrustStage.settlement => 'phase_label_settlement',
+    // Reuses settlement label: terminal has no dedicated copy yet.
+    TrustStage.terminal => 'phase_label_settlement',
   };
+}
+
+/// Buyer can still pay (or retry) in these states.
+bool canPayForOrderStatus(String status) {
+  switch (canonicalStatusOf(status)) {
+    case OrderStatus.awaitingPayment:
+    case OrderStatus.awaitingEscrowPayment:
+    case OrderStatus.paymentPending:
+    case OrderStatus.paymentFailed:
+    case OrderStatus.quoted:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Buyer may open a dispute in escrow, transit, inspection or delivered.
+bool canDisputeForOrderStatus(String status) {
+  switch (canonicalStatusOf(status)) {
+    case OrderStatus.inEscrow:
+    case OrderStatus.escrowHeld:
+    case OrderStatus.sellerAccepted:
+    case OrderStatus.dispatched:
+    case OrderStatus.inTransit:
+    case OrderStatus.outForDelivery:
+    case OrderStatus.inspectionPeriod:
+    case OrderStatus.delivered:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Valid TZ mobile: 07xx/06xx (10 digits) or 2556x/2557x.
+bool isValidTzMobile(String raw) {
+  final digits = raw.replaceAll(RegExp(r'\D'), '');
+  final local = digits.startsWith('255') ? '0${digits.substring(3)}' : digits;
+  return RegExp(r'^0[67]\d{8}$').hasMatch(local);
 }
 
 /// Maps any known status (v2 or legacy) onto its position in the seven-stage
@@ -194,7 +235,6 @@ TrustStage trustStageOf(String status) {
     case OrderStatus.draft:
     case OrderStatus.pending:
     case OrderStatus.published:
-    case OrderStatus.cancelled:
       return TrustStage.initiation;
     case OrderStatus.addressRequired:
     case OrderStatus.awaitingShippingQuote:
@@ -209,8 +249,6 @@ TrustStage trustStageOf(String status) {
     case OrderStatus.paymentProcessing:
     case OrderStatus.paid:
     case OrderStatus.paymentFailed:
-    case OrderStatus.failed:
-    case OrderStatus.expired:
       return TrustStage.transaction;
     case OrderStatus.inEscrow:
     case OrderStatus.escrowHeld:
@@ -234,8 +272,13 @@ TrustStage trustStageOf(String status) {
     case OrderStatus.walletCredited:
     case OrderStatus.payoutPending:
     case OrderStatus.payoutComplete:
-    case OrderStatus.refunded:
       return TrustStage.settlement;
+    case OrderStatus.cancelled:
+    case OrderStatus.expired:
+    case OrderStatus.failed:
+    case OrderStatus.refunded:
+      // Terminal states get their own stage so stepper never shows step 0.
+      return TrustStage.terminal;
     default:
       return TrustStage.initiation;
   }

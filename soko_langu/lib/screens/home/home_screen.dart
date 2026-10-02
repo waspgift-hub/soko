@@ -717,10 +717,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   bool _onFeedScroll(ScrollNotification notification) {
+    // Brand and category views paginate through the same provider, which routes
+    // the fetch by its own filter state; gating on `_selectedBrand` here used
+    // to strand those lists after the first page.
     if (notification is ScrollUpdateNotification &&
         notification.metrics.axis == Axis.vertical &&
-        notification.metrics.extentAfter < 500 &&
-        _selectedBrand == null) {
+        notification.metrics.extentAfter < 500) {
       context.read<ProductFeedProvider>().loadNextPage();
     }
     return false;
@@ -884,8 +886,18 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ),
-      if (provider.isLoading)
-        SliverToBoxAdapter(
+      _buildPaginationFooter(provider, cs),
+    ];
+  }
+
+  /// Footer states for the infinite feed: spinner while a page is in flight, a
+  /// tappable retry when the page failed, and an end-of-feed marker so a dead
+  /// scroll position never looks like a hung screen.
+  Widget _buildPaginationFooter(ProductFeedProvider provider, ColorScheme cs) {
+    if (provider.isLoading) {
+      return SliverToBoxAdapter(
+        child: Semantics(
+          label: context.tr('loading_more'),
           child: Padding(
             padding: const EdgeInsets.all(AppInsets.lg),
             child: Center(
@@ -897,7 +909,40 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         ),
-    ];
+      );
+    }
+
+    if (provider.error != null) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(AppInsets.lg),
+          child: Center(
+            child: DsButton(
+              label: context.tr('retry'),
+              icon: Icons.refresh_rounded,
+              onPressed: provider.loadNextPage,
+              height: 48,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!provider.hasMore) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 100),
+          child: Center(
+            child: Text(
+              context.tr('end_of_feed'),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SliverToBoxAdapter(child: SizedBox(height: AppInsets.lg));
   }
 }
 

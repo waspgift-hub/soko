@@ -106,6 +106,38 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   StreamSubscription<List<Category>>? _categoriesSub;
 
+  bool get _hasUnsavedChanges {
+    return _nameController.text.trim().isNotEmpty ||
+        _descriptionController.text.trim().isNotEmpty ||
+        _priceController.text.trim().isNotEmpty ||
+        _newImages.isNotEmpty ||
+        _videoFile != null ||
+        _variants.isNotEmpty;
+  }
+
+  Future<bool> _confirmDiscard() async {
+    if (!_hasUnsavedChanges || _isEditing) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('discard_draft', 'Tupa rasimu?')),
+        content: Text(context.tr(
+            'discard_draft_body', 'Umejaza sehemu ya tangazo. Ukirudi nyuma, maelezo yatafutika.')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(context.tr('keep_editing', 'Endelea')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(context.tr('discard', 'Tupa')),
+          ),
+        ],
+      ),
+    );
+    return discard == true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -717,7 +749,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Block swipe-back loss: draft has images + long form, confirm first.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_saving) return;
+        if (await _confirmDiscard() && context.mounted) context.pop();
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text(
           _isEditing
@@ -1307,6 +1347,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

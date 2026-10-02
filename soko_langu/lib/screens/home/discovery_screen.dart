@@ -36,6 +36,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   StreamSubscription? _flashSub;
   FeedTab _tab = FeedTab.forYou;
   String _userLocation = '';
+  Stream<List<Product>>? _productStream;
 
   @override
   void initState() {
@@ -43,7 +44,19 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
+    _productStream = _productService.getProducts();
     _loadMeta();
+  }
+
+  /// Re-subscribes the product stream so pull-to-refresh actually re-queries
+  /// instead of only reloading the user's location.
+  void _reloadProducts() {
+    setState(() => _productStream = _productService.getProducts());
+  }
+
+  Future<void> _refresh() async {
+    _reloadProducts();
+    await _loadMeta();
   }
 
   Future<void> _loadMeta() async {
@@ -171,7 +184,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
           Container(height: 1, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.08)),
           Expanded(
             child: StreamBuilder<List<Product>>(
-              stream: _productService.getProducts(),
+              stream: _productStream,
               builder: (context, snap) {
                 if (snap.connectionState ==
                     ConnectionState.waiting) {
@@ -183,8 +196,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 final items = _forTab(snap.data ?? []);
                 if (items.isEmpty) return _emptyForTab(context);
                 return RefreshIndicator(
-                  onRefresh: () async =>
-                      setState(() => _loadMeta()),
+                  onRefresh: _refresh,
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
@@ -248,8 +260,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
           ),
           const SizedBox(height: 12),
           ElevatedButton(
-            onPressed: () => setState(() {}),
-            child: const Text('Try Again'),
+            // Re-subscribing is what actually retries the query; a bare
+            // setState left the failed stream in place and the button did
+            // nothing visible.
+            onPressed: _reloadProducts,
+            child: Text(context.tr('try_again')),
           ),
         ],
       ),

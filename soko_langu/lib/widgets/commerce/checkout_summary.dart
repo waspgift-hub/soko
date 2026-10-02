@@ -36,18 +36,24 @@ class CheckoutSummary extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _line(context, cs, 'Subtotal', context.formatPrice(subtotal)),
+          _line(context, cs, context.tr('subtotal'), context.formatPrice(subtotal)),
           if (delivery > 0) ...[
             const SizedBox(height: AppSpacing.s2),
-            _line(context, cs, 'Delivery', context.formatPrice(delivery)),
+            _line(context, cs, context.tr('delivery'), context.formatPrice(delivery)),
           ],
           if (serviceFee > 0) ...[
             const SizedBox(height: AppSpacing.s2),
-            _line(context, cs, 'Service fee', context.formatPrice(serviceFee)),
+            _line(context, cs, context.tr('service_fee'), context.formatPrice(serviceFee)),
           ],
           if (discount > 0) ...[
             const SizedBox(height: AppSpacing.s2),
-            _line(context, cs, 'Discount', '-${context.formatPrice(discount)}', valueColor: cs.successGreen),
+            _line(
+              context,
+              cs,
+              context.tr('discount'),
+              '-${context.formatPrice(discount)}',
+              valueColor: cs.successGreen,
+            ),
           ],
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.s3),
@@ -56,7 +62,7 @@ class CheckoutSummary extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total payable', style: TextStyle(fontSize: AppFontSize.md, fontWeight: FontWeight.w700, color: cs.onSurface)),
+              Text(context.tr('total_payable'), style: TextStyle(fontSize: AppFontSize.md, fontWeight: FontWeight.w700, color: cs.onSurface)),
               Text(
                 context.formatPrice(total),
                 style: TextStyle(fontSize: AppFontSize.xl, fontWeight: FontWeight.w700, color: cs.primary),

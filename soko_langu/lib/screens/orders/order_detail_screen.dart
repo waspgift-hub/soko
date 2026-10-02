@@ -943,6 +943,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       TrustStage.logistics: Icons.local_shipping_outlined,
       TrustStage.verification: Icons.verified_outlined,
       TrustStage.settlement: Icons.account_balance_wallet_outlined,
+      TrustStage.terminal: Icons.block_outlined,
     };
     Color stageColor(TrustStage s) => switch (s) {
       TrustStage.initiation => cs.onSurfaceVariant,
@@ -952,6 +953,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       TrustStage.logistics => cs.tertiary,
       TrustStage.verification => cs.successGreen,
       TrustStage.settlement => cs.successGreen,
+      TrustStage.terminal => cs.error,
     };
     final steps = TrustStage.values
         .map(
@@ -3086,7 +3088,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     if (!await RateLimiter.canProceed(action: 'pay_order', cooldown: const Duration(seconds: 10))) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please wait before trying again')),
+        SnackBar(content: Text(context.tr('retry_cooldown'))),
       );
       return;
     }
@@ -3096,8 +3098,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       setState(() => _phoneError = context.tr('phone_validator_empty'));
       return;
     }
-    final digits = raw.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 9) {
+    // Strict TZ check so ClickPesa never receives 255123... garbage.
+    if (!isValidTzMobile(raw)) {
       setState(() => _phoneError = context.tr('phone_validator_invalid'));
       return;
     }

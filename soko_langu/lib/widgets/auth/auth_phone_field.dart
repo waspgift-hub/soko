@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 
@@ -105,7 +106,8 @@ class AuthPhoneFieldState extends State<AuthPhoneField> {
                   controller: widget.controller,
                   focusNode: _focus,
                   keyboardType: TextInputType.phone,
-                  textInputAction: widget.textInputAction,
+                  textInputAction: widget.textInputAction ?? TextInputAction.next,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onFieldSubmitted: widget.onFieldSubmitted,
                   validator: widget.validator,
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),

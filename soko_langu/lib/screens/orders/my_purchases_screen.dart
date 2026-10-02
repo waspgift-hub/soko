@@ -873,8 +873,26 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
 
   String _escrowLabel(String status) {
     switch (canonicalStatusOf(status)) {
+      case OrderStatus.awaitingPayment:
+      case OrderStatus.awaitingEscrowPayment:
+      case OrderStatus.paymentPending:
+        return context.tr('awaiting_payment_label');
+      case OrderStatus.quoted:
+      case OrderStatus.pendingShippingFee:
+      case OrderStatus.shippingFeeReview:
+        return context.tr('quoted_label');
+      case OrderStatus.awaitingShippingQuote:
+      case OrderStatus.addressRequired:
+        return context.tr('waiting_for_seller_label');
+      case OrderStatus.paymentFailed:
+      case OrderStatus.failed:
+        return context.tr('failed');
       case OrderStatus.inEscrow:
         return context.tr('in_escrow_label');
+      case OrderStatus.disputed:
+        return context.tr('disputed_label');
+      case OrderStatus.refundPending:
+        return context.tr('refund_pending_label');
       case OrderStatus.dispatched:
       case OrderStatus.inTransit:
       case OrderStatus.outForDelivery:
@@ -886,10 +904,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       case OrderStatus.payoutPending:
       case OrderStatus.payoutComplete:
         return context.tr('delivered_and_completed');
-      case OrderStatus.failed:
-        return context.tr('failed');
       case OrderStatus.refunded:
         return context.tr('refunded');
+      case OrderStatus.cancelled:
+        return context.tr('cancelled_label');
+      case OrderStatus.expired:
+        return context.tr('expired_label');
       default:
         return context.tr('pending');
     }
@@ -1568,13 +1588,9 @@ class _OrderGlassCard extends StatelessWidget {
     double platformFee = 0,
     double processingFee = 0,
   }) {
-    final canPay = status == 'awaiting_payment';
+    final canPay = canPayForOrderStatus(status);
     final canConfirm = status == 'delivered' || status == 'dispatched';
-    final canDispute =
-        status == 'paid_escrow_held' ||
-        status == 'escrow_hold' ||
-        status == 'dispatched' ||
-        status == 'delivered';
+    final canDispute = canDisputeForOrderStatus(status);
     final canCancel = status == 'paid_escrow_held' || status == 'escrow_hold';
     final canDelete =
         status == 'pending' ||

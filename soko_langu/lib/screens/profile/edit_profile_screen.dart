@@ -284,9 +284,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     )) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait before requesting another code'),
-          ),
+          SnackBar(content: Text(context.tr('otp_cooldown'))),
         );
       return;
     }

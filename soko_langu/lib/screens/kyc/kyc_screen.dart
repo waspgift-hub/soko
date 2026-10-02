@@ -931,9 +931,8 @@ class _KycScreenState extends State<KycScreen> {
     return TextButton(
       onPressed: onVerify,
       style: TextButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        minimumSize: const Size(48, 48),
       ),
       child: Text(context.tr('verify')),
     );

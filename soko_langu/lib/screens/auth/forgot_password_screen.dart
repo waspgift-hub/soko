@@ -10,6 +10,7 @@ import '../../services/localization_service.dart';
 import '../../app/routes.dart';
 import '../../utils/rate_limiter.dart';
 import '../../utils/validators.dart';
+import '../../models/order_statuses.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -29,6 +30,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String? _serverError;
   int _methodIndex = 0; // 0 = email, 1 = phone
   bool _otpSent = false;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
   // ignore: unused_field
   bool _otpVerified = false;
 
@@ -52,8 +55,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   String? _phoneValidator(String? v) {
     if (v == null || v.trim().isEmpty) return context.tr('phone_validator_empty');
-    final digits = v.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 9) return context.tr('phone_validator_invalid');
+    if (!isValidTzMobile(v.trim())) return context.tr('phone_validator_invalid');
     return null;
   }
 
@@ -111,7 +113,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Please wait before requesting another code')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('otp_cooldown'))));
       return;
     }
     setState(() {
@@ -328,6 +330,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       validator: _phoneValidator,
                     ),
                   ] else ...[
+                    // Keep sent-to number visible so user knows where OTP went.
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.phone_android, size: 18, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _phoneController.text.trim(),
+                              style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurface),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => setState(() => _otpSent = false),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              tapTargetSize: MaterialTapTargetSize.padded,
+                            ),
+                            child: Text(context.tr('change_number', 'Badili')),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _otpController,
                       keyboardType: TextInputType.number,
@@ -356,7 +387,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _newPasswordController,
-                      obscureText: true,
+                      obscureText: _obscureNew,
                       textInputAction: TextInputAction.next,
                       validator: Validators.password,
                       decoration: InputDecoration(
@@ -364,6 +395,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         prefixIcon: Icon(
                           Icons.lock_outlined,
                           color: cs.onSurface.withValues(alpha: 0.59),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                          onPressed: () => setState(() => _obscureNew = !_obscureNew),
                         ),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
@@ -384,7 +419,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _confirmPasswordController,
-                      obscureText: true,
+                      obscureText: _obscureConfirm,
                       textInputAction: TextInputAction.done,
                       validator: (v) {
                         if (v != _newPasswordController.text) {
@@ -397,6 +432,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         prefixIcon: Icon(
                           Icons.lock_outlined,
                           color: cs.onSurface.withValues(alpha: 0.59),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                          onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                         ),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),

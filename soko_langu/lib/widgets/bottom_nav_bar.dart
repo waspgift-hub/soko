@@ -6,17 +6,17 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/home/discovery_screen.dart';
 import '../screens/chat/chat_inbox_screen.dart';
-import '../screens/home/add_product_screen.dart';
 import '../services/user_service.dart';
 import '../services/chat_service.dart';
 import '../models/chat_room.dart';
-import '../app/app_transitions.dart';
+import '../app/routes.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
 import '../theme/neumorphic.dart';
 import '../utils/responsive.dart';
 import 'auth_wall.dart';
 import 'profile_mini_player.dart';
+import 'package:go_router/go_router.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -420,9 +420,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _openAddProduct() {
     HapticFeedback.mediumImpact();
-    Navigator.of(
-      context,
-    ).push(buildAppRoute(builder: (_) => const AddProductScreen()));
+    // Use GoRouter so auth redirect guard and deep-link stack stay intact.
+    context.push(AppRoutes.addProduct);
   }
 
   Widget _buildSidebar(ColorScheme cs) {
@@ -583,11 +582,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
-                          Navigator.of(context).push(
-                            buildAppRoute(
-                              builder: (_) => const AddProductScreen(),
-                            ),
-                          );
+                          context.push(AppRoutes.addProduct);
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(

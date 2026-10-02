@@ -250,6 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
+                      onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) {
                           return context.tr('enter_email_please');
@@ -316,9 +317,9 @@ class _LoginScreenState extends State<LoginScreen> {
             child: TextButton(
               onPressed: _isLoading ? null : () => context.push(AppRoutes.forgotPassword),
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                minimumSize: const Size(48, 48),
+                tapTargetSize: MaterialTapTargetSize.padded,
               ),
               child: Text(
                 context.tr('forgot_password'),

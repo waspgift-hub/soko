@@ -142,7 +142,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Please wait before requesting another code')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('otp_cooldown'))));
       return;
     }
     final raw = _phoneController.text.trim();
@@ -296,6 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 prefixIcon: Icons.person_outline,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.name],
+                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                 validator: (v) {
                   if (v == null || v.trim().length < 2) {
                     return context.tr('full_name_required');
@@ -311,11 +312,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
+                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                 validator: _emailValidator,
               ),
               const SizedBox(height: 14),
               if (!widget.otpVerified) ...[
-                AuthPhoneField(controller: _phoneController, validator: _phoneValidator),
+                AuthPhoneField(controller: _phoneController, validator: _phoneValidator, onFieldSubmitted: (_) => FocusScope.of(context).nextFocus()),
               ] else ...[
                 _ReadOnlyPhone(displayPhone: _displayPhone),
               ],

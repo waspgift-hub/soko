@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 import '../../extensions/context_tr.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../app/routes.dart';
@@ -20,6 +21,9 @@ class VerifyEmailScreen extends StatefulWidget {
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   final _otpController = TextEditingController();
   String? _email;
+  String? _inlineError;
+  Timer? _resendTimer;
+  int _resendLeft = 0;
 
   @override
   void initState() {
@@ -41,17 +45,31 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   void dispose() {
     _otpController.dispose();
+    _resendTimer?.cancel();
     super.dispose();
+  }
+
+  void _startResendCooldown() {
+    // Matches server OTP guard 60s cooldown to avoid 429 spam.
+    _resendTimer?.cancel();
+    setState(() => _resendLeft = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      setState(() => _resendLeft--);
+      if (_resendLeft <= 0) t.cancel();
+    });
   }
 
   Future<void> _sendOtp() async {
     if (_email == null || _email!.isEmpty) return;
+    if (_resendLeft > 0) return;
     // Re-entrancy is already prevented by the notifier's `sending` state, which
     // disables this button in build(). The old empty catch swallowed the failure
     // entirely, so a 429 or a bounced address left the user tapping a button
     // that would never send anything.
     try {
       await context.read<AuthNotifier>().sendEmailOtp(_email!);
+      _startResendCooldown();
     } catch (_) {
       // AuthNotifier.error is surfaced by the banner; rethrowing here would
       // surface the same failure twice.
@@ -60,7 +78,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _verifyOtp() async {
     final otp = _otpController.text.trim();
-    if (otp.length != 6) return;
+    if (otp.length != 6) {
+      setState(() => _inlineError = context.tr('otp_invalid_length'));
+      return;
+    }
+    setState(() => _inlineError = null);
     final notifier = context.read<AuthNotifier>();
     final ok = await notifier.verifyEmailOtp(_email ?? '', otp);
     if (ok && mounted) {
@@ -155,7 +177,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: BorderSide(color: cs.primary, width: 2),
                                 ),
+                                errorText: _inlineError,
                               ),
+                              onChanged: (_) {
+                                if (_inlineError != null) {
+                                  setState(() => _inlineError = null);
+                                }
+                              },
                             ),
                             const SizedBox(height: 24),
                             SizedBox(
@@ -186,11 +214,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                             ),
                             const SizedBox(height: 12),
                             TextButton(
-                              onPressed: sending ? null : _sendOtp,
+                              onPressed: (sending || _resendLeft > 0) ? null : _sendOtp,
                               child: sending
                                   ? const GoogleLoading(size: 20, strokeWidth: 2)
                                   : Text(
-                                      context.tr('resend_otp'),
+                                      _resendLeft > 0
+                                          ? context.tr('resend_wait').replaceAll(
+                                              '{0}', '00:${_resendLeft.toString().padLeft(2, '0')}')
+                                          : context.tr('resend_otp'),
                                       style: TextStyle(color: cs.primary),
                                     ),
                             ),
@@ -247,7 +278,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           TextButton(
                             onPressed: () async {
                               await context.read<AuthNotifier>().logout();
-                              if (context.mounted) Navigator.pop(context);
+                              if (context.mounted) context.go(AppRoutes.login);
                             },
                             child: Text(
                               context.tr('use_different_account'),

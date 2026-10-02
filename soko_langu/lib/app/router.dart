@@ -236,8 +236,10 @@ GoRouter buildRouter() {
         path: AppRoutes.productReviews,
         pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? const {};
+          final productId = extra['productId'] as String? ?? '';
+          if (productId.isEmpty) return _premiumPage(const _MissingRouteData());
           return _premiumPage(ProductReviewsScreen(
-            productId: extra['productId'] as String? ?? '',
+            productId: productId,
             productName: extra['productName'] as String? ?? '',
           ));
         },
@@ -606,10 +608,41 @@ class _MissingRouteData extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // Guarded route opened without product: explain + offer recovery.
     return Scaffold(
-      appBar: AppBar(leading: BackButton()),
+      appBar: AppBar(leading: const BackButton()),
       body: Center(
-        child: Text(context.tr('loading_error')),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shopping_bag_outlined, size: 48, color: cs.onSurfaceVariant),
+              const SizedBox(height: 16),
+              Text(
+                context.tr('loading_error'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('missing_product_hint', 'Bidhaa haikupatikana. Rudi dukani kuchagua tena.'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.home),
+                  icon: const Icon(Icons.storefront_outlined),
+                  label: Text(context.tr('back_to_shop', 'Rudi dukani')),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

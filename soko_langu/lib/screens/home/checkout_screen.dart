@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../constants/tanzania_districts.dart';
 import '../../widgets/safe_dropdown.dart';
 import '../../models/product_model.dart';
+import '../../models/order_statuses.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/api_config.dart';
@@ -49,6 +50,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double? _latitude;
   double? _longitude;
   String _deliveryType = 'local';
+  String _paymentMethod = 'escrow';
   String? _selectedRegion;
   String? _selectedDistrict;
   String? _selectedWard;
@@ -70,11 +72,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   double get _lineTotal => _effectivePrice * _quantity;
 
+  // Shipping is quoted by seller after order; show 0 explicitly for now.
+  double get _deliveryFee => 0;
+
+  bool get _isFormValid {
+    final region = _selectedRegion ?? _regionCtrl.text.trim();
+    final district = _selectedDistrict ?? '';
+    final street = _streetCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    if (region.isEmpty || district.isEmpty || street.isEmpty) return false;
+    if (phone.isNotEmpty && !isValidTzMobile(phone)) return false;
+    return true;
+  }
+
   @override
   void initState() {
     super.initState();
     _loadBuyerPhone();
     _subscribeFlashSale();
+    _regionCtrl.addListener(_onFormChanged);
+    _streetCtrl.addListener(_onFormChanged);
+    _phoneCtrl.addListener(_onFormChanged);
+  }
+
+  void _onFormChanged() {
+    // Rebuild bottom CTA so it enables only when address + phone are valid.
+    if (mounted) setState(() {});
   }
 
   void _subscribeFlashSale() {
@@ -97,6 +120,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void dispose() {
     _flashSub?.cancel();
+    _regionCtrl.removeListener(_onFormChanged);
+    _streetCtrl.removeListener(_onFormChanged);
+    _phoneCtrl.removeListener(_onFormChanged);
     _regionCtrl.dispose();
     _streetCtrl.dispose();
     _landmarksCtrl.dispose();
@@ -253,7 +279,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               children: [
                 _buildHeroProduct(context, cs, p),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                _buildStepsHeader(context, cs),
+                const SizedBox(height: 12),
                 _buildTrustStrip(context, cs),
                 const SizedBox(height: 20),
 
@@ -320,9 +348,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(color: cs.primary, width: 1.5),
                       ),
+                      errorText: _phoneCtrl.text.trim().isNotEmpty && !isValidTzMobile(_phoneCtrl.text.trim())
+                          ? context.tr('phone_validator_invalid')
+                          : null,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                   ),
+                ),
+                const SizedBox(height: 20),
+                _buildSectionTitle(context, cs, Icons.payments_outlined, context.tr('payment_method', 'Njia ya malipo')),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr('checkout_pay_later_note', 'Utalipa baada ya muuzaji kuthibitisha usafirishaji. Pesa zinashikiliwa na escrow.'),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
+                PaymentMethodTile(
+                  icon: Icons.shield_outlined,
+                  label: context.tr('pay_escrow', 'Escrow (salama)'),
+                  subtitle: context.tr('pay_escrow_sub', 'M-Pesa / Tigo / Airtel via push'),
+                  selected: _paymentMethod == 'escrow',
+                  onTap: () => setState(() => _paymentMethod = 'escrow'),
+                ),
+                const SizedBox(height: 10),
+                PaymentMethodTile(
+                  icon: Icons.money_outlined,
+                  label: context.tr('pay_on_delivery', 'Malipo mkononi'),
+                  subtitle: context.tr('pay_on_delivery_sub', 'Ikiwa muuzaji atakubali'),
+                  selected: _paymentMethod == 'cod',
+                  onTap: () => setState(() => _paymentMethod = 'cod'),
                 ),
                 if (_latitude != null && _longitude != null) ...[
                   const SizedBox(height: 16),
@@ -662,11 +716,65 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  Widget _buildStepsHeader(BuildContext context, ColorScheme cs) {
+    // 3-step indicator so quote flow is explicit: address -> pay later.
+    Widget step(String label, bool done, bool current) {
+      return Expanded(
+        child: Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: done || current ? cs.primary : cs.surfaceContainerHighest,
+              ),
+              child: Icon(
+                done ? Icons.check : Icons.circle,
+                size: done ? 14 : 8,
+                color: done || current ? cs.onPrimary : cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: current ? FontWeight.w700 : FontWeight.w500,
+                  color: current ? cs.onSurface : cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final addressDone = (_selectedRegion ?? _regionCtrl.text).isNotEmpty &&
+        (_selectedDistrict ?? '').isNotEmpty &&
+        _streetCtrl.text.isNotEmpty;
+    return Semantics(
+      header: true,
+      label: 'Checkout steps',
+      child: Row(
+        children: [
+          step(context.tr('step_address', '1. Anwani'), addressDone, true),
+          step(context.tr('step_confirm', '2. Thibitisha'), false, _isFormValid),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
     final originalTotal = widget.product.price * _quantity;
     final discount = _flashSale != null && originalTotal > _lineTotal
         ? originalTotal - _lineTotal
         : 0.0;
+    final canSubmit = _isFormValid && !_processing;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
@@ -677,13 +785,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         top: false,
         child: CheckoutSummary(
           subtotal: _lineTotal,
+          delivery: _deliveryFee,
           discount: discount,
-          note: _flashSale != null ? context.tr('flash_sale_price', 'Flash sale price') : null,
+          note: _deliveryFee == 0
+              ? context.tr('shipping_quoted_later', 'Usafirishaji utathibitishwa na muuzaji')
+              : (_flashSale != null ? context.tr('flash_sale_price', 'Flash sale price') : null),
           action: SizedBox(
             width: double.infinity,
             height: 52,
             child: ElevatedButton.icon(
-              onPressed: _processing ? null : _submitOrder,
+              onPressed: canSubmit ? _submitOrder : null,
               icon: _processing
                   ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.onPrimary)
                   : const Icon(Icons.send_rounded, size: 20),
@@ -708,8 +819,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final region = _selectedRegion ?? _regionCtrl.text.trim();
     final district = _selectedDistrict ?? '';
     final street = _streetCtrl.text.trim();
+    final phoneRaw = _phoneCtrl.text.trim();
     if (region.isEmpty || district.isEmpty || street.isEmpty) {
       _showError(context.tr('fill_full_address_error'));
+      return;
+    }
+    if (phoneRaw.isNotEmpty && !isValidTzMobile(phoneRaw)) {
+      _showError(context.tr('phone_validator_invalid'));
       return;
     }
 
@@ -721,7 +837,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       final p = widget.product;
       final token = await user.getIdToken();
-      final resp = await http.post(
+      final resp = await http
+          .post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/create'),
         headers: {
           'Content-Type': 'application/json',
@@ -748,10 +865,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'latitude': _latitude,
           'longitude': _longitude,
           'deliveryType': _deliveryType,
+          'preferredPaymentMethod': _paymentMethod,
         }),
-      );
+        // Avoid stuck "sending" on poor networks.
+      ).timeout(const Duration(seconds: 30));
 
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (!mounted) return;
       if (resp.statusCode != 200 || data['success'] != true) {
         _showError(data['error'] ?? context.tr('failed_to_create_order', 'Failed to create order'));
         setState(() => _processing = false);
@@ -764,6 +884,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         context.push('${AppRoutes.orderDetail}/${orderData['orderId']}', extra: orderData);
       }
     } catch (e) {
+      if (!mounted) return;
       final friendly = context.trError(e);
       _showError(friendly);
       setState(() => _processing = false);

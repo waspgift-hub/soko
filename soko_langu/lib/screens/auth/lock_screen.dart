@@ -17,6 +17,8 @@ class LockScreen extends StatefulWidget {
 class _LockScreenState extends State<LockScreen> {
   final _pinController = TextEditingController();
   String? _error;
+  int _attempts = 0;
+  DateTime? _lockedUntil;
 
   @override
   void dispose() {
@@ -25,11 +27,23 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _unlock() async {
+    if (_lockedUntil != null && DateTime.now().isBefore(_lockedUntil!)) {
+      setState(() => _error = context.tr('too_many_attempts'));
+      return;
+    }
     final savedHash = await SecureStorageService.read('app_lock_pin') ?? '';
+    // SHA-256 unsalted is weak for low-entropy PIN; kept for compat with
+    // existing stored hashes, mitigated by attempt limit + backoff below.
     final inputHash = sha256.convert(utf8.encode(_pinController.text)).toString();
     if (inputHash == savedHash) {
       widget.onUnlock();
     } else {
+      _attempts++;
+      if (_attempts >= 5) {
+        _lockedUntil = DateTime.now().add(const Duration(seconds: 30));
+        _attempts = 0;
+      }
+      if (!mounted) return;
       setState(() => _error = context.tr('wrong_pin'));
       _pinController.clear();
     }
@@ -80,7 +94,10 @@ class _LockScreenState extends State<LockScreen> {
                     const SizedBox(height: 32),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 40),
-                      child: TextField(
+                      child: Semantics(
+                        label: context.tr('enter_pin_unlock'),
+                        textField: true,
+                        child: TextField(
                         controller: _pinController,
                         obscureText: true,
                         keyboardType: TextInputType.number,
@@ -120,6 +137,7 @@ class _LockScreenState extends State<LockScreen> {
                           color: cs.onSurface,
                         ),
                         onSubmitted: (_) => _unlock(),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
