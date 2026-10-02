@@ -5,7 +5,11 @@ node_modules
 *.fcm-backup
 .env
 .env.example
-Dockerfile
+# NOT `Dockerfile`. Excluding it is normally harmless because a Docker build
+# receives the Dockerfile separately — but Railway assembles the upload archive
+# with this file first, and then cannot find the build file:
+#   couldn't locate a dockerfile at path soko_langu/server/Dockerfile in code archive
+# which failed every deploy and left the production service in a Failed state.
 .gitignore
 .railwayignore
 ecosystem.config.js
