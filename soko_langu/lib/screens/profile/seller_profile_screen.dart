@@ -61,6 +61,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         title: Text(widget.sellerName),
         actions: [
           IconButton(
+            tooltip: context.tr('send_message'),
             icon: Icon(Icons.message, color: Theme.of(context).colorScheme.primary),
             onPressed: _chatWithSeller,
           ),

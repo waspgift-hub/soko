@@ -180,6 +180,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         title: Text(context.tr('clickpesa_overview')),
         actions: [
           IconButton(
+            tooltip: context.tr('refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,
           ),

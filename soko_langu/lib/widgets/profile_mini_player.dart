@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../extensions/context_tr.dart';
 import '../services/profile_media_controller.dart';
 import '../services/profile_media_session.dart';
 
@@ -106,6 +107,7 @@ class ProfileMiniPlayer extends StatelessWidget {
                                     playSnap.data == ProfileMediaState.playing;
                                 return IconButton(
                                   iconSize: 28,
+                                  tooltip: playing ? context.tr('pause') : context.tr('play'),
                                   icon: Icon(
                                     playing
                                         ? Icons.pause_circle_filled
@@ -118,12 +120,14 @@ class ProfileMiniPlayer extends StatelessWidget {
                             ),
                             IconButton(
                               icon: const Icon(Icons.skip_next),
+                              tooltip: context.tr('skip_next'),
                               onPressed: media.queue.length > 1
                                   ? media.next
                                   : null,
                             ),
                             IconButton(
                               icon: const Icon(Icons.close, size: 20),
+                              tooltip: context.tr('close'),
                               onPressed: session.stop,
                             ),
                           ],

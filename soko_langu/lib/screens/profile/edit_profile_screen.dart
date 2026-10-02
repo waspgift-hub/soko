@@ -794,6 +794,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     suffixIcon: IconButton(
+                      tooltip: context.tr('date'),
                       icon: Icon(
                         Icons.date_range,
                         color: Theme.of(context).colorScheme.primary,
@@ -901,6 +902,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         const SizedBox(width: 4),
                         IconButton(
+                          tooltip: context.tr('decrease'),
                           icon: Icon(
                             Icons.remove_circle,
                             color: Theme.of(context).colorScheme.error,

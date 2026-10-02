@@ -12,6 +12,7 @@ class AddStatusScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(context.tr('add_status', 'Add Status')),
         leading: IconButton(
+          tooltip: context.tr('close'),
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),

@@ -112,6 +112,7 @@ class _CommentSectionState extends State<CommentSection> {
                     sending
                         ? const GoogleLoading(size: 20, strokeWidth: 2)
                         : IconButton(
+                            tooltip: context.tr('send'),
                             icon: Icon(
                               Icons.send,
                               color: Theme.of(context).colorScheme.primary,
@@ -268,6 +269,7 @@ class _BurstSendButtonState extends State<_BurstSendButton> {
       alignment: Alignment.center,
       children: [
         IconButton(
+          tooltip: context.tr('send'),
           icon: Icon(Icons.send, color: cs.primary),
           onPressed: _handleTap,
         ),

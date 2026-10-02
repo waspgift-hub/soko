@@ -845,6 +845,7 @@ class SessionMediaPlayerState extends State<SessionMediaPlayer> {
             ListTile(
               title: Text(context.tr('sleep_timer')),
               trailing: IconButton(
+                tooltip: context.tr('close'),
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.of(sheetContext).pop(),
               ),
@@ -1021,13 +1022,14 @@ class _FullscreenMediaState extends State<_FullscreenMedia> {
         foregroundColor: Colors.white,
         title: Text(widget.item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         leading: IconButton(
+          tooltip: context.tr('close'),
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(c?.value.position),
         ),
       ),
       body: Center(
         child: _failed
-            ? const Text('Video haijafunguka', style: TextStyle(color: Colors.white))
+            ? Text(context.tr('video_failed_to_open'), style: const TextStyle(color: Colors.white))
             : (c == null || !c.value.isInitialized)
             ? const CircularProgressIndicator(color: Colors.white)
             : GestureDetector(

@@ -126,6 +126,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       ),
                       subtitle: _buildWishlistPrice(context, product),
                       trailing: IconButton(
+                        tooltip: context.tr('delete'),
                         icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
                         onPressed: () => _remove(id),
                       ),

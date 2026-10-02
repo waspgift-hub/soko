@@ -306,6 +306,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   children: List.generate(5, (i) {
                     final star = i + 1;
                     return IconButton(
+                      tooltip: context.trParams('rating_out_of', {'n': '$star'}),
                       icon: Icon(
                         star <= rating ? Icons.star : Icons.star_border,
                         color: Theme.of(context).colorScheme.primary,
@@ -977,7 +978,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         centerTitle: true,
         titleSpacing: 0,
         leading: _isSelectionMode
-            ? IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() {_isSelectionMode=false; _selectedIds.clear();}))
+            ? IconButton(tooltip: context.tr('exit_selection'), icon: const Icon(Icons.close), onPressed: () => setState(() {_isSelectionMode=false; _selectedIds.clear();}))
             : null,
         actions: _isSelectionMode
             ? [

@@ -156,6 +156,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                 Row(
                   children: [
                     IconButton(
+                      tooltip: context.tr('back'),
                       icon: Icon(Icons.arrow_back, color: cs.surface),
                       onPressed: () => context.pop(),
                     ),

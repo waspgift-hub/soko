@@ -1553,6 +1553,7 @@ class _SearchScreenState extends State<SearchScreen>
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
+                  tooltip: context.tr('remove_search_history'),
                   icon: Icon(Icons.close, size: 16, color: cs.primary),
                   onPressed: () => _removeHistoryItem(q),
                 ),

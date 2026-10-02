@@ -160,6 +160,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       appBar: _selectMode
           ? AppBar(
               leading: IconButton(
+                tooltip: context.tr('exit_selection'),
                 icon: const Icon(Icons.close),
                 onPressed: _exitSelectMode,
               ),

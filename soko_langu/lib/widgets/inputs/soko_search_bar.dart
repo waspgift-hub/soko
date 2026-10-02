@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/neumorphic.dart';
 
@@ -199,7 +200,8 @@ class _SuffixRow extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.close_rounded, size: 18, color: cs.primary),
+              tooltip: context.tr('clear'),
+                    icon: Icon(Icons.close_rounded, size: 18, color: cs.primary),
             ),
             ...?trailing,
             if (onFilter != null) filterButton,

@@ -65,6 +65,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             title: Text(context.tr('notifications')),
             actions: [
               IconButton(
+                tooltip: context.tr('notification_settings'),
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: () => context.push(AppRoutes.notificationPreferences),
               ),
@@ -416,6 +417,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             title: Text(context.tr('notifications')),
             actions: [
               IconButton(
+                tooltip: context.tr('notification_settings'),
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: () => context.push(AppRoutes.notificationPreferences),
               ),

@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _startResendCountdown();
       HapticFeedback.mediumImpact();
     } catch (e) {
-      if (mounted) _showError(context.trError(e));
+      if (mounted) _showError(context.trError(e, feature: 'auth', screen: 'login_otp'));
     } finally {
       if (mounted) setState(() => _sendingOtp = false);
     }
@@ -168,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   'email_not_registered',
                   'Akaunti haikupatikana kwa barua pepe hii. Jisajili kwanza.',
                 )
-              : context.trError(e),
+              : context.trError(e, feature: 'auth', screen: 'login_otp_verify'),
         );
       }
     } finally {
@@ -303,6 +303,7 @@ class _LoginScreenState extends State<LoginScreen> {
             autofillHints: const [AutofillHints.password],
             validator: (v) => (v == null || v.isEmpty) ? context.tr('enter_password') : null,
             suffix: IconButton(
+              tooltip: context.tr(_obscurePassword ? 'show_password' : 'hide_password'),
               onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               icon: Icon(
                 _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,

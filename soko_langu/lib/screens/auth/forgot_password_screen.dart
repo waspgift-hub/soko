@@ -211,6 +211,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: context.tr('back'),
           icon: Icon(Icons.arrow_back, color: cs.primary),
           onPressed: () => context.go(AppRoutes.login),
         ),
@@ -398,6 +399,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(_obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                          tooltip: context.tr(_obscureNew ? 'show_password' : 'hide_password'),
                           onPressed: () => setState(() => _obscureNew = !_obscureNew),
                         ),
                         filled: true,
@@ -435,6 +437,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                          tooltip: context.tr(_obscureConfirm ? 'show_password' : 'hide_password'),
                           onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                         ),
                         filled: true,

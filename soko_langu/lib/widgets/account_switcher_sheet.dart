@@ -300,6 +300,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
               ),
             ),
           IconButton(
+            tooltip: context.tr('remove_account'),
             icon: Icon(Icons.close, size: 18, color: cs.primary),
             onPressed: () => _removeAccount(account),
           ),

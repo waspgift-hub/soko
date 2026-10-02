@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/receipt_pdf_service.dart';
 import '../../models/transaction_model.dart';
@@ -55,6 +54,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            tooltip: context.tr('switch_language'),
             icon: Text(_lang == 'sw' ? 'EN' : 'SW', style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary, fontSize: 14)),
             onPressed: () => setState(() => _lang = _lang == 'sw' ? 'en' : 'sw'),
           ),
@@ -132,8 +132,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     String paymentMethod, String? transactionReference,
     String? courierName, String? driverPhone, String? trackingNumber,
   ) {
-    final nf = NumberFormat('#,###', 'en');
-
     // Seller receives = price - platformFee (what seller actually gets);
     // prefer the stored field when the server recorded the true payout.
     final storedSellerReceives = (d['sellerReceives'] as num?)?.toDouble();
@@ -210,13 +208,13 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ],
                 // Payment Breakdown
                 _infoSection(cs, context.tr( 'payment_breakdown', 'Mgawanyo wa Malipo'), [
-                  _infoRow(cs, context.tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
+                  _infoRow(cs, context.tr( 'product_price', 'Bei ya Bidhaa'), context.formatPriceInt(price.toInt())),
                   if (shippingCost > 0)
-                    _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
+                    _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), context.formatPriceInt(shippingCost.toInt()), valueColor: cs.secondary),
                   if (shippingCost == 0)
                     _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), context.tr('free_delivery'), valueColor: cs.successGreen),
-                  _infoRow(cs, context.tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
-                  _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(clickpesaFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, context.tr( 'commission', 'Commission ya Soko Vibe'), context.formatPriceInt(platformFee.toInt()), valueColor: cs.tertiary),
+                  _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), context.formatPriceInt(clickpesaFee.toInt()), valueColor: cs.tertiary),
                 ]),
                 const SizedBox(height: 8),
                 _divider(cs),
@@ -225,7 +223,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   children: [
                     Text(context.tr( 'total', 'Jumla'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
                     const Spacer(),
-                    Text('TSh ${nf.format(totalAmount.toInt())}',
+                    Text(context.formatPriceInt(totalAmount.toInt()),
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary,
                         shadows: [Shadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 8)],
                       )),
@@ -237,7 +235,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     children: [
                       Text(context.tr( 'seller_gets', 'Muuzaji anapata'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                       const Spacer(),
-                      Text('TSh ${nf.format(sellerReceives.toInt())}',
+                      Text(context.formatPriceInt(sellerReceives.toInt()),
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.successGreen)),
                     ],
                   ),

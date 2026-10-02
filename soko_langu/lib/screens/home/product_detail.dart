@@ -191,6 +191,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         actions: [
           IconButton(
             icon: Icon(Icons.share, color: cs.primary),
+            tooltip: context.tr('share'),
             onPressed: () => _shareProduct(product),
           ),
           DsLikeButton(
@@ -205,6 +206,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 Icons.flag_outlined,
                 color: cs.error.withValues(alpha: 0.7),
               ),
+              tooltip: context.tr('report_user'),
               onPressed: () => context.push(
                 AppRoutes.report,
                 extra: {

@@ -202,6 +202,7 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
             title: Text(context.tr('my_ads')),
             actions: [
               IconButton(
+                tooltip: context.tr('add'),
                 icon: const Icon(Icons.add),
                 onPressed: () => context.push(AppRoutes.addProduct),
               ),

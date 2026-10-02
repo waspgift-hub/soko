@@ -61,6 +61,7 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(5, (i) {
                   return IconButton(
+                    tooltip: context.trParams('rating_out_of', {'n': '${i + 1}'}),
                     icon: Icon(
                       i < rating ? Icons.star : Icons.star_border,
                       color: Theme.of(context).colorScheme.tertiary,

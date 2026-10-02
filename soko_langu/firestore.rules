@@ -10,17 +10,27 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // A missing isAdmin is treated as "not an admin" via get() rather than left to
+    // raise an evaluation error: the flag is absent on every ordinary profile,
+    // so reading it directly would make this helper error out instead of simply
+    // returning false.
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true
       );
     }
 
+    // Firestore rules do not guarantee short-circuit evaluation, and reading a
+    // field that is not present raises an evaluation error (which denies the
+    // whole request) rather than yielding null. Reading isSuspended through
+    // get() with a false default keeps an account whose profile predates the
+    // field — or whose profile write failed — able to comment, review and post
+    // a buyer request, instead of silently losing every write action.
     function notSuspended() {
       return isSignedIn() && (
-        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuspended != true
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) != true
       );
     }
 
@@ -85,11 +95,11 @@ service cloud.firestore {
 
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
-      // Any signed-in user may list a product: the client writes their own
-      // listing under their own uid (Postgres API and Firestore fallback both
-      // run under the user's token). isSellerOwns only requires the row's
-      // sellerId to match the caller so users cannot forge other sellers'
-      // listings. Suspension/trust enforcement stays server-side.
+      // A "seller" is not a stored role — anyone signed in may list a product
+      // under their own uid (Postgres API and Firestore fallback both run under
+      // the user's token), which makes the products doc the single source of
+      // seller-ness. Ownership is therefore checked against sellerId on the doc.
+      // Suspension/trust enforcement stays server-side.
       function isSellerOwns() {
         return isSignedIn() && request.resource.data.sellerId == request.auth.uid;
       }
@@ -106,19 +116,23 @@ service cloud.firestore {
         && request.resource.data.get('rating', 0) == 0
         && request.resource.data.get('reviewCount', 0) == 0;
       allow update: if isSignedIn() && (
-        // seller owns the product AND is not tampering with boost fields
+        // Seller owns the product AND is not tampering with reputation or
+        // placement state. rating / reviewCount / soldCount are server-owned:
+        // the aggregate is recomputed by POST /api/products/:id/rating through
+        // the admin SDK, so a client write of any of the three can only be an
+        // attempt to inflate a listing's reputation or sales volume. (The
+        // ProductService.updateProductRating / incrementSoldCount helpers that
+        // wrote these from the client have no callers.)
         (resource.data.sellerId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'isBoosted', 'boostedUntil', 'boostTier', 'isFeatured', 'featuredUntil'
+          'isBoosted', 'boostedUntil', 'boostTier', 'isFeatured', 'featuredUntil',
+          'rating', 'reviewCount', 'soldCount'
         ]))
         // any signed-in user can bump viewCount
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
         // any signed-in user can like/unlike (arrayUnion/arrayRemove on likedBy)
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
-        // rating/reviewCount/soldCount were client-writable here and let any
-        // user inflate their own listing's rating, review totals, and volume.
-        // The server now owns all three: recompute flows through the admin SDK
-        // (POST /api/products/:id/rating) which bypasses rules entirely, so a
-        // client write of these fields is a fraud signal, never a legitimate one.
+        // admin SDK writes bypass rules entirely; this branch covers a client
+        // running as an admin (moderation tools) touching the same fields.
         || isAdmin()
       );
       allow delete: if (isSignedIn() && resource.data.sellerId == request.auth.uid) || isAdmin();
@@ -384,16 +398,42 @@ service cloud.firestore {
     }
 
     // ─── PRODUCT ANALYTICS ──────────────────────────────────
-    // Tracked views are unique per signed-in account; dashboards are server-read.
+    // Tracked views are unique per account (doc id == uid); dashboards and
+    // demographic breakdowns are server-read.
     match /product_analytics/{productId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
 
       match /views/{viewId} {
-        allow read: if isAdmin();
-        // unique per-account views use userId == doc id; anonymous adds stay
-        // blocked (client caps those server-side via the API)
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        // A viewer may only ever read their OWN row — that is the de-dupe probe
+        // in AnalyticsService.trackProductView ("have I already seen this?").
+        // The rows carry gender + location + age of every visitor, so letting a
+        // signed-in user list the whole subcollection would expose one seller's
+        // audience demographics to any account.
+        allow read: if isAdmin()
+          || (isSignedIn() && viewId == request.auth.uid);
+
+        // The product must exist, and the row's own productId must match the
+        // parent path. Without the path check a caller could file a view for
+        // product A inside product B's tree and skew B's analytics; without the
+        // exists() check analytics trees could be spawned for products that do
+        // not exist (unbounded storage spam, since views are the only writable
+        // part of this subtree).
+        allow create: if exists(/databases/$(database)/documents/products/$(productId))
+          && request.resource.data.productId == productId
+          && (
+            // Signed-in: a row may only claim the caller's own identity, so a
+            // client cannot inflate the count on behalf of someone else.
+            (isSignedIn() && request.resource.data.get('userId', null) == request.auth.uid)
+            // Anonymous visitor: there is no uid to claim, so userId must be null.
+            // Rate limiting is not expressible in rules — the client caps one
+            // anonymous view per session, and real enforcement is server-side.
+            || (!isSignedIn() && request.resource.data.get('userId', null) == null)
+          );
+
+        // View rows are immutable telemetry; correcting or removing one would
+        // change the number the seller dashboard reports.
+        allow update, delete: if isAdmin();
       }
 
       match /daily_stats/{statId} {
@@ -574,6 +614,44 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAdmin();
       allow update, delete: if isAdmin();
+    }
+
+    // ─── CLIENT ERROR TELEMETRY ──────────────────────────────
+    // Crash reports from the app (ErrorReportingService). Rows carry stack
+    // traces, device models and sanitized request data for EVERY user who hit
+    // the same bug, so reads stay admin-only — the client only ever writes and
+    // must never be able to read back someone else's stack trace.
+    match /system_errors/{errorId} {
+      allow read: if isAdmin();
+
+      // The client is the only writer and is not trusted: the payload is pinned
+      // to the fields the reporter actually populates and the free-text blobs
+      // (stack trace, technical error) are size-capped, so error reporting can
+      // never be used as general-purpose storage.
+      allow create: if request.resource.data.keys().hasAll([
+          'errorId', 'fingerprint', 'timestamp', 'severity', 'environment'
+        ])
+        && request.resource.data.errorId is string
+        && request.resource.data.errorId.size() <= 64
+        && request.resource.data.fingerprint is string
+        && request.resource.data.fingerprint.size() <= 300
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.get('severity', '') is string
+        && request.resource.data.get('environment', '') is string
+        && request.resource.data.get('stackTrace', '') is string
+        && request.resource.data.get('stackTrace', '').size() <= 4000
+        && request.resource.data.get('sanitizedTechnicalError', '') is string
+        && request.resource.data.get('sanitizedTechnicalError', '').size() <= 1000;
+
+      // De-dupe counters only, and only ever moving forward: occurrenceCount
+      // drives admin triage priority, so a client must not be able to zero it
+      // out, rewrite the report body, or re-point it at another user.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['occurrenceCount', 'lastSeen', 'status'])
+        && request.resource.data.occurrenceCount
+             == resource.data.get('occurrenceCount', 0) + 1;
+
+      allow delete: if isAdmin();
     }
 
     // ─── AUDIT LOG ──────────────────────────────────────────

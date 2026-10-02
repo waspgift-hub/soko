@@ -714,7 +714,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       } else {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(context.trError(e)),
+            content: Text(context.trError(e, feature: 'product', screen: 'add_product')),
             duration: const Duration(seconds: 5),
           ),
         );
@@ -1157,6 +1157,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     border: const OutlineInputBorder(),
                     labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                     suffixIcon: IconButton(
+                      tooltip: context.tr('scan_barcode'),
                       icon: Icon(Icons.qr_code_scanner, color: Theme.of(context).colorScheme.primary),
                       onPressed: () => _scanBarcode(),
                     ),
@@ -1286,6 +1287,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 height: 36,
                                 child: IconButton(
                                   padding: EdgeInsets.zero,
+                                  tooltip: context.tr('remove_variant'),
                                   icon: Icon(
                                     Icons.close,
                                     size: 20,

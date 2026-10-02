@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
 import '../../services/order_api.dart';
+import '../../utils/api_envelope.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
@@ -88,13 +89,13 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({'orderId': txId, 'shippingCost': cost}),
       );
-      if (resp.statusCode == 200) {
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
         _shipCtrl(txId).clear();
         if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
         return;
       }
-      final body = jsonDecode(resp.body);
-      _showError(body['error'] ?? context.tr('dispatch_failed'));
+      _showError(env.error ?? context.tr('dispatch_failed'));
     } catch (e) {
       if (mounted) _showError(context.trError(e));
     } finally {

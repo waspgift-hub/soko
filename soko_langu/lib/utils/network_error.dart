@@ -30,6 +30,8 @@ class ErrorKeys {
   static const tooManyAttempts = 'error_too_many_attempts';
   static const invalidCredentials = 'error_invalid_credentials';
   static const timeout = 'error_timeout';
+  static const paymentFailed = 'error_payment_failed';
+  static const uploadFailed = 'error_upload_failed';
 }
 
 /// Maps an HTTP status code to a user-facing error KEY (see [ErrorKeys]).
@@ -208,6 +210,15 @@ String translateError(dynamic error) {
     return ErrorKeys.noPermission;
   }
 
+  // Backend 4xx bodies sometimes arrive as a thrown string rather than an
+  // HTTP status, so this is the only place we can classify them — the
+  // status mapper has no message to read.
+  if (msg.contains('payment') || msg.contains('pay')) {
+    return ErrorKeys.paymentFailed;
+  }
+  if (msg.contains('upload') || msg.contains('compress')) {
+    return ErrorKeys.uploadFailed;
+  }
   return ErrorKeys.generic;
 }
 

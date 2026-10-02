@@ -93,6 +93,9 @@ class ReceiptPdfService {
               pw.SizedBox(height: 16),
               _buildSectionTitle(t('Mgawanyo wa Malipo', 'Payment Breakdown')),
               pw.SizedBox(height: 8),
+              // Deliberately not routed through ExchangeRateService: this PDF is
+              // the charge record and settlement always happens in TSh, so a
+              // converted figure would misstate what was actually billed.
               _buildInfoRow(t('Bei ya Bidhaa', 'Product Price'), 'TZS ${nf.format(price.toInt())}', nf),
               if (shippingCost > 0)
                 _buildInfoRow(t('Nauli ya Usafirishaji', 'Shipping Cost'), 'TZS ${nf.format(shippingCost.toInt())}', nf),

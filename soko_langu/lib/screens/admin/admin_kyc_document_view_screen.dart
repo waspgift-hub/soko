@@ -498,6 +498,7 @@ class _AdminKycDocumentViewScreenState
               top: MediaQuery.of(ctx).padding.top + 8,
               right: 8,
               child: IconButton(
+                tooltip: context.tr('close'),
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => Navigator.pop(ctx),
               ),
@@ -529,6 +530,7 @@ class _AdminKycDocumentViewScreenState
               top: MediaQuery.of(ctx).padding.top + 8,
               right: 8,
               child: IconButton(
+                tooltip: context.tr('close'),
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => Navigator.pop(ctx),
               ),

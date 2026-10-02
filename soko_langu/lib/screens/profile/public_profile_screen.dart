@@ -74,7 +74,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         title: Text(widget.userName),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined),
+            tooltip: context.tr('share'),
+                    icon: const Icon(Icons.share_outlined),
             onPressed: () async {
               // Prefer username if available from profile stream; fallback to uid
               final snap = await UserService().getProfile(widget.userId);
@@ -95,6 +96,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           ),
           if (!_isMyProfile) ...[
             IconButton(
+              tooltip: context.tr('send_message'),
               icon: Icon(
                 Icons.chat,
                 color: Theme.of(context).colorScheme.whatsappGreen,
@@ -102,6 +104,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               onPressed: _chatWithSeller,
             ),
             IconButton(
+              tooltip: context.tr('report_user'),
               icon: Icon(
                 Icons.flag_outlined,
                 color: Theme.of(

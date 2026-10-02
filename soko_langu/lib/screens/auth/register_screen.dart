@@ -180,7 +180,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) _showError(context.trError(e));
+      if (mounted) _showError(context.trError(e, feature: 'auth', screen: 'register'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -264,7 +264,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
       if (mounted) context.go(AppRoutes.home);
     } catch (e) {
-      if (mounted) _showError(context.trError(e));
+      if (mounted) _showError(context.trError(e, feature: 'auth', screen: 'register'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -331,6 +331,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     size: 20,
                     color: cs.onSurfaceVariant,
                   ),
+                  tooltip: context.tr(_obscurePassword ? 'show_password' : 'hide_password'),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
                 obscureText: _obscurePassword,
@@ -356,6 +357,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     size: 20,
                     color: cs.onSurfaceVariant,
                   ),
+                  tooltip: context.tr(_obscureConfirm ? 'show_password' : 'hide_password'),
                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                 ),
                 obscureText: _obscureConfirm,

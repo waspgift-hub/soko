@@ -169,6 +169,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.monetization_on_outlined),
+            tooltip: context.tr('change_currency'),
             onPressed: () => _showCurrencyPicker(context),
           ),
         ],

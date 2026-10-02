@@ -35,6 +35,7 @@ import 'services/onboarding_service.dart';
 import 'services/user_service.dart';
 import 'services/groq_service.dart';
 import 'services/localization_service.dart';
+import 'services/error_reporting_service.dart';
 import 'services/local_cache_service.dart';
 import 'services/network_state_service.dart';
 import 'repositories/product_repository.dart';
@@ -152,10 +153,23 @@ void main() async {
 void _setupGlobalErrorHandlers() {
   FlutterError.onError = (FlutterErrorDetails details) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    // Also report to our error monitoring
+    ErrorReportingService().reportError(
+      error: details.exception,
+      userMessage: details.exceptionAsString(),
+      severity: ErrorSeverity.critical,
+      stackTrace: details.stack.toString(),
+    );
   };
 
   ui.PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    ErrorReportingService().reportError(
+      error: error,
+      userMessage: error.toString(),
+      severity: ErrorSeverity.critical,
+      stackTrace: stack.toString(),
+    );
     return true; // Prevent the isolate from crashing after reporting
   };
 }

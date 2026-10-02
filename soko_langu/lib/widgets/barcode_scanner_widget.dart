@@ -45,11 +45,13 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
         title: Text(context.tr('scan_barcode_qr', 'Scan Barcode / QR')),
         actions: [
           IconButton(
-            icon: const Icon(Icons.flash_on),
+            tooltip: context.tr('flash'),
+              icon: const Icon(Icons.flash_on),
             onPressed: () => _controller?.toggleTorch(),
           ),
           IconButton(
-            icon: const Icon(Icons.flip_camera_android),
+            tooltip: context.tr('flip_camera'),
+              icon: const Icon(Icons.flip_camera_android),
             onPressed: () => _controller?.switchCamera(),
           ),
         ],

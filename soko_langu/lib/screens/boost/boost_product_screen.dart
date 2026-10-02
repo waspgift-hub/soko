@@ -1,18 +1,33 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../models/product_model.dart';
-import '../../services/product_service.dart';
-import '../../services/boost_service.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart';
+import '../../models/product_model.dart';
+import '../../services/boost_service.dart';
+import '../../services/product_service.dart';
+import '../../theme/app_dimens.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/product_cached_image.dart';
-import '../../widgets/commerce/payment_method_tile.dart';
+import 'boost_tiers.dart';
+import 'widgets/boost_checkout_bar.dart';
+import 'widgets/boost_hero_panel.dart';
+import 'widgets/boost_payment_section.dart';
+import 'widgets/boost_reach_panel.dart';
+import 'widgets/boost_result_overlays.dart';
+import 'widgets/boost_tier_card.dart';
+import 'widgets/boost_value_prop_grid.dart';
 
-/// Boost purchase screen: pick a product, pick a package, pay with mobile
-/// money. The server activates the boost (product doc flips isBoosted) once
-/// the ClickPesa webhook confirms the payment, so this screen only starts the
-/// payment and renders the USSD/BillPay instructions.
+/// Boost purchase screen.
+///
+/// Three questions in order, because that is the order a seller actually asks
+/// them: *what do I get* (hero + value props), *how much for how long* (package
+/// cards + reach estimate), *how do I pay* (payment card + sticky bar). The
+/// server activates the boost once the ClickPesa webhook clears, so this screen
+/// only starts the payment and reports what the server said.
 class BoostProductScreen extends StatefulWidget {
   /// Optional preselect — when null (e.g. the seller dashboard quick action),
   /// the seller picks one of their own products first.
@@ -25,28 +40,6 @@ class BoostProductScreen extends StatefulWidget {
   State<BoostProductScreen> createState() => _BoostProductScreenState();
 }
 
-class _TierInfo {
-  final String key;
-  final int price;
-  final int days;
-  const _TierInfo(this.key, this.price, this.days);
-}
-
-const _tiers = [
-  _TierInfo('bronze', 1500, 3),
-  _TierInfo('silver', 3000, 7),
-  _TierInfo('gold', 10000, 30),
-];
-
-const _providers = [
-  ('mpesa', 'M-Pesa'),
-  ('tigo', 'Tigo Pesa'),
-  ('airtel', 'Airtel Money'),
-  ('halopesa', 'HaloPesa'),
-  ('ezy', 'EzyPesa'),
-  ('crdb', 'CRDB'),
-];
-
 class _BoostProductScreenState extends State<BoostProductScreen> {
   final ProductService _productService = ProductService();
   final TextEditingController _phoneCtrl = TextEditingController();
@@ -54,26 +47,39 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
   bool _loadingProducts = true;
   List<Product> _mine = [];
   Product? _product;
-  String _tier = 'silver';
+
+  BoostTier _tier = BoostTier.byKey(BoostTier.silverKey);
   String _provider = 'mpesa';
-  bool _useBillPay = false;
+  BoostPayMethod _method = BoostPayMethod.ussd;
+  bool _phoneAttempted = false;
+
   bool _paying = false;
 
   @override
   void initState() {
     super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user?.phoneNumber != null) {
-      _phoneCtrl.text = user!.phoneNumber!;
-    }
+    final phone = FirebaseAuth.instance.currentUser?.phoneNumber;
+    if (phone != null) _phoneCtrl.text = phone;
     _product = widget.product;
     _load();
+    _phoneCtrl.addListener(_onPhoneChanged);
   }
 
   @override
   void dispose() {
+    _phoneCtrl.removeListener(_onPhoneChanged);
     _phoneCtrl.dispose();
     super.dispose();
+  }
+
+  bool get _phoneValid =>
+      _phoneCtrl.text.replaceAll(RegExp(r'\D'), '').length >= 9;
+
+  String? get _phoneError =>
+      _phoneAttempted && !_phoneValid ? context.tr('boost_phone_invalid') : null;
+
+  void _onPhoneChanged() {
+    if (_phoneAttempted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -94,79 +100,28 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
   }
 
   Future<void> _pickProduct() async {
+    // DsSheet scrolls its own child, which would fight the sheet's grabber for
+    // the same drag, so the picker drives a draggable sheet instead.
     final picked = await showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        final cs = Theme.of(context).colorScheme;
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          minChildSize: 0.4,
-          maxChildSize: 0.95,
-          builder: (context, scrollCtrl) => Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  context.tr('boost_pick_product'),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  controller: scrollCtrl,
-                  itemCount: _mine.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    final p = _mine[i];
-                    final selected = _product?.id == p.id;
-                    return ListTile(
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: ProductCachedImage(
-                            url: p.images.isNotEmpty ? p.images[0] : null,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(context.formatPriceInt(p.price.toInt(), currencyOverride: 'TZS')),
-                      trailing: selected
-                          ? Icon(Icons.check_circle, color: cs.primary)
-                          : null,
-                      onTap: () => Navigator.pop(context, p),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ProductPicker(
+        products: _mine,
+        selectedId: _product?.id,
+      ),
     );
-    if (picked != null) setState(() => _product = picked);
+    if (picked != null && mounted) setState(() => _product = picked);
   }
-
-  _TierInfo get _tierInfo =>
-      _tiers.firstWhere((t) => t.key == _tier, orElse: () => _tiers[1]);
 
   Future<void> _pay() async {
     final product = _product;
-    if (product == null) return;
+    if (product == null || _paying) return;
+
+    setState(() => _phoneAttempted = true);
     final phone = _phoneCtrl.text.trim();
-    if (phone.length < 9) {
-      _showError(context.tr('boost_phone_hint'));
-      return;
-    }
+    if (phone.replaceAll(RegExp(r'\D'), '').length < 9) return;
+
     setState(() => _paying = true);
     try {
       final res = await BoostService.initBoostProduct(
@@ -174,9 +129,9 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
         productName: product.name,
         productImage: product.images.isNotEmpty ? product.images[0] : null,
         productPrice: product.price,
-        tier: _tierInfo.key,
+        tier: _tier.key,
         phone: phone,
-        paymentMethod: _useBillPay ? 'billpay' : 'ussd_push',
+        paymentMethod: _method == BoostPayMethod.billpay ? 'billpay' : 'ussd_push',
         provider: _provider,
       );
       if (!mounted) return;
@@ -184,10 +139,30 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
         _showError('${res['error']}');
         return;
       }
-      if (_useBillPay) {
-        _showBillPay(res);
-      } else {
-        _showUssdSent(res);
+      if (_method == BoostPayMethod.billpay) {
+        // BillPay settles against a control number out-of-band, so there is
+        // nothing to poll yet — hand over the instructions and stay honest.
+        await _showBillPay(res);
+        return;
+      }
+
+      // USSD push is confirmable: the seller approves on their phone within a
+      // few seconds, so poll the webhook before claiming the boost went live.
+      final orderId = (res['order_id'] ?? res['orderId'] ?? '').toString();
+      if (orderId.isEmpty) {
+        _showStillPending();
+        return;
+      }
+
+      final settled = await _waitWithProgress(orderId);
+      if (!mounted || settled == null) return;
+      switch (settled) {
+        case BoostService.boostPaid:
+          await _showSuccess(product);
+        case BoostService.boostFailed:
+          _showError(context.tr('boost_payment_failed'));
+        default:
+          _showStillPending();
       }
     } catch (e) {
       if (mounted) _showError(context.trError(e));
@@ -196,52 +171,65 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
     }
   }
 
-  void _showUssdSent(Map<String, dynamic> res) {
-    final amount = (res['totalAmount'] ?? res['amount'] ?? _tierInfo.price).toString();
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        icon: Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 40),
-        title: Text(context.tr('boost_complete')),
-        content: Text(context.trParams('boost_push_sent', {'amount': amount})),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(context.tr('boost_done')),
-          ),
-        ],
+  /// Runs the webhook poll behind [BoostProgressOverlay]. Returns null when the
+  /// seller chose to check back later, which must not fall through to an error.
+  Future<String?> _waitWithProgress(String orderId) async {
+    unawaited(
+      Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BoostProgressOverlay(tier: _tier),
+          fullscreenDialog: true,
+        ),
       ),
+    );
+    // Let the overlay paint before the first poll locks the frame.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    final outcome = await BoostService.waitForSettlement(orderId);
+    if (!mounted) return null;
+    Navigator.of(context, rootNavigator: true).pop();
+    return outcome;
+  }
+
+  Future<void> _showSuccess(Product product) async {
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BoostSuccessOverlay(
+          productName: product.name,
+          tier: _tier,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _product = null);
+  }
+
+  Future<void> _showBillPay(Map<String, dynamic> res) async {
+    final number = (res['billPayNumber'] ?? '').toString();
+    await DsSheet.show<void>(
+      context: context,
+      content: BoostBillPaySheet(controlNumber: number, tier: _tier),
     );
   }
 
-  void _showBillPay(Map<String, dynamic> res) {
-    final number = (res['billPayNumber'] ?? '').toString();
-    final total = (res['totalAmount'] ?? res['amount'] ?? _tierInfo.price).toString();
+  void _showStillPending() {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
         final cs = Theme.of(context).colorScheme;
         return AlertDialog(
-          icon: Icon(Icons.receipt_long, color: cs.primary, size: 40),
-          title: Text(context.tr('boost_receipt_title')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                context.trParams('boost_billpay_number', {'number': number}),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                context.trParams('boost_billpay_instructions', {'amount': total}),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+          icon: Icon(Icons.hourglass_top_rounded, color: cs.tertiary, size: 40),
+          title: Text(context.tr('boost_still_pending_title')),
+          content: Text(context.tr('boost_still_pending_local')),
           actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                context.push(AppRoutes.myAds);
+              },
+              child: Text(context.tr('boost_view_my_boosts')),
+            ),
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(context.tr('boost_done')),
@@ -256,8 +244,12 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error, size: 40),
-        title: Text(context.tr('boost_error').replaceAll('{reason}', '')),
+        icon: Icon(
+          Icons.error_outline_rounded,
+          color: Theme.of(context).colorScheme.error,
+          size: 40,
+        ),
+        title: Text(context.tr('boost_error_title')),
         content: Text(reason),
         actions: [
           TextButton(
@@ -269,274 +261,295 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
     );
   }
 
-  Widget _tierCard(int index) {
-    final tier = _tiers[index];
-    final selected = _tier == tier.key;
-    final isPopular = tier.key == 'silver';
-    final cs = Theme.of(context).colorScheme;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tier = tier.key),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: selected ? cs.primary.withValues(alpha: 0.08) : cs.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? cs.primary : cs.outlineVariant,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            children: [
-              if (isPopular)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: cs.trendingOrange,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    context.tr('popular'),
-                    style: TextStyle(color: cs.surface, fontSize: 9, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              Icon(
-                tier.key == 'gold' ? Icons.workspace_premium : Icons.rocket_launch,
-                color: selected ? cs.primary : cs.onSurfaceVariant,
-                size: 26,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                tier.key.toUpperCase(),
-                style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface, fontSize: 13),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                context.formatPriceInt(tier.price, currencyOverride: 'TZS'),
-                style: TextStyle(fontWeight: FontWeight.w800, color: cs.primary, fontSize: 13),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                context.trParams('boost_days', {'count': '${tier.days}'}),
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final product = _product;
-    final canPay = product != null && !_loadingProducts;
-
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('boost_screen_title'))),
+      appBar: AppBar(
+        title: Text(context.tr('boost_screen_title')),
+        centerTitle: false,
+      ),
       body: SafeArea(
+        bottom: false,
         child: _loadingProducts
-            ? const Center(child: CircularProgressIndicator())
-            : product == null
-                ? _EmptyState(cs: cs)
+            ? const Center(child: DsLoadingDots())
+            : _product == null
+                ? const _NoProducts()
                 : ListView(
-                    padding: const EdgeInsets.all(16),
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.s4,
+                      AppSpacing.s2,
+                      AppSpacing.s4,
+                      AppSpacing.s8,
+                    ),
                     children: [
-                      // ── Mission statement ──
-                      Text(context.tr('boost_screen_subtitle'),
-                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, height: 1.4)),
-                      const SizedBox(height: 20),
-
-                      // ── Product ──
-                      Text(context.tr('boost_choose_product'),
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: _mine.length > 1 ? _pickProduct : null,
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: cs.surface,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: cs.outlineVariant),
-                          ),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: SizedBox(
-                                  width: 52,
-                                  height: 52,
-                                  child: ProductCachedImage(
-                                    url: product.images.isNotEmpty ? product.images[0] : null,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(product.name,
-                                        maxLines: 2, overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
-                                    if (product.isBoostedValid)
-                                      Text(context.tr('featured'),
-                                          style: TextStyle(color: cs.primary, fontSize: 12, fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                              ),
-                              if (_mine.length > 1)
-                                Icon(Icons.expand_more, color: cs.onSurfaceVariant)
-                              else
-                                Icon(Icons.check_circle, color: cs.primary, size: 20),
-                            ],
+                      BoostHeroPanel(
+                        product: _product,
+                        canSwitchProduct: _mine.length > 1,
+                        onTapProduct: _pickProduct,
+                      ),
+                      const SizedBox(height: AppSpacing.s6),
+                      _SectionLabel(
+                        title: context.tr('boost_section_why'),
+                        caption: context.tr('boost_section_why_caption'),
+                      ),
+                      const SizedBox(height: AppSpacing.s3),
+                      const BoostValuePropGrid(),
+                      const SizedBox(height: AppSpacing.s7),
+                      _SectionLabel(
+                        title: context.tr('boost_section_package'),
+                        caption: context.tr('boost_package_note'),
+                      ),
+                      const SizedBox(height: AppSpacing.s3),
+                      for (final tier in BoostTier.all)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                          child: BoostTierCard(
+                            tier: tier,
+                            selected: tier.key == _tier.key,
+                            onTap: () => setState(() => _tier = tier),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── Package ──
-                      Text(context.tr('boost_package_title'),
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: cs.onSurface)),
-                      const SizedBox(height: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (var i = 0; i < _tiers.length; i++) ...[
-                            if (i > 0) const SizedBox(width: 10),
-                            _tierCard(i),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      // ── Benefits ──
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _benefitChip(cs, Icons.search, context.tr('boost_benefit1')),
-                          _benefitChip(cs, Icons.workspace_premium, context.tr('boost_benefit2')),
-                          _benefitChip(cs, Icons.visibility, context.tr('boost_benefit3')),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(context.tr('boost_package_note'),
-                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, height: 1.4)),
-                      const SizedBox(height: 20),
-
-                      // ── Phone ──
-                      TextField(
-                        controller: _phoneCtrl,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          labelText: context.tr('boost_phone_label'),
-                          hintText: context.tr('boost_phone_hint'),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          prefixIcon: const Icon(Icons.phone_android),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // ── Provider ──
-                      Text(context.tr('boost_provider_label'),
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          for (final (key, label) in _providers)
-                            ChoiceChip(
-                              label: Text(label),
-                              selected: _provider == key,
-                              onSelected: (_) => setState(() => _provider = key),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // ── Method ──
-                      Text(context.tr('boost_method_label'),
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
-                      const SizedBox(height: 8),
-                      PaymentMethodTile(
-                        icon: Icons.smartphone,
-                        label: context.tr('boost_method_ussd'),
-                        selected: !_useBillPay,
-                        onTap: () => setState(() => _useBillPay = false),
-                      ),
-                      const SizedBox(height: 8),
-                      PaymentMethodTile(
-                        icon: Icons.receipt_long,
-                        label: context.tr('boost_method_billpay'),
-                        selected: _useBillPay,
-                        onTap: () => setState(() => _useBillPay = true),
-                      ),
-                      const SizedBox(height: 24),
-
-                      DsButton(
-                        label: context.trParams('boost_pay_now',
-                            {'amount': context.formatPriceInt(_tierInfo.price, currencyOverride: 'TZS')}),
-                        icon: Icons.bolt,
-                        size: DsButtonSize.lg,
-                        loading: _paying,
-                        onPressed: canPay && !_paying ? _pay : null,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        context.trParams('boost_period_days', {'count': '${_tierInfo.days}'}),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                      const SizedBox(height: AppSpacing.s2),
+                      BoostReachPanel(tier: _tier),
+                      const SizedBox(height: AppSpacing.s7),
+                      BoostPaymentSection(
+                        phoneController: _phoneCtrl,
+                        method: _method,
+                        provider: _provider,
+                        phoneError: _phoneError,
+                        onMethodChanged: (m) => setState(() => _method = m),
+                        onProviderChanged: (p) => setState(() => _provider = p),
                       ),
                     ],
                   ),
       ),
+      bottomNavigationBar: _product == null
+          ? null
+          : BoostCheckoutBar(
+              tier: _tier,
+              paying: _paying,
+              enabled: !_loadingProducts,
+              onPay: _pay,
+            ),
     );
   }
+}
 
-  Widget _benefitChip(ColorScheme cs, IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: cs.primary),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: cs.onSurface, fontSize: 12)),
-        ],
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title, required this.caption});
+
+  final String title;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          caption,
+          style: TextStyle(
+            color: scheme.onSurfaceVariant,
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductPicker extends StatelessWidget {
+  const _ProductPicker({
+    required this.products,
+    required this.selectedId,
+    required this.controller,
+  });
+
+  final List<Product> products;
+  final String? selectedId;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final selectedId = selectedIdArg;
+    final sheetTheme = Theme.of(context);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (context, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: sheetTheme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius2.xxl),
+          ),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: AppSpacing.s3),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(AppRadius.full),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.s6,
+                AppSpacing.s4,
+                AppSpacing.s6,
+                AppSpacing.s2,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.tr('boost_pick_product'),
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    context.trParams('boost_products_owned', {
+                      'count': '${products.length}',
+                    }),
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.separated(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.s6,
+                  AppSpacing.s2,
+                  AppSpacing.s6,
+                  AppSpacing.s6,
+                ),
+                itemCount: products.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final p = products[i];
+                  final selected = selectedId == p.id;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: ProductCachedImage(
+                          url: p.images.isNotEmpty ? p.images[0] : null,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      context.formatPriceInt(
+                        p.price.toInt(),
+                        currencyOverride: 'TZS',
+                      ),
+                    ),
+                    trailing: selected
+                        ? Icon(
+                            Icons.check_circle_rounded,
+                            color: scheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.pop(context, p),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final ColorScheme cs;
-  const _EmptyState({required this.cs});
+class _NoProducts extends StatelessWidget {
+  const _NoProducts();
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpacing.s8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: cs.onSurfaceVariant),
-            const SizedBox(height: 12),
-            Text(context.tr('boost_no_products_title'),
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.onSurface)),
-            const SizedBox(height: 6),
-            Text(context.tr('boost_no_products'),
-                textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant)),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.inventory_2_outlined,
+                size: 40,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s4),
+            Text(
+              context.tr('boost_no_products_title'),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s2),
+            Text(
+              context.tr('boost_no_products'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s5),
+            DsButton(
+              label: context.tr('add_product_first'),
+              icon: Icons.add_rounded,
+              variant: DsButtonVariant.secondary,
+              fullWidth: false,
+              onPressed: () => context.push(AppRoutes.sellProduct),
+            ),
           ],
         ),
       ),

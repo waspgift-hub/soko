@@ -11,6 +11,7 @@ import '../../app/app_transitions.dart';
 import '../../services/analytics_service.dart';
 import '../../models/analytics_models.dart';
 import '../../services/api_config.dart';
+import '../../utils/api_envelope.dart';
 import '../../services/fraud_prevention_service.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
@@ -51,7 +52,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   List<Map<String, dynamic>> _disputedTxs = [];
   List<Map<String, dynamic>> _failedPayoutTxs = [];
-  List<Map<String, dynamic>> _pendingKycUsers = [];
+List<Map<String, dynamic>> _pendingKycUsers = [];
+  List<Map<String, dynamic>> _systemErrors = [];
+
+  /// Non-null when the pending-KYC queue could not be read. Kept separate from
+  /// the list so an outage never renders as the green "nothing pending" state.
+  String? _kycQueueError;
   bool _loadingExceptions = true;
   bool _loadingKyc = false;
 
@@ -141,7 +147,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadExceptions() async {
     setState(() => _loadingExceptions = true);
     try {
-      final futures = <Future>[
+       final futures = <Future>[
         FirebaseFirestore.instance
             .collection('transactions')
             .where('status', isEqualTo: 'disputed')
@@ -151,6 +157,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             .collection('transactions')
             .where('payoutStatus', isEqualTo: 'failed_retry')
             .limit(50)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('system_errors')
+            .orderBy('lastSeen', descending: true)
+            .limit(100)
             .get(),
       ];
 
@@ -163,6 +174,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final results = await Future.wait(futures);
       final disputedSnap = results[0] as QuerySnapshot;
       final failedSnap = results[1] as QuerySnapshot;
+      final errorsSnap = results.length > 2 ? results[2] as QuerySnapshot : null;
 
       if (mounted) {
         setState(() {
@@ -172,6 +184,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           _failedPayoutTxs = failedSnap.docs
               .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
               .toList();
+          if (errorsSnap != null) {
+            _systemErrors = errorsSnap.docs
+                .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+                .toList();
+          }
         });
       }
     } catch (e) {
@@ -181,7 +198,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _loadPendingKyc() async {
-    setState(() => _loadingKyc = true);
+    setState(() {
+      _loadingKyc = true;
+      _kycQueueError = null;
+    });
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final resp = await http
@@ -193,17 +213,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             },
           )
           .timeout(const Duration(seconds: 10));
-      if (resp.statusCode == 200) {
-        final body = jsonDecode(resp.body);
-        final pending = body['pending'] as List? ?? [];
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
+        final pending = env.body['pending'] as List? ?? [];
         if (mounted) {
           setState(
             () => _pendingKycUsers = pending.cast<Map<String, dynamic>>(),
           );
         }
+      } else if (mounted) {
+        setState(() => _kycQueueError = env.error ?? context.tr('error_generic'));
       }
     } catch (e) {
       debugPrint('Admin loadPendingKyc: $e');
+      // Never leave the list empty on failure: an empty list renders the green
+      // "nothing pending" state, which reads as "all verified" during an outage.
+      if (mounted) setState(() => _kycQueueError = context.tr('error_generic'));
     }
     if (mounted) setState(() => _loadingKyc = false);
   }
@@ -245,6 +270,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         title: Text(context.tr('admin_dashboard')),
         actions: [
           IconButton(
+            tooltip: context.tr('refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() => _loading = true);
@@ -317,7 +343,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final disputeCount = _disputedTxs.length;
     final failedCount = _failedPayoutTxs.length;
     final kycCount = _pendingKycUsers.length;
-    final totalExceptions = disputeCount + failedCount + kycCount;
+    final errorCount = _systemErrors.length;
+    final totalExceptions = disputeCount + failedCount + kycCount + errorCount;
 
     return RefreshIndicator(
       onRefresh: _loadExceptions,
@@ -350,6 +377,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   label: context.tr('pending_kyc'),
                   color: cs.secondary,
                 ),
+                const SizedBox(width: 10),
+                _exceptionSummaryCard(
+                  icon: Icons.bug_report,
+                  count: errorCount,
+                  label: 'System Errors',
+                  color: cs.onErrorContainer.withValues(alpha: 0.8),
+                ),
               ],
             ),
           ),
@@ -380,7 +414,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               const SizedBox(height: 16),
             ],
 
-            // Pending KYC
+             // Pending KYC
             if (kycCount > 0) ...[
               _buildSectionHeader(
                 '${context.tr('pending_kyc')} ($kycCount)',
@@ -394,6 +428,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 )
               else
                 ..._pendingKycUsers.map((u) => _buildKycCard(u, cs)),
+              const SizedBox(height: 16),
+            ],
+            // System errors
+            if (errorCount > 0) ...[
+              _buildSectionHeader(
+                'System Errors ($errorCount)',
+                cs,
+              ),
+              const SizedBox(height: 8),
+              ..._systemErrors.map((e) => _buildSystemErrorCard(e, cs)),
               const SizedBox(height: 16),
             ],
           ],
@@ -1185,20 +1229,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           'note': note,
         }),
       );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200) {
+      // Releases or refunds real money, so require the server's own
+      // confirmation rather than inferring it from a 200.
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
         _loadExceptions();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                result['message'] ?? context.tr('dispute_resolved'),
+                env.body['message']?.toString() ?? context.tr('dispute_resolved'),
               ),
             ),
           );
         }
       } else {
-        throw Exception(result['error'] ?? 'Failed to resolve dispute');
+        throw Exception(env.error ?? 'Failed to resolve dispute');
       }
     } catch (e) {
       if (mounted) {
@@ -1255,18 +1301,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         },
         body: jsonEncode({'orderId': orderId}),
       );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200) {
+      // Moves seller money, so require the server's own confirmation.
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
         _loadExceptions();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? context.tr('payout_retried')),
+              content: Text(
+                env.body['message']?.toString() ?? context.tr('payout_retried'),
+              ),
             ),
           );
         }
       } else {
-        throw Exception(result['error'] ?? context.tr('retry_failed'));
+        throw Exception(env.error ?? context.tr('retry_failed'));
       }
     } catch (e) {
       if (mounted) {
@@ -1862,7 +1911,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${_pendingKycUsers.length}',
+                  // "?" not 0: a failed load is not an empty queue.
+                  _kycQueueError != null ? '?' : '${_pendingKycUsers.length}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: _pendingKycUsers.isNotEmpty ? cs.secondary : cs.primary,
@@ -1874,6 +1924,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const SizedBox(height: 16),
           if (_loadingKyc)
             const Center(child: Padding(padding: EdgeInsets.all(32), child: GoogleLoading()))
+          else if (_kycQueueError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  children: [
+                    Icon(Icons.cloud_off_outlined, size: 64, color: cs.error.withValues(alpha: 0.6)),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('kyc_queue_unavailable'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _loadPendingKyc,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(context.tr('retry')),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else if (_pendingKycUsers.isEmpty)
             Center(
               child: Padding(
@@ -2424,6 +2497,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           onPressed: () => _fraudService.markResolved(alert.id),
           child: Text(context.tr('dismiss'), style: TextStyle(fontSize: 12)),
         ),
+      ),
+    );
+  }
+
+  /// One row of the server-reported `systemErrors` collection. Every field is
+  /// read defensively — the docs are written by the backend.
+  Widget _buildSystemErrorCard(Map<String, dynamic> e, ColorScheme cs) {
+    final dateStr = _formatTimestamp(e['lastSeen'] ?? e['timestamp']);
+    final severity = e['severity']?.toString() ?? 'error';
+    final feature = e['feature']?.toString() ?? context.tr('unknown');
+    final errId = e['errorId']?.toString() ?? e['id']?.toString() ?? '';
+    final count = e['occurrenceCount']?.toString() ?? '1';
+    final msg = e['errorMessage']?.toString() ?? '';
+    final tech = e['sanitizedTechnicalError']?.toString() ?? '';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ExpansionTile(
+        title: Text('​$errId • $severity • $feature'),
+        subtitle: Text('$dateStr • ${context.tr('occurrences')}: $count'),
+        childrenPadding: const EdgeInsets.all(12),
+        children: [
+          if (msg.isNotEmpty)
+            ListTile(
+              title: Text(context.tr('user_message')),
+              subtitle: Text(msg),
+            ),
+          if (tech.isNotEmpty)
+            ListTile(
+              title: Text(context.tr('technical_details')),
+              subtitle: Text(tech, style: const TextStyle(fontSize: 11)),
+            ),
+        ],
       ),
     );
   }

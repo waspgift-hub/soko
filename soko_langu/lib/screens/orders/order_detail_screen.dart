@@ -658,6 +658,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       child: Row(
         children: [
           IconButton(
+            tooltip: context.tr('back'),
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -690,6 +691,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           ),
           const Spacer(),
           IconButton(
+            tooltip: context.tr('share'),
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(

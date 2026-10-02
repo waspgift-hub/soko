@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_config.dart';
 import '../../services/order_api.dart';
+import '../../utils/api_envelope.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
@@ -89,12 +90,12 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         }),
       );
 
-      if (resp.statusCode == 200) {
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
         _showSuccess(context.tr('shipping_cost_submitted'));
         ctrl.clear();
       } else {
-        final body = jsonDecode(resp.body);
-        final serverError = body['error'] ?? body['message'] ?? '';
+        final serverError = env.error ?? '';
         _showError(serverError.isEmpty
             ? context.tr('quote_sync_warning')
             : '${context.tr('quote_sync_warning')}\n$serverError');

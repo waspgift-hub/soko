@@ -885,7 +885,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      final friendly = context.trError(e);
+      final friendly = context.trError(e, feature: 'payment', screen: 'checkout');
       _showError(friendly);
       setState(() => _processing = false);
     }

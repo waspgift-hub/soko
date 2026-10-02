@@ -101,6 +101,11 @@ class StandardInputField extends StatefulWidget {
   final IconData? suffixIcon;
   final VoidCallback? onSuffixTap;
 
+  /// Accessible name for the [suffixIcon] button. Required in practice: the
+  /// icon carries no text, so without this a screen reader announces
+  /// "button" and nothing else.
+  final String? suffixTooltip;
+
   /// Renders the visibility toggle automatically for password intents.
   final bool showPasswordToggle;
 

@@ -476,6 +476,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
               ),
               child: IconButton(
+                tooltip: context.tr('send'),
                 icon: Icon(Icons.send_rounded, color: cs.onPrimary, size: 18),
                 onPressed: () => _sendMessage(_controller.text),
               ),

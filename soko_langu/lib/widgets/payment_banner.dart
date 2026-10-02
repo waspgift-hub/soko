@@ -217,6 +217,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                                 ],
                                 const SizedBox(width: 4),
                                 IconButton(
+                                  tooltip: context.tr('dismiss'),
                                   icon: const Icon(Icons.close, size: 20),
                                   onPressed: widget.onDismiss,
                                   padding: EdgeInsets.zero,
@@ -549,6 +550,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                                     ),
                                   if (isOk || isFail)
                                     IconButton(
+                                      tooltip: context.tr('dismiss'),
                                       icon: const Icon(Icons.close, size: 20),
                                       onPressed: RealtimePaymentBanner.dismiss,
                                       padding: EdgeInsets.zero,

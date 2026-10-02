@@ -263,6 +263,7 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                   color: Theme.of(context).colorScheme.tertiary,
                   size: 36,
                 ),
+                tooltip: context.trParams('rating_out_of', {'n': '${i + 1}'}),
                 onPressed: () => setState(() => _rating = i + 1),
               );
             }),

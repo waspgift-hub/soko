@@ -435,12 +435,14 @@ class _HomeScreenState extends State<HomeScreen>
         actions: [
           IconButton(
             icon: Icon(Icons.monetization_on_outlined, color: cs.primary),
+            tooltip: context.tr('change_currency'),
             onPressed: () => _showCurrencyPicker(context),
           ),
           Stack(
             children: [
               IconButton(
                 icon: Icon(Icons.notifications_outlined, color: cs.primary),
+                tooltip: context.tr('notifications'),
                 onPressed: () {
                   // Don't stack a second notification route on a fast double tap —
                   // the resulting duplicate page entries crash element teardown.

@@ -200,7 +200,7 @@ class _OtpScreenState extends State<OtpScreen> {
       // guaranteed 429.
       if (mounted) {
         setState(() {
-          _errorMessage = context.trError(e);
+          _errorMessage = context.trError(e, feature: 'auth', screen: 'otp');
           _errorTick++;
         });
       }

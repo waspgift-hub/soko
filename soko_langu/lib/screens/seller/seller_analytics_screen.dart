@@ -87,7 +87,8 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         actions: [
-          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
+          IconButton(tooltip: context.tr('refresh'),
+            icon: const Icon(Icons.refresh_rounded), onPressed: _load),
         ],
       ),
       body: _loading

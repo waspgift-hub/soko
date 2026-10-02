@@ -197,7 +197,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
           ),
           const SizedBox(width: AppSpacing.s2),
           IconButton(
-            icon: const Icon(Icons.more_vert),
+            tooltip: context.tr('more_options'),
+                  icon: const Icon(Icons.more_vert),
             onPressed: widget.onMore,
           ),
         ],
@@ -279,7 +280,8 @@ Widget _media(
               style: AppTypography.timeIndicator(
                   cs.onSurfaceVariant)),
         IconButton(
-          icon: const Icon(Icons.mode_comment_outlined),
+          tooltip: context.tr('comment'),
+                  icon: const Icon(Icons.mode_comment_outlined),
           onPressed: widget.onComment == null
               ? null
               : () async {
@@ -292,6 +294,7 @@ Widget _media(
               style: AppTypography.timeIndicator(
                   cs.onSurfaceVariant)),
         IconButton(
+          tooltip: context.tr(_saved ? 'unsave_post' : 'save_post'),
           icon: Icon(_saved
               ? Icons.bookmark
               : Icons.bookmark_border),
@@ -303,6 +306,7 @@ Widget _media(
         ),
         const Spacer(),
         IconButton(
+          tooltip: context.tr('share'),
           icon: const Icon(Icons.share_outlined),
           onPressed: _share,
         ),

@@ -109,6 +109,7 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
         title: Text(context.tr('ad_revenue')),
         actions: [
           IconButton(
+            tooltip: context.tr('refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: _loadStats,
           ),

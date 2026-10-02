@@ -466,6 +466,7 @@ class _ChatPageState extends State<ChatPage> {
         shadowColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: context.tr('back'),
           icon: Icon(Icons.arrow_back, color: cs.onSurface),
           onPressed: () => context.pop(),
         ),
@@ -562,6 +563,7 @@ class _ChatPageState extends State<ChatPage> {
             onPressed: _openWhatsApp,
           ),
           IconButton(
+            tooltip: context.tr('more_options'),
             icon: Icon(Icons.more_vert, color: cs.onSurface),
             onPressed: () => _showOptions(cs),
           ),
@@ -728,6 +730,7 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('clear_reply'),
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: () => setState(() {
                       _replyTo = null;
@@ -790,6 +793,7 @@ class _ChatPageState extends State<ChatPage> {
                       border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
                     ),
                     child: IconButton(
+                      tooltip: context.tr('send'),
                       icon: Icon(Icons.send_rounded, color: cs.onPrimary, size: 18),
                       onPressed: _sendMessage,
                     ),
