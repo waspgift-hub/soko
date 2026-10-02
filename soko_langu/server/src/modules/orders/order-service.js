@@ -378,7 +378,7 @@ async function cancelOrder({ orderId, actorId, reason }) {
     });
   }
 
-  return store.$transaction(async (tx) => {
+  const updated = await store.$transaction(async (tx) => {
     const fresh = await tx.order.findUnique({ where: { id: orderId } });
     const machine = new OrderStateMachine(fresh.status);
     if (!machine.canTransition(ORDER_STATES.CANCELLED)) {
@@ -391,14 +391,18 @@ async function cancelOrder({ orderId, actorId, reason }) {
       reason: reason || 'Buyer cancelled order',
     });
 
-    const updated = await tx.order.update({
+    return tx.order.update({
       where: { id: orderId },
       data: { status: ORDER_STATES.CANCELLED, statusChangedBy: actorId },
     });
-
-    await syncLegacyOrderStatus(updated);
-    return updated;
   });
+
+  // Mirrored AFTER the commit, not inside it: the store's transaction buffers
+  // its own writes and flushes once at the end, but the mirror writes straight
+  // through raw Firestore — so doing it in the callback would leave the client
+  // showing CANCELLED even when the cancel later threw and rolled back.
+  await syncLegacyOrderStatus(updated);
+  return updated;
 }
 
 /**

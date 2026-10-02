@@ -4,8 +4,21 @@ const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const shippingService = require('./shipping-quote-service');
 const { getStore } = require('../../config/database');
+const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
 const router = Router();
+
+// Publishes a quote-driven status change to the Firestore docs the app streams.
+// Without this the store moves the order (e.g. to AWAITING_ESCROW_PAYMENT) but
+// the `orders/{id}` doc the Flutter screen listens to keeps its old lowercase
+// status — so an admin approves a quote and the buyer still sees "seller is
+// quoting" and cannot reach payment. The v1 orders alias in order-service
+// already mirrors; these routes call the service directly and bypass it.
+async function mirrorQuoteOutcome(order) {
+  if (!order || !order.id) return order;
+  await syncLegacyOrderStatus(order);
+  return order;
+}
 
 async function requireSellerProfile(req) {
   const store = getStore();
@@ -41,6 +54,9 @@ router.post(
       shippingAddress: req.body.shippingAddress,
       sellerRegion: req.body.sellerRegion,
     });
+    // Mirror 'quoted' + the server-locked shippingCost/totalAmount so the
+    // buyer's invoice stops showing the creation-time zeros.
+    await mirrorQuoteOutcome(result.updatedOrder);
     res.status(201).json({ success: true, data: result });
   }
 );
@@ -55,6 +71,7 @@ router.post(
       orderId: req.params.orderId,
       approvedBy: req.user.id,
     });
+    await mirrorQuoteOutcome(order);
     res.json({ success: true, data: order });
   }
 );
@@ -73,6 +90,7 @@ router.post(
       blockedBy: req.user.id,
       reason: req.body.reason,
     });
+    await mirrorQuoteOutcome(order);
     res.json({ success: true, data: order });
   }
 );

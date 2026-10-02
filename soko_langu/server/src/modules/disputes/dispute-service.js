@@ -2,6 +2,7 @@ const { getStore } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { releaseEscrowAndSettle } = require('../handover/handover-service');
+const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
 const DISPUTE_REASONS = [
   'WRONG_ITEM',
@@ -100,7 +101,7 @@ async function resolveDispute({ disputeId, resolvedBy, resolution, note, buyerAm
   const lock = await acquireLock(`dispute:${disputeId}`, 60);
 
   try {
-    return await store.$transaction(async (tx) => {
+    const updated = await store.$transaction(async (tx) => {
       const dispute = await tx.dispute.findUnique({ where: { id: disputeId }, include: { order: true } });
       if (!dispute) throw httpError(404, 'DISPUTE_NOT_FOUND');
       if (dispute.status !== 'open') throw httpError(409, 'DISPUTE_NOT_OPEN');
@@ -159,6 +160,17 @@ async function resolveDispute({ disputeId, resolvedBy, resolution, note, buyerAm
 
       return updated;
     });
+
+    // Publish the resolved state to the Firestore docs the app streams.
+    // Deliberately AFTER the transaction commits: a raw Firestore write inside
+    // the callback is not part of the buffered batch and would survive a
+    // rollback — and this decision decides whose money moves. Re-reading the
+    // committed row (rather than reusing the pre-update snapshot) also means the
+    // mirror shows the state the refund/settlement path actually landed on.
+    const committed = await store.order.findUnique({ where: { id: updated.orderId } });
+    if (committed) await syncLegacyOrderStatus(committed);
+
+    return updated;
   } finally {
     if (lock.acquired) await releaseLock(`dispute:${disputeId}`, lock.token);
   }

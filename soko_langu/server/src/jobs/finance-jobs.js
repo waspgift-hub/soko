@@ -21,6 +21,7 @@ const { autoRelease } = require('../modules/disputes/auto-release-service');
 const { processWithdrawal } = require('../modules/wallet/wallet-service');
 const { runReconciliation } = require('../modules/reconciliation/reconciliation-service');
 const { sendOneSignalNotification, notifyAdmins } = require('../modules/legacy-compat/notify');
+const { syncLegacyOrderStatus } = require('../modules/legacy-compat/presentation-mirror');
 
 // Sentinel used so a stale-but-paid order is never expired. Only ACTIVE holds
 // / initiated payments are re-verified; anything else is left for admin.
@@ -131,7 +132,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
         }
       }
 
-      await store.$transaction(async (tx) => {
+      const expiredOrder = await store.$transaction(async (tx) => {
         const machine = new OrderStateMachine(fresh.status);
         machine.transition(ORDER_STATES.EXPIRED, { actor: 'system', reason: 'Payment window elapsed' });
         const updated = await tx.order.update({
@@ -147,6 +148,13 @@ async function expireStalePayments({ now = new Date() } = {}) {
         });
         return updated;
       });
+
+      // Mirror after the commit: the sweep is what ends a buyer's payment
+      // attempt, and without this the order screen keeps showing a pending
+      // payment the buyer can no longer complete. Outside the callback so a
+      // rollback cannot leave the client believing the order expired.
+      await syncLegacyOrderStatus(expiredOrder);
+
       summary.expired += 1;
       await notifyBuyer(fresh, 'Order expired', 'Malipo yale kuchezewa. Tafadhali weka oda mpya.', { type: 'order_expired', expiry: true });
     } catch (e) {
