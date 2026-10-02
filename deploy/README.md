@@ -211,4 +211,55 @@ npm run test:e2e # opt-in live end-to-end tests against a running deployment
 1. `git log --oneline` to see previous versions
 2. `./deploy.sh <previous-commit>`
 3. Monitor health for 15 minutes
+
+## Railway: the API build is currently blocked
+
+`railway.json` says `builder: DOCKERFILE` with `watchPatterns: ["soko_langu/server/**"]`.
+The Railway service is linked to project `soko_langu`, environment `production`,
+service `soko-langu-server`, and its **Root Directory is set in the Railway
+dashboard**, which the CLI cannot read or change. That setting decides both the
+build context and the Dockerfile lookup, and the two Dockerfiles in this repo
+assume different roots:
+
+| Dockerfile | Build context it assumes | `COPY` it needs |
+| --- | --- | --- |
+| `Dockerfile` (repo root) | repo root | `COPY soko_langu/server/ ./` |
+| `soko_langu/server/Dockerfile` | `soko_langu/server` | `COPY . .` |
+
+With the service root directory set to `soko_langu/server`, the repo-root
+Dockerfile builds and then fails on its last step:
+
+```
+[5/5] COPY soko_langu/server/ .
+Build Failed: failed to compute cache key:
+  failed to calculate checksum of ref ...: "/soko_langu/server": not found
+```
+
+Fix it in the Railway dashboard by picking one of:
+
+1. Set **Root Directory** to the repo root (leave empty) — then the root
+   `Dockerfile` is correct as written. This is the option that matches the
+   `watchPatterns` paths, which are repo-root-relative.
+2. Keep Root Directory at `soko_langu/server` and set
+   `build.dockerfilePath: "Dockerfile"` in `railway.json` — then
+   `soko_langu/server/Dockerfile` is used, whose context is the server dir.
+
+Until one is applied the service stays `Failed`, so no commit reaches the live
+API. Verify with:
+
+```bash
+railway status                 # expect a green/active dot, not "Failed"
+railway logs --build -n 40| grep -E "ERRO|couldn't locate|Build (Failed|complete)"
+curl -s https://api.sokovibe.co.tz/health
+```
+
+Note that `railway up` skips the build when the uploaded snapshot matches the
+last one ("no changes detected in watch paths"), so a Dockerfile or
+`railway.json` fix alone will not rebuild. Touch a file under
+`soko_langu/server/**` to force it.
+
+`soko_langu/server/.dockerignore` must not list `Dockerfile`: Railway applies
+that file when assembling the upload archive, and excluding it makes Railway
+report `couldn't locate a dockerfile ... in code archive` before it ever reaches
+a build step.
 4. If rollback also fails, restore from backup
