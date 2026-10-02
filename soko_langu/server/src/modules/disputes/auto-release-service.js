@@ -1,6 +1,7 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
+const { RELEASE_REASON } = require('../escrow/escrow-release');
 
 const REQUIRED_SAFEGUARDS = [
   'NO_ACTIVE_DISPUTE',
@@ -49,7 +50,9 @@ async function evaluateAutoRelease(tx, orderId) {
  */
 async function autoRelease({ orderId, triggeredBy = 'system' }) {
   const store = getStore();
-  const lock = await acquireLock(`autorelease:${orderId}`, 60);
+  // Fail closed: an automatic sweep must never run concurrently with a manual
+  // settlement just because Redis blipped.
+  const lock = await requireLock(`autorelease:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {
@@ -92,9 +95,23 @@ async function autoRelease({ orderId, triggeredBy = 'system' }) {
         data: { status: ORDER_STATES.COMPLETED, completedAt: new Date() },
       });
 
-      // Release escrow and settle (idempotent via releaseEscrowAndSettle)
+      // Release escrow and settle (idempotent via releaseEscrowAndSettle).
+      // The reason is explicit: AUTO_RELEASE may only touch a `holding` hold,
+      // so a disputed order can never be paid out by the 14-day timer.
       const { releaseEscrowAndSettle } = require('../handover/handover-service');
-      await releaseEscrowAndSettle(tx, order);
+      const released = await releaseEscrowAndSettle(tx, order, {
+        reason: RELEASE_REASON.AUTO_RELEASE,
+      });
+      if (!released) {
+        // Nothing eligible (the hold is disputed/refunded/absent). The order
+        // state was already advanced above, so surface it rather than
+        // pretending the money moved.
+        return {
+          status: 'NO_ELIGIBLE_ESCROW',
+          order: completedOrder,
+          missingSafeguards: ['NO_ELIGIBLE_ESCROW'],
+        };
+      }
 
       return { status: 'AUTO_RELEASED', order: completedOrder, missingSafeguards: [] };
     });

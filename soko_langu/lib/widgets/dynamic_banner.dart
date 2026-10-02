@@ -7,13 +7,30 @@ import '../models/product_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
 
-class DynamicBanner extends StatelessWidget {
+class DynamicBanner extends StatefulWidget {
   const DynamicBanner({super.key});
+
+  @override
+  State<DynamicBanner> createState() => _DynamicBannerState();
+}
+
+class _DynamicBannerState extends State<DynamicBanner> {
+  // Built once, not per build. `getFeaturedProducts()` is
+  // `Stream.fromFuture(_api.fetchProducts(...))`, so an inline `stream:` meant a
+  // fresh HTTP request to the products API on every rebuild of this banner —
+  // and a new ProductService instance to hold it.
+  late final Stream<List<Product>> _featured;
+
+  @override
+  void initState() {
+    super.initState();
+    _featured = ProductService().getFeaturedProducts();
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Product>>(
-      stream: ProductService().getFeaturedProducts(),
+      stream: _featured,
       builder: (context, snap) {
         final products = snap.data ?? [];
         if (products.isEmpty) return const EarnMoneyBanner();

@@ -134,10 +134,29 @@ class UserService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  /// Profiles already resolved this session, keyed by uid.
+  ///
+  /// Keyed rather than a single slot on purpose: one global slot would let
+  /// `getProfile(someOtherUid)` return the signed-in user's own cached profile
+  /// to any screen that asked, which is a cross-user data leak.
+  final Map<String, UserProfile> _profileCache = {};
+
+  /// Drops the cached profiles so the next read re-fetches.
+  ///
+  /// Call after any write that changes profile content. The whole map is
+  /// cleared rather than one entry because a shop-banner or avatar edit is
+  /// mirrored onto several docs by different screens, and a targeted delete
+  /// would leave a stale copy under a neighbouring key.
+  void invalidateProfileCache() => _profileCache.clear();
+
   DocumentReference<Map<String, dynamic>> _profileDoc() =>
       _db.collection('users').doc(_auth.currentUser!.uid);
 
   Future<UserProfile?> getProfile(String uid) async {
+    // Only serve this uid's own entry.
+    final cached = _profileCache[uid];
+    if (cached != null) return cached;
+
     final self = uid == _auth.currentUser?.uid;
     final api = await _apiProfile(uid, self, await _currentToken());
     if (api != null) {
@@ -145,13 +164,20 @@ class UserService {
       // save; a blank Postgres row must not blank out an existing profile.
       if (self && api.isEmpty()) {
         final fb = await _db.collection('users').doc(uid).get();
-        if (fb.exists) return api.absorb(UserProfile.fromMap(uid, fb.data()!));
+        if (fb.exists) {
+          final merged = api.absorb(UserProfile.fromMap(uid, fb.data()!));
+          _profileCache[uid] = merged;
+          return merged;
+        }
       }
+      _profileCache[uid] = api;
       return api;
     }
     final doc = await _db.collection('users').doc(uid).get();
     if (!doc.exists) return null;
-    return UserProfile.fromMap(uid, doc.data()!);
+    final fbProfile = UserProfile.fromMap(uid, doc.data()!);
+    _profileCache[uid] = fbProfile;
+    return fbProfile;
   }
 
   Future<Map<String, UserProfile>> getProfiles(List<String> uids) async {
@@ -172,7 +198,13 @@ class UserService {
     } else {
       missing.addAll(uids);
     }
-    final refs = missing.map((id) => _db.collection('users').doc(id)).toList();
+    // Batch read of OTHER users goes through `userPublic/{uid}`.
+    //
+    // `users/{uid}` is owner-scoped by firestore.rules because it holds phone,
+    // email, KYC and balances; a batch read there would now be denied (which is
+    // the point). The projection carries the display fields a chat list or
+    // seller card renders, and maps onto the same `UserProfile` shape.
+    final refs = missing.map((id) => _db.collection('userPublic').doc(id)).toList();
     final docs = await Future.wait(refs.map((r) => r.get()));
     for (final doc in docs) {
       if (doc.exists) {
@@ -292,6 +324,8 @@ class UserService {
       await _updateSelf(m);
     }
     await _db.collection('users').doc(profile.uid).set(m, SetOptions(merge: true));
+    // Clear profile cache so dependent screens see the updated data
+    invalidateProfileCache();
   }
 
   /// Persists the user's in-app language to their profile doc so the server
@@ -366,6 +400,8 @@ class UserService {
     } catch (_) {}
     await _updateSelf({'profileImage': url});
     await _profileDoc().update({'profileImage': url});
+    // Clear profile cache so dependent screens see the updated image
+    invalidateProfileCache();
   }
 
   /// Deletes the previous profile image from Cloudinary after it has been
@@ -413,8 +449,10 @@ class UserService {
         } catch (_) {}
       }
     }
+    // Uniqueness is a public concern (anyone can hold a username), so it is
+    // checked against the public projection rather than the private doc.
     final snap = await _db
-        .collection('users')
+        .collection('userPublic')
         .where('username', isEqualTo: username.trim().toLowerCase())
         .get();
     for (var doc in snap.docs) {
@@ -450,11 +488,16 @@ class UserService {
     if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return [];
     final results = <String, UserProfile>{};
-    // Try structured indexes first (usernameLower, etc.), fall back to legacy fields
+    // Prefix search over the PUBLIC projection.
+    //
+    // Querying `users` here would (a) be denied by the tightened rules and
+    // (b) be a privacy leak even if it were allowed: a prefix scan walks other
+    // people's phone/email/KYC fields. `userPublic` is indexed on the same
+    // display names, so recall is unchanged for a user search.
     Future<void> tryQuery(String field) async {
       try {
         final snap = await _db
-            .collection('users')
+            .collection('userPublic')
             .where(field, isGreaterThanOrEqualTo: q)
             .where(field, isLessThan: '$q\uf8ff')
             .limit(20)
@@ -469,14 +512,19 @@ class UserService {
     await tryQuery('username');
     // displayName is stored with original casing; try lower variant if exists
     await tryQuery('displayNameLower');
-    // last resort: brute scan for displayName containing q (limited)
+    // Last resort: substring scan over the PUBLIC projection.
+    //
+    // Previously this read `users` and was therefore both a privacy leak (it
+    // loaded other people's private docs into memory to do a substring match)
+    // and, after the rules tightening, a guaranteed permission error. Same
+    // recall, no PII, and it is now actually reachable.
     if (results.isEmpty) {
       try {
-        final snap = await _db.collection('users').limit(50).get();
+        final snap = await _db.collection('userPublic').limit(50).get();
         for (final doc in snap.docs) {
           final data = doc.data();
           final dn = (data['displayName'] ?? '').toString().toLowerCase();
-          final un = (data['username'] ?? data['usernameLower'] ?? '').toString().toLowerCase();
+          final un = (data['username'] ?? '').toString().toLowerCase();
           if (dn.contains(q) || un.contains(q)) {
             results[doc.id] = UserProfile.fromMap(doc.id, data);
             if (results.length >= 20) break;
@@ -553,9 +601,31 @@ class UserService {
     });
   }
 
+  /// Canonical KYC badge status stream.
+  ///
+  /// All seller-facing screens must consume this stream rather than
+  /// independently fetching `sellerKycApproved` from product models, so a KYC
+  /// change propagates to every dependent badge at once.
+  ///
+  /// Reads the coarse `kycApproved` flag on the PUBLIC projection. Listening to
+  /// `users/{sellerId}` directly would need access to the seller's private
+  /// document, which the rules deliberately deny to everyone but the owner and
+  /// admin — and a public badge must not require that.
+  Stream<bool> streamKycStatus(String sellerId) {
+    final ref = _db.collection('userPublic').doc(sellerId);
+    return ref.snapshots().map((doc) {
+      if (!doc.exists) return false;
+      return doc.data()?['kycApproved'] == true;
+    });
+  }
+
   /// Stream the other user's lastActive for presence detection.
+  ///
+  /// Reads `userPublic/{uid}`: `lastActive` is presence metadata, not private
+  /// account data, and the projection mirrors it. Reading `users/{uid}` would be
+  /// denied for anyone but the owner.
   Stream<DateTime?> streamLastActive(String uid) {
-    return _db.collection('users').doc(uid).snapshots().map((doc) {
+    return _db.collection('userPublic').doc(uid).snapshots().map((doc) {
       if (!doc.exists) return null;
       final ts = doc.data()!['lastActive'];
       return (ts as dynamic)?.toDate();

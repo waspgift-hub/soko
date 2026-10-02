@@ -1,5 +1,11 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+// Money paths acquire a Redis lock with FAIL-CLOSED semantics: an unreachable
+// Redis refuses the operation instead of proceeding unprotected. Hermetic
+// tests have no Redis, so install an in-process stub before the service
+// modules bind acquireLock/requireLock at require time.
+require('./helpers/locks').stubLocksAlwaysAvailable();
+
 const { mapFirestoreProductToPrisma, mapFirestoreMediaToProductRows, buildSlug, normaliseCondition, toCreatedAt } = require('../src/modules/products/legacy-mapper');
 
 const SELLER_ID = '11111111-1111-1111-1111-111111111111';

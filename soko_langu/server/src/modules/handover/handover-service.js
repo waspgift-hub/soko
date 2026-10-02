@@ -1,8 +1,11 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { generateOtp, generateToken, hashOtp, verifyOtp, generateQrPayload } = require('./otp-generator');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
-const { releaseEscrowAndSettle } = require('../escrow/escrow-release');
+const {
+  releaseEscrowAndSettle,
+  RELEASE_REASON,
+} = require('../escrow/escrow-release');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { sendOneSignalNotification } = require('../legacy-compat/notify');
 
@@ -60,7 +63,7 @@ function credentialTtlMs() {
  */
 async function issueOtp({ orderId, issuedBy, userRole, order }) {
   const store = getStore();
-  const lock = await acquireLock(`otp:${orderId}`, 60);
+  const lock = await requireLock(`otp:${orderId}`, 60);
 
   try {
     let mirroredOrder = null;
@@ -158,9 +161,9 @@ async function issueOtp({ orderId, issuedBy, userRole, order }) {
  * can never double-credit: status-priority guard, single-use credential,
  * escrow release + Firestore wallet settle (both idempotent), then COMPLETED.
  */
-async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
+async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy, role }) {
   const store = getStore();
-  const lock = await acquireLock(`complete:${orderId}`, 60);
+  const lock = await requireLock(`complete:${orderId}`, 60);
 
   try {
     const result = await store.$transaction(async (tx) => {
@@ -173,6 +176,9 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
       if (!HANDOVER_VERIFIABLE_STATES.includes(order.status)) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
+      // Authorize BEFORE the credential is consumed, so an unauthorized caller
+      // cannot burn a buyer's OTP attempt counter.
+      assertCanVerifyHandover(order, { userId: verifiedBy, role });
 
       const credential = await findActiveCredential(tx, orderId, 'otp');
       if (!credential) throw httpError(404, 'NO_ACTIVE_CREDENTIAL');
@@ -209,9 +215,9 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
  * Verify the QR handover credential (token from the QR payload) and complete
  * the order through the exact same completion path as OTP.
  */
-async function verifyQrAndComplete({ orderId, token, verifiedBy }) {
+async function verifyQrAndComplete({ orderId, token, verifiedBy, role }) {
   const store = getStore();
-  const lock = await acquireLock(`complete:${orderId}`, 60);
+  const lock = await requireLock(`complete:${orderId}`, 60);
 
   try {
     const result = await store.$transaction(async (tx) => {
@@ -224,6 +230,7 @@ async function verifyQrAndComplete({ orderId, token, verifiedBy }) {
       if (!HANDOVER_VERIFIABLE_STATES.includes(order.status)) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
+      assertCanVerifyHandover(order, { userId: verifiedBy, role });
 
       const credential = await resolveQrCredential(tx, orderId, token);
       if (!credential) throw httpError(404, 'NO_ACTIVE_CREDENTIAL');
@@ -276,9 +283,10 @@ async function completeAfterCredentialVerified(tx, order, verifiedBy, credential
     data: { status: ORDER_STATES.DELIVERY_CONFIRMED, statusChangedBy: verifiedBy || order.buyerId },
   });
 
-  const escrowHold = settle
-    ? await releaseEscrowAndSettle(tx, order, { settle })
-    : await releaseEscrowAndSettle(tx, order);
+  const escrowHold = await releaseEscrowAndSettle(tx, order, {
+    reason: RELEASE_REASON.BUYER_CONFIRMED,
+    ...(settle ? { settle } : {}),
+  });
 
   const stepTwo = new OrderStateMachine(ORDER_STATES.DELIVERY_CONFIRMED);
   stepTwo.transition(ORDER_STATES.COMPLETED, { actor: 'system', reason: `${credentialType} handover verified` });
@@ -415,8 +423,30 @@ function assertCanIssueOtp(order, { userId, role }) {
   throw httpError(403, 'FORBIDDEN');
 }
 
+/**
+ * Only the buyer (or an admin) may complete an order using its handover
+ * credential.
+ *
+ * This is the counterpart to [assertCanIssueOtp], which ALREADY enforced
+ * ownership on issuance. Verification enforced nothing: `verifyOtpAndComplete`
+ * accepted any authenticated caller who presented a correct 6-digit code, and
+ * `completeAfterCredentialVerified` explicitly classified a non-buyer as the
+ * `system` actor. Since the OTP is shared with the courier and appears in
+ * screenshots, possession of the code plus any logged-in account was enough to
+ * release escrow on someone else's order.
+ *
+ * Kept pure so it is unit-testable without a transaction.
+ */
+function assertCanVerifyHandover(order, { userId, role }) {
+  if (order.buyerId === userId) return;
+  if (role === 'admin' || role === 'super_admin') return;
+  throw httpError(403, 'NOT_ORDER_PARTICIPANT');
+}
+
 module.exports = {
   issueOtp,
+  assertCanIssueOtp,
+  assertCanVerifyHandover,
   verifyOtpAndComplete,
   verifyQrAndComplete,
   releaseEscrowAndSettle,

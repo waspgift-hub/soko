@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { authenticate, requireActive } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
+const { otpVerifyLimiter, handoverLimiter } = require('../../middleware/rateLimiter');
 const { z } = require('zod');
 const handoverService = require('./handover-service');
 
@@ -21,11 +22,18 @@ router.post(
   }
 );
 
-// Verify OTP and complete the order atomically (handover)
+// Verify OTP and complete the order atomically (handover).
+//
+// Two limiters, deliberately: `handoverLimiter` bounds how fast ONE buyer can
+// hammer an order, and `otpVerifyLimiter` bounds the source. A 6-digit code is
+// a 10^6 space with a 5-attempt cap on the credential, so guessing across many
+// orders is the real threat — the per-source cap is what stops that.
 router.post(
   '/:orderId/otp/verify',
   authenticate,
   requireActive,
+  handoverLimiter,
+  otpVerifyLimiter,
   validate({
     body: z.object({ otp: z.string().length(6) }),
   }),
@@ -34,6 +42,7 @@ router.post(
       orderId: req.params.orderId,
       submittedOtp: req.body.otp,
       verifiedBy: req.user.id,
+      role: req.user.role,
     });
     res.json({ success: true, data: result });
   }
@@ -44,6 +53,7 @@ router.post(
   '/:orderId/qr/verify',
   authenticate,
   requireActive,
+  handoverLimiter,
   validate({
     body: z.object({ token: z.string().min(32).max(200) }),
   }),
@@ -52,6 +62,7 @@ router.post(
       orderId: req.params.orderId,
       token: req.body.token,
       verifiedBy: req.user.id,
+      role: req.user.role,
     });
     res.json({ success: true, data: result });
   }

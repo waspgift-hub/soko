@@ -1,7 +1,10 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
-const { releaseEscrowAndSettle } = require('../handover/handover-service');
+const {
+  releaseEscrowAndSettle,
+  RELEASE_REASON,
+} = require('../escrow/escrow-release');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
 const DISPUTE_REASONS = [
@@ -23,7 +26,7 @@ const SELLER_REASONS = ['BUYER_FRAUD'];
  */
 async function fileDispute({ orderId, filedBy, reason, description, role }) {
   const store = getStore();
-  const lock = await acquireLock(`dispute:${orderId}`, 60);
+  const lock = await requireLock(`dispute:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {
@@ -98,7 +101,7 @@ async function fileDispute({ orderId, filedBy, reason, description, role }) {
  */
 async function resolveDispute({ disputeId, resolvedBy, resolution, note, buyerAmount, sellerAmount }) {
   const store = getStore();
-  const lock = await acquireLock(`dispute:${disputeId}`, 60);
+  const lock = await requireLock(`dispute:${disputeId}`, 60);
 
   try {
     const updated = await store.$transaction(async (tx) => {
@@ -149,9 +152,20 @@ async function resolveDispute({ disputeId, resolvedBy, resolution, note, buyerAm
       });
 
       if (resolution === 'FULL_TO_SELLER') {
-        // Admin ruled for the seller: settle immediately. Idempotent via the
-        // `settlement_<orderId>` ledger key — a later OTP verify is a no-op.
-        await releaseEscrowAndSettle(tx, dispute.order);
+        // Admin ruled for the seller: settle immediately. This is the ONE path
+        // permitted to release a `disputed` hold, which is why the reason is
+        // explicit — the automatic and buyer-confirmed paths must never reach a
+        // disputed hold. Idempotent via the `settle_<orderId>` ledger key, so a
+        // later OTP verify is a no-op.
+        const released = await releaseEscrowAndSettle(tx, dispute.order, {
+          reason: RELEASE_REASON.DISPUTE_TO_SELLER,
+        });
+        if (!released) {
+          throw httpError(
+            409,
+            `DISPUTE_ESCROW_UNAVAILABLE_FOR_RELEASE:${escrowHold.status}`,
+          );
+        }
       } else if (resolution === 'FULL_REFUND') {
         await openRefundForOrder(tx, dispute, resolvedBy, null);
       } else {

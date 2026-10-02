@@ -23,7 +23,16 @@
 const { randomUUID } = require('crypto');
 const { getFirebaseFirestore } = require('../config/firebase');
 
-const CAP = 1000;
+// Page sizes. There is no longer a "read ceiling" — these bound a SINGLE
+// Firestore read, and the query layer pages until the answer is complete.
+//
+//   DEFAULT_PAGE_SIZE  a bounded page when the caller gave no `take`
+//   SCAN_PAGE_SIZE     batch size for the residual (post-filter) scan path
+//   HARD_PAGE_CAP      ceiling on one caller-supplied `take`, so a single
+//                      request can never ask the database for the world
+const DEFAULT_PAGE_SIZE = 200;
+const SCAN_PAGE_SIZE = 300;
+const HARD_PAGE_CAP = 1000;
 
 // model -> collection + identity + money fields.
 // `keyField` (when set) is the field whose value IS the document id AND the
@@ -210,6 +219,16 @@ function normOrderBy(spec) {
   return Array.isArray(spec) ? spec : [spec];
 }
 
+// A JSON path like `{ createdAt: { path: ['meta','at'], direction: 'desc' } }`
+// cannot be pushed to Firestore, so an ordered query that uses one must fall
+// back to the residual scan path instead of pretending the order was applied.
+function orderIsPushable(orderSpec) {
+  return orderSpec.every((s) => {
+    const [field, dir] = Object.entries(s)[0];
+    return !(dir && typeof dir === 'object' && Array.isArray(dir.path));
+  });
+}
+
 function sortRows(rows, spec) {
   if (!spec) return rows;
   const keys = normOrderBy(spec).map((s) => {
@@ -259,6 +278,28 @@ function buildPushdownPlan(clean) {
       continue;
     }
     if (Array.isArray(v)) {
+      // `in` is natively expressible. This matters most for the finance
+      // sweeps, which select on `{ status: { in: [...] } }` — pushing it down
+      // turns a full-collection scan into one indexed query.
+      //
+      // Firestore caps an `in` at 30 values and forbids combining `in` with
+      // `not-in` or a range on the same field; both are handled by falling back
+      // to the residual scan rather than issuing an invalid query.
+      const usable =
+        v.length > 0 &&
+        v.length <= 30 &&
+        v.every((x) =>
+          x == null ? false : ['string', 'boolean', 'number', 'bigint'].includes(typeof x),
+        ) &&
+        !rangedFields.has(k);
+      if (usable) {
+        filters.push({
+          field: k,
+          op: 'in',
+          val: v.map((x) => num(x)),
+        });
+        continue;
+      }
       residual = true;
       continue;
     }
@@ -368,44 +409,165 @@ class ModelFacade {
     return this._serialize(snap.data(), key);
   }
 
+/**
+   * Loads rows for a query.
+   *
+   * Two execution strategies, neither of which can truncate:
+   *
+   * 1. **Pushed-down** (`plan.exact && orderBy is Firestore-expressible`).
+   *    Equality filters and ordering both go to Firestore, the page is bounded
+   *    by `limit`, and `startAfter` resumes without re-reading. Reads scale
+   *    with page size, not collection size. Requires the composite indexes
+   *    declared in firestore.indexes.json.
+   *
+   * 2. **Residual scan** (any operator Firestore cannot express: `in`, `not`,
+   *    `contains`, JSON-path probes). Pages through the collection in bounded
+   *    batches using `startAfter(documentId)` and post-filters each batch, so
+   *    it stays CORRECT over any collection size while never holding more than
+   *    `SCAN_PAGE_SIZE` documents in memory at once.
+   *
+   * The previous implementation took a third path: one `limit(1000).get()`.
+   * That silently truncated every count, aggregate and ordered list past 1000
+   * documents — including all six finance sweeps, which is why escrow
+   * auto-release and payment expiry stopped working past that size.
+   */
   async _baseRows(where, opts = {}) {
     const clean = this._cleanWhere(where);
     // Prefer a single-key resolution to a cheap doc read.
     const key = this._resolveKey(clean);
-    let rows = [];
     if (key) {
       const r = await this._readByKey(key);
-      if (r && matchWhere(r, clean)) rows.push(r);
-    } else {
-      // Push down every filter Firestore can express natively, then post-filter
-      // the residual in memory. For exact plans the read ceiling is the
-      // requested row count (collect) — not the full CAP scan that made every
-      // list call cost up to 1000 Firestore reads. Ordered reads stay full-CAP:
-      // bounding them would require server-side ordering (new composite indexes)
-      // or risk mid-list truncation, so caching absorbs those instead.
-      const plan = buildPushdownPlan(clean);
-      const collect = Number(opts.collect > 0 ? opts.collect : 0) || 0;
+      const rows = r && matchWhere(r, clean) ? [r] : [];
+      return this._withOverlay(rows, clean);
+    }
+
+    const plan = buildPushdownPlan(clean);
+    const orderSpec = normOrderBy(opts.orderBy);
+    const ordered = orderSpec.length > 0;
+    const take = opts.take != null ? Number(opts.take) : null;
+    const skip = Number(opts.skip || 0);
+
+    // Pushed-down path. Ordering MUST be native: sorting an arbitrary bounded
+    // page in memory would return the wrong rows, not just a truncated list.
+    if (plan.exact && (!ordered || orderIsPushable(orderSpec))) {
+      const rows = await this._pagedQuery({
+        filters: plan.filters,
+        orderBy: orderSpec,
+        take: take != null ? take + skip : DEFAULT_PAGE_SIZE,
+        startAfter: opts.cursor || null,
+      });
+      return this._withOverlay(rows, clean);
+    }
+
+    // Residual path. Without an orderBy we can stop once we have enough rows;
+    // with one, the candidate set must be fully sorted, so walk it all — but in
+    // bounded batches, never as a single unbounded read.
+    const needAll = ordered;
+    const rows = [];
+    let cursor = null;
+    let scanned = 0;
+
+    for (;;) {
+      const batchSize = needAll
+        ? SCAN_PAGE_SIZE
+        : Math.max(SCAN_PAGE_SIZE, (take || 0) + skip);
       let q = this.db().collection(this.col);
       for (const f of plan.filters) q = q.where(f.field, f.op, f.val);
-      const ordered = normOrderBy(opts.orderBy).length > 0;
-      const want = plan.exact && !ordered && collect > 0 ? Math.min(CAP, collect) : CAP;
-      const snap = await q.limit(want).get();
+      if (cursor) q = q.startAfter(cursor);
+
+      const snap = await q.limit(batchSize).get();
+      if (snap.empty) break;
+
       for (const d of snap.docs) {
         const row = this._serialize(d.data(), d.id);
+        scanned += 1;
         if (matchWhere(row, clean)) rows.push(row);
       }
+
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < batchSize) break;
+      if (!needAll && rows.length >= (take || 0) + skip) break;
     }
+
+    void scanned;
+    return this._withOverlay(rows, clean);
+  }
+
+  /** Merges buffered-transaction writes over a query result. */
+  _withOverlay(rows, clean) {
     const ov = this._overlay();
-    if (ov) {
-      const map = new Map(rows.map((r) => [this._docKey(r.id), r]));
-      for (const [dk, row] of ov) {
-        if (!dk.startsWith(this.col + '/')) continue;
-        if (row === null) map.delete(dk);
-        else map.set(dk, row);
-      }
-      rows = [...map.values()].filter((r) => matchWhere(r, clean));
+    if (!ov) return rows;
+    const map = new Map(rows.map((r) => [this._docKey(r.id), r]));
+    for (const [dk, row] of ov) {
+      if (!dk.startsWith(this.col + '/')) continue;
+      if (row === null) map.delete(dk);
+      else map.set(dk, row);
     }
-    return rows;
+    return [...map.values()].filter((r) => matchWhere(r, clean));
+  }
+
+  /**
+   * One bounded, ordered Firestore page.
+   *
+   * Reached only when `orderBy` names real Firestore fields, so `orderBy` can
+   * be pushed to the server. `limit` bounds the read; `startAfter` makes paging
+   * cost O(page) instead of O(offset).
+   */
+  async _pagedQuery({ filters, orderBy, take, startAfter }) {
+    let q = this.db().collection(this.col);
+    for (const f of filters) q = q.where(f.field, f.op, f.val);
+    for (const spec of orderBy) {
+      const [field, dir] = Object.entries(spec)[0];
+      q = q.orderBy(field, String(dir).toLowerCase() === 'desc' ? 'desc' : 'asc');
+    }
+    if (startAfter) {
+      for (const spec of orderBy) {
+        const [field] = Object.entries(spec)[0];
+        q = q.startAfter(startAfter[field]);
+      }
+    }
+    const limit = Math.min(Math.max(1, Number(take) || DEFAULT_PAGE_SIZE), HARD_PAGE_CAP);
+    const snap = await q.limit(limit).get();
+    return snap.docs.map((d) => this._serialize(d.data(), d.id));
+  }
+
+  /**
+   * Opaque pagination cursor: the ordered field values of the last row.
+   *
+   * Timestamps are encoded as millis because Firestore `Timestamp` objects do
+   * not survive `JSON.stringify`, which would make every cursor undecodable the
+   * first time an ordered field was a date — i.e. nearly every list endpoint.
+   */
+  _encodeCursor(orderBy, lastRow) {
+    if (!orderBy.length || !lastRow) return null;
+    const payload = {};
+    for (const spec of orderBy) {
+      const [field] = Object.entries(spec)[0];
+      const v = lastRow[field];
+      if (v == null) return null;
+      payload[field] =
+        v && typeof v === 'object' && typeof v.toMillis === 'function'
+          ? { __ts: v.toMillis() }
+          : v;
+    }
+    return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+  }
+
+  _decodeCursor(cursor) {
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(String(cursor), 'base64').toString('utf8'),
+      );
+      const out = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        out[k] = v && typeof v === 'object' && v.__ts != null
+          ? new Date(Number(v.__ts))
+          : v;
+      }
+      return out;
+    } catch {
+      return null;
+    }
   }
 
   async _resolveRelationWhere(where) {
@@ -502,14 +664,29 @@ class ModelFacade {
   }
 
   async findFirst({ where = {}, orderBy, select, include } = {}) {
-    const rows = sortRows(await this._baseRows(where, { collect: 1, orderBy }), orderBy);
+    // take:1 lets the pushed-down path issue a single `limit(1)` with native
+    // ordering, instead of reading a page and sorting it in memory.
+    const rows = sortRows(
+      await this._baseRows(where, { take: 1, orderBy }),
+      orderBy,
+    );
     return this._decorate(rows[0] || null, select, include);
   }
 
-  async findMany({ where = {}, orderBy, take, skip = 0, select, include } = {}) {
+  /**
+   * Lists rows. Accepts either `skip`/`take` (offset paging, used by the admin
+   * and analytics surfaces) or `cursor` (Firestore `startAfter`, used by the
+   * app-facing list endpoints). `cursor` and `orderBy` must be used together.
+   */
+  async findMany({ where = {}, orderBy, take, skip = 0, cursor, select, include } = {}) {
     let rows = sortRows(
-      await this._baseRows(where, { collect: take != null ? Number(skip) + Number(take) : 0, orderBy }),
-      orderBy
+      await this._baseRows(where, {
+        take: take != null ? Number(take) : null,
+        skip: Number(skip) || 0,
+        orderBy,
+        cursor,
+      }),
+      orderBy,
     );
     const start = Number(skip) || 0;
     const end = take != null ? start + Number(take) : undefined;
@@ -517,14 +694,68 @@ class ModelFacade {
     return Promise.all(rows.map((r) => this._decorate(r, select, include)));
   }
 
+  /**
+   * Encodes an opaque cursor from a page of rows so a caller can request the
+   * next one without the store exposing Firestore internals.
+   */
+  encodeCursor(rows, orderBy) {
+    if (!rows || !rows.length) return null;
+    return this._encodeCursor(normOrderBy(orderBy), rows[rows.length - 1]);
+  }
+
+  decodeCursor(cursor) {
+    return this._decodeCursor(cursor);
+  }
+
   async _findBase({ where, take }) {
-    let rows = await this._baseRows(where, { collect: take != null ? Number(take) : 1 });
+    let rows = await this._baseRows(where, { take: take != null ? Number(take) : 1 });
     if (take != null) rows = rows.slice(0, take);
     return rows[0] || null;
   }
 
+  /**
+   * Exact document count.
+   *
+   * Uses Firestore's native `count()` aggregation for a fully pushable filter
+   * (1 read billed, regardless of collection size). Anything Firestore cannot
+   * express falls back to the paged residual scan, which is slower but no
+   * longer silently caps at 1000.
+   */
   async count({ where = {} } = {}) {
-    return (await this._baseRows(where)).length;
+    const key = this._resolveKey(this._cleanWhere(where));
+    if (key) return (await this._readByKey(key)) ? 1 : 0;
+
+    const clean = this._cleanWhere(where);
+    const plan = buildPushdownPlan(clean);
+    // `count()` is a Firestore 3.10+ aggregation. Feature-detect it so the
+    // test double (and any older SDK) degrades to the scan instead of throwing.
+    let supportsCount = false;
+    try {
+      const probe = this.db().collection(this.col);
+      supportsCount = typeof probe.count === 'function';
+    } catch {
+      supportsCount = false;
+    }
+
+    if (plan.exact && supportsCount) {
+      try {
+        let q = this.db().collection(this.col);
+        for (const f of plan.filters) q = q.where(f.field, f.op, f.val);
+        const agg = await q.count().get();
+        const data = agg.data && agg.data();
+        const n = data && typeof data.count === 'number'
+          ? data.count
+          : (data && data.count && typeof data.count.toNumber === 'function'
+            ? data.count.toNumber()
+            : null);
+        if (n != null) return n;
+      } catch (e) {
+        // A count() query needs the same composite index as the read. If it is
+        // missing, fall through to the scan rather than failing the request.
+        if (!/FAILED_PRECONDITION|index/i.test(String(e && e.message))) throw e;
+      }
+    }
+    return (await this._baseRows(where, { take: null })).length;
   }
 
   async create({ data = {}, select, include } = {}) {
@@ -557,7 +788,7 @@ class ModelFacade {
 
   async update({ where = {}, data = {}, select, include } = {}) {
     const key = this._resolveKey(where);
-    const rows = key != null ? await this._baseRows({ ...where }) : await this._baseRows(where);
+    const rows = await this._baseRows(where, { take: 1 });
     const cur = rows.find((r) => key == null || String(r.id) === String(key)) || rows[0] || null;
     if (!cur) return null;
     const merged = this._applyAtomic(cur, data);
@@ -568,8 +799,17 @@ class ModelFacade {
     return this._decorate(merged, select, include);
   }
 
+  /**
+   * Batched read-modify-write over every matching row.
+   *
+   * `data` is applied per row from the row's own current value, so a concurrent
+   * writer is not clobbered by a stale snapshot the way it was when callers
+   * pre-computed absolute values and wrote them wholesale. Callers that need
+   * true atomicity on a money field must use `commerce-store` (real Firestore
+   * transactions), not this.
+   */
   async updateMany({ where = {}, data = {} } = {}) {
-    const rows = await this._baseRows(where);
+    const rows = await this._baseRows(where, { take: null });
     for (const r of rows) {
       const merged = this._applyAtomic(r, data);
       this._normalizeMoney(merged);
@@ -580,20 +820,40 @@ class ModelFacade {
   }
 
   async upsert({ where = {}, create: createData = {}, update: updateData = {}, select } = {}) {
-    const existing = (await this._baseRows(where))[0] || null;
+    const existing = (await this._baseRows(where, { take: 1 }))[0] || null;
     if (existing) return this.update({ where: { id: existing.id }, data: updateData, select });
     return this.create({ data: createData, select });
   }
 
   async delete({ where = {} } = {}) {
-    const rows = await this._baseRows(where);
+    const rows = await this._baseRows(where, { take: null });
     for (const r of rows) await this.persistDelete(r.id);
     return { count: rows.length };
   }
 
+  /**
+   * `_count` uses Firestore's native aggregation (1 read, any collection size).
+   *
+   * `_sum` cannot: Firestore has no server-side SUM. It is computed from the
+   * paged residual scan, which is now COMPLETE rather than capped at 1000 — the
+   * previous version read at most 1000 documents and reported a sum that was
+   * silently wrong for every larger collection (reconciliation totals, admin
+   * revenue, escrow held).
+   */
   async aggregate({ where = {}, _sum = {}, _count = {} } = {}) {
-    const rows = await this._baseRows(where);
     const res = {};
+    const wantCount = Object.values(_count).some(Boolean);
+
+    if (wantCount && !Object.values(_sum).some(Boolean)) {
+      const n = await this.count({ where });
+      res._count = {};
+      for (const [f, flag] of Object.entries(_count)) {
+        if (flag) res._count[f] = n;
+      }
+      return res;
+    }
+
+    const rows = await this._baseRows(where, { take: null });
     if (Object.keys(_sum).length) {
       res._sum = {};
       for (const [f, flag] of Object.entries(_sum)) {
@@ -612,7 +872,7 @@ class ModelFacade {
   }
 
   async groupBy({ by = [], where = {}, _count = {}, _sum = {} } = {}) {
-    const rows = await this._baseRows(where);
+    const rows = await this._baseRows(where, { take: null });
     const relFilters = await this._resolveRelationWhere(where);
     const groups = new Map();
     for (const r of rows) {

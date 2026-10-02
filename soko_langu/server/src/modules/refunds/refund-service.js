@@ -1,5 +1,5 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
 const { resolvePayoutPhone } = require('../../services/payout-phone');
 const { OrderStateMachine, ORDER_STATES, canonicalStatusOf } = require('../orders/order-state-machine');
@@ -63,7 +63,7 @@ function buildCorrelationId(orderNumber) {
 // executed by processRefund (admin only). Buyer requests never move the order.
 async function requestRefund({ orderId, requestedBy, role, reason, amount }) {
   const store = getStore();
-  const lock = await acquireLock(`refundreq:${orderId}`, 60);
+  const lock = await requireLock(`refundreq:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {
@@ -124,7 +124,7 @@ async function requestRefund({ orderId, requestedBy, role, reason, amount }) {
 // disburse the money to the buyer's phone via the provider payout channel.
 async function processRefund({ refundId, processedBy = 'system' }) {
   const store = getStore();
-  const lock = await acquireLock(`refund:${refundId}`, 60);
+  const lock = await requireLock(`refund:${refundId}`, 60);
 
   try {
     const { refund, order, escrowHold, finalState, completed } = await store.$transaction(async (tx) => {
@@ -352,7 +352,7 @@ async function disburseRefund(refund) {
 // in REFUND_PENDING (retryable via the standard admin processRefund flow).
 async function refundOnCancel({ orderId, actorId, role, reason }) {
   const store = getStore();
-  const lock = await acquireLock(`cancelrefund:${orderId}`, 60);
+  const lock = await requireLock(`cancelrefund:${orderId}`, 60);
 
   try {
     if (role !== 'buyer' && role !== 'admin') throw httpError(403, 'FORBIDDEN');

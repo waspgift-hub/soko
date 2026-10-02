@@ -18,6 +18,12 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+// Money paths acquire a Redis lock with FAIL-CLOSED semantics: an unreachable
+// Redis refuses the operation instead of proceeding unprotected. Hermetic
+// tests have no Redis, so install an in-process stub before the service
+// modules bind acquireLock/requireLock at require time.
+require('./helpers/locks').stubLocksAlwaysAvailable();
+
 
 const state = { store: null, provider: null, payoutCalls: [] };
 

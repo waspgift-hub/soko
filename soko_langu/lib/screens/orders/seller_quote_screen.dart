@@ -26,6 +26,22 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
   final Map<String, bool> _submitting = {};
   final Map<String, bool> _freeDelivery = {};
 
+  // Memoised per seller: this screen rebuilds on every cost-field keystroke, and
+  // an inline `stream:` re-opened the Firestore listener each time.
+  String? _ordersStreamKey;
+  Stream<QuerySnapshot>? _ordersStream;
+
+  Stream<QuerySnapshot> _ordersFor(String uid) {
+    if (_ordersStreamKey != uid) {
+      _ordersStreamKey = uid;
+      _ordersStream = FirebaseFirestore.instance
+          .collection('orders')
+          .where('sellerId', isEqualTo: uid)
+          .snapshots();
+    }
+    return _ordersStream!;
+  }
+
   @override
   void dispose() {
     for (final c in _costCtrls.values) {
@@ -130,10 +146,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         // "Orders Needing Quote" carousel). The mirror in `transactions` is
         // written by the server inside a swallowed try/catch, so it can drift
         // and leave this list empty — reading `orders` keeps both in sync.
-        stream: FirebaseFirestore.instance
-            .collection('orders')
-            .where('sellerId', isEqualTo: user.uid)
-            .snapshots(),
+        stream: _ordersFor(user.uid),
         builder: (context, snap) {
           if (snap.hasError) {
             return Center(child: Text('${context.tr('error')}: ${snap.error}'));

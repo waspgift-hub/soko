@@ -1,5 +1,5 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 
 const EVIDENCE_TYPES = [
   'LISTING_SNAPSHOT',
@@ -20,7 +20,7 @@ const EVIDENCE_TYPES = [
  */
 async function addEvidence({ disputeId, submittedBy, type, r2Key, description }) {
   const store = getStore();
-  const lock = await acquireLock(`evidence:${disputeId}`, 60);
+  const lock = await requireLock(`evidence:${disputeId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {

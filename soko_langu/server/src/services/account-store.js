@@ -32,6 +32,84 @@ function docRef(uid) {
   return assertDb().collection('users').doc(uid);
 }
 
+// ─── PUBLIC PROJECTION ──────────────────────────────────
+//
+// `users/{uid}` is the OWNER'S PRIVATE record: phone, email, exact KYC state,
+// balances, isAdmin, isSuspended. Firestore rules cannot redact fields from a
+// document read, so once `users` reads were tightened to owner-or-admin, the
+// marketplace still needed a safe way to learn the handful of things it
+// legitimately displays about *other* people (chat list names, seller badges,
+// public profile cards).
+//
+// This projection is that answer. It contains no contact details, no money, no
+// privilege flags and no raw KYC payload — only what a profile card renders.
+// It is written exclusively by the Admin SDK, which bypasses rules, so no client
+// can forge a "verified" flag; firestore.rules grants read but no write.
+//
+// NOTE the derived booleans: `kycApproved` / `trustTier` are deliberately
+// coarse. Consumers that need more detail already go through
+// GET /api/v1/trust/sellers/:id/passport or GET /api/v1/users/me.
+const PUBLIC_FIELDS = [
+  'displayName', 'username', 'bio', 'avatarUrl', 'location', 'mood',
+  'lastActive', 'createdAt', 'updatedAt',
+];
+
+/**
+ * Derives the public projection from a `users` doc.
+ *
+ * `kycApproved` is a boolean, not the KYC object: the app only ever needs
+ * "verified or not" for a badge, and the full object (document numbers, review
+ * notes) must never leave the owner's document.
+ */
+function buildPublicProjection(uid, doc) {
+  const p = (doc && doc.metadata && doc.metadata.profile) || {};
+  const displayName = doc.displayName || doc.name || '';
+  const username = doc.username || '';
+  return {
+    userId: uid,
+    displayName,
+    username,
+    // Lower-cased mirrors of the two searchable fields. `user_service.dart`
+    // prefix-searches `userPublic` with `isGreaterThanOrEqualTo` /
+    // `isLessThan` on these, and Firestore range queries are byte-ordered on
+    // the stored string — so without them a query for "amara" misses "Amara"
+    // and returns nothing. They are derived, never trusted from the client.
+    displayNameLower: String(displayName).toLowerCase(),
+    usernameLower: String(username).toLowerCase(),
+    bio: doc.bio || '',
+    avatarUrl: doc.avatarUrl || '',
+    location: p.location || '',
+    mood: p.mood || '',
+    // Coarse badge flag only — never the KYC payload itself.
+    kycApproved: Boolean(doc.kyc && doc.kyc.approved),
+    isSeller: Boolean(doc.sellerProfile && doc.sellerProfile.sellerStatus === 'seller'),
+    accountStatus: doc.accountStatus === 'suspended' ? 'suspended' : 'active',
+    lastActive: doc.lastActive || null,
+    createdAt: doc.createdAt || null,
+    updatedAt: doc.updatedAt || null,
+    updatedAtIso: new Date().toISOString(),
+  };
+}
+
+/**
+ * Mirrors the safe subset into `userPublic/{uid}`.
+ *
+ * Best-effort by design: a failure here must never fail the profile write that
+ * triggered it, because the private `users` doc is the source of truth and the
+ * projection is a derived cache. A missed projection degrades to the server API
+ * path (GET /api/v1/users/public/:id), not to a broken write.
+ */
+async function syncPublicProjection(uid, doc) {
+  try {
+    await assertDb()
+      .collection('userPublic')
+      .doc(uid)
+      .set(buildPublicProjection(uid, doc), { merge: true });
+  } catch (e) {
+    console.error('[ACCOUNT-STORE] public projection failed:', e.message);
+  }
+}
+
 async function getProfile(uid) {
   const snap = await docRef(uid).get();
   return snap.exists ? snapshotData(snap) : null;
@@ -106,6 +184,7 @@ function applyProfileUpdate(doc, body) {
 async function writeProfile(uid, { col, meta }) {
   const data = { userId: uid, ...col, metadata: meta, updatedAt: adminNow() };
   await docRef(uid).set(data, { merge: true });
+  await syncPublicProjection(uid, { ...data });
 
   try {
     const store = getStore();
@@ -125,6 +204,14 @@ async function writeProfile(uid, { col, meta }) {
 // doc, then set them on the store seam row too.
 async function updateFlags(uid, flags) {
   await docRef(uid).set({ ...flags, updatedAt: adminNow() }, { merge: true });
+  // Suspension is reflected in the projection so a banned seller's public card
+  // stops showing as active without exposing the reason or the actor.
+  try {
+    const current = await getProfile(uid);
+    if (current) await syncPublicProjection(uid, current);
+  } catch (e) {
+    console.error('[ACCOUNT-STORE] projection flag sync failed:', e.message);
+  }
   try {
     const store = getStore();
     const row = await store.user.findUnique({ where: { firebaseUid: uid }, select: { id: true } });
@@ -177,8 +264,53 @@ async function byUsernameFirestore(username) {
   return snap.empty ? null : { ...snapshotData(snap.docs[0]), _uid: snap.docs[0].id };
 }
 
+/**
+ * Builds a public projection from the current Firestore `users` doc.
+ *
+ * Exposed so a one-off backfill can populate `userPublic` for accounts created
+ * before the projection existed. Run with the Admin SDK (rules grant no client
+ * write, by design).
+ *
+ *   node scripts/backfill-user-public.js
+ */
+async function backfillUserPublic({ batchSize = 400, limit } = {}) {
+  const db = assertDb();
+  let created = 0;
+  let scanned = 0;
+  let cursor = null;
+
+  for (;;) {
+    let q = db.collection('users').orderBy('__name__').limit(batchSize);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    for (const doc of snap.docs) {
+      scanned++;
+      batch.set(
+        db.collection('userPublic').doc(doc.id),
+        buildPublicProjection(doc.id, doc.data() || {}),
+        { merge: true },
+      );
+    }
+    await batch.commit();
+    created += snap.size;
+    cursor = snap.docs[snap.docs.length - 1];
+
+    if (limit && scanned >= limit) break;
+    if (snap.size < batchSize) break;
+  }
+
+  return { scanned, created };
+}
+
 module.exports = {
   getProfile,
+  buildPublicProjection,
+  syncPublicProjection,
+  backfillUserPublic,
+  PUBLIC_FIELDS,
   serializeFirestoreProfile,
   applyProfileUpdate,
   writeProfile,

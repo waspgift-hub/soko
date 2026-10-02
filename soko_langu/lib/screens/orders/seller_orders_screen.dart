@@ -76,6 +76,46 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     super.dispose();
   }
 
+  // The order list is a live Firestore query, and the screen also runs a 1 Hz
+  // ticker for the countdown column. With `stream:` built inline in build(), that
+  // ticker rebuilt the widget once a second and each rebuild opened a NEW
+  // listener on the seller's whole `transactions` collection — a full re-read per
+  // second, per seller, for as long as the screen was open. Memoising by
+  // (uid, refreshKey) keeps one listener and only re-opens it on an explicit
+  // refresh.
+  String? _ordersStreamKey;
+  Stream<QuerySnapshot>? _ordersStream;
+
+  Stream<QuerySnapshot> _ordersStreamFor(String uid, int refreshKey) {
+    final key = '$uid:$refreshKey';
+    if (_ordersStreamKey != key) {
+      _ordersStreamKey = key;
+      _ordersStream = FirebaseFirestore.instance
+          .collection('transactions')
+          .where('sellerId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots();
+    }
+    return _ordersStream!;
+  }
+
+  String? _pendingStreamKey;
+  Stream<QuerySnapshot>? _pendingOrdersStream;
+
+  Stream<QuerySnapshot> _pendingOrdersStreamFor(String uid, int refreshKey) {
+    final key = '$uid:$refreshKey';
+    if (_pendingStreamKey != key) {
+      _pendingStreamKey = key;
+      _pendingOrdersStream = FirebaseFirestore.instance
+          .collection('orders')
+          .where('sellerId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(150)
+          .snapshots();
+    }
+    return _pendingOrdersStream!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -100,11 +140,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               key: ValueKey('seller_orders_$_refreshKey'),
-              stream: FirebaseFirestore.instance
-                  .collection('transactions')
-                  .where('sellerId', isEqualTo: user.uid)
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
+              stream: _ordersStreamFor(user.uid, _refreshKey),
               builder: (context, snap) {
                 if (snap.hasError) {
                   return SokoVibeErrorState(
@@ -762,12 +798,9 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   Widget _buildPendingOrdersSection(ColorScheme cs, User user) {
     return StreamBuilder<QuerySnapshot>(
       key: ValueKey('seller_pending_orders_$_refreshKey'),
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('sellerId', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .limit(150)
-          .snapshots(),
+      // Same reasoning as _ordersStreamFor: memoised so the 1 Hz ticker cannot
+      // re-open this second listener on every tick.
+      stream: _pendingOrdersStreamFor(user.uid, _refreshKey),
       builder: (context, snap) {
         if (snap.hasError) {
           // Surfacing the failure here keeps the section from silently

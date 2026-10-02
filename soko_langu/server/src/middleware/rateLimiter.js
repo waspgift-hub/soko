@@ -133,17 +133,61 @@ const searchLimiter = rateLimit({ max: 30, windowMs: 60000 });
 // per-device limit on top (30 chat / 60 summary per hour, groq_service.dart).
 const aiLimiter = rateLimit({ max: 20, windowMs: 60000 });
 
-// Security-specific limiters (per plan Phase 12.3)
-const otpRequestLimiter = rateLimit({ max: 100, windowMs: 60000 });      // loose global ceiling; per-target guard lives in otpGuard
-const otpVerifyLimiter = rateLimit({ max: 30, windowMs: 900000 });        // 30/15min per source; real brute-force guard is the 5-attempt cap per OTP key
-const checkoutLimiter = rateLimit({ max: 5, windowMs: 60000 });          // 5/min per user
-const withdrawalLimiter = rateLimit({ max: 3, windowMs: 3600000 });      // 3/hour per seller
-const loginLimiter = rateLimit({ max: 5, windowMs: 900000 });            // 5/15min per email
-const commentLimiter = rateLimit({ max: 10, windowMs: 60000 });          // 10/min per user
-const messageLimiter = rateLimit({ max: 30, windowMs: 60000 });          // 30/min per user
+// Security-specific limiters.
+//
+// Keyed by user id when the route runs behind `authenticate`, and by IP
+// otherwise. The previous definitions all keyed on IP only, which meant every
+// user behind one mobile NAT shared a bucket — the limit was either useless
+// (never fired) or punitive (throttled a whole carrier). `userKeyed` uses the
+// authenticated uid and falls back to the IP only when there is no session.
+const userKeyed = (req) => (req.user && req.user.id ? `u:${req.user.id}` : `ip:${clientIp(req)}`);
+
+// OTP: a loose global ceiling. The real per-target guards (per-phone cooldown,
+// per-phone quota, per-IP quota) live in otpGuard and are keyed on the phone
+// number, which is what actually stops one target being spammed.
+const otpRequestLimiter = rateLimit({ max: 100, windowMs: 60000 });
+// Verify: 30/15min per source. Combined with the 5-attempt cap on each
+// credential, guessing is bounded on both axes.
+const otpVerifyLimiter = rateLimit({
+  max: 30,
+  windowMs: 900000,
+  keyGenerator: userKeyed,
+});
+// Handover completion per ORDER, not per user: one buyer confirming one
+// delivery should not be throttled, but one order should not accept a burst of
+// guesses either. 10/5min leaves ample room for a retry after a typo.
+const handoverLimiter = rateLimit({
+  max: 10,
+  windowMs: 5 * 60 * 1000,
+  keyGenerator: (req) => `handover:${req.params.orderId || 'unknown'}:${userKeyed(req)}`,
+});
+const checkoutLimiter = rateLimit({
+  max: 5,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
+// Money out. 3/hour per seller is the product rule; this is the cheap outer
+// bound so a scripted caller cannot even reach the ledger.
+const withdrawalLimiter = rateLimit({
+  max: 3,
+  windowMs: 3600000,
+  keyGenerator: userKeyed,
+});
+const loginLimiter = rateLimit({ max: 5, windowMs: 900000 });
+const commentLimiter = rateLimit({
+  max: 10,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
+const messageLimiter = rateLimit({
+  max: 30,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
 
 module.exports = {
   rateLimit,
+  clientIp,
   generalLimiter,
   adminLimiter,
   authLimiter,
@@ -152,6 +196,7 @@ module.exports = {
   aiLimiter,
   otpRequestLimiter,
   otpVerifyLimiter,
+  handoverLimiter,
   checkoutLimiter,
   withdrawalLimiter,
   loginLimiter,

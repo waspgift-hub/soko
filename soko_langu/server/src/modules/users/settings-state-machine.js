@@ -36,7 +36,7 @@ const DOMAIN_VALIDATORS = {
   profile: ['displayName', 'username', 'bio', 'avatarUrl'],
   security: ['twoFactorEnabled', 'emailVerified', 'phoneVerified'],
   privacy: ['showEmail', 'showPhone', 'showLocation', 'profileVisibility'],
-  notifications: ['pushEnabled', 'emailEnabled', 'smsEnabled', 'types'],
+  notifications: ['pushEnabled', 'emailEnabled', 'smsEnabled', 'types', 'categoryPreferences'],
   shopping: ['defaultAddressId', 'preferredShipping', 'savedCards'],
   selling: ['storeName', 'storeDescription', 'returnsPolicy'],
   payments: ['defaultPayoutMethod', 'currencyPreference'],

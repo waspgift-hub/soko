@@ -17,9 +17,15 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
   int _currentPage = 0;
   Timer? _timer;
 
+  // Held rather than built inline: the carousel repaints every 4 seconds, and an
+  // inline `stream:` made each of those repaints open a fresh Firestore listener
+  // on `price_drops` and tear the previous one down.
+  late final Stream<List<Map<String, dynamic>>> _dropsStream;
+
   @override
   void initState() {
     super.initState();
+    _dropsStream = _service.getActivePriceDrops();
     _pageController = PageController();
   }
 
@@ -47,7 +53,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _service.getActivePriceDrops(),
+      stream: _dropsStream,
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();

@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_service.dart';
 
 /// Tracks public-profile views: increments a `profileViews` counter on the
-/// owner's users doc and pushes a notification to the owner the first time a
-/// viewer opens their profile (throttled via SharedPreferences so one viewer
-/// doesn't spam the owner on every visit).
+/// owner's public projection and pushes a notification to the owner the first
+/// time a viewer opens their profile (throttled via SharedPreferences so one
+/// viewer doesn't spam the owner on every visit).
 class ProfileViewService {
   static const String _throttleKey = 'notified_profile_views';
 
@@ -43,18 +43,26 @@ class ProfileViewService {
     }
   }
 
+  /// Records a profile view against the public projection.
+  ///
+  /// Previously wrote `users/{otherUid}.profileViews`, which required the
+  /// client to hold write access to another user's private document — a
+  /// privilege firestore.rules correctly denies. The counter belongs with the
+  /// public data anyway, and `profileViews` is display-only.
+  ///
+  /// `update`, not `set(merge)`: the rules grant no `create` on `userPublic`, so
+  /// a viewer can bump the counter on an existing projection but cannot
+  /// fabricate one (which would let a caller write their own `kycApproved: true`).
+  /// A user with no projection yet simply is not counted until
+  /// `server/scripts/backfill-user-public.js` has run for them.
   Future<void> _incrementCounter(String profileOwnerId) async {
     try {
       await _db
-          .collection('users')
+          .collection('userPublic')
           .doc(profileOwnerId)
           .update({'profileViews': FieldValue.increment(1)});
     } catch (_) {
-      // counter may not exist yet — create it
-      await _db
-          .collection('users')
-          .doc(profileOwnerId)
-          .set({'profileViews': 1}, SetOptions(merge: true));
+      // Analytics is never worth failing a profile render over.
     }
   }
 }

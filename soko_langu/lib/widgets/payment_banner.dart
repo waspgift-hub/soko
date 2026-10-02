@@ -319,9 +319,18 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
   Timer? _elapsedTimer;
   int _elapsedSeconds = 0;
 
+  // Held rather than rebuilt inline: the 1 Hz elapsed timer above rebuilds this
+  // widget every second, and an inline `stream:` meant a new Firestore document
+  // listener was opened and torn down on every one of those ticks.
+  late final Stream<DocumentSnapshot> _orderDocStream;
+
   @override
   void initState() {
     super.initState();
+    _orderDocStream = FirebaseFirestore.instance
+        .collection('transactions')
+        .doc(widget.orderId)
+        .snapshots();
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -410,10 +419,10 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
     final bottom = MediaQuery.of(context).padding.bottom + 32;
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('transactions')
-          .doc(widget.orderId)
-          .snapshots(),
+      // Built once per order, not once per build. This widget polls on a 1 Hz
+      // timer while a payment is pending, so an inline `stream:` opened and
+      // cancelled a Firestore document listener on every tick.
+      stream: _orderDocStream,
       builder: (context, snap) {
         final data = snap.data?.data() as Map<String, dynamic>?;
         final status = data?['status'] as String? ?? 'pending';

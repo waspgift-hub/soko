@@ -13,7 +13,7 @@
  */
 const config = require('../config');
 const { getStore } = require('../config/database');
-const { acquireLock, releaseLock } = require('../config/redis');
+const { acquireLock, requireLock, releaseLock } = require('../config/redis');
 const { getProvider } = require('../modules/payments/provider-factory');
 const paymentService = require('../modules/payments/payment-service');
 const { OrderStateMachine, ORDER_STATES } = require('../modules/orders/order-state-machine');
@@ -26,6 +26,66 @@ const { syncLegacyOrderStatus } = require('../modules/legacy-compat/presentation
 // Sentinel used so a stale-but-paid order is never expired. Only ACTIVE holds
 // / initiated payments are re-verified; anything else is left for admin.
 const PAYMENT_STATES_ACTIVE = ['initiated', 'pending'];
+
+/**
+ * Walks a sweep in bounded, ordered batches until the set is drained.
+ *
+ * The previous shape was `findMany({ take: N, orderBy })` in a single call. Two
+ * problems, both fixed here:
+ *
+ *  1. The store used to read a fixed 1000-document ceiling for any ordered
+ *     query, so every sweep silently saw only the newest 1000 rows in the
+ *     collection — payments past that point never expired and escrow never
+ *     auto-released.
+ *  2. A single `take: N` per run cannot drain a backlog larger than N.
+ *
+ * Now each batch is one indexed, ordered, LIMIT-bounded query, and the loop
+ * continues until a short page proves the set is exhausted. `maxBatches` is a
+ * wall-clock guard, not a correctness ceiling: on hitting it the summary says
+ * `drained: false` so the next scheduled run continues rather than the sweep
+ * being reported as complete.
+ *
+ * `status` values that are not re-queued (completed, refunded, …) simply drop
+ * out of the filter, so the cursor walks forward through newly-advanced rows
+ * without revisiting settled work.
+ */
+async function drainSweep({
+  model,
+  where,
+  batchSize = 100,
+  maxBatches = 20,
+  orderBy = { createdAt: 'asc' },
+  onBatch,
+  summary,
+}) {
+  let processed = 0;
+  let batches = 0;
+
+  for (let batch = 0; batch < maxBatches; batch++) {
+    const rows = await model.findMany({ where, take: batchSize, orderBy });
+    if (!rows || rows.length === 0) {
+      summary.drained = true;
+      return { processed, batches };
+    }
+
+    await onBatch(rows);
+
+    processed += rows.length;
+    batches += 1;
+
+    if (rows.length < batchSize) {
+      // A short page means the indexed query is exhausted.
+      summary.drained = true;
+      return { processed, batches };
+    }
+  }
+
+  // Ran out of batch budget with a full page still coming. Deliberately left
+  // false so the caller reports an incomplete sweep; the next scheduled run
+  // picks up where this one stopped.
+  summary.drained = false;
+  return { processed, batches };
+}
 
 async function audit(tx, data) {
   try {
@@ -47,13 +107,20 @@ async function audit(tx, data) {
 }
 
 // Fire a notification at most once per window (Redis SETNX key, TTL window).
+//
+// `optional: true` is correct here and only here: this lock is a duplicate-
+// notification damper, not a correctness guard. Losing it during a Redis blip
+// means an extra alert, which is harmless; the money locks must fail closed.
 async function throttledNotify(key, ttlSeconds, fn) {
-  const lock = await acquireLock(`notify:${key}`, ttlSeconds);
+  const lock = await acquireLock(`notify:${key}`, ttlSeconds, { optional: true });
   if (!lock.acquired) return;
   try {
     await fn();
   } catch (e) {
     console.error('[FINANCE][NOTIFY]', key, e.message);
+  } finally {
+    // The window IS the TTL — releasing early would defeat the throttle. This
+    // lock is intentionally not released, unlike every money lock.
   }
 }
 
@@ -76,18 +143,35 @@ async function notifyBuyer(order, title, body, data) {
 async function expireStalePayments({ now = new Date() } = {}) {
   const store = getStore();
   const due = new Date(now.getTime() - config.finance.paymentExpireMs);
-  const pendingOrders = await store.order.findMany({
+
+  const summary = { expired: 0, paidRecovered: 0, skipped: 0, failed: 0, processed: 0, drained: true };
+
+  await drainSweep({
+    model: store.order,
     where: {
       status: { in: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING] },
       createdAt: { lte: due },
     },
-    take: 100,
-    orderBy: { createdAt: 'asc' },
-  });
-
-  const summary = { expired: 0, paidRecovered: 0, skipped: 0, failed: 0 };
-  for (const order of pendingOrders) {
-    const lock = await acquireLock(`expire:${order.id}`, 60);
+    batchSize: 100,
+    summary,
+    onBatch: async (pendingOrders) => {
+    summary.processed += pendingOrders.length;
+    for (const order of pendingOrders) {
+    // Fail closed. Expiring an order is a money-visible transition: two sweeps
+    // running concurrently could expire an order the buyer is actively paying,
+    // or recover-then-expire the same payment. `acquireLock` returned
+    // `{acquired:false}` during a Redis blip and this loop still ran the body,
+    // so a degraded Redis silently removed the mutual exclusion it existed to
+    // provide. `requireLock` throws instead, the catch below counts it, and the
+    // order survives to the next sweep.
+    let lock;
+    try {
+      lock = await requireLock(`expire:${order.id}`, 60);
+    } catch (e) {
+      summary.failed += 1;
+      console.error('[FINANCE] expireStalePayments lock', order.id, e.message);
+      continue;
+    }
     try {
       const fresh = await store.order.findUnique({ where: { id: order.id } });
       if (![ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_PROCESSING].includes(fresh.status)) {
@@ -163,7 +247,10 @@ async function expireStalePayments({ now = new Date() } = {}) {
     } finally {
       if (lock.acquired) await releaseLock(`expire:${order.id}`, lock.token);
     }
-  }
+    }
+    },
+  });
+
   return summary;
 }
 
@@ -174,21 +261,27 @@ async function expireStalePayments({ now = new Date() } = {}) {
 async function runAutoReleaseSweep({ now = new Date() } = {}) {
   const store = getStore();
   const due = new Date(now.getTime() - config.finance.autoReleaseDays * 24 * 3600 * 1000);
-  const orders = await store.order.findMany({
+
+  const summary = { released: 0, blocked: 0, skipped: 0, errored: 0, processed: 0, drained: true };
+
+  await drainSweep({
+    model: store.order,
     where: {
       legacyFirestoreId: null,
       status: { in: [ORDER_STATES.DELIVERED, ORDER_STATES.DELIVERY_CONFIRMED] },
       deliveredAt: { lte: due },
     },
-    take: 50,
+    batchSize: 50,
+    // `deliveredAt` drives both the filter and the order, so the cursor walks
+    // oldest-delivered first and each batch makes progress.
     orderBy: { deliveredAt: 'asc' },
-  });
-
-  const summary = { released: 0, blocked: 0, skipped: 0, errored: 0 };
-  for (const order of orders) {
+    summary,
+    onBatch: async (orders) => {
+    summary.processed += orders.length;
+    for (const order of orders) {
     try {
-      // V3 Alignment: Instead of a separate autoRelease service, we trigger
-      // the canonical completeOrder flow which handles the Ledger settlement.
+      // The canonical completeOrder flow performs the Ledger settlement; this
+      // sweep only decides *when* an order qualifies.
       const orderService = require('../modules/orders/order-service');
       const result = await orderService.completeOrder({
         orderId: order.id,
@@ -196,8 +289,13 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
         method: 'AUTO_RELEASE',
       });
 
-      if (result) {
+      if (result && result.status === 'COMPLETED') {
         summary.released += 1;
+      } else if (result && result.status === 'NO_ELIGIBLE_ESCROW') {
+        // The hold was disputed or refunded: the sweep must not pay it out.
+        // Surfaced separately so a disputed backlog is visible instead of
+        // being indistinguishable from a completed release.
+        summary.blocked += 1;
       } else {
         summary.skipped += 1;
       }
@@ -205,7 +303,10 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
       summary.errored += 1;
       console.error('[FINANCE] autoRelease order', order.id, e.message);
     }
-  }
+    }
+    },
+  });
+
   return summary;
 }
 
@@ -218,14 +319,24 @@ async function processPendingWithdrawals({ now = new Date() } = {}) {
   const autoCutoff = new Date(now.getTime() - config.finance.withdrawalAutoProcessMs);
   const stuckCutoff = new Date(now.getTime() - config.finance.withdrawalStuckMs);
 
-  const pendings = await store.withdrawal.findMany({
-    where: { status: 'pending', createdAt: { lte: autoCutoff } },
-    take: 50,
-    orderBy: { createdAt: 'asc' },
-  });
-  const summary = { processed: 0, skipped: 0, stuckAlerted: 0, errored: 0 };
+  const summary = { processed: 0, skipped: 0, stuckAlerted: 0, errored: 0, drained: true };
 
-  for (const w of pendings) {
+  await drainSweep({
+    model: store.withdrawal,
+    // `reserved` is the dispatch queue: money is held and the gateway has not
+    // been called. `disbursing` is included because a previous attempt may have
+    // died mid-call — processWithdrawal asks ClickPesa whether it already has
+    // the payout before touching it, so this can never double-send.
+    //
+    // The old filter was `status: 'pending'`, a state the withdrawal state
+    // machine does not have: `requestWithdrawal` writes `requested`, then
+    // `reserved` once the ledger debit commits. The sweep therefore matched zero
+    // rows and every withdrawal sat unprocessed until an admin opened it.
+    where: { status: { in: ['reserved', 'disbursing'] }, createdAt: { lte: autoCutoff } },
+    batchSize: 50,
+    summary,
+    onBatch: async (pendings) => {
+    for (const w of pendings) {
     try {
       await processWithdrawal({ withdrawalId: w.id, executedBy: 'system' });
       summary.processed += 1;
@@ -233,21 +344,30 @@ async function processPendingWithdrawals({ now = new Date() } = {}) {
       summary.errored += 1;
       console.warn('[FINANCE] withdrawal process', w.id, e.message);
     }
-  }
-
-  const stuck = await store.withdrawal.findMany({
-    where: { status: 'processing', createdAt: { lte: stuckCutoff } },
-    take: 20,
-    orderBy: { createdAt: 'asc' },
+    }
+    },
   });
-  for (const s of stuck) {
+
+  // Payouts the gateway accepted but never confirmed. These are NOT retried —
+  // they may already have been sent. They are alerted for manual
+  // reconciliation, which is the only safe action without a payout-status API.
+  await drainSweep({
+    model: store.withdrawal,
+    where: { status: 'processing', createdAt: { lte: stuckCutoff } },
+    batchSize: 20,
+    summary,
+    onBatch: async (stuck) => {
+    for (const s of stuck) {
     summary.stuckAlerted += 1;
     await throttledNotify(`withdrawalStuck:${s.id}`, 24 * 3600, () =>
       notifyAdmins('Payout stuck in processing', `Withdrawal ${s.id} is processing past the window. Reconcile with ClickPesa.`, {
         type: 'withdrawal_failed', withdrawalId: s.id, stuck: true,
       })
     );
-  }
+    }
+    },
+  });
+
   return summary;
 }
 
@@ -290,14 +410,15 @@ async function runReconciliationSweep({ now = new Date() } = {}) {
 async function escalateDisputes({ now = new Date() } = {}) {
   const store = getStore();
   const cutoff = new Date(now.getTime() - config.finance.disputeSlaMs);
-  const open = await store.dispute.findMany({
+  const summary = { escalated: 0, drained: true };
+
+  await drainSweep({
+    model: store.dispute,
     where: { status: 'open', createdAt: { lte: cutoff } },
-    take: 20,
-    orderBy: { createdAt: 'asc' },
-    include: { order: { select: { orderNumber: true, buyerId: true, sellerId: true } } },
-  });
-  const summary = { escalated: 0 };
-  for (const d of open) {
+    batchSize: 20,
+    summary,
+    onBatch: async (open) => {
+    for (const d of open) {
     summary.escalated += 1;
     await throttledNotify(`dispute:${d.id}`, 24 * 3600, () =>
       notifyAdmins(
@@ -327,7 +448,10 @@ async function escalateDisputes({ now = new Date() } = {}) {
         )
       );
     }
-  }
+    }
+    },
+  });
+
   return summary;
 }
 
@@ -339,21 +463,20 @@ async function refundUnstuck({ now = new Date() } = {}) {
   const store = getStore();
   const processingCutoff = new Date(now.getTime() - 2 * 3600 * 1000);
   const failedCutoff = new Date(now.getTime() - 24 * 3600 * 1000);
-  const summary = { stuck: 0 };
+  const summary = { stuck: 0, drained: true };
 
-  const stuck = await store.refund.findMany({
+  await drainSweep({
+    model: store.refund,
     where: {
       OR: [
         { status: 'processing', createdAt: { lte: processingCutoff } },
         { status: 'failed', createdAt: { lte: failedCutoff } },
       ],
     },
-    take: 20,
-    orderBy: { createdAt: 'asc' },
-    include: { order: { select: { orderNumber: true } } },
-  });
-
-  for (const r of stuck) {
+    batchSize: 20,
+    summary,
+    onBatch: async (stuck) => {
+    for (const r of stuck) {
     summary.stuck += 1;
     await throttledNotify(`refund:${r.id}`, 24 * 3600, () =>
       notifyAdmins(
@@ -362,7 +485,10 @@ async function refundUnstuck({ now = new Date() } = {}) {
         { type: 'refund_stuck', refundId: r.id, status: r.status, amount: r.amount.toString() }
       )
     );
-  }
+    }
+    },
+  });
+
   return summary;
 }
 

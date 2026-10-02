@@ -49,17 +49,23 @@ class SuggestionService {
     return {};
   }
 
+  /// Display names for other users.
+  ///
+  /// Reads `userPublic/{uid}`, NOT `users/{uid}`. The private `users` doc holds
+  /// contact details, KYC state and balances, and Firestore rules now restrict
+  /// it to the owner; the projection carries only display data and is safe to
+  /// read for anyone.
   Future<Map<String, String>> sellerNames(Set<String> sellerIds) async {
     final map = <String, String>{};
     for (final id in sellerIds) {
       try {
         final doc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection('userPublic')
             .doc(id)
             .get();
         final data = doc.data();
         if (data != null) {
-          map[id] = (data['displayName'] ?? data['name'] ?? 'Member').toString();
+          map[id] = (data['displayName'] ?? 'Member').toString();
         }
       } catch (_) {}
     }

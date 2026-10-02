@@ -151,7 +151,7 @@ class FraudPreventionService {
 
   Future<void> checkNewSeller(String sellerId, String sellerName) async {
     try {
-      final userDoc = await _db.collection('users').doc(sellerId).get();
+      final userDoc = await _db.collection('userPublic').doc(sellerId).get();
       final data = userDoc.data();
       if (data == null) return;
 
@@ -235,8 +235,12 @@ class FraudPreventionService {
         );
       }
 
-      final sellerDoc = await _db.collection('users').doc(sellerId).get();
-      if (sellerDoc.data()?['kyc']?['approved'] != true && amount > 100000) {
+      // Coarse `kycApproved` from the public projection. The full KYC object lives
+      // on the owner's private `users` doc, which this client must not read;
+      // for a "flag high-value payments from unverified sellers" heuristic the
+      // boolean is exactly what is needed.
+      final sellerDoc = await _db.collection('userPublic').doc(sellerId).get();
+      if (sellerDoc.data()?['kycApproved'] != true && amount > 100000) {
         await _raiseAlert(
           sellerId: sellerId,
           sellerName: sellerName,

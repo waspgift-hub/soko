@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,7 +13,6 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../main.dart' show AppConfig;
 import '../../widgets/ds/ds.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/soko_widgets.dart';
 
@@ -26,6 +27,77 @@ class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notifService = NotificationService();
   final NotificationApiClient _api = NotificationApiClient();
   DateTime? _lastTileTapAt;
+
+  // Created ONCE and reused.
+  //
+  // Both of these were previously constructed inline in build(): the v1 future
+  // re-issued an HTTP request on every rebuild, and the Firestore stream
+  // re-subscribed (and re-billed a full read) on every rebuild. Because each
+  // completion triggers setState → rebuild, both were self-sustaining loops that
+  // ran until the user navigated away — `_buildV1Body` alone was two HTTP calls
+  // per iteration, because fetchUnreadCount is nested inside fetchNotifications.
+  late final Future<({List<NotificationItem> notifications, int unreadCount})>
+      _v1Future;
+  StreamSubscription<QuerySnapshot>? _fsSub;
+  QuerySnapshot? _fsSnapshot;
+  Object? _fsError;
+  bool _fsLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _v1Future = _api.fetchNotifications();
+    _subscribeFirestore();
+  }
+
+  /// The Firestore fallback path (used when `kUseNotificationsApi` is false).
+  ///
+  /// Subscribed once and torn down in [dispose] rather than being handed a new
+  /// stream to `StreamBuilder` on each build.
+  void _subscribeFirestore() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _fsLoading = false;
+      return;
+    }
+    _fsSub = FirebaseFirestore.instance
+        .collection('notifications')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        // Bounded: an unbounded user-scoped listener re-bills its whole result
+        // set every time any document in it changes.
+        .limit(60)
+        .snapshots()
+        .listen(
+      (snap) {
+        if (!mounted) return;
+        setState(() {
+          _fsSnapshot = snap;
+          _fsLoading = false;
+          _fsError = null;
+        });
+      },
+      onError: (e) {
+        if (!mounted) return;
+        setState(() {
+          _fsError = e;
+          _fsLoading = false;
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _fsSub?.cancel();
+    _fsSub = null;
+    super.dispose();
+  }
+
+  /// Forces a refetch after a mutation (mark-all-read, delete-all).
+  void _reload() {
+    setState(() => _v1Future = _api.fetchNotifications());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,60 +115,55 @@ class _NotificationScreenState extends State<NotificationScreen> {
       return _buildV1Body(cs);
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snap) {
-        if (snap.hasError) return _buildErrorScaffold(cs);
-        if (!snap.hasData) return _buildLoadingScaffold(cs);
+    if (_fsLoading) return _buildLoadingScaffold(cs);
+    if (_fsError != null) return _buildErrorScaffold(cs);
+    return _buildFirestoreBody(cs, _fsSnapshot);
+  }
 
-        final docs = snap.data!.docs;
-        // Snapshot `[]` throws for fields absent from a doc; legacy rows
-        // predate isRead, so read through the Map which defaults to null.
-        final unreadCount =
-            docs.where((d) => ((d.data() as Map)['isRead'] as bool?) != true).length;
+  /// Firestore-backed list, rendered from the snapshot held in state.
+  Widget _buildFirestoreBody(ColorScheme cs, QuerySnapshot? snap) {
+    final docs = snap?.docs ?? const <QueryDocumentSnapshot>[];
+    // Snapshot `[]` throws for fields absent from a doc; legacy rows predate
+    // isRead, so read through the Map which defaults to null.
+    final unreadCount = docs
+        .where((d) => ((d.data() as Map)['isRead'] as bool?) != true)
+        .length;
 
-        return Scaffold(
-          backgroundColor: cs.surface,
-          appBar: AppBar(
-            title: Text(context.tr('notifications')),
-            actions: [
-              IconButton(
-                tooltip: context.tr('notification_settings'),
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () => context.push(AppRoutes.notificationPreferences),
-              ),
-              if (unreadCount > 0)
-                TextButton(
-                  onPressed: () => _markAllRead(),
-                  child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
-                ),
-              if (docs.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.delete_sweep_outlined),
-                  tooltip: context.tr('clear_all'),
-                  onPressed: () => _deleteAll(docs),
-                ),
-            ],
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        title: Text(context.tr('notifications')),
+        actions: [
+          IconButton(
+            tooltip: context.tr('notification_settings'),
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push(AppRoutes.notificationPreferences),
           ),
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
-              ),
+          if (unreadCount > 0)
+            TextButton(
+              onPressed: () => _markAllRead(),
+              child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
             ),
-            child: docs.isEmpty
-                ? _emptyState(context)
-                : _buildNotificationList(cs, docs),
+          if (docs.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined),
+              tooltip: context.tr('clear_all'),
+              onPressed: () => _deleteAll(docs),
+            ),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
           ),
-          bottomNavigationBar: const AdBanner(),
-        );
-      },
+        ),
+        child: docs.isEmpty
+            ? _emptyState(context)
+            : _buildNotificationList(cs, docs),
+      ),
     );
   }
 
@@ -116,7 +183,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (mounted) {
       SokoSnackbar.info(context, context.tr('mark_all_read'));
     }
-    if (mounted) setState(() {});
+    // Refresh the ONE future this screen reads. The bare `setState(() {})`
+    // used to be relied on to re-trigger the FutureBuilder — which only worked
+    // because the future was rebuilt in build(), i.e. by re-requesting on every
+    // rebuild. Now the refresh is explicit.
+    if (ApiConfig.kUseNotificationsApi) _reload();
   }
 
   /// Batch-deletes every notification and shows how many were removed so the
@@ -166,6 +237,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     final deleted = await _api.deleteAll();
     if (!mounted) return;
+    _reload();
     SokoSnackbar.show(
       context,
       message: context.tr(
@@ -394,7 +466,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const AdBanner(),
     );
   }
 
@@ -403,7 +474,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
   /// remaining UI (card render, tap routing, swipe delete) is shared.
   Widget _buildV1Body(ColorScheme cs) {
     return FutureBuilder<({List<NotificationItem> notifications, int unreadCount})>(
-      future: _api.fetchNotifications(),
+      // `late final` created in initState, NOT a fresh call here. Constructing
+      // the future inside build() meant every rebuild issued a new request, and
+      // every completion called setState, which rebuilt — an unbounded loop.
+      future: _v1Future,
       builder: (context, snap) {
         if (snap.hasError) return _buildErrorScaffold(cs);
         if (!snap.hasData) return _buildLoadingScaffold(cs);
@@ -446,7 +520,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 ? _emptyState(context)
                 : _buildV1NotificationList(cs, items),
           ),
-          bottomNavigationBar: const AdBanner(),
         );
       },
     );
@@ -481,7 +554,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const AdBanner(),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,6 +13,18 @@ class CategoryService {
   final ProductApiClient _api = ProductApiClient();
   List<Category>? _cached;
   Stream<List<Category>>? _cachedStream;
+
+  // Callers write `CategoryService().watchCategories()` inside a
+  // `StreamBuilder.stream:`, so every build used to construct a new instance.
+  // The per-instance `_cachedStream` cache therefore never hit: each rebuild
+  // opened a fresh Firestore listener on `categories` (or, on the HTTP path, a
+  // fresh `Stream.fromFuture` and therefore a fresh categories request). One
+  // shared instance plus one broadcast stream fixes every call site at once.
+  static CategoryService? _shared;
+
+  factory CategoryService() => _shared ??= CategoryService._internal();
+
+  CategoryService._internal();
 
   // =========================
   // SHIPPED TREE (static, synchronous)
@@ -61,25 +74,69 @@ class CategoryService {
       // v1 is HTTP, not a stream: resolve once from Postgres and replay the
       // cached tree; ProductApiClient keeps its own copy so the category pages
       // and the home grid never hit Firestore during the migration window.
-      return Stream.fromFuture(() async {
+      //
+      // Broadcast + value replay rather than `Stream.fromFuture`, because this is
+      // handed to a StreamBuilder: a fresh future-backed stream per call meant
+      // one categories HTTP request per rebuild.
+      // The HTTP path has no source stream of its own — the fetch IS the source.
+      return _broadcast(const Stream<List<Category>>.empty(), () async {
         final cats = await _api.fetchCategories();
         _cached = cats.where((c) => c.isActive).toList();
         return _cached!;
-      }());
+      });
     }
     if (_cachedStream != null) return _cachedStream!;
-    _cachedStream = _db.collection("categories").snapshots().map((snapshot) {
-      if (snapshot.docs.isEmpty) {
-        return getDefaultCategories();
-      }
-      final cats = snapshot.docs
-          .map((doc) => Category.fromFirestore(doc))
-          .toList();
-      cats.sort((a, b) => a.order.compareTo(b.order));
-      _cached = cats.where((c) => c.isActive).toList();
-      return _cached!;
-    });
+    _cachedStream = _broadcast(
+      _db.collection("categories").snapshots().map((snapshot) {
+        if (snapshot.docs.isEmpty) {
+          return getDefaultCategories();
+        }
+        final cats = snapshot.docs
+            .map((doc) => Category.fromFirestore(doc))
+            .toList();
+        cats.sort((a, b) => a.order.compareTo(b.order));
+        _cached = cats.where((c) => c.isActive).toList();
+        return _cached!;
+      }),
+      null,
+    );
     return _cachedStream!;
+  }
+
+  List<Category>? _httpLast;
+
+  /// Wraps a source stream in a broadcast controller that replays its last value
+  /// to each new subscriber, so a remounted widget is not stuck on "loading"
+  /// and a rebuild does not re-subscribe.
+  Stream<List<Category>> _broadcast(
+    Stream<List<Category>> source,
+    Future<List<Category>> Function()? seed,
+  ) {
+    late final StreamController<List<Category>> ctrl;
+    var started = false;
+
+    ctrl = StreamController<List<Category>>.broadcast(
+      onListen: () {
+        if (started) {
+          // Replay so a late subscriber renders immediately.
+          final last = _httpLast;
+          if (last != null) scheduleMicrotask(() => ctrl.add(last));
+          return;
+        }
+        started = true;
+        if (seed != null) {
+          seed().then((v) {
+            _httpLast = v;
+            if (!ctrl.isClosed) ctrl.add(v);
+          }).catchError((_) {});
+        }
+        source.listen((v) {
+          _httpLast = v;
+          if (!ctrl.isClosed) ctrl.add(v);
+        }, onError: (Object _) {});
+      },
+    );
+    return ctrl.stream;
   }
 
   List<Category> get cached => _cached ?? [];

@@ -29,6 +29,7 @@ const LEDGER_TYPES = {
   COMMISSION_DEBITED: 'COMMISSION_DEBITED',
   SETTLEMENT_CREDITED: 'SETTLEMENT_CREDITED',
   WITHDRAWAL_DEBITED: 'WITHDRAWAL_DEBITED',
+  WITHDRAWAL_REFUNDED: 'WITHDRAWAL_REFUNDED',
   REFUND_PROCESSED: 'REFUND_PROCESSED',
   LEGACY_BALANCE: 'LEGACY_BALANCE',
   ADJUSTMENT: 'ADJUSTMENT',
@@ -254,29 +255,41 @@ async function listWithdrawals(sellerUid, { limit = 500, db } = {}) {
   return snap.docs.map((d) => serializeWithdrawal(d));
 }
 
-// Sums non-cancelled withdrawals since a date (daily cap). Reads at most
-// `limit` docs and filters cancelled in memory — withdrawal volume per seller
-// per day is small, so a pure-DB SUM() aggregate is not worth a range filter
-// that Firestore cannot combine with a status != filter.
-async function sumWithdrawalsToday(sellerUid, sinceDate, { db, limit = 500 } = {}) {
+// Sums non-cancelled withdrawals since a date (daily cap).
+//
+// Paged rather than capped: the previous version read `limit` (500) docs sorted
+// newest-first and gave up, which meant the daily cap was computed from a
+// truncated window. At a volume where one seller exceeds 500 withdrawals in the
+// window the cap silently under-counted and allowed more money out.
+async function sumWithdrawalsToday(sellerUid, sinceDate, { db, pageSize = 200 } = {}) {
   const store = db || localDb();
-  const snap = await store
-    .collection(COLLECTIONS.withdrawals)
-    .where('sellerId', '==', String(sellerUid))
-    .orderBy('createdAt', 'desc')
-    .limit(limit)
-    .get();
   const since = new Date(sinceDate).getTime();
+  const sinceTimestamp = new Date(sinceDate);
   let total = 0;
-  for (const d of snap.docs) {
-    const x = d.data();
-    if (x.status === 'cancelled') continue;
-    const created = x.createdAt && typeof x.createdAt.toDate === 'function'
-      ? x.createdAt.toDate().getTime()
-      : new Date(x.createdAt || 0).getTime();
-    if (created < since) continue;
-    total += tzs(x.amount);
+  let cursor = null;
+
+  // Bound the loop so a pathological dataset cannot spin forever, but high
+  // enough that a legitimate day of withdrawals cannot be truncated.
+  for (let page = 0; page < 50; page++) {
+    let q = store
+      .collection(COLLECTIONS.withdrawals)
+      .where('sellerId', '==', String(sellerUid))
+      .where('createdAt', '>=', sinceTimestamp)
+      .limit(pageSize);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    for (const d of snap.docs) {
+      const x = d.data();
+      if (x.status === 'cancelled') continue;
+      total += tzs(x.amount);
+    }
+    cursor = snap.docs[snap.docs.length - 1];
+    if (snap.docs.length < pageSize) break;
   }
+
+  void since;
   return total;
 }
 
@@ -433,23 +446,65 @@ async function settleEscrowToSeller({
 
 // ---- Webhook outbox (Layer-2 idempotency, now native to Firestore) ----
 
+/**
+ * Records a webhook event, atomically claiming the dedup key.
+ *
+ * The previous shape was `get()` → `if (exists) return` → `set()`. That is a
+ * time-of-check/time-of-use race: two concurrent deliveries of the same event
+ * both read "absent" and both proceed to the business effect. ClickPesa retries,
+ * so concurrent delivery is a normal occurrence, not a theoretical one.
+ *
+ * Now the claim happens inside a Firestore transaction using `create()`, which
+ * fails with ALREADY_EXISTS if the key is taken. Exactly one caller sees
+ * `claimed: true` and is allowed to apply the business effect; every other
+ * caller gets `claimed: false` and the already-stored row, so it is a no-op.
+ *
+ * The in-transaction re-read also makes this safe if the original writer
+ * crashed between `create()` and its business effect: the row exists with
+ * status 'received', and the reconciliation sweep can see it.
+ */
 async function recordWebhookEvent({ provider, dedupKey, type, rawPayload, signature, orderReference, db } = {}) {
   const store = db || localDb();
-  const ref = store.collection(COLLECTIONS.webhooks).doc(String(dedupKey));
-  const existing = await ref.get();
-  if (existing.exists) return { id: ref.id, ...existing.data(), dedupKey, status: existing.data().status };
-  await ref.set({
-    provider,
-    dedupKey,
-    type,
-    status: 'received',
-    rawPayload: rawPayload == null ? null : rawPayload,
-    signature: signature || null,
-    orderReference: orderReference || null,
-    attempts: 0,
-    createdAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { id: ref.id, provider, dedupKey, type, status: 'received', orderReference: orderReference || null };
+  const key = String(dedupKey);
+  const ref = store.collection(COLLECTIONS.webhooks).doc(key);
+
+  return store.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (snap.exists) {
+      const d = snap.data() || {};
+      return {
+        claimed: false,
+        duplicate: true,
+        id: ref.id,
+        dedupKey: key,
+        status: d.status || 'received',
+        orderReference: d.orderReference || null,
+      };
+    }
+    // `create` (not `set`) so the write is conditional on the document not
+    // existing — the atomicity primitive the dedup needs.
+    t.create(ref, {
+      provider,
+      dedupKey: key,
+      type,
+      status: 'received',
+      rawPayload: rawPayload == null ? null : rawPayload,
+      signature: signature || null,
+      orderReference: orderReference || null,
+      attempts: 0,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      claimed: true,
+      duplicate: false,
+      id: ref.id,
+      provider,
+      dedupKey: key,
+      type,
+      status: 'received',
+      orderReference: orderReference || null,
+    };
+  });
 }
 
 async function markWebhookStatus(event, status, { error, attempts = 0, db } = {}) {

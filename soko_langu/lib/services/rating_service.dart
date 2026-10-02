@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -34,6 +36,15 @@ class RatingService {
   final ReviewApiClient _api;
 
   RatingService({ReviewApiClient? api}) : _api = api ?? ReviewApiClient();
+
+  // Profile screens build `RatingService().streamSellerRating(...)` inline in a
+  // StreamBuilder, so the cache below only pays off if the instance is shared.
+  static RatingService? _shared;
+
+  /// A cached, replaying stream of the seller summary. See [streamSellerRating].
+  final Map<String, Stream<SellerRating>> _sellerRatingStreams = {};
+
+  static RatingService get instance => _shared ??= RatingService();
 
   Future<SellerRating> getSellerRating(String sellerId) async {
     if (ApiConfig.kUseReviewsApi) {
@@ -91,23 +102,22 @@ class RatingService {
 
   Stream<SellerRating> streamSellerRating(String sellerId) {
     if (ApiConfig.kUseReviewsApi) {
-      // v1 is HTTP, not a stream — emit a single summary snapshot.
-      return Stream.fromFuture(() async {
-        try {
-          final s = await _api.fetchSellerSummary(sellerId: sellerId);
-          return SellerRating(
-            averageRating: s.averageRating,
-            totalReviews: s.totalReviews,
-            fiveStar: s.fiveStar,
-            fourStar: s.fourStar,
-            threeStar: s.threeStar,
-            twoStar: s.twoStar,
-            oneStar: s.oneStar,
-          );
-        } catch (_) {
-          return SellerRating();
-        }
-      }());
+      // v1 is HTTP, not a stream — emit a single summary snapshot. Memoised per
+      // seller because profile screens build this inline: without the cache each
+      // rebuild issued another seller-summary request.
+      return _sellerRatingStreams.putIfAbsent(sellerId, () {
+        final ctrl = StreamController<SellerRating>.broadcast();
+        SellerRating? last;
+        getSellerRating(sellerId).then((v) {
+          last = v;
+          if (!ctrl.isClosed) ctrl.add(v);
+        }).catchError((_) {});
+        ctrl.onListen = () {
+          final snapshot = last;
+          if (snapshot != null) scheduleMicrotask(() => ctrl.add(snapshot));
+        };
+        return ctrl.stream;
+      });
     }
     return _db
         .collection('reviews')

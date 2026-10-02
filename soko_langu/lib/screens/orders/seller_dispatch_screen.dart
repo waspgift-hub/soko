@@ -32,6 +32,23 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   final Map<String, TextEditingController> _notesCtrls = {};
   final Map<String, bool> _freeDelivery = {};
 
+  // Memoised per seller. Built inline, this query re-opened a Firestore listener
+  // on every rebuild — and dispatch mutates several controllers at once, so each
+  // field edit rebuilt the screen and re-read the seller's whole transaction list.
+  String? _txStreamKey;
+  Stream<QuerySnapshot>? _txStream;
+
+  Stream<QuerySnapshot> _transactionsFor(String uid) {
+    if (_txStreamKey != uid) {
+      _txStreamKey = uid;
+      _txStream = FirebaseFirestore.instance
+          .collection('transactions')
+          .where('sellerId', isEqualTo: uid)
+          .snapshots();
+    }
+    return _txStream!;
+  }
+
   @override
   void dispose() {
     for (final c in _shippingCostCtrls.values) c.dispose();
@@ -168,7 +185,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('dispatch_title')), backgroundColor: Colors.transparent, elevation: 0),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('transactions').where('sellerId', isEqualTo: user.uid).snapshots(),
+        stream: _transactionsFor(user.uid),
         builder: (context, snap) {
           if (snap.hasError) return Center(child: Text('${context.tr('error')}: ${snap.error}'));
           if (!snap.hasData) return const Center(child: GoogleLoading());

@@ -26,6 +26,10 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    // The service now owns a long-lived Firestore listener and three broadcast
+    // controllers (see SellerEarningsService). Leaving them open leaks the
+    // listener every time the user leaves this screen.
+    _service.dispose();
     super.dispose();
   }
 

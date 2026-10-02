@@ -1,12 +1,15 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { refundOnCancel, isRefundableEscrowState } = require('../refunds/refund-service');
 const { submitQuote, approveQuote } = require('../shipping/shipping-quote-service');
 const { fileDispute } = require('../disputes/dispute-service');
-const { releaseEscrowAndSettle } = require('../escrow/escrow-release');
+const {
+  releaseEscrowAndSettle,
+  RELEASE_REASON,
+} = require('../escrow/escrow-release');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -172,7 +175,7 @@ async function submitShippingQuote({ orderId, sellerId, amount, estimatedDays, n
  */
 async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
   const store = getStore();
-  const lock = await acquireLock(`dispatch:${orderId}`, 60);
+  const lock = await requireLock(`dispatch:${orderId}`, 60);
 
   try {
     const updated = await store.$transaction(async (tx) => {
@@ -244,7 +247,7 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
  */
 async function markDelivered({ orderId, actorId }) {
   const store = getStore();
-  const lock = await acquireLock(`deliver:${orderId}`, 60);
+  const lock = await requireLock(`deliver:${orderId}`, 60);
 
   try {
     const updated = await store.$transaction(async (tx) => {
@@ -304,7 +307,7 @@ async function markDelivered({ orderId, actorId }) {
  */
 async function completeOrder({ orderId, actorId = 'system', method = 'OTP_VERIFY' }) {
   const store = getStore();
-  const lock = await acquireLock(`complete:${orderId}`, 60);
+  const lock = await requireLock(`complete:${orderId}`, 60);
 
   try {
     const order = await store.$transaction(async (tx) => {
@@ -332,7 +335,28 @@ async function completeOrder({ orderId, actorId = 'system', method = 'OTP_VERIFY
         data: { status: stateSteps[0], statusChangedBy: actorId },
       });
 
-      await releaseEscrowAndSettle(tx, current);
+      // `method` distinguishes a buyer-confirmed completion (OTP/QR) from the
+      // automated inspection-window path. Both are legitimate release reasons,
+      // and AUTO_RELEASE is only allowed to touch a `holding` hold, so a
+      // disputed order can never be settled by this function.
+      const releaseReason =
+        method === 'OTP_VERIFY' || method === 'QR_VERIFY'
+          ? RELEASE_REASON.BUYER_CONFIRMED
+          : RELEASE_REASON.AUTO_RELEASE;
+
+      const released = await releaseEscrowAndSettle(tx, current, {
+        reason: releaseReason,
+      });
+      if (!released) {
+        // Nothing eligible to release (disputed / refunded / no hold). The
+        // order state has already advanced above, so report it rather than
+        // claiming the order completed with money moved.
+        return {
+          status: 'NO_ELIGIBLE_ESCROW',
+          order: updated,
+          releaseReason,
+        };
+      }
 
       updated = await tx.order.update({
         where: { id: orderId },

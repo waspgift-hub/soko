@@ -1,5 +1,5 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('./provider-factory');
 const { PaymentError } = require('./payment-errors');
 const config = require('../../config');
@@ -30,7 +30,7 @@ async function initiatePayment({
   phoneNumber,
 }) {
   const store = getStore();
-  const lock = await acquireLock(`payment:${orderId}`, 60);
+  const lock = await requireLock(`payment:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {
@@ -99,7 +99,7 @@ async function confirmCollection({
   force = false,
 }) {
   const store = getStore();
-  const lock = await acquireLock(`collection:${orderReference}`, 60);
+  const lock = await requireLock(`collection:${orderReference}`, 60);
 
   let result;
   try {
@@ -222,7 +222,7 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
     throw httpError(400, 'MISSING_ORDER_REFERENCE');
   }
 
-  const lock = await acquireLock(`webhook:${dedupKey}`, 60);
+  const lock = await requireLock(`webhook:${dedupKey}`, 60);
   try {
     const event = await outbox.recordWebhookEvent({
       provider: providerName,
@@ -233,9 +233,24 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
       orderReference: normalized.orderReference,
     });
 
-    // Already handled by a previous delivery — ack without side effects.
-    if (event && event.status === outbox.WEBHOOK_STATUS_PROCESSED) {
-      return { received: true, webhookId, duplicate: true };
+    // Duplicate delivery: `recordWebhookEvent` claims the dedup key inside a
+    // Firestore transaction using `create()`, so exactly ONE concurrent caller
+    // gets `claimed: true` and may apply a business effect. Everyone else acks.
+    //
+    // The `processed` status check is kept as a second guard for a delivery that
+    // arrives long after the first finished. A `received` row means an earlier
+    // delivery claimed the key but may have died before applying its effect —
+    // acknowledging (rather than re-running) is what prevents double-crediting
+    // `users/{uid}.walletBalance`; reconciliation resolves the orphan.
+    if (event && (event.duplicate === true || event.claimed === false)) {
+      return {
+        received: true,
+        webhookId,
+        duplicate: true,
+        ...(event.status === outbox.WEBHOOK_STATUS_PROCESSED
+          ? {}
+          : { pending: true }),
+      };
     }
 
     await outbox.markWebhookProcessing(event);
@@ -295,7 +310,7 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
 
 async function markPaymentFailed(orderReference, { reason = null, providerPaymentId = null } = {}) {
   const store = getStore();
-  const lock = await acquireLock(`fail:${orderReference}`, 60);
+  const lock = await requireLock(`fail:${orderReference}`, 60);
   let result;
   try {
     await store.$transaction(async (tx) => {

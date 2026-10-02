@@ -111,18 +111,37 @@ async function del(key) {
 }
 
 // Invalidate a pattern (for cache busting when products change)
+//
+// Uses SCAN + UNLINK, never `KEYS`. `KEYS` is O(keyspace) and runs
+// single-threaded inside the Redis server, so calling it here stalled EVERY other
+// client — rate limiting, OTP, the BullMQ transport and analytics — while one
+// seller listed a product. SCAN yields between pages and UNLINK frees memory on
+// a background thread.
 async function delPattern(pattern) {
-  // Always clear in-memory (full scan)
+  // Always clear in-memory (bounded at MAX_ENTRIES, so this scan is cheap).
+  const prefix = pattern.replace('*', '');
   for (const key of memStore.keys()) {
-    if (key.startsWith(pattern.replace('*', ''))) memStore.delete(key);
+    if (key.startsWith(prefix)) memStore.delete(key);
   }
 
-  // Redis pattern delete
-  if (redisClient) {
-    try {
-      const keys = await redisClient.keys(`cache:${pattern}`);
-      if (keys.length > 0) await redisClient.del(...keys);
-    } catch (_) { /* Redis unavailable, skip */ }
+  if (!redisClient) return;
+  try {
+    const match = `cache:${pattern}`;
+    let cursor = '0';
+    let removed = 0;
+    do {
+      const [next, keys] = await redisClient.scan(cursor, 'MATCH', match, 'COUNT', 200);
+      cursor = next;
+      if (keys.length > 0) {
+        removed += await (typeof redisClient.unlink === 'function'
+          ? redisClient.unlink(...keys)
+          : redisClient.del(...keys));
+      }
+    } while (cursor !== '0');
+    void removed;
+  } catch (e) {
+    // Invalidation is best-effort by design; the TTL bounds the staleness.
+    console.warn('[CACHE] delPattern failed:', e.message);
   }
 }
 

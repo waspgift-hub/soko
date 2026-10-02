@@ -1,7 +1,16 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+// Money paths acquire a Redis lock with FAIL-CLOSED semantics: an unreachable
+// Redis refuses the operation instead of proceeding unprotected. Hermetic
+// tests have no Redis, so install an in-process stub before the service
+// modules bind acquireLock/requireLock at require time.
+require('./helpers/locks').stubLocksAlwaysAvailable();
 
-const { releaseEscrowAndSettle } = require('../src/modules/escrow/escrow-release');
+
+const {
+  releaseEscrowAndSettle,
+  RELEASE_REASON,
+} = require('../src/modules/escrow/escrow-release');
 const { withdrawalPayoutPhone } = require('../src/modules/wallet/wallet-service');
 
 // Minimal in-memory Prisma-like client covering the subset of tx.* calls that
@@ -67,7 +76,7 @@ test('releaseEscrowAndSettle credits the seller via the injected settle', async 
     return { alreadySettled: false };
   };
 
-  const result = await releaseEscrowAndSettle(tx, order, { settle });
+  const result = await releaseEscrowAndSettle(tx, order, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
 
   assert.deepEqual(settleCalls, [{
     orderId: order.id,
@@ -93,7 +102,7 @@ test('releaseEscrowAndSettle skips the commission row when commission is zero', 
   const settle = async () => ({ alreadySettled: false });
   const zeroOrder = { ...order, platformCommission: 0n };
 
-  await releaseEscrowAndSettle(tx, zeroOrder, { settle });
+  await releaseEscrowAndSettle(tx, zeroOrder, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
 
   const types = tx._store.escrowTransaction.map((e) => e.type);
   assert.ok(types.includes('SETTLEMENT_TO_SELLER'));
@@ -109,8 +118,8 @@ test('releaseEscrowAndSettle is idempotent — a retry never re-releases', async
     return { alreadySettled: false };
   };
 
-  await releaseEscrowAndSettle(tx, order, { settle });
-  await releaseEscrowAndSettle(tx, order, { settle });
+  await releaseEscrowAndSettle(tx, order, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
+  await releaseEscrowAndSettle(tx, order, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
 
   assert.equal(settleCalls.length, 1, 'second call sees a released hold and settles nothing');
   assert.equal(tx._store.escrowTransaction.filter((e) => e.type === 'SETTLEMENT_TO_SELLER').length, 1);
@@ -124,9 +133,9 @@ test('releaseEscrowAndSettle closes the Prisma trace even when Firestore already
   seedHolding(tx);
   const settle = async () => ({ alreadySettled: true });
 
-  await releaseEscrowAndSettle(tx, order, { settle });
+  await releaseEscrowAndSettle(tx, order, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
   tx._store.escrowHold[0].status = 'holding'; // simulate Prisma transaction rollback
-  await releaseEscrowAndSettle(tx, order, { settle });
+  await releaseEscrowAndSettle(tx, order, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
 
   assert.equal(tx._store.escrowHold[0].status, 'released');
   assert.equal(tx._store.escrowTransaction.filter((e) => e.type === 'SETTLEMENT_TO_SELLER').length, 1);
@@ -138,7 +147,7 @@ test('releaseEscrowAndSettle returns null when there is nothing to release', asy
     throw new Error('must not settle without a hold');
   };
 
-  const result = await releaseEscrowAndSettle(tx, order, { settle });
+  const result = await releaseEscrowAndSettle(tx, order, { settle, reason: RELEASE_REASON.BUYER_CONFIRMED });
   assert.equal(result, null);
 });
 

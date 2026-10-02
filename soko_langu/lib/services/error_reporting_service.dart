@@ -115,8 +115,22 @@ class ErrorReportingService {
   factory ErrorReportingService() => _instance;
   ErrorReportingService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Resolved lazily: `FirebaseFirestore.instance` throws when Firebase has not
+  // finished initializing, and this singleton is constructed from catch blocks
+  // and error paths that can run before (or without) init. A field initializer
+  // would turn a reporting failure into a second, harder failure.
+  FirebaseFirestore? _firestoreOrNull;
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
+
+  FirebaseFirestore? get _firestore => _firestoreOrNull ??= _tryFirestore();
+
+  static FirebaseFirestore? _tryFirestore() {
+    try {
+      return FirebaseFirestore.instance;
+    } catch (_) {
+      return null;
+    }
+  }
 
   String? _lastErrorId;
 
@@ -234,29 +248,127 @@ class ErrorReportingService {
     return parts.join('|');
   }
 
+  // ── Flood control ────────────────────────────────────────
+  //
+  // `FlutterError.onError` fires ONCE PER FRAME for a build error, so a layout
+  // overflow or a bad setState in a timer produced ~60 reports/second, each one
+  // doing a Firestore READ plus a WRITE. That is how a client-side bug turns into
+  // a Firestore bill, and it also means the error signal was drowned by its own
+  // volume.
+  //
+  // Three limits, applied before any network call:
+  //   1. per-fingerprint rate limit (5 reports / 10 min) — the count is still
+  //      incremented so frequency is visible,
+  //   2. global ceiling (50 distinct fingerprints) so 50 different errors cannot
+  //      bypass the per-fingerprint limit,
+  //   3. a single in-flight send, because overlapping reports used to race on
+  //      the same dedupe query.
+  static const Duration _fingerprintWindow = Duration(minutes: 10);
+  static const int _fingerprintBudget = 5;
+  static const int _globalFingerprintCap = 50;
+
+  final Map<String, List<DateTime>> _recentByFingerprint = {};
+  final List<String> _recentOrder = [];
+  bool _sending = false;
+  final List<ErrorReport> _pending = [];
+
+  /// True when this fingerprint has already been reported [budget] times inside
+  /// the window. Counts the occurrence locally so the suppression is visible.
+  bool _consumeBudget(String fingerprint) {
+    final now = DateTime.now();
+    final hits = _recentByFingerprint[fingerprint] ?? [];
+    final cutoff = now.subtract(_fingerprintWindow);
+    final recent = hits.where((t) => t.isAfter(cutoff)).toList();
+
+    if (_recentOrder.length >= _globalFingerprintCap) {
+      _recentOrder.removeAt(0);
+    }
+    if (!_recentByFingerprint.containsKey(fingerprint)) {
+      _recentOrder.add(fingerprint);
+    }
+
+    if (recent.length >= _fingerprintBudget) {
+      _recentByFingerprint[fingerprint] = recent;
+      return false;
+    }
+
+    recent.add(now);
+    _recentByFingerprint[fingerprint] = recent;
+    return true;
+  }
+
+  /// Drops fingerprints whose most recent hit has aged out, so the maps cannot
+  /// grow without bound across a long session.
+  void _sweepFingerprints() {
+    final cutoff = DateTime.now().subtract(_fingerprintWindow);
+    _recentByFingerprint.removeWhere((_, hits) {
+      if (hits.isEmpty) return true;
+      return !hits.last.isAfter(cutoff);
+    });
+    _recentOrder.removeWhere(
+      (f) => !_recentByFingerprint.containsKey(f),
+    );
+  }
+
   Future<void> _sendReport(ErrorReport report) async {
+    // No Firebase (startup race, offline-only path, unit test): reporting is
+    // best-effort by design, so drop the report rather than throw into the
+    // caller that was already handling an error.
+    if (_firestore == null) return;
+
+    final fingerprint = _generateFingerprint(report);
+    if (!_consumeBudget(fingerprint)) {
+      // Suppressed locally. The occurrence is still counted in the local budget,
+      // so a genuine spike shows up as "stopped reporting" rather than silence.
+      return;
+    }
+
+    // Serialise sends. Previously N concurrent reports all ran the same
+    // read-then-write dedupe, so the first occurrence produced N duplicate docs.
+    if (_sending) {
+      if (_pending.length < 20) _pending.add(report);
+      return;
+    }
+    _sending = true;
+    try {
+      do {
+        await _persist(report);
+        _sweepFingerprints();
+        if (_pending.isEmpty) break;
+        report = _pending.removeAt(0);
+      } while (_pending.isNotEmpty);
+    } finally {
+      _sending = false;
+      if (_pending.isNotEmpty) {
+        final rest = _pending.toList();
+        _pending.clear();
+        for (final r in rest) {
+          unawaited(_sendReport(r));
+        }
+      }
+    }
+  }
+
+  Future<void> _persist(ErrorReport report) async {
+    final firestore = _firestore!;
     try {
       final fingerprint = _generateFingerprint(report);
-      final existing = await _firestore
+      // Deterministic document id keyed on the fingerprint. The old code did
+      // read(fingerprint) → decide → write, which is not atomic: two reports
+      // that raced both saw "no doc" and both created one, and every report cost
+      // a Firestore READ. A merged set against a deterministic id is a single
+      // write, and FieldValue.increment keeps occurrenceCount accurate without
+      // the read.
+      final ref = firestore
           .collection('system_errors')
-          .where('fingerprint', isEqualTo: fingerprint)
-          .limit(1)
-          .get();
-      if (existing.docs.isNotEmpty) {
-        final doc = existing.docs.first;
-        final data = doc.data();
-        final count = (data['occurrenceCount'] as int? ?? 1) + 1;
-        await doc.reference.update({
-          'occurrenceCount': count,
-          'lastSeen': Timestamp.fromDate(DateTime.now()),
-          'status': 'Open',
-        });
-      } else {
-        await _firestore.collection('system_errors').add({
-          ...report.toMap(),
-          'fingerprint': fingerprint,
-        });
-      }
+          .doc(fingerprint.hashCode.abs().toRadixString(16));
+      await ref.set({
+        ...report.toMap(),
+        'fingerprint': fingerprint,
+        'occurrenceCount': FieldValue.increment(1),
+        'lastSeen': Timestamp.fromDate(DateTime.now()),
+        'status': 'Open',
+      }, SetOptions(merge: true));
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Failed to send report: $e');

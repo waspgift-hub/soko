@@ -1,5 +1,5 @@
 const { getStore } = require('../../config/database');
-const { acquireLock, releaseLock } = require('../../config/redis');
+const { requireLock, releaseLock } = require('../../config/redis');
 const { validateShippingQuote } = require('./shipping-validation');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 
@@ -7,7 +7,7 @@ const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machi
 // Runs platform validation to decide NORMAL / REVIEW_REQUIRED / BLOCKED.
 async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, shippingAddress, sellerRegion }) {
   const store = getStore();
-  const lock = await acquireLock(`shipping:${orderId}`, 60);
+  const lock = await requireLock(`shipping:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {
@@ -111,7 +111,7 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
 // actor defaults to 'admin' for the admin route; the buyer route overrides it.
 async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
   const store = getStore();
-  const lock = await acquireLock(`shipping:${orderId}`, 60);
+  const lock = await requireLock(`shipping:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {
@@ -156,7 +156,7 @@ async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
 // Admin blocks a quote, returning order to PENDING_SHIPPING_FEE for revision.
 async function blockQuote({ orderId, blockedBy, reason }) {
   const store = getStore();
-  const lock = await acquireLock(`shipping:${orderId}`, 60);
+  const lock = await requireLock(`shipping:${orderId}`, 60);
 
   try {
     return await store.$transaction(async (tx) => {

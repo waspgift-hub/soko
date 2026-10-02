@@ -40,6 +40,12 @@ service cloud.firestore {
     // fields is silently rejected by Firestore rules, preventing
     // privilege escalation, wallet tampering, and boost fraud.
     // Admin SDK bypasses these rules entirely (server-side trust boundary).
+    //
+    // `trust` is here because it holds the Blue Tick grant and therefore the
+    // seller's ad-exemption. `sellerKycApproved` belongs on the same list for
+    // products below: both feed the ranking boost and the ad exemption, so a
+    // client that could write them could buy itself a visibility advantage and
+    // an ad-free account.
     function noSensitiveFieldChanges() {
       // Allowing fcmToken to only ever be DELETED (set to null) lets the client
       // clear its device token on logout without granting any write power.
@@ -48,7 +54,8 @@ service cloud.firestore {
           || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'walletBalance', 'sellerBalance', 'pendingEscrow',
             'totalSales', 'grossSalesVolume', 'totalWithdrawn',
-            'isAdmin', 'isSuspended', 'kyc',
+            'isAdmin', 'isSuspended', 'kyc', 'trust',
+            'sellerKycApproved', 'adsExempt', 'isBlueTick', 'blueTick',
             'isBoosted', 'boostedUntil', 'boostTier',
             'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
           ]);
@@ -65,7 +72,8 @@ service cloud.firestore {
       return !incoming.keys().hasAny([
           'walletBalance', 'pendingEscrow',
           'totalSales', 'grossSalesVolume', 'totalWithdrawn',
-          'kyc', 'isBoosted', 'boostedUntil', 'boostTier',
+          'kyc', 'trust', 'sellerKycApproved', 'adsExempt', 'isBlueTick', 'blueTick',
+          'isBoosted', 'boostedUntil', 'boostTier',
           'lastSaleAt', 'lastLoginAt', 'fcmToken'
         ])
         && incoming.get('sellerBalance', 0) == 0
@@ -73,9 +81,48 @@ service cloud.firestore {
         && incoming.get('isSuspended', false) != true;
     }
 
+    // ─── USER PUBLIC PROJECTIONS ────────────────────────────
+    //
+    // Why this collection exists: `users/{uid}` is the owner's private record
+    // (phone, email, kyc, balances, isAdmin, isSuspended). Firestore rules CAN
+    // filter a *list* but CANNOT redact fields from a document read — so
+    // `allow read: if isSignedIn()` on `users` handed every logged-in account
+    // the entire user table, including other people's phone numbers and admin
+    // status.
+    //
+    // Rather than pretend field-level rules exist, the fields the marketplace
+    // legitimately needs about *other* people are projected into this
+    // collection, which contains no PII, no money and no privilege flags. It is
+    // written ONLY by the Admin SDK (which bypasses rules); no client rule
+    // grants write, so a caller cannot forge a verified badge.
+    match /userPublic/{userId} {
+      // Readable by anyone: everything here is display data by construction.
+      allow read: if true;
+      // ONE field is client-writable: the profile-view counter, and only by
+      // incrementing it by exactly one. There is deliberately no `create`, so a
+      // caller cannot fabricate a projection, and `affectedKeys()` pins the
+      // update to that single field, so kycApproved / isSeller / accountStatus
+      // stay Admin-SDK-only and a forged verified badge remains impossible.
+      //
+      // Known limit: any signed-in account can call this repeatedly, so the
+      // number is a vanity metric, not an audited count. Counting that has to be
+      // trustworthy belongs behind a rate-limited server endpoint.
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profileViews'])
+        && request.resource.data.profileViews == resource.data.profileViews + 1;
+    }
+
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if isSignedIn();
+      // Owner or admin only.
+      //
+      // Cross-user reads that the marketplace genuinely needs (display name for
+      // chat, seller badge for a listing, profile-view counter) must go through
+      // `userPublic/{uid}` above, which carries only the safe subset. Keeping
+      // this owner-scoped is what stops one seller from scripting a loop over
+      // `collection('users').get()` and harvesting every phone number, email,
+      // KYC state and `isAdmin` flag in the platform.
+      allow read: if isOwner(userId) || isAdmin();
       // Create must also pass noSensitiveFieldChanges — otherwise a client could
       // sign up and create their own doc with isAdmin:true, sellerBalance, etc.
       allow create: if isOwner(userId) && noSensitiveCreateFields();
@@ -108,10 +155,13 @@ service cloud.firestore {
       // via the ClickPesa webhook and purchase flow), and cannot start with a
       // pre-inflated rating — otherwise a client could list a product with
       // isBoosted:true + rating:5.0 and get a free featured placement.
+      // sellerKycApproved is on the forbidden list for the same reason: it is the
+      // denormalised trust flag the search ranking boost reads.
       allow create: if isSellerOwns()
         && !request.resource.data.keys().hasAny([
           'isBoosted', 'boostedUntil', 'boostTier',
-          'isFeatured', 'featuredUntil', 'soldCount'
+          'isFeatured', 'featuredUntil', 'soldCount',
+          'sellerKycApproved'
         ])
         && request.resource.data.get('rating', 0) == 0
         && request.resource.data.get('reviewCount', 0) == 0;
@@ -122,10 +172,11 @@ service cloud.firestore {
         // the admin SDK, so a client write of any of the three can only be an
         // attempt to inflate a listing's reputation or sales volume. (The
         // ProductService.updateProductRating / incrementSoldCount helpers that
-        // wrote these from the client have no callers.)
+        // wrote these from the client have no callers.) sellerKycApproved is
+        // server-owned for the same reason — see create above.
         (resource.data.sellerId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'isBoosted', 'boostedUntil', 'boostTier', 'isFeatured', 'featuredUntil',
-          'rating', 'reviewCount', 'soldCount'
+          'rating', 'reviewCount', 'soldCount', 'sellerKycApproved'
         ]))
         // any signed-in user can bump viewCount
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
@@ -487,10 +538,27 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // ─── APP SETTINGS (maintenance mode, etc.) ─────────────
+    // ─── APP SETTINGS (maintenance mode, ads config, etc.) ───
     match /app_settings/{docId} {
+      // Signed-in users may read: AdRemoteConfigService streams `ad_config` so an
+      // admin can switch ads off without shipping a build.
       allow read: if isSignedIn();
+
+      // Only an admin client may write. The server-side path
+      // (PUT /api/v1/admin/config/ads) uses the admin SDK and bypasses rules
+      // entirely; this branch exists so a client running as an admin (the
+      // in-app moderation tools) can also write, and so an ordinary seller
+      // cannot disable ads on their own account, disable the Blue Tick ad
+      // exemption, or raise their own search boost.
       allow write: if isAdmin();
+    }
+
+    // ─── TRUST / BLUE TICK ────────────────────────────────
+    // Server-owned verification grants. Kept out of `users/{uid}` reads so a
+    // client cannot enumerate who is verified, and append-only from a client's
+    // point of view: reads are admin-only, writes are admin-only.
+    match /seller_trust/{sellerId} {
+      allow read, write: if isAdmin();
     }
 
     // ─── PRICE DROPS ────────────────────────────────────────
