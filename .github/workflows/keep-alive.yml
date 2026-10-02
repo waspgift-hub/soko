@@ -1,17 +1,29 @@
-name: Keep Render Server Awake
+name: Render Dev Keep-Alive
 
-# Render free-tier web services sleep after ~15 minutes of inactivity.
-# This scheduled job pings the /health endpoint every 10 minutes so the
-# server stays hot for users at all times. No external service required.
+# DEVELOPMENT-ONLY keep-alive for the Render FREE web service
+# (https://soko-langu-server.onrender.com). Render spins down free services
+# after 15 minutes without inbound traffic; this workflow pings the liveness
+# endpoint every 10 minutes from GitHub's infrastructure ($0) so the dev API
+# stays warm. It is NOT a production uptime/SLA system — production services
+# (soko-langu-api, payment-api on paid plans) are never targeted here.
+#
+# ENABLE / DISABLE:
+#   Guarded by the GitHub Actions variable RENDER_KEEPALIVE_ENABLED.
+#   - Unset or not "true" -> this workflow no-ops (safe default; production
+#     is never affected either way because only the dev URL is used).
+#   - Set to "true"       -> pings run. Create/update the variable at
+#     https://github.com/waspgift-hub/soko/settings/variables/actions
+#
+# Schedule note (GitHub docs): scheduled events can be delayed or dropped at
+# the top of the hour under high load, so the cron is offset to minute 3.
 
 on:
   schedule:
-    # Run every 10 minutes (Render sleeps after ~15 min without traffic)
-    - cron: '*/10 * * * *'
+    - cron: '3-59/10 * * * *'
   workflow_dispatch:
 
 concurrency:
-  group: keep-alive
+  group: render-dev-keep-alive
   cancel-in-progress: false
 
 jobs:
@@ -19,7 +31,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping server health endpoint
-        run: curl -sf --max-time 20 "${{ vars.SERVER_HEALTH_URL }}" >/dev/null || exit 1
+      - name: Check dev keep-alive is enabled
+        id: gate
+        run: |
+          if [ "${{ vars.RENDER_KEEPALIVE_ENABLED }}" != "true" ]; then
+            echo "RENDER_KEEPALIVE_ENABLED is not 'true' — dev keep-alive disabled, skipping."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ping Render dev liveness endpoint
+        if: steps.gate.outputs.enabled == 'true'
         env:
-          SERVER_HEALTH_URL: ${{ vars.SERVER_HEALTH_URL || 'https://soko-langu-server.onrender.com/health' }}
+          SERVER_HEALTH_URL: ${{ vars.SERVER_HEALTH_URL || 'https://soko-langu-server.onrender.com/health/live' }}
+        run: |
+          set -uo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 20 \
+            -A 'SokoVibe-Dev-KeepAlive' \
+            -f \
+            "$SERVER_HEALTH_URL") || {
+              echo "::error::Dev keep-alive FAILED: $SERVER_HEALTH_URL unreachable, timed out, or returned an error status"
+              exit 1
+            }
+          if [ "$code" != "200" ]; then
+            echo "::error::Dev keep-alive FAILED: unexpected HTTP $code from $SERVER_HEALTH_URL"
+            exit 1
+          fi
+          echo "Dev keep-alive OK: $SERVER_HEALTH_URL -> HTTP $code"
