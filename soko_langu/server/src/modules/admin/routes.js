@@ -10,6 +10,18 @@ const { getStore } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const { sendMail } = require('../../services/mailer');
+const cache = require('../../../cache');
+const productStore = require('../products/product-store');
+
+// A write to a product invalidates its detail entry by id and slug plus every
+// filtered list, so a moderator delete never serves a stale catalog entry.
+function invalidateProductCache(product) {
+  const id = product?.id;
+  const slug = product?.slug;
+  if (id) cache.del(`catalog:product:v2:${id}`);
+  if (slug) cache.del(`catalog:product:v2:${slug}`);
+  cache.delPattern('catalog:list:v2:*');
+}
 
 const router = Router();
 
@@ -404,12 +416,19 @@ router.get(
       categoryId: z.string().optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
+      includeDeleted: z
+        .enum(['0', '1'])
+        .optional()
+        .transform((v) => v === '1'),
     }),
   }),
   async (req, res) => {
     const store = getStore();
+    // Deleted listings stay queryable: the panel has to be able to review what
+    // was taken down, and `status=deleted` used to return nothing because the
+    // deletedAt filter hid the very rows that filter asks for.
     const where = {
-      deletedAt: null,
+      ...(req.query.includeDeleted ? {} : { deletedAt: null }),
       ...(req.query.q
         ? {
             OR: [
@@ -436,9 +455,82 @@ router.get(
       }),
       store.product.count({ where }),
     ]);
-    res.json({ success: true, data: { products, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
+    res.json({
+      success: true,
+      data: {
+        products,
+        pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total },
+        includeDeleted: Boolean(req.query.includeDeleted),
+      },
+    });
   }
 );
+
+// Single product for the panel drawer. The list endpoint paginates, so scanning
+// it for one id reported "not found" for anything past the first page.
+router.get('/products/:id', async (req, res) => {
+  const store = getStore();
+  const product = await store.product.findUnique({
+    where: { id: req.params.id },
+    include: {
+      seller: { select: { id: true, storeName: true, storeSlug: true } },
+      category: { select: { id: true, name: true } },
+      media: { select: { r2Key: true, thumbnailR2Key: true, type: true }, orderBy: { sortOrder: 'asc' } },
+      boosts: { select: { plan: true, status: true, expiresAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+  });
+  if (!product) return res.status(404).json({ success: false, error: 'PRODUCT_NOT_FOUND' });
+  res.json({ success: true, data: product });
+});
+
+// Moderator delete / restore. Soft only — see product-service.adminSetDeleted
+// for why a hard delete would orphan orders and escrow rows.
+router.delete(
+  '/products/:id',
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({ reason: z.string().max(500).optional() }),
+  }),
+  async (req, res) => {
+    try {
+      const product = await productStore.adminSetListingDeleted({
+        productId: req.params.id,
+        deleted: true,
+      });
+      invalidateProductCache(product);
+      await writeAudit({
+        ...auditFromReq(req),
+        action: 'product.admin_delete',
+        entityType: 'product',
+        entityId: product.id,
+        newState: { status: 'deleted', reason: req.body.reason || null },
+      });
+      res.json({ success: true, data: product });
+    } catch (e) {
+      res.status(e.status || 500).json({ success: false, error: e.message || 'DELETE_FAILED' });
+    }
+  }
+);
+
+router.post('/products/:id/restore', async (req, res) => {
+  try {
+    const product = await productStore.adminSetListingDeleted({
+      productId: req.params.id,
+      deleted: false,
+    });
+    invalidateProductCache(product);
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'product.admin_restore',
+      entityType: 'product',
+      entityId: product.id,
+      newState: { status: 'draft' },
+    });
+    res.json({ success: true, data: product });
+  } catch (e) {
+    res.status(e.status || 500).json({ success: false, error: e.message || 'RESTORE_FAILED' });
+  }
+});
 
 // User detail for the panel drawer: profile + verification + storefront + wallet.
 router.get(

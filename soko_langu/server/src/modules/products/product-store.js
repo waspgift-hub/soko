@@ -193,6 +193,21 @@ async function moderateListing({ productId, status }) {
   return service.moderate({ id: productId, status });
 }
 
+// Moderator delete/restore. Mirrors deleteListing's Firestore cleanup but skips
+// the ownership check — the caller is the admin router, already behind
+// authenticateAdmin, and the reason is written to the audit log there.
+async function adminSetListingDeleted({ productId, deleted }) {
+  const db = requireStore();
+  if (deleted) {
+    await db.collection('products').doc(productId).delete().catch(() => {});
+  } else {
+    const row = await service.adminSetDeleted({ id: productId, deleted: false });
+    await writeDoc(db, productId, buildMirrorDoc(row)).catch(() => {});
+    return row;
+  }
+  return service.adminSetDeleted({ id: productId, deleted: true });
+}
+
 module.exports = {
   createListing,
   updateListing,
@@ -200,6 +215,7 @@ module.exports = {
   deleteListing,
   attachListingMedia,
   moderateListing,
+  adminSetListingDeleted,
   applyListingPatch,
   listingPseudoRow,
 };

@@ -320,3 +320,23 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width
   aside#sidebar.open { transform: none; }
   main#main { margin-left: 0; padding: 0 14px 40px; }
 }
+/* ---- Moderation additions: delete/restore rows, KYC detail, reason modal ---- */
+/* Deleted listings stay legible but visibly out of the catalog, so a moderator
+   can tell "taken down" apart from "hidden by the filter". */
+.tbl tr.rowgone td { opacity: 0.55; }
+.tbl tr.rowgone td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+
+/* Toolbar checkbox: same shape as the settings .chk, but usable in a toolbar. */
+.toolbar .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.toolbar .chk input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--sv-accent); cursor: pointer; }
+.toolbar .chk:hover { color: var(--fg); }
+
+/* Inline warning inside a drawer/modal. */
+.warnbox { margin: 10px 0 14px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; color: var(--bad); background: var(--badbg); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+
+/* Pager with prev/label/next spread across the row (KYC queue). */
+.pager.spread { justify-content: space-between; }
+.pager .btn[disabled] { opacity: 0.45; pointer-events: none; }
+
+/* Reason textarea inside a modal: inherit the modal field styling. */
+.modal textarea.field { min-height: 84px; resize: vertical; width: 100%; }

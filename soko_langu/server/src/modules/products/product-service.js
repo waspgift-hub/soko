@@ -326,6 +326,27 @@ async function softDelete({ id, sellerProfileId, userId }) {
   return store.product.update({ where: { id }, data: { status: 'deleted', deletedAt: new Date() } });
 }
 
+/**
+ * Moderator delete/restore. Deliberately NOT a hard delete: a product can be
+ * referenced by live orders, escrow holds and receipts, so removing the row
+ * would orphan money records. Deleted listings stay queryable for audit and
+ * come back to 'draft' (never straight to 'published') on restore, so a
+ * moderator cannot accidentally re-list something without review.
+ */
+async function adminSetDeleted({ id, deleted }) {
+  const store = getStore();
+  const existing = await store.product.findUnique({ where: { id } });
+  if (!existing) throw httpError(404, 'PRODUCT_NOT_FOUND');
+  const alreadyDeleted = Boolean(existing.deletedAt) || existing.status === 'deleted';
+  if (Boolean(deleted) === alreadyDeleted) return existing;
+  return store.product.update({
+    where: { id },
+    data: deleted
+      ? { status: 'deleted', deletedAt: new Date() }
+      : { status: 'draft', deletedAt: null },
+  });
+}
+
 // Flatten the seller relation into the client contract the legacy product doc
 // already carried (sellerId = the Firebase UID, sellerPhone = the account
 // phone). The app and web shop resolve store links, own-product checks and
@@ -479,6 +500,7 @@ module.exports = {
   updateProduct,
   setStatus,
   softDelete,
+  adminSetDeleted,
   buildListWhere,
   applySnapshotPatch,
   listProducts,

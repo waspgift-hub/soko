@@ -229,6 +229,49 @@ const SW2EN = {
   'Hakuna maoni ya vipengele': 'No feature suggestions yet',
   'Hakuna maoni ya jamii': 'No community comments yet',
   'Maelezo': 'Details', 'Vipengele': 'Features', 'Jina': 'Name', 'Lugha': 'Language', 'Wakati': 'Time',
+
+  // Moderation: product delete / restore
+  'Onyesha zilizofutwa': 'Show deleted', 'Chuja': 'Filter',
+  'Futa': 'Delete', 'Futa bidhaa': 'Delete product', 'Rudisha': 'Restore',
+  'Rudisha bidhaa': 'Restore product',
+  'Futa bidhaa hii?': 'Delete this product?',
+  'Bidhaa itaondolewa kwenye soko na kuwa haionekani. Maagizo yaliyotengeneza bado yako. Unaweza kuirudisha baadaye.':
+    'The product leaves the marketplace and stops being visible. Orders it created are kept. You can restore it later.',
+  'Sababu (inahitajika)': 'Reason (required)',
+  'Kwa nini unafuta bidhaa hii?': 'Why are you deleting this product?',
+  'Sababu inahitajika': 'A reason is required',
+  'Bidhaa imefutwa': 'Product deleted',
+  'Bidhaa imerudishwa kama draft': 'Product restored as a draft',
+  'Rudisha bidhaa? Itarudi kama draft': 'Restore the product? It comes back as a draft',
+  'Bidhaa hii imefutwa. Maagizo yaliyotengeneza bado yako.':
+    'This product is deleted. Orders it created are still kept.',
+  'Ghairi': 'Cancel',
+
+  // KYC: every state, detail drawer, reason prompts
+  'Zinazosubiri': 'Pending', 'Zilizokubaliwa': 'Approved', 'Zilizokataa': 'Rejected',
+  'Zilizofutwa': 'Revoked', 'Zote': 'All',
+  'Maelezo ya KYC': 'KYC details',
+  'Tafuta jina, email, simu au namba ya kitambulisho.':
+    'Search name, email, phone or ID number.',
+  'Hakuna wasilisho la KYC': 'No KYC submissions',
+  'Ukurasa': 'Page', 'jumla': 'total', 'Iliyotangulia': 'Previous', 'Inayofuata': 'Next',
+  'Jina kamili': 'Full name', 'Aina ya kitambulisho': 'ID type', 'Nambari': 'Number',
+  'Tarehe ya kuzaliwa': 'Date of birth', 'Barua pepe': 'Email', 'Anwani': 'Address',
+  'Barua pepe kwa waliopokea taarifa': 'Email the waitlist subscribers',
+  'Ada ya uthibitisho': 'Verification fee',
+  'Kumbukumbu ya malipo': 'Payment reference',
+  'Iliwasilishwa': 'Submitted', 'Ilipitiwa': 'Reviewed', 'Ilifutwa': 'Revoked at',
+  'Maelezo ya ukaguzi': 'Review notes',
+  'Kubali tena': 'Approve again',
+  'Kataa KYC': 'Reject KYC', 'Sababu ya kukataa': 'Reason for rejection',
+  'Mfano: picha ya kitambulisho haisomeki vizuri': 'e.g. the ID photo is not legible',
+  'Futa KYC': 'Revoke KYC',
+  'Futa kibali cha KYC cha': 'Revoke the KYC approval for',
+  'Sababu ya kufuta': 'Reason for revoking',
+  'Mfano: taarifa za kitambulisho zilishukuliwa': 'e.g. the ID details were reported stolen',
+  'Sababu ya kukataa KYC ya': 'Reason to reject the KYC for',
+  'Hakuna rekodi ya KYC kwa mtumiaji huyu': 'No KYC record for this user',
+  'Hakiki': 'Documents', 'Kubali': 'Approve', 'Kataa': 'Reject',
 };
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 const SW2EN_PAIRS = Object.entries(SW2EN).sort((a, b) => b[0].length - a[0].length);
@@ -315,6 +358,7 @@ async function api(path, opts = {}) {
 const getJSON = (p) => api(p);
 const putJSON = (p, b) => api(p, { method: 'PUT', body: b });
 const postJSON = (p, b) => api(p, { method: 'POST', body: b });
+const delJSON = (p, b) => api(p, { method: 'DELETE', body: b });
 
 // ---------------------------------------------------------------------------
 // UI shell: modal / drawer / confirm
@@ -438,6 +482,8 @@ const ACTIONS = {
   sellerPending(args) { sellerVerify(args.id, args.name, 'pending'); },
   viewSeller(args) { viewSellerDetail(args.id); },
   productModerate(args) { productModerate(args.id, args.title); },
+  productDelete(args) { productDelete(args.id, args.title); },
+  productRestore(args) { productRestore(args.id, args.title); },
   viewProduct(args) { viewProductDetail(args.id, args.title); },
   viewOrder(args) { viewOrderDetail(args.id, args.num, args.status); },
   viewFsOrder(args) { viewFsOrder(args.id, args.num); },
@@ -454,6 +500,7 @@ const ACTIONS = {
   kycReject(args) { kycReview(args.uid, args.name, 'reject'); },
   kycRevoke(args) { kycReview(args.uid, args.name, 'revoke'); },
   kycDocs(args) { kycViewDocuments(args.uid, args.name); },
+  kycDetail(args) { kycDetailRow(args.uid, args.name); },
   revenueWithdraw() { revenueWithdraw(); },
   fsUnFlag(args) { fsUnFlagAcc(args.uid, args.name); },
   viewFsProduct(args) { viewFsProduct(args.id, args.name); },
@@ -986,9 +1033,11 @@ async function viewSellerDetail(id) {
 // Bidhaa
 // ---------------------------------------------------------------------------
 function productsToolbar() {
+  const showDel = pgState('products', 'del') === '1';
   return '<div class="toolbar">' +
-    '<input class="field q" id="pQ" placeholder="Tafuta bidhaa…">' +
+    '<input class="field q" id="pQ" placeholder="Tafuta bidhaa.">' +
     '<select class="select-xs" id="pStatus"><option value="">Hali: yote</option><option>draft</option><option>published</option><option>suspended</option><option>rejected</option><option>deleted</option></select>' +
+    '<label class="chk" title="Onyesha bidhaa zilizofutwa"><input type="checkbox" id="pDel"' + (showDel ? ' checked' : '') + '> Onyesha zilizofutwa</label>' +
     '<button class="btn" id="pGo">Chuja</button>' +
     '</div>';
 }
@@ -1010,12 +1059,16 @@ async function loadProducts() {
     '<div id="fpCard"></div>';
   const qs = new URLSearchParams({ page, limit: 20 });
   if (q) qs.set('q', q); if (st) qs.set('status', st);
+  // The server hides deletedAt rows unless asked, so "deleted" in the status
+  // filter only returns anything when the toggle is on too.
+  if (st === 'deleted' || pgState('products', 'del') === '1') qs.set('includeDeleted', '1');
   try {
     const j = await getJSON('/api/v1/admin/products?' + qs.toString());
     const d = (j.data && j.data.products) || [];
     $('pRows').innerHTML = d.length ? d.map((p) => {
       const args = JSON.stringify({ id: p.id, title: p.title || p.id }).replace(/'/g, '&#39;');
-      return '<tr>' +
+      const gone = p.status === 'deleted' || p.deletedAt;
+      return '<tr' + (gone ? ' class="rowgone"' : '') + '>' +
         '<td>' + thumbOf(p.media) + ' <b>' + esc(p.title || '—') + '</b><div class="dim mono">' + esc(id12(p.id)) + '</div></td>' +
         '<td>' + esc((p.seller && p.seller.storeName) || '—') + '</td>' +
         '<td class="dim">' + esc((p.category && p.category.name) || '—') + '</td>' +
@@ -1025,9 +1078,14 @@ async function loadProducts() {
         '<td class="rowactions">' +
         '<button class="btn sm" data-fn="viewProduct" data-args=\'' + args + '\'>Angalia</button>' +
         '<button class="btn sm" data-fn="productModerate" data-args=\'' + args + '\'>Hali</button>' +
+        (gone
+          ? '<button class="btn sm accent" data-fn="productRestore" data-args=\'' + args + '\'>Rudisha</button>'
+          : '<button class="btn sm danger" data-fn="productDelete" data-args=\'' + args + '\'>Futa</button>') +
         '</td></tr>';
     }).join('') : '<tr><td colspan="7" class="empty">Hakuna bidhaa</td></tr>';
     $('pPag').innerHTML = pagerHTML('products', j.data.pagination);
+    const delBox = $('pDel');
+    if (delBox) delBox.onchange = () => { setPg('products', 'del', delBox.checked ? '1' : '0'); setPg('products', 'page', 1); loadProducts(); };
   } catch (e) { $('pRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
   bindSection('products'); touch();
   renderFsProducts();
@@ -1055,15 +1113,16 @@ async function productModerate(id, title) {
 async function viewProductDetail(id, title) {
   openDrawer('<div class="dsub">Inapakia…</div>');
   try {
-    const qs = new URLSearchParams({ page: 1, limit: 50 });
-    const j = await getJSON('/api/v1/admin/products?' + qs.toString());
-    const d = (j.data && j.data.products) || [];
-    const p = d.find((x) => x.id === id);
+    const j = await getJSON('/api/v1/admin/products/' + encodeURIComponent(id));
+    const p = j && j.data;
     if (!p) { closeDrawer(); toast('Bidhaa haikuonekana', false); return; }
     const b = (p.boosts && p.boosts[0]) || {};
+    const args = JSON.stringify({ id: p.id, title: p.title || p.id }).replace(/'/g, '&#39;');
+    const gone = p.status === 'deleted' || p.deletedAt;
     openDrawer(
       '<h3>' + esc(p.title || '—') + '</h3>' +
       '<div class="dsub">' + esc(p.slug || '') + ' · ' + esc((p.category && p.category.name) || '') + '</div>' +
+      (gone ? '<div class="warnbox">Bidhaa hii imefutwa. Maagizo yaliyotengeneza bado yako.</div>' : '') +
       '<dl class="kv">' +
       '<dt>Bei</dt><dd>' + fmtTZS(p.price) + (p.originalPrice ? ' <span class="dim">(was ' + fmtTZS(p.originalPrice) + ')</span>' : '') + '</dd>' +
       '<dt>Hali / stock</dt><dd>' + badge(p.status) + ' · ' + esc(p.condition || '') + ' · ' + fmtNum(p.stock) + '</dd>' +
@@ -1075,11 +1134,52 @@ async function viewProductDetail(id, title) {
       '<dt>Imeundwa</dt><dd>' + fmtTime(p.createdAt) + '</dd>' +
       '</dl>' +
       '<div class="drawer-actions">' +
-      '<button class="btn sm accent" data-fn="productModerate" data-args=\'' + JSON.stringify({ id: p.id, title: p.title || p.id }).replace(/'/g, '&#39;') + '\'>Hali ya uchapishaji</button>' +
+      (gone
+        ? '<button class="btn sm accent" data-fn="productRestore" data-args=\'' + args + '\'>Rudisha bidhaa</button>'
+        : '<button class="btn sm" data-fn="productModerate" data-args=\'' + args + '\'>Hali ya uchapishaji</button>' +
+          '<button class="btn sm danger" data-fn="productDelete" data-args=\'' + args + '\'>Futa bidhaa</button>') +
       '</div>'
     );
     bindSection('products');
   } catch (e) { toast(e.message, false); }
+}
+
+// Moderator delete. Soft only, and the reason is mandatory: this is the record
+// that explains later why a listing vanished.
+async function productDelete(id, title) {
+  openModal(
+    '<h3>Futa bidhaa</h3>' +
+    '<p class="msub">' + esc(title || id) + '</p>' +
+    '<div class="warnbox">Bidhaa itaondolewa kwenye soko na kuwa haionekani. Maagizo yaliyotengeneza bado yako. Unaweza kuirudisha baadaye.</div>' +
+    '<label>Sababu (inahitajika)</label>' +
+    '<input class="field" id="pdReason" placeholder="Kwa nini unafuta bidhaa hii?">' +
+    '<div class="mfooter"><button class="btn" id="pdNo">Ghairi</button><button class="btn danger" id="pdYes">Futa bidhaa</button></div>'
+  );
+  $('pdNo').onclick = closeModal;
+  $('pdYes').onclick = () => {
+    const reason = $('pdReason').value.trim();
+    if (!reason) { toast('Sababu inahitajika', false); return; }
+    run(async () => {
+      await delJSON('/api/v1/admin/products/' + encodeURIComponent(id), { reason });
+      closeModal();
+      toast('Bidhaa imefutwa', true);
+      loadProducts();
+    });
+  };
+}
+
+async function productRestore(id, title) {
+  const ok = await confirmModal(
+    'Rudisha bidhaa',
+    'Rudisha "' + (title || id) + '"? Itarudi kama draft — utahitaji kuChapisha.',
+    'Rudisha',
+  );
+  if (!ok) return;
+  run(async () => {
+    await postJSON('/api/v1/admin/products/' + encodeURIComponent(id) + '/restore');
+    toast('Bidhaa imerudishwa kama draft', true);
+    loadProducts();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -2151,55 +2251,153 @@ async function revenueWithdraw() {
 // KYC admin approve/reject/revoke
 // ---------------------------------------------------------------------------
 function kycTabs(active) {
-  const tabs = { pending: 'Zinazosubiri', all: 'Zote' };
-  return '<div class="toolbar" style="margin-bottom:14px">' + Object.keys(tabs).map((k) =>
-    '<button class="radio-chip ' + (active === k ? 'on' : '') + '" data-ktab="' + k + '">' + tabs[k] + '</button>').join('') + '</div>';
+  const tabs = {
+    pending: 'Zinazosubiri',
+    approved: 'Zilizokubaliwa',
+    rejected: 'Zilizokataa',
+    revoked: 'Zilizofutwa',
+    all: 'Zote',
+  };
+  return '<div class="toolbar" style="margin-bottom:14px">' +
+    '<input class="field q" id="kQ" placeholder="Tafuta jina, email, simu au namba ya kitambulisho.">' +
+    Object.keys(tabs).map((k) =>
+      '<button class="radio-chip ' + (active === k ? 'on' : '') + '" data-ktab="' + k + '">' + tabs[k] + '</button>').join('') +
+    '</div>';
 }
 async function loadKyc(focus) {
   const el = secEl('kyc');
   const f = focus || pgState('kyc', 'f') || 'pending';
   setPg('kyc', 'f', f);
   el.innerHTML = kycTabs(f) + '<div class="finBody"></div>';
+  const qi = $('kQ');
+  if (qi) {
+    qi.value = pgState('kyc', 'q') || '';
+    qi.onkeydown = (e) => {
+      if (e.key !== 'Enter') return;
+      setPg('kyc', 'q', qi.value.trim());
+      setPg('kyc', 'page', 1);
+      loadKycList(f);
+    };
+  }
   loadKycList(f);
-  el.querySelectorAll('[data-ktab]').forEach((b) => b.addEventListener('click', () => loadKyc(b.dataset.ktab)));
+  el.querySelectorAll('[data-ktab]').forEach((b) => b.addEventListener('click', () => {
+    setPg('kyc', 'page', 1);
+    loadKyc(b.dataset.ktab);
+  }));
 }
 async function loadKycList(f) {
   const body = secEl('kyc').querySelector('.finBody');
+  const page = pgState('kyc', 'page') || 1;
+  const limit = 25;
+  const q = pgState('kyc', 'q') || '';
   body.innerHTML = '<div class="card"><div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div></div>';
   try {
-    const j = f === 'pending' ? await getJSON('/api/admin/kyc/pending') : await getJSON('/api/admin/kyc/all');
-    const rows = f === 'pending' ? (j.pending || []) : (j.all || []);
+    const qs = new URLSearchParams({
+      status: f,
+      limit: String(limit),
+      skip: String((page - 1) * limit),
+    });
+    if (q) qs.set('q', q);
+    const j = await getJSON('/api/admin/kyc/all?' + qs.toString());
+    const rows = j.all || [];
+    const total = j.total != null ? j.total : rows.length;
+    // The detail drawer reads from this cache, so opening a record costs no
+    // extra request and works for every state, not just pending.
+    S.kycRows = rows;
     body.innerHTML = '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
-      '<th>Mtumiaji</th><th>Aina ya Kitambulisho</th><th>Nambari</th><th>Iliwasilishwa</th><th>Hali</th><th style="text-align:right">Vitendo</th></tr></thead><tbody>' +
+      '<th>Mtumiaji</th><th>Jina kamili</th><th>Aina ya Kitambulisho</th><th>Nambari</th><th>Iliwasilishwa</th><th>Hali</th><th style="text-align:right">Vitendo</th></tr></thead><tbody>' +
       (rows.length ? rows.map((u) => {
         const k = u.kyc || {};
         const st = k.status || 'none';
         const args = JSON.stringify({ uid: u.uid, name: u.displayName || u.email || u.uid }).replace(/'/g, '&#39;');
-        let actions = '<span class="dim">—</span>';
+        const fullName = [k.firstName, k.middleName, k.lastName].filter(Boolean).join(' ') || k.fullName || '—';
+        // Detail is offered in EVERY state: a rejected or revoked applicant is
+        // exactly the record a moderator needs to read before deciding.
+        let actions = '<button class="btn sm" data-fn="kycDetail" data-args=\'' + args + '\'>Maelezo</button> ' +
+          '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button>';
         if (st === 'pending') {
-          actions =
-            '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button> ' +
-            '<button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali</button> ' +
-            '<button class="btn sm danger" data-fn="kycReject" data-args=\'' + args + '\'>Kataa</button>';
+          actions += ' <button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali</button>' +
+            ' <button class="btn sm danger" data-fn="kycReject" data-args=\'' + args + '\'>Kataa</button>';
         } else if (st === 'approved') {
-          actions = '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button> ' +
-            '<button class="btn sm" data-fn="kycRevoke" data-args=\'' + args + '\'>Futa (Revoke)</button>';
-        } else if (st !== 'none') {
-          actions = '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button>';
+          actions += ' <button class="btn sm danger" data-fn="kycRevoke" data-args=\'' + args + '\'>Futa (Revoke)</button>';
+        } else if (st === 'rejected' || st === 'revoked') {
+          // Let a lapsed applicant be approved again without erasing history.
+          actions += ' <button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali tena</button>';
         }
         return '<tr>' +
           '<td>' + avatarOf({ displayName: u.displayName, avatarUrl: '', email: u.email }) + ' <b>' + esc(u.displayName || '—') + '</b><div class="dim">' + esc(u.email || '') + ' · ' + esc(u.phone || '') + '</div></td>' +
+          '<td>' + esc(fullName) + '</td>' +
           '<td>' + esc(k.idType || '—') + '</td>' +
           '<td class="mono">' + esc(k.idNumber || '—') + '</td>' +
           '<td class="dim">' + fmtDay(k.submittedAt) + '</td>' +
           '<td>' + badge(st) + '</td>' +
           '<td class="rowactions">' + actions + '</td></tr>';
-      }).join('') : '<tr><td colspan="6" class="empty">Hakuna wasilisho la KYC</td></tr>') +
-      '</tbody></table></div></div>';
+      }).join('') : '<tr><td colspan="7" class="empty">Hakuna wasilisho la KYC' + (q ? ' kwa "' + esc(q) + '"' : '') + '</td></tr>') +
+      '</tbody></table></div>' +
+      '<div class="pager">' +
+      '<button class="btn sm" data-kpage="prev"' + (page <= 1 ? ' disabled' : '') + '>Iliyotangulia</button>' +
+      '<span class="dim">Ukurasa ' + page + ' · jumla ' + fmtNum(total) + '</span>' +
+      '<button class="btn sm" data-kpage="next"' + (rows.length < limit ? ' disabled' : '') + '>Inayofuata</button>' +
+      '</div></div>';
+    body.querySelectorAll('[data-kpage]').forEach((b) => b.addEventListener('click', () => {
+      setPg('kyc', 'page', Math.max(1, page + (b.dataset.kpage === 'next' ? 1 : -1)));
+      loadKycList(f);
+    }));
   } catch (e) {
     body.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>';
   }
   bindSection('kyc'); touch(); icons();
+}
+// Full KYC record in the drawer. Prefers the cached list payload so opening a
+// record costs no request; falls back to a uid search for the case where the
+// reviewer switched state tabs (or paged away) before clicking through.
+async function kycDetailRow(uid, name) {
+  let cached = (S.kycRows || []).find((r) => r.uid === uid);
+  if (!cached) {
+    try {
+      // collectKyc matches on the doc id, so q=<uid> is an exact lookup.
+      const qs = new URLSearchParams({ status: 'all', limit: '1', q: uid });
+      const j = await getJSON('/api/admin/kyc/all?' + qs.toString());
+      cached = (j.all || []).find((r) => r.uid === uid) || null;
+    } catch (e) { cached = null; }
+  }
+  if (!cached) { toast('Hakuna rekodi ya KYC kwa mtumiaji huyu', false); return; }
+  const k = cached.kyc || {};
+  const fullName = [k.firstName, k.middleName, k.lastName].filter(Boolean).join(' ') || k.fullName || '—';
+  const args = JSON.stringify({ uid: uid, name: name || uid }).replace(/'/g, '&#39;');
+  const st = k.status || 'none';
+  let actions = '<button class="btn sm" data-fn="kycDocs" data-args=\'' + args + '\'>Hakiki</button>';
+  if (st === 'pending') {
+    actions += ' <button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali</button>' +
+      ' <button class="btn sm danger" data-fn="kycReject" data-args=\'' + args + '\'>Kataa</button>';
+  } else if (st === 'approved') {
+    actions += ' <button class="btn sm danger" data-fn="kycRevoke" data-args=\'' + args + '\'>Futa (Revoke)</button>';
+  } else if (st === 'rejected' || st === 'revoked') {
+    actions += ' <button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali tena</button>';
+  }
+  openDrawer(
+    '<h3>Maelezo ya KYC</h3>' +
+    '<div class="dsub">' + esc(name || uid) + '</div>' +
+    '<div style="margin:10px 0">' + badge(st) + '</div>' +
+    '<dl class="kv">' +
+    '<dt>Jina kamili</dt><dd>' + esc(fullName) + '</dd>' +
+    '<dt>Aina ya kitambulisho</dt><dd>' + esc(k.idType || '—') + '</dd>' +
+    '<dt>Nambari</dt><dd class="mono">' + esc(k.idNumber || '—') + '</dd>' +
+    '<dt>Tarehe ya kuzaliwa</dt><dd>' + esc(k.dateOfBirth || '—') + '</dd>' +
+    '<dt>Simu</dt><dd>' + esc(k.phone || cached.phone || '—') + '</dd>' +
+    '<dt>Barua pepe</dt><dd>' + esc(k.email || cached.email || '—') + '</dd>' +
+    '<dt>Anwani</dt><dd>' + esc(k.address || '—') + '</dd>' +
+    '<dt>Ada ya uthibitisho</dt><dd>' + (k.feeAmount ? fmtTZS(k.feeAmount) : '—') +
+      (k.feePaidAt ? ' <span class="dim">(' + fmtTime(k.feePaidAt) + ')</span>' : '') + '</dd>' +
+    (k.feeReference ? '<dt>Kumbukumbu ya malipo</dt><dd class="mono dim">' + esc(k.feeReference) + '</dd>' : '') +
+    '<dt>Iliwasilishwa</dt><dd>' + fmtTime(k.submittedAt) + '</dd>' +
+    (k.reviewedAt ? '<dt>Ilipitiwa</dt><dd>' + fmtTime(k.reviewedAt) + '</dd>' : '') +
+    (k.revokedAt ? '<dt>Ilifutwa</dt><dd>' + fmtTime(k.revokedAt) + '</dd>' : '') +
+    (k.reviewNotes ? '<dt>Maelezo ya ukaguzi</dt><dd>' + esc(k.reviewNotes) + '</dd>' : '') +
+    '</dl>' +
+    '<div class="drawer-actions">' + actions + '</div>'
+  );
+  bindSection('kyc');
 }
 // KYC documents live in a private bucket with no public URL, so the panel asks
 // the API for a short-lived signed link per document every time this is opened.
@@ -2247,25 +2445,58 @@ async function kycViewDocuments(uid, name) {
     }
   }
 }
+// Reason prompts use the panel's own modal instead of window.prompt: native
+// dialogs render in the browser's language (English on an English-locale admin
+// machine), are unstyleable, and break the SW/EN toggle.
+function reasonModal({ title, sub, label, placeholder, confirmLabel, danger, onOk }) {
+  openModal(
+    '<h3>' + esc(title) + '</h3>' +
+    (sub ? '<p class="msub">' + esc(sub) + '</p>' : '') +
+    '<label>' + esc(label) + '</label>' +
+    '<textarea class="field" id="rsnInput" rows="3" placeholder="' + esc(placeholder || '') + '"></textarea>' +
+    '<div class="mfooter"><button class="btn" id="rsnNo">Ghairi</button>' +
+    '<button class="btn ' + (danger ? 'danger' : 'accent') + '" id="rsnYes">' + esc(confirmLabel) + '</button></div>'
+  );
+  $('rsnNo').onclick = closeModal;
+  $('rsnYes').onclick = () => {
+    const v = $('rsnInput').value.trim();
+    closeModal();
+    onOk(v);
+  };
+  const ta = $('rsnInput');
+  if (ta) ta.focus();
+}
+
 async function kycReview(uid, name, action) {
   if (action === 'reject') {
-    const reason = prompt('Sababu ya kukataa KYC ya ' + name);
-    if (reason === null) return;
-    run(async () => {
-      const j = await postJSON('/api/admin/kyc/review', { userId: uid, approve: false, notes: reason });
-      toast((j && j.message) || 'KYC imekataliwa', true);
-      loadKyc(pgState('kyc', 'f'));
+    reasonModal({
+      title: 'Kataa KYC',
+      sub: name,
+      label: 'Sababu ya kukataa',
+      placeholder: 'Mfano: picha ya kitambulisho haisomeki vizuri',
+      confirmLabel: 'Kataa',
+      danger: true,
+      onOk: (reason) => run(async () => {
+        const j = await postJSON('/api/admin/kyc/review', { userId: uid, approve: false, notes: reason });
+        toast((j && j.message) || 'KYC imekataliwa', true);
+        loadKyc(pgState('kyc', 'f'));
+      }),
     });
     return;
   }
   if (action === 'revoke') {
-    const ok = await confirmModal('Futa KYC', 'Futa kibali cha KYC cha ' + name + '? Bidhaa zake zitaondolewa kibali cha kuuza.', 'Futa', true);
-    if (!ok) return;
-    const reason = prompt('Sababu ya kufuta');
-    run(async () => {
-      const j = await postJSON('/api/admin/kyc/revoke', { userId: uid, reason: reason || '' });
-      toast((j && j.message) || 'KYC imefutwa', true);
-      loadKyc(pgState('kyc', 'f'));
+    reasonModal({
+      title: 'Futa KYC',
+      sub: 'Futa kibali cha KYC cha ' + name + '? Bidhaa zake zitaondolewa kibali cha kuuza.',
+      label: 'Sababu ya kufuta',
+      placeholder: 'Mfano: taarifa za kitambulisho zilishukuliwa',
+      confirmLabel: 'Futa',
+      danger: true,
+      onOk: (reason) => run(async () => {
+        const j = await postJSON('/api/admin/kyc/revoke', { userId: uid, reason: reason });
+        toast((j && j.message) || 'KYC imefutwa', true);
+        loadKyc(pgState('kyc', 'f'));
+      }),
     });
     return;
   }
