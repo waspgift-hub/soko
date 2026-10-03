@@ -162,4 +162,85 @@ function buildOtpEmail({ otp, lang = 'sw', expiresInMinutes = 5, recipientEmail 
   return { subject: c.subject, html };
 }
 
-module.exports = { buildOtpEmail };
+// Security notification: password was changed. No links, no codes — if the
+// recipient did not do this, the mail tells them exactly where to get help.
+function buildPasswordChangedEmail({ lang = 'sw', when = null } = {}) {
+  const en = lang === 'en';
+  const c = en
+    ? {
+        subject: 'Soko Vibe — Your password was changed',
+        heading: 'Password changed',
+        intro: `Your Soko Vibe password was changed${when ? ` on ${when}` : ''}. All other devices have been signed out automatically.`,
+        securityTitle: 'Wasn\'t you?',
+        securityBody: 'Someone with access to your phone or email changed this password. Contact Soko Vibe Support immediately at support@sokovibe.co.tz so we can secure your account.',
+      }
+    : {
+        subject: 'Soko Vibe — Nenosiri lako limebadilishwa',
+        heading: 'Nenosiri limebadilishwa',
+        intro: `Nenosiri lako la Soko Vibe limebadilishwa${when ? ` mnamo ${when}` : ''}. Vifaa vingine vyote vimetolewa nje kiotomatiki.`,
+        securityTitle: 'Si wewe?',
+        securityBody: 'Mtu mwenye ufikiaji wa simu au barua pepe yako amebadilisha nenosiri hili. Wasiliana na Msaada wa Soko Vibe mara moja kupitia support@sokovibe.co.tz ili tukulinde akaunti yako.',
+      };
+
+  const html = `<!DOCTYPE html>
+<html lang="${en ? 'en' : 'sw'}" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>${c.subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F2F5F3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F2F5F3;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid ${BRAND.border};">
+          <tr>
+            <td align="center" style="padding:40px 24px 8px 24px;">
+              <img src="${LOGO_URL}" width="72" height="72" alt="Soko Vibe" style="border:0;display:block;margin:0 auto;border-radius:50%;">
+              <p style="margin:14px 0 0 0;font-size:20px;font-weight:700;color:${BRAND.dark};letter-spacing:0.5px;">Soko Vibe</p>
+              <p style="margin:2px 0 0 0;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;color:${BRAND.muted};">Tanzania Online Marketplace</p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:28px 24px 6px 24px;">
+              <h1 style="margin:0;font-size:26px;line-height:1.3;color:${BRAND.text};">${c.heading}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 32px 8px 32px;">
+              <p style="margin:0;font-size:14px;line-height:1.7;color:${BRAND.text};">${c.intro}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 32px 36px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FAFBFA;border-radius:10px;border:1px solid ${BRAND.border};">
+                <tr>
+                  <td style="padding:14px 18px;font-size:13px;line-height:1.6;color:${BRAND.muted};">
+                    <strong style="color:${BRAND.text};">${c.securityTitle}</strong><br>
+                    ${c.securityBody}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td align="center" style="padding:18px 16px 8px 16px;font-size:12px;color:${BRAND.muted};">
+              <span style="text-transform:uppercase;letter-spacing:1px;font-weight:600;color:#4B5563;">Soko Vibe</span> · Dar es Salaam, Tanzania<br>
+              <span style="color:${BRAND.green};"><a href="https://www.sokovibe.co.tz" style="color:${BRAND.green};text-decoration:none;">www.sokovibe.co.tz</a></span> · <a href="mailto:support@sokovibe.co.tz" style="color:${BRAND.green};text-decoration:none;">support@sokovibe.co.tz</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject: c.subject, html };
+}
+
+module.exports = { buildOtpEmail, buildPasswordChangedEmail };

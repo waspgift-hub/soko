@@ -28,11 +28,14 @@ async function deliverPhoneOtp({ phone, message, code, userId, langCode = 'sw' }
     if (channel === 'push') {
       if (!userId) continue;
       attempts.push('push');
+      // The push is a "code is ready" ping ONLY: the secret itself travels by
+      // SMS, never inside a third-party push payload (retention + on-device
+      // notification logs would both keep a copy of the credential).
       const result = await pushService.sendPush(
         userId,
         langCode === 'en' ? 'Your Soko Vibe code' : 'Msimbo wako wa Soko Vibe',
         message,
-        { type: 'otp_code', otp: String(code) },
+        { type: 'otp_ready' },
       );
       if (result.success) return { delivered: true, channel: 'push', attempts };
       if (result.error === 'CONFIG_MISSING') continue;

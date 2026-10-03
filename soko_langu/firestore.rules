@@ -56,7 +56,7 @@ service cloud.firestore {
             'totalSales', 'grossSalesVolume', 'totalWithdrawn',
             'isAdmin', 'isSuspended', 'kyc', 'trust',
             'sellerKycApproved', 'adsExempt', 'isBlueTick', 'blueTick',
-            'isBoosted', 'boostedUntil', 'boostTier',
+            'isBoosted', 'boostedUntil', 'boostTier', 'sessionRevokedAt',
             'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
           ]);
     }
@@ -73,7 +73,7 @@ service cloud.firestore {
           'walletBalance', 'pendingEscrow',
           'totalSales', 'grossSalesVolume', 'totalWithdrawn',
           'kyc', 'trust', 'sellerKycApproved', 'adsExempt', 'isBlueTick', 'blueTick',
-          'isBoosted', 'boostedUntil', 'boostTier',
+          'isBoosted', 'boostedUntil', 'boostTier', 'sessionRevokedAt',
           'lastSaleAt', 'lastLoginAt', 'fcmToken'
         ])
         && incoming.get('sellerBalance', 0) == 0
@@ -839,6 +839,15 @@ service cloud.firestore {
         && request.resource.data.email.size() <= 254
         && request.resource.data.createdAt is timestamp;
       allow read, update, delete: if isAdmin();
+    }
+
+    // ─── SESSION REVOCATIONS (logout-all) ───────────────────
+    // Written ONLY by the Admin SDK (logout-all endpoint, password-reset
+    // recovery, admin suspension). No client path: a caller who could write
+    // their own stamp could never be logged out, and one who could write
+    // others' could log anyone out.
+    match /session_revocations/{uid} {
+      allow read, write: if isAdmin();
     }
 
     // ─── SMOKE: deny-all fallback for any undocumented collection ──

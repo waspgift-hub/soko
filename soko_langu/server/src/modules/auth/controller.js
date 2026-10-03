@@ -1,18 +1,54 @@
 const crypto = require('crypto');
 const { getFirebaseAuth } = require('../../config/firebase');
 const { getStore } = require('../../config/database');
-const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp } = require('../../services/otp-store');
+const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp, createOtpHash, verifyOtpHash } = require('../../services/otp-store');
 const { sendMail } = require('../../services/mailer');
-const { buildOtpEmail } = require('../../services/email-templates');
+const { buildOtpEmail, buildPasswordChangedEmail } = require('../../services/email-templates');
 const { deliverPhoneOtp } = require('../../services/otp-delivery');
-const { releaseOtpClaim } = require('../../middleware/otpGuard');
+const { releaseOtpClaim, checkTarget } = require('../../middleware/otpGuard');
+const { clientIp } = require('../../middleware/rateLimiter');
+const { writeAudit, auditFromReq } = require('../../services/audit');
+const { maskPhone, maskEmail } = require('../../utils/pii');
+const { validatePassword } = require('../../services/password-policy');
+const { revokeUserSessions } = require('../../services/session-revocation');
 const accountStore = require('../../services/account-store');
 
 const OTP_TTL_SECONDS = 300; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
-function hashOtp(value) {
-  return crypto.createHash('sha256').update(String(value)).digest('hex');
+// Per-target ceiling for the pre-auth existence probes (stacked on top of the
+// shared authLimiter IP bucket). Registration needs a duplicate check, but an
+// open oracle must be expensive: 50 probes per target per 15 min, no cooldown.
+const CHECK_MAX_PER_TARGET = parseInt(process.env.AUTH_CHECK_MAX_PER_TARGET || '50', 10);
+const CHECK_WINDOW_MS = 15 * 60 * 1000;
+
+// Fire-and-forget security audit for auth events. writeAudit swallows its own
+// errors, so handlers stay one line each and auth never breaks because the
+// audit table is slow. PII is masked: entityId carries channel + last digits
+// only, never a full phone number or mailbox.
+function authAudit(req, action, extra = {}) {
+  try {
+    const { inc } = require('../../services/auth-risk');
+    inc(action);
+  } catch (_) {}
+  writeAudit({ ...auditFromReq(req), action, entityType: 'auth', ...extra });
+}
+
+// Probing tripwire for the existence oracles: many distinct targets from one
+// IP inside the window is enumeration. Logged once per IP per window; the
+// request itself is still served (per-target ceilings bound the damage).
+async function probeCheck(req, target) {
+  try {
+    const { recordProbe } = require('../../services/auth-risk');
+    const ip = clientIp(req);
+    const { probing, distinct } = await recordProbe(ip, target);
+    if (probing) {
+      authAudit(req, 'auth_probing_detected', {
+        entityId: `ip:${ip}`,
+        newState: { distinctTargets: distinct },
+      });
+    }
+  } catch (_) {}
 }
 
 function cleanPhone(phone) {
@@ -29,7 +65,7 @@ async function sendOtp(req, res) {
     const clean = cleanPhone(phone);
     const otp = crypto.randomInt(100000, 1000000).toString();
 
-    await saveOtp(`phone:${clean}`, hashOtp(otp), OTP_TTL_SECONDS);
+    await saveOtp(`phone:${clean}`, createOtpHash(otp), OTP_TTL_SECONDS);
 
     const message = langCode === 'en'
       ? `Your OTP is ${otp}. It expires in 5 minutes.`
@@ -42,7 +78,8 @@ async function sendOtp(req, res) {
       langCode,
     });
     if (!delivery.delivered) {
-      console.error('[AUTH] send-otp delivery failed for', clean);
+      console.error('[AUTH] send-otp delivery failed for', maskPhone(clean));
+      authAudit(req, 'otp_request_failed', { entityId: `phone:${maskPhone(clean)}` });
       // The code never reached the user. Both halves of the guard claim have to
       // go: the stored hash (so it cannot be verified later) AND the cooldown
       // plus quota slot the middleware already consumed. Rolling back only the
@@ -53,6 +90,7 @@ async function sendOtp(req, res) {
       return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
+    authAudit(req, 'otp_requested', { entityId: `phone:${maskPhone(clean)}` });
     res.json({
       success: true,
       sent: true,
@@ -77,20 +115,24 @@ async function verifyOtp(req, res) {
     if (!record || record.used || Date.now() > record.expiresAt) {
       return res.status(400).json({ error: 'auth_otp_expired' });
     }
-
-    const attempts = await bumpAttempts(`phone:${clean}`);
-    if (attempts > OTP_MAX_ATTEMPTS) {
+    if ((record.attempts || 0) >= OTP_MAX_ATTEMPTS) {
+      authAudit(req, 'otp_verify_locked', { entityId: `phone:${maskPhone(clean)}` });
       return res.status(400).json({ error: 'auth_otp_invalid' });
     }
 
-    const hashed = hashOtp(otpValue);
-    const a = Buffer.from(hashed);
-    const b = Buffer.from(record.otpHash);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    // Attempts are bumped ONLY on a failed compare: bumping first let an
+    // attacker burn a victim's budget with empty requests, and rejected a
+    // correct code entered as the 6th attempt.
+    if (!verifyOtpHash(otpValue, record.otpHash)) {
+      const attempts = await bumpAttempts(`phone:${clean}`);
+      authAudit(req, attempts >= OTP_MAX_ATTEMPTS ? 'otp_verify_locked' : 'otp_verify_failed', {
+        entityId: `phone:${maskPhone(clean)}`,
+      });
       return res.status(400).json({ error: 'auth_otp_invalid' });
     }
 
     await markUsed(`phone:${clean}`);
+    authAudit(req, 'otp_verified', { entityId: `phone:${maskPhone(clean)}` });
     res.json({
       success: true,
       valid: true,
@@ -115,7 +157,7 @@ async function sendEmailOtp(req, res) {
     const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
     const otp = crypto.randomInt(100000, 1000000).toString();
 
-    await saveOtp(`email:${cleanEmail}`, hashOtp(otp), OTP_TTL_SECONDS);
+    await saveOtp(`email:${cleanEmail}`, createOtpHash(otp), OTP_TTL_SECONDS);
 
     const { subject, html } = buildOtpEmail({
       otp,
@@ -124,6 +166,7 @@ async function sendEmailOtp(req, res) {
       recipientEmail: cleanEmail,
     });
     const sent = await sendMail(cleanEmail, subject, html);
+    authAudit(req, sent ? 'otp_requested' : 'otp_request_failed', { entityId: `email:${maskEmail(cleanEmail)}` });
     if (!sent) {
       // The code never arrived (every channel failed, or the address bounced /
       // is suppressed). Drop the stored hash AND give back the cooldown and the
@@ -146,21 +189,19 @@ async function sendEmailOtp(req, res) {
 }
 
 // Shared email-OTP check: expiry, single-use, 5 attempts, timing-safe compare.
+// Attempts bump only on a failed compare (see verifyOtp).
 async function checkEmailCode(cleanEmail, otpValue) {
   if (!otpValue) return { ok: false, error: 'auth_otp_invalid' };
   const record = await getOtp(`email:${cleanEmail}`);
   if (!record || record.used || Date.now() > record.expiresAt) {
     return { ok: false, error: 'auth_otp_expired' };
   }
-  const attempts = await bumpAttempts(`email:${cleanEmail}`);
-  if (attempts > OTP_MAX_ATTEMPTS) {
-    return { ok: false, error: 'auth_otp_invalid' };
+  if ((record.attempts || 0) >= OTP_MAX_ATTEMPTS) {
+    return { ok: false, error: 'auth_otp_invalid', locked: true };
   }
-  const hashed = hashOtp(otpValue);
-  const a = Buffer.from(hashed);
-  const b = Buffer.from(record.otpHash);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return { ok: false, error: 'auth_otp_invalid' };
+  if (!verifyOtpHash(otpValue, record.otpHash)) {
+    const attempts = await bumpAttempts(`email:${cleanEmail}`);
+    return { ok: false, error: 'auth_otp_invalid', locked: attempts >= OTP_MAX_ATTEMPTS };
   }
   await markUsed(`email:${cleanEmail}`);
   return { ok: true };
@@ -177,7 +218,7 @@ async function markFirebaseEmailVerified(cleanEmail) {
   try {
     const auth = getFirebaseAuth();
     if (!auth) {
-      console.warn('[AUTH] Firebase not configured; skipping emailVerified flag for', cleanEmail);
+      console.warn('[AUTH] Firebase not configured; skipping emailVerified flag for', maskEmail(cleanEmail));
       return false;
     }
     const user = await auth.getUserByEmail(cleanEmail);
@@ -189,7 +230,7 @@ async function markFirebaseEmailVerified(cleanEmail) {
     // (a verification-before-registration flow), so it is not an error.
     const code = err && err.code ? String(err.code) : '';
     if (code === 'auth/user-not-found') return false;
-    console.error('[AUTH] failed to set emailVerified for', cleanEmail, '-', err.message);
+    console.error('[AUTH] failed to set emailVerified for', maskEmail(cleanEmail), '-', err.message);
     return false;
   }
 }
@@ -224,8 +265,12 @@ async function verifyEmailOtp(req, res) {
 }
 
 // Email + OTP login for the app: verifies the emailed code, resolves the
-// Firebase user by email (no auto-create for email signups), returns a
-// custom token the client signs in with.
+// Firebase user by email, returns a custom token the client signs in with.
+//
+// No account for the mailbox is NOT a 404: the OTP just proved the requester
+// controls that mailbox, so the account is created (passwordless signup,
+// mirroring phoneLogin auto-create). Besides better UX, this closes the
+// account-enumeration oracle the 404 used to be.
 async function emailOtpLogin(req, res) {
   try {
     const { email, otp, code } = req.body;
@@ -233,21 +278,60 @@ async function emailOtpLogin(req, res) {
     if (!email || !otpValue) return res.status(400).json({ error: 'auth_otp_invalid' });
     const cleanEmail = String(email).trim().toLowerCase();
     const check = await checkEmailCode(cleanEmail, otpValue);
-    if (!check.ok) return res.status(400).json({ error: check.error });
+    if (!check.ok) {
+      authAudit(req, check.locked ? 'otp_verify_locked' : 'otp_verify_failed', {
+        entityId: `email:${maskEmail(cleanEmail)}`,
+      });
+      return res.status(400).json({ error: check.error });
+    }
 
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
 
     let uid;
+    let created = false;
     try {
       const record = await auth.getUserByEmail(cleanEmail);
       uid = record.uid;
     } catch (e) {
-      return res.status(404).json({ error: 'auth_user_not_found' });
+      const userRecord = await auth.createUser({
+        email: cleanEmail,
+        emailVerified: true,
+        password: crypto.randomBytes(24).toString('base64url'),
+        displayName: cleanEmail.split('@')[0],
+      });
+      uid = userRecord.uid;
+      created = true;
+      const store = getStore();
+      await store.user.create({
+        data: {
+          firebaseUid: uid,
+          email: cleanEmail,
+          displayName: cleanEmail.split('@')[0],
+          accountStatus: 'active',
+          lastLoginAt: new Date(),
+        },
+      });
+      await accountStore.writeProfile(uid, {
+        col: {
+          email: cleanEmail,
+          displayName: cleanEmail.split('@')[0],
+          preferredLanguage: 'sw',
+          accountStatus: 'active',
+          createdAt: new Date().toISOString(),
+        },
+        meta: { lastActive: new Date().toISOString(), profile: {} },
+      });
     }
 
     const token = await auth.createCustomToken(uid);
-    res.json({ success: true, token });
+    authAudit(req, 'email_otp_login', {
+      actorId: uid,
+      actorType: 'user',
+      entityId: `email:${maskEmail(cleanEmail)}`,
+      newState: created ? { createdViaOtp: true } : undefined,
+    });
+    res.json({ success: true, token, created });
   } catch (error) {
     console.error('[AUTH] Email OTP login error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -268,33 +352,36 @@ async function otpSignIn(req, res) {
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
 
-    let uid;
+    // Missing account and non-admin resolve to the SAME 403: distinguishing
+    // them would let anyone probe which mailboxes belong to admins.
+    let uid = null;
+    let isAdmin = false;
     try {
       const record = await auth.getUserByEmail(cleanEmail);
       uid = record.uid;
+      const store = getStore();
+      const user = await store.user.findFirst({
+        where: { firebaseUid: uid },
+        select: { role: true },
+      });
+      if (user && ['admin', 'super_admin'].includes(user.role)) {
+        isAdmin = true;
+      } else {
+        // Firestore users/{uid}.role is authoritative for admin identity once the
+        // account has no seam row (fresh-backed admin bookings).
+        const doc = await accountStore.getProfile(uid);
+        if (doc && ['admin', 'super_admin'].includes(doc.role)) isAdmin = true;
+      }
     } catch (e) {
-      return res.status(404).json({ error: 'auth_user_not_found' });
+      uid = null;
     }
-
-    const store = getStore();
-    let isAdmin = false;
-    const user = await store.user.findFirst({
-      where: { firebaseUid: uid },
-      select: { role: true },
-    });
-    if (user && ['admin', 'super_admin'].includes(user.role)) {
-      isAdmin = true;
-    } else {
-      // Firestore users/{uid}.role is authoritative for admin identity once the
-      // account has no seam row (fresh-backed admin bookings).
-      const doc = await accountStore.getProfile(uid);
-      if (doc && ['admin', 'super_admin'].includes(doc.role)) isAdmin = true;
-    }
-    if (!isAdmin) {
+    if (!isAdmin || !uid) {
+      authAudit(req, 'admin_otp_signin_denied', { entityId: `email:${maskEmail(cleanEmail)}` });
       return res.status(403).json({ error: 'ADMIN_REQUIRED' });
     }
 
     const customToken = await auth.createCustomToken(uid);
+    authAudit(req, 'admin_otp_signin', { actorId: uid, actorType: 'user' });
     res.json({ customToken, uid });
   } catch (error) {
     console.error('[AUTH] Admin OTP sign-in error:', error.message);
@@ -313,6 +400,18 @@ async function checkPhone(req, res) {
     }
 
     const clean = cleanPhone(phone);
+    // Registration needs this probe, but an open oracle must be expensive:
+    // per-target ceiling stacked on the shared authLimiter IP bucket.
+    const throttle = await checkTarget(`check:phone:${clean}`, clientIp(req), {
+      cooldown: false,
+      maxPerKey: CHECK_MAX_PER_TARGET,
+    }).catch(() => ({ ok: true }));
+    if (!throttle.ok) {
+      authAudit(req, 'account_probe_throttled', { entityId: `phone:${maskPhone(clean)}` });
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil(CHECK_WINDOW_MS / 1000))));
+      return res.status(429).json({ error: 'auth_otp_limit', success: false });
+    }
+    await probeCheck(req, `phone:${clean}`);
     const fs = await accountStore.byPhoneFirestore(clean);
     if (fs) return res.json({ exists: true });
 
@@ -340,6 +439,16 @@ async function checkEmail(req, res) {
     }
 
     const cleanEmail = String(email).trim().toLowerCase();
+    const throttle = await checkTarget(`check:email:${cleanEmail}`, clientIp(req), {
+      cooldown: false,
+      maxPerKey: CHECK_MAX_PER_TARGET,
+    }).catch(() => ({ ok: true }));
+    if (!throttle.ok) {
+      authAudit(req, 'account_probe_throttled', { entityId: `email:${maskEmail(cleanEmail)}` });
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil(CHECK_WINDOW_MS / 1000))));
+      return res.status(429).json({ error: 'auth_otp_limit', success: false });
+    }
+    await probeCheck(req, `email:${cleanEmail}`);
     const fs = await accountStore.byEmailFirestore(cleanEmail);
     if (fs) return res.json({ exists: true });
 
@@ -367,22 +476,20 @@ function syntheticEmail(clean) {
 }
 
 // Shared phone-OTP check: expiry, single-use, 5 attempts, timing-safe.
-// Returns { ok: true } or { ok: false, error }.
+// Attempts bump only on a failed compare (see verifyOtp).
+// Returns { ok: true } or { ok: false, error, locked }.
 async function checkPhoneCode(clean, otpValue) {
   if (!otpValue) return { ok: false, error: 'auth_otp_invalid' };
   const record = await getOtp(`phone:${clean}`);
   if (!record || record.used || Date.now() > record.expiresAt) {
     return { ok: false, error: 'auth_otp_expired' };
   }
-  const attempts = await bumpAttempts(`phone:${clean}`);
-  if (attempts > OTP_MAX_ATTEMPTS) {
-    return { ok: false, error: 'auth_otp_invalid' };
+  if ((record.attempts || 0) >= OTP_MAX_ATTEMPTS) {
+    return { ok: false, error: 'auth_otp_invalid', locked: true };
   }
-  const hashed = hashOtp(otpValue);
-  const a = Buffer.from(hashed);
-  const b = Buffer.from(record.otpHash);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return { ok: false, error: 'auth_otp_invalid' };
+  if (!verifyOtpHash(otpValue, record.otpHash)) {
+    const attempts = await bumpAttempts(`phone:${clean}`);
+    return { ok: false, error: 'auth_otp_invalid', locked: attempts >= OTP_MAX_ATTEMPTS };
   }
   await markUsed(`phone:${clean}`);
   return { ok: true };
@@ -398,7 +505,12 @@ async function phoneLogin(req, res) {
     }
     const clean = cleanPhone(phone);
     const check = await checkPhoneCode(clean, otp || code);
-    if (!check.ok) return res.status(400).json({ error: check.error });
+    if (!check.ok) {
+      authAudit(req, check.locked ? 'otp_verify_locked' : 'otp_verify_failed', {
+        entityId: `phone:${maskPhone(clean)}`,
+      });
+      return res.status(400).json({ error: check.error });
+    }
 
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
@@ -486,6 +598,11 @@ async function phoneLogin(req, res) {
     }
 
     const token = await auth.createCustomToken(uid);
+    authAudit(req, 'phone_otp_login', {
+      actorId: uid,
+      actorType: 'user',
+      entityId: `phone:${maskPhone(clean)}`,
+    });
     res.json({ success: true, token });
   } catch (error) {
     console.error('[AUTH] Phone login error:', error.message);
@@ -494,18 +611,28 @@ async function phoneLogin(req, res) {
 }
 
 // Reset password by phone + OTP (for phone-registered accounts).
+//
+// The response is identical whether or not an account exists for the phone:
+// the OTP already proved control of the number, so a 404 here would be a
+// pure account-enumeration oracle with no UX value.
 async function resetPasswordByPhone(req, res) {
   try {
     const { phone, otp, code, newPassword } = req.body;
     if (!phone || !(otp || code) || !newPassword) {
       return res.status(400).json({ error: 'Phone, OTP, and new password are required' });
     }
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const policy = validatePassword(newPassword);
+    if (!policy.ok) {
+      return res.status(400).json({ error: policy.code });
     }
     const clean = cleanPhone(phone);
     const check = await checkPhoneCode(clean, otp || code);
-    if (!check.ok) return res.status(400).json({ error: check.error });
+    if (!check.ok) {
+      authAudit(req, check.locked ? 'otp_verify_locked' : 'otp_verify_failed', {
+        entityId: `phone:${maskPhone(clean)}`,
+      });
+      return res.status(400).json({ error: check.error });
+    }
 
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
@@ -522,19 +649,67 @@ async function resetPasswordByPhone(req, res) {
         const existing = await auth.getUserByEmail(syntheticEmail(clean));
         uid = existing.uid;
       } catch (_) {
-        return res.status(404).json({ error: 'auth_no_account' });
+        uid = null;
       }
     }
 
-    try {
-      await auth.updateUser(uid, { password: String(newPassword) });
-    } catch (authErr) {
-      return res.status(500).json({ error: 'failed_to_reset_password' });
+    if (uid) {
+      try {
+        await auth.updateUser(uid, { password: String(newPassword) });
+      } catch (authErr) {
+        authAudit(req, 'password_reset_failed', { actorId: uid, actorType: 'user' });
+        return res.status(500).json({ error: 'failed_to_reset_password' });
+      }
+      // Recovery invalidates every old session: a password reset means the
+      // previous credential is compromised until proven otherwise.
+      await revokeUserSessions(uid).catch(() => null);
+      authAudit(req, 'password_changed', { actorId: uid, actorType: 'user' });
+      // Best-effort security mail to the account's mailbox, if it has a real
+      // one (synthetic phone_* addresses receive nothing — no mailbox).
+      // Queued, never awaited: the reset answer must not wait on SMTP.
+      try {
+        const record = await auth.getUser(uid);
+        const mailbox = record.email && !record.email.startsWith('phone_') ? record.email : null;
+        if (mailbox) {
+          const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
+          const { subject, html } = buildPasswordChangedEmail({
+            lang,
+            when: new Date().toISOString(),
+          });
+          const { enqueueNotification } = require('../../services/notification-worker');
+          await enqueueNotification('email', { to: mailbox, subject, html }, {
+            idempotencyKey: `pwd-changed:${uid}:${Date.now()}`,
+          });
+        }
+      } catch (_) {
+        // Notification failure must never fail the reset itself.
+      }
+    } else {
+      authAudit(req, 'password_reset_no_account', { entityId: `phone:${maskPhone(clean)}` });
     }
 
     res.json({ success: true, message: 'Nenosiri limebadilishwa kwa mafanikio.' });
   } catch (error) {
     console.error('[AUTH] Reset password error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Logout from all devices: stamps sessionRevokedAt so every token minted
+// before now dies on routes enforcing requireFreshSession (money, admin,
+// auth-sensitive). The client signs out locally right after this returns.
+// "Logout current device" stays a local FirebaseAuth.signOut — per-device
+// revocation is impossible with bearer ID tokens.
+async function logoutAll(req, res) {
+  try {
+    const uid = req.firebaseUid;
+    if (!uid) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    const stamped = await revokeUserSessions(uid);
+    if (!stamped) return res.status(503).json({ error: 'Auth not configured' });
+    authAudit(req, 'logout_all_devices', { actorId: uid, actorType: 'user' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[AUTH] Logout-all error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -550,4 +725,5 @@ module.exports = {
   resetPasswordByPhone,
   emailOtpLogin,
   otpSignIn,
+  logoutAll,
 };

@@ -12,13 +12,15 @@
 // first that actually delivers.
 
 const nodemailer = require('nodemailer');
+const { maskEmail } = require('../utils/pii');
 
 let transporter = null;
 
 // Keeps the HTTP request budget: a slow relay must never stall the API. The
-// Resend API answers in ~1s; 30s is guard-room for degraded networks without
-// letting an SMTP relay idle the request away.
-const SEND_TIMEOUT_MS = 30000;
+// Resend API answers in ~1s; 15s is guard-room for degraded networks that
+// still fits inside the API's own 20s request timeout (30s used to 504 while
+// the handler was still sending).
+const SEND_TIMEOUT_MS = 15000;
 
 function withTimeout(promise, ms = SEND_TIMEOUT_MS) {
   return Promise.race([
@@ -164,17 +166,18 @@ async function sendMail(to, subject, html) {
   }
 
   const failures = [];
+  const masked = maskEmail(to);
   for (const [name, attempt] of channels) {
     try {
       await withTimeout(attempt());
-      console.log(`[MAILER] sent via ${name} to ${to}`);
+      console.log(`[MAILER] sent via ${name} to ${masked}`);
       return true;
     } catch (e) {
       console.error(`[MAILER] ${name} failed:`, e.message);
       failures.push(`${name}: ${e.message}`);
     }
   }
-  console.error(`[MAILER] all channels failed for ${to}: ${failures.join(' | ')}`);
+  console.error(`[MAILER] all channels failed for ${masked}: ${failures.join(' | ')}`);
   return false;
 }
 
