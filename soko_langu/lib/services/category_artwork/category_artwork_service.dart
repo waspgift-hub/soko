@@ -80,6 +80,11 @@ class CategoryArtworkService {
   bool _promptDismissed = false;
   bool _initialized = false;
   bool _cancelRequested = false;
+
+  /// True only while [downloadPack] is actually running in this isolate. Lets a
+  /// stale `downloading` status left by a killed attempt be recovered from
+  /// instead of dead-ending every later tap.
+  bool _downloadInFlight = false;
   Timer? _remoteManifestTimer;
 
   // Injected for tests.
@@ -244,7 +249,14 @@ class CategoryArtworkService {
     // value must not block an otherwise valid pack.
     final parsed = _tryParseVersion(min);
     if (parsed == null) return;
-    final current = _appVersion ?? '0.0.0';
+    // An unknown running version must NOT reject the pack. Reading the missing
+    // version as '0.0.0' made this gate fail closed, so on any device where
+    // `setAppVersion` had not run the download threw before fetching a single
+    // byte and the button looked inert. Skipping the comparison is the safe
+    // direction: a genuinely too-old app still gets correct artwork, whereas the
+    // alternative is artwork that can never be installed at all.
+    final current = _appVersion;
+    if (current == null || current.isEmpty) return;
     if (_compareVersions(current, min) < 0) {
       throw ArtworkDownloadException(
         'Pack ${manifest.version} requires app $min, running $current',
@@ -307,7 +319,17 @@ class CategoryArtworkService {
   /// subcategories; null downloads everything. Either way the install is
   /// atomic and the previous version survives any failure.
   Future<bool> downloadPack({Set<String>? onlyCategories}) async {
-    if (_status == ArtworkStatus.downloading) return false;
+    // Guard against a re-entrant tap, but only while this isolate really is
+    // downloading. A previous attempt that never finished (app killed, socket
+    // dropped) used to leave the status on `downloading`, and this line then
+    // turned every later tap into a silent no-op: no progress, no error, no
+    // toast — the button simply looked broken.
+    if (_status == ArtworkStatus.downloading) {
+      if (_downloadInFlight) return false;
+      _status = ArtworkStatus.notInstalled;
+      _setStatus(ArtworkStatus.notInstalled);
+    }
+    _downloadInFlight = true;
     _cancelRequested = false;
     _setStatus(ArtworkStatus.downloading);
     _setProgress(
@@ -434,6 +456,10 @@ class CategoryArtworkService {
       if (manifest != null) await _store.clearStaging(manifest.version);
       if (kDebugMode) debugPrint('artwork download failed: $e\n$st');
       return false;
+    } finally {
+      // Always release the guard, including on cancel, so a failed attempt
+      // cannot wedge the button for the rest of the session.
+      _downloadInFlight = false;
     }
   }
 
