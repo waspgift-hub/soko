@@ -8,6 +8,7 @@ import '../../../theme/app_motion.dart';
 import '../../../theme/app_typography.dart';
 import '../../../widgets/ds/ds.dart';
 import '../../../widgets/product_cached_image.dart';
+import '../boost_tiers.dart';
 
 /// Dark, always-dark hero that anchors the boost screen: the value proposition,
 /// a live preview of the listing once it is boosted, and the reassurance strip.
@@ -78,8 +79,9 @@ class BoostHeroPanel extends StatelessWidget {
                   const SizedBox(height: AppSpacing.s4),
                   Text(
                     context.tr('boost_hero_title'),
-                    style: AppTypography.brandTitle(Colors.white)
-                        .copyWith(fontSize: 28, height: 1.12),
+                    style: AppTypography.brandTitle(
+                      Colors.white,
+                    ).copyWith(fontSize: 28, height: 1.12),
                   ),
                   const SizedBox(height: AppSpacing.s2),
                   Text(
@@ -214,15 +216,8 @@ class _ProductPreview extends StatelessWidget {
                       Text(
                         item == null
                             ? ''
-                            : context.formatPriceInt(
-                                item.price.toInt(),
-                                currencyOverride: 'TZS',
-                              ),
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                            : context.formatPriceInt(item.price.toInt(), currencyOverride: 'TZS'),
+                        style: TextStyle(color: accent, fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -236,11 +231,7 @@ class _ProductPreview extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: const Icon(
-                      Icons.swap_vert_rounded,
-                      size: 18,
-                      color: Colors.white70,
-                    ),
+                    child: const Icon(Icons.swap_vert_rounded, size: 18, color: Colors.white70),
                   ),
               ],
             ),
@@ -259,10 +250,7 @@ class _ProductPreview extends StatelessWidget {
                     context.tr('boost_hero_preview_line'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      fontSize: 11.5,
-                    ),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11.5),
                   ),
                 ),
                 const DsBadge(
@@ -294,23 +282,14 @@ class _HeroReassuranceStrip extends StatelessWidget {
             context.tr('boost_trust_instant'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 11.5,
-            ),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11.5),
           ),
         ),
-        const Text(
-          '�',
-          style: TextStyle(color: Color(0x4DFFFFFF)),
-        ),
+        const Text('�', style: TextStyle(color: Color(0x4DFFFFFF))),
         const SizedBox(width: AppSpacing.s2),
         Text(
           context.tr('boost_trust_no_subscription'),
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
-            fontSize: 11.5,
-          ),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11.5),
         ),
       ],
     );
@@ -334,8 +313,7 @@ class CountUpText extends StatefulWidget {
   State<CountUpText> createState() => _CountUpTextState();
 }
 
-class _CountUpTextState extends State<CountUpText>
-    with SingleTickerProviderStateMixin {
+class _CountUpTextState extends State<CountUpText> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _curve;
 
@@ -363,21 +341,8 @@ class _CountUpTextState extends State<CountUpText>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _curve,
-      builder: (context, _) => Text(
-        _format((widget.value * _curve.value).round()),
-        style: widget.style,
-      ),
+      builder: (context, _) =>
+          Text(formatBoostCount((widget.value * _curve.value).round()), style: widget.style),
     );
-  }
-
-  /// 1_260 reads as noise next to a projected figure, so anything under 10k is
-  /// abbreviated to one decimal (`4.4K`) and the rest keeps thousands commas.
-  String _format(int n) {
-    if (n >= 10000) {
-      final k = n / 1000;
-      return '${k.toStringAsFixed(k >= 100 ? 0 : 1)}K';
-    }
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return n.toString();
   }
 }

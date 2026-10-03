@@ -4,10 +4,7 @@ class LocalizationService {
   static const String _languageKey = 'language_code';
   static const String _currencyKey = 'currency';
 
-  static const Map<String, String> supportedLanguages = {
-    'sw': 'Kiswahili',
-    'en': 'English',
-  };
+  static const Map<String, String> supportedLanguages = {'sw': 'Kiswahili', 'en': 'English'};
 
   static const Map<String, Map<String, String>> supportedCurrencies = {
     'TZS': {'symbol': 'TSh', 'name': 'Tanzanian Shilling'},
@@ -46,8 +43,7 @@ class LocalizationService {
       'chat_seller': 'Ongea na Muuzaji',
       'messages': 'Ujumbe',
       'messages_subtitle': 'Wasiliana na wanunuzi na wauzaji',
-      'trust_banner_msg':
-          'Weka malipo ndani ya Soko Vibe. Usimpe mtu yeyote OTP yako.',
+      'trust_banner_msg': 'Weka malipo ndani ya Soko Vibe. Usimpe mtu yeyote OTP yako.',
       'for_you': 'Kwa Ajili Yako',
       'nearby': 'Karibu Nawe',
       'set_location_title': 'Weka eneo lako ili kuona bidhaa zilizo karibu.',
@@ -55,8 +51,7 @@ class LocalizationService {
       'no_nearby': 'Hakuna bidhaa karibu nawe bado.',
       'explore_marketplace': 'Chunguza Soko',
       'login_required_title': 'Ingia kuendelea',
-      'login_required_body':
-          'Unahitaji akaunti kufanya hivi. Kutazama ni bure.',
+      'login_required_body': 'Unahitaji akaunti kufanya hivi. Kutazama ni bure.',
       'maybe_later': 'Baadaye',
       'total': 'Jumla',
       'products': 'Bidhaa',
@@ -231,15 +226,13 @@ class LocalizationService {
           'Ununuzi huu unajumuisha ada ya jemala ya 3.5% (inakokotolewa kwa bei ya bidhaa).',
       'allow_continue': 'Ruhusu na Endelea',
       'deny_cancel': 'Kataa na Ghairi',
-      'transaction_cancelled':
-          'Ununuzi umetenguliwa. Hakuna malipo yaliyotozwa.',
+      'transaction_cancelled': 'Ununuzi umetenguliwa. Hakuna malipo yaliyotozwa.',
       'searching_soko': 'Inatafuta Soko Vibe...',
       'loading_results': 'Inapakia matokeo kutoka Soko Vibe...',
       'loading': 'Inapakia...',
       'no_results_soko': 'Hakuna matokeo katika Soko Vibe',
       'try_different': 'Jaribu maneno tofauti au vinjari kategoria',
-      'trouble_connecting':
-          'Soko Vibe inatatizika kuunganisha. Tafadhali jaribu tena.',
+      'trouble_connecting': 'Soko Vibe inatatizika kuunganisha. Tafadhali jaribu tena.',
       'try_again': 'Jaribu Tena',
 
       'total_sales': 'Mauzo Jumla',
@@ -275,7 +268,8 @@ class LocalizationService {
       'pay_on_delivery': 'Malipo mkononi',
       'pay_on_delivery_sub': 'Ikiwa muuzaji atakubali',
       'shipping_quoted_later': 'Usafirishaji utathibitishwa na muuzaji',
-      'checkout_pay_later_note': 'Utalipa baada ya muuzaji kuthibitisha usafirishaji. Pesa zinashikiliwa na escrow.',
+      'checkout_pay_later_note':
+          'Utalipa baada ya muuzaji kuthibitisha usafirishaji. Pesa zinashikiliwa na escrow.',
       'occurrences': 'Marudio',
       'user_message': 'Ujumbe wa mtumiaji',
       'technical_details': 'Maelezo ya kiuatimu',
@@ -325,8 +319,7 @@ class LocalizationService {
       'delete_message_confirm': 'Futa ujumbe huu?',
       'editing_message': 'Inahariri ujumbe',
       'deleted_message': 'Umejumbe imefutwa',
-      'delete_time_expired':
-          'Muda umeisha. Unaweza futa ndani ya dakika 15 tu.',
+      'delete_time_expired': 'Muda umeisha. Unaweza futa ndani ya dakika 15 tu.',
       'forwarded_message': 'Imetumwa tena',
       'message_deleted': 'Ujumbe huu umefutwa',
       'comments': 'Maoni',
@@ -362,15 +355,12 @@ class LocalizationService {
       'value_eg': 'Thamani (mf. Kubwa, Nyekundu)',
       'price_adj_label': 'Bei ±',
       'verify_email_title': 'Thibitisha Barua Pepe',
-      'verify_email_sent':
-          'Tumekutumia barua pepe ya uthibitisho. Angalia kikasha chako.',
-      'email_verification_sent':
-          'Barua pepe ya uthibitisho imetumwa! Angalia kikasha chako.',
+      'verify_email_sent': 'Tumekutumia barua pepe ya uthibitisho. Angalia kikasha chako.',
+      'email_verification_sent': 'Barua pepe ya uthibitisho imetumwa! Angalia kikasha chako.',
       'use_different_account': 'Tumia akaunti nyingine',
       'verified_continue': 'Nimethibitisha - Endelea',
       'resend_verification': 'Tuma Tena Barua Pepe',
-      'email_not_verified':
-          'Barua pepe bado haijathibitishwa. Tafadhali thibitisha kwanza.',
+      'email_not_verified': 'Barua pepe bado haijathibitishwa. Tafadhali thibitisha kwanza.',
       'wishlist_empty': 'Orodha yako ya tamaa haina kitu',
       'choose_username': 'chagua jina la kipekee la mtumiaji',
       'username_required': 'Jina la mtumiaji linahitajika',
@@ -385,8 +375,7 @@ class LocalizationService {
       'get_location': 'Pata mahali nilipo',
       'location_disabled': 'Huduma za mahali zimezimwa',
       'location_denied': 'Ruhusa ya mahali imekataliwa kabisa',
-      'location_permission_denied':
-          'Ruhusa ya mahali imekataliwa. Jaribu tena.',
+      'location_permission_denied': 'Ruhusa ya mahali imekataliwa. Jaribu tena.',
       'location_title': 'Ruhusu eneo lako',
       'location_disclosure':
           'Soko Vibe inatumia eneo lako kuonyesha bidhaa zilizo karibu nawe na kuwasaidia wauzaji kupata wanunuzi katika eneo lako. Eneo lako halionyeshwi hadharani.',
@@ -399,8 +388,7 @@ class LocalizationService {
       'not_now': 'Sio sasa',
       'notifications_blocked_hint':
           'Programu huandaa maombi ya taarifa, lakini mfano wako umekataa. Ili kupata taarifa, fungua mipangilio ya mfano na uruhusu programu kutoa taarifa.',
-      'remove_old_first':
-          'Ondoa picha za zamani kwanza ili hii iwe kava',
+      'remove_old_first': 'Ondoa picha za zamani kwanza ili hii iwe kava',
       'deleted_notifications_count': 'taarifa zimefutwa: {count}',
       'profile_saved': 'Wasifu umehifadhiwa!',
       'call_history': 'Historia ya Simu',
@@ -485,8 +473,7 @@ class LocalizationService {
       'status_completed': 'Imekamilika',
       'status_escrow': 'Kwenye Escrow',
       'status_pending': 'Inasubiri',
-      'purchase_successful':
-          'Umefanikiwa kununua! Angalia historia ya miamala yako.',
+      'purchase_successful': 'Umefanikiwa kununua! Angalia historia ya miamala yako.',
       'cannot_buy_own': 'Hauwezi kununua bidhaa yako mwenyewe',
       'whatsapp': 'WhatsApp',
       'whatsapp_product_inquiry':
@@ -545,14 +532,15 @@ class LocalizationService {
       'requests_empty_hint': 'Weka ombi lako na uwaache wauzaji wakutafutie',
       'requests_error': 'Hitilafu kupakia maombi. Angalia muunganisho wako.',
       'unlock_contact': 'Fungua Anwani ya Mwasiliani',
-      'unlock_contact_ad_msg':
-          'Tazama tangazo moja la video kufungua mawasiliano ya mnunuzi',
+      'unlock_contact_ad_msg': 'Tazama tangazo moja la video kufungua mawasiliano ya mnunuzi',
       'contact_unlocked': 'Mawasiliano yamefunguliwa!',
       'locked_contact_hint': 'Mawasiliano yamefichwa',
       'locked_short': 'Imefungwa',
       'contact_unlocked_short': 'Imefunguliwa',
-      'ignore_offline': 'Hii inaweza kuwa tatizo la mtandao — hakikisha uko mtandaoni kisha jaribu tena.',
-      'account_suspended_seller': 'Akaunti yako imesimamishwa — wasiliana na msimamizi ili kuendelea kuuza.',
+      'ignore_offline':
+          'Hii inaweza kuwa tatizo la mtandao — hakikisha uko mtandaoni kisha jaribu tena.',
+      'account_suspended_seller':
+          'Akaunti yako imesimamishwa — wasiliana na msimamizi ili kuendelea kuuza.',
       'invalid_whatsapp': 'Weka namba sahihi ya WhatsApp',
       'enter_budget': 'Weka bajeti sahihi',
       'whatsapp_contact': 'WhatsApp',
@@ -563,23 +551,18 @@ class LocalizationService {
       'boost_promo_cta': 'Anza Sasa',
 
       'send_whatsapp_message': 'Tuma Ujumbe WhatsApp',
-      'contact_seller_via_whatsapp':
-          'Wasiliana na muuzaji moja kwa moja kupitia WhatsApp',
+      'contact_seller_via_whatsapp': 'Wasiliana na muuzaji moja kwa moja kupitia WhatsApp',
       'phone_number_missing': 'Namba ya simu haipatikani',
-      'group_whatsapp_message':
-          'Ninatengeneza kikundi cha Soko Vibe. Tafadhali niongeze.',
+      'group_whatsapp_message': 'Ninatengeneza kikundi cha Soko Vibe. Tafadhali niongeze.',
       'create_group_description': 'Tengeneza kikundi kwenye WhatsApp',
-      'after_create_group_share':
-          'Baada ya kutengeneza kikundi, shiriki kiungo cha WhatsApp',
+      'after_create_group_share': 'Baada ya kutengeneza kikundi, shiriki kiungo cha WhatsApp',
       'group_chat_title': 'Mazungumzo ya Kikundi',
-      'continue_group_chat_whatsapp':
-          'Endelea na mazungumzo ya kikundi kwenye WhatsApp',
+      'continue_group_chat_whatsapp': 'Endelea na mazungumzo ya kikundi kwenye WhatsApp',
       'ai_hear_error':
           'Samahani mkuu, siwezi kusikia vizuri. Tafadhali jaribu tena au andika jina la bidhaa.',
       'ai_generic_error': 'Samahani mkuu, kuna tatizo. Tafadhali jaribu tena.',
       'ai_insights': 'Ushauri wa AI wa kukuza biashara',
-      'ai_insights_empty':
-          'Tafuta maoni ya AI kwa kubofya ikoni ya kuonyesha upya hapo juu.',
+      'ai_insights_empty': 'Tafuta maoni ya AI kwa kubofya ikoni ya kuonyesha upya hapo juu.',
       'regenerate': 'Onyesha upya',
       'ai_chat_hint': 'Andika chochote... tafuta, ongea, omba ushauri',
       'ai_tip_title': 'Mkuu! Dalali ana ushauri',
@@ -587,8 +570,7 @@ class LocalizationService {
           'Bidhaa zako {0} hazijapata wateja. Jaribu kupunguza bei au kuboresha maelezo!',
       'contact_seller': 'Wasiliana na Muuzaji',
       'now': 'Sasa',
-      'ai_mic_permission_denied':
-          'Samahani, hakuna ruhusa ya kutumia maikrofoni.',
+      'ai_mic_permission_denied': 'Samahani, hakuna ruhusa ya kutumia maikrofoni.',
       'ai_recording_hint': 'Kurekodi... Bonyeza tena maikrofoni kusimamisha.',
       'ai_recording_stopped': '[Kurekodi kumesimama... nakusubiri]',
       'ai_typing': 'AI anaandika...',
@@ -604,14 +586,11 @@ class LocalizationService {
       'otp_sent_email': 'OTP imetumwa kwenye barua pepe yako. Angalia inbox.',
       'failed_to_send_otp': 'Imeshindwa kutuma OTP',
       'network_error_try_again': 'Tatizo la mtandao. Tafadhali jaribu tena.',
-      'password_reset_success_login':
-          'Nenosiri limewekwa upya! Sasa unaweza kuingia.',
+      'password_reset_success_login': 'Nenosiri limewekwa upya! Sasa unaweza kuingia.',
       'failed_to_reset_password': 'Imeshindwa kuweka upya nenosiri',
-      'enter_email_otp_hint':
-          'Weka barua pepe yako kupokea OTP ya kuweka upya.',
+      'enter_email_otp_hint': 'Weka barua pepe yako kupokea OTP ya kuweka upya.',
       'enter_otp_title': 'Weka OTP',
-      'check_email_otp_hint':
-          'Angalia barua pepe yako kwa OTP yenye tarakimu 6.',
+      'check_email_otp_hint': 'Angalia barua pepe yako kwa OTP yenye tarakimu 6.',
       'new_password': 'Nenosiri Mpya',
       'choose_new_password_hint': 'Chagua nenosiri jipya la akaunti yako.',
       'new_password_hint': 'Nenosiri jipya (angalau herufi 6)',
@@ -623,8 +602,7 @@ class LocalizationService {
       'enter_id_number_please': 'Tafadhali jaza namba ya kitambulisho',
       'upload_id_image_please': 'Tafadhali pakia picha ya kitambulisho chako',
       'take_selfie_please': 'Tafadhali piga selfie yako',
-      'failed_to_upload_image':
-          'Imeshindwa kupakia picha. Angalia muunganisho wako.',
+      'failed_to_upload_image': 'Imeshindwa kupakia picha. Angalia muunganisho wako.',
       'kyc_approved_success': 'KYC imekubaliwa! Sasa unaweza kuuza bidhaa.',
       'kyc_submitted': 'KYC imetumwa.',
       'kyc_under_review': 'Inakaguliwa...',
@@ -635,10 +613,8 @@ class LocalizationService {
       'identification_label': 'Kitambulisho:',
       'kyc_pending': 'KYC Inakaguliwa',
       'kyc_pending_subtitle': 'KYC inakaguliwa...',
-      'kyc_pending_desc':
-          'Taarifa zako zinakaguliwa. Utapokea taarifa ukishakubaliwa.',
-      'kyc_rejected_default':
-          'KYC imekataliwa. Tuma tena baada ya kusahihisha.',
+      'kyc_pending_desc': 'Taarifa zako zinakaguliwa. Utapokea taarifa ukishakubaliwa.',
+      'kyc_rejected_default': 'KYC imekataliwa. Tuma tena baada ya kusahihisha.',
       'fill_identity_info': 'Jaza taarifa zako za utambulisho',
       'upload_id_selfie_instruction':
           'Pakia picha ya kitambulisho chako na selfie kwa uthibitisho.',
@@ -660,13 +636,11 @@ class LocalizationService {
       'kyc_passport_number': 'Namba ya Pasipoti',
       'kyc_passport_image': 'Picha ya Pasipoti',
       'kyc_shop_video': 'Video ya Duka Lako',
-      'kyc_shop_video_desc':
-          'Piga video fupi (sekunde 30 au chini) inayoonyesha duka lako.',
+      'kyc_shop_video_desc': 'Piga video fupi (sekunde 30 au chini) inayoonyesha duka lako.',
       'kyc_take_video': 'Piga Video',
       'kyc_video_record': 'Piga au Chagua Video',
       'kyc_video_selected': 'Video imechaguliwa',
-      'kyc_video_too_large':
-          'Video ni kubwa sana (zaidi ya 90MB). Piga video fupi zaidi.',
+      'kyc_video_too_large': 'Video ni kubwa sana (zaidi ya 90MB). Piga video fupi zaidi.',
       'kyc_video_upload_failed':
           'Imeshindwa kupakia video. Angalia muunganisho wako na ujaribu tena.',
       'kyc_enter_first_name': 'Tafadhali jaza jina lako la kwanza',
@@ -677,18 +651,14 @@ class LocalizationService {
       'kyc_enter_phone': 'Tafadhali jaza namba ya simu',
       'kyc_enter_email': 'Tafadhali jaza barua pepe halali',
       'kyc_otp_label': 'Msimbo wa OTP',
-      'kyc_otp_sent':
-          'Msimbo wa OTP umetumwa. Weka msimbo ili kuthibitisha.',
-      'kyc_otp_send_failed':
-          'Imeshindwa kutuma msimbo. Angalia muunganisho na ujaribu tena.',
+      'kyc_otp_sent': 'Msimbo wa OTP umetumwa. Weka msimbo ili kuthibitisha.',
+      'kyc_otp_send_failed': 'Imeshindwa kutuma msimbo. Angalia muunganisho na ujaribu tena.',
       'kyc_enter_otp': 'Tafadhali weka msimbo wa OTP',
       'kyc_otp_invalid': 'Msimbo si sahihi au umeisha. Jaribu kupata mwingine.',
       'kyc_phone_verified': 'Namba ya simu imethibitishwa',
       'kyc_email_verified': 'Barua pepe imethibitishwa',
-      'kyc_verify_phone_required':
-          'Thibitisha namba ya simu kwa OTP kabla ya kutuma',
-      'kyc_verify_email_required':
-          'Thibitisha barua pepe kwa OTP kabla ya kutuma',
+      'kyc_verify_phone_required': 'Thibitisha namba ya simu kwa OTP kabla ya kutuma',
+      'kyc_verify_email_required': 'Thibitisha barua pepe kwa OTP kabla ya kutuma',
       'kyc_passport_required': 'Weka namba ya pasipoti (angalau herufi 6)',
       'kyc_upload_video_please': 'Tafadhali pakia video ya duka lako',
       'kyc_fee_title': 'Ada ya Uthibitisho',
@@ -699,8 +669,7 @@ class LocalizationService {
       'kyc_fee_get_control': 'Pata Namba ya Control',
       'kyc_fee_method_ussd': 'Push kwa Simu (USSD)',
       'kyc_fee_method_billpay': 'BillPay (Control Number)',
-      'kyc_fee_ussd_sent':
-          'Push imetumwa kwenye simu yako. Kamilisha malipo ukiwa kwenye simu.',
+      'kyc_fee_ussd_sent': 'Push imetumwa kwenye simu yako. Kamilisha malipo ukiwa kwenye simu.',
       'kyc_fee_waiting': 'Inasubiri uthibitisho wa malipo...',
       'kyc_fee_check_again': 'Angalia Tena',
       'kyc_fee_not_paid_yet': 'Malipo bado hayajathibitishwa.',
@@ -709,10 +678,8 @@ class LocalizationService {
           'Weka namba hii kwenye M-Pesa yako chini ya menyu ya Lipa kwa BillPay.',
       'kyc_fee_copy': 'Nakili',
       'kyc_fee_copied': 'Namba imenakiliwa',
-      'kyc_fee_unpaid_error':
-          'Lipa ada ya uthibitisho kwanza kabla ya kutuma KYC.',
-      'kyc_fee_load_failed':
-          'Imeshindwa kupakua hali ya ada. Angalia muunganisho wako.',
+      'kyc_fee_unpaid_error': 'Lipa ada ya uthibitisho kwanza kabla ya kutuma KYC.',
+      'kyc_fee_load_failed': 'Imeshindwa kupakua hali ya ada. Angalia muunganisho wako.',
       'kyc_fee_retry': 'Jaribu Tena',
       'kyc_tap_to_watch': 'Bonyeza kutazama video',
       'request_refund': 'Taka Refund?',
@@ -741,15 +708,16 @@ class LocalizationService {
       'tx_history': 'Historia ya Miamala',
       'whatsapp_not_installed': 'WhatsApp haipo, imefungua tovuti',
       'seller_earnings_subtitle': '{0} sales | Gusa kwa maelezo na utoaji',
-      'boost_plans':
-          'Bronze TZS 1,500/3d · Silver TZS 3,000/7d · Gold TZS 10,000/30d',
+      'boost_plans': 'Bronze TZS 1,500/3d · Silver TZS 3,000/7d · Gold TZS 10,000/30d',
       // ── Boost Purchase Flow ──
       'boost_screen_title': 'Angazia Bidhaa Yako',
-      'boost_screen_subtitle': 'Chagua kifurushi. Bidhaa yako itaonekana juu ya matokeo ya utafutaji ikiwa na bendera ya Featured kwa wanunuzi wengi zaidi.',
+      'boost_screen_subtitle':
+          'Chagua kifurushi. Bidhaa yako itaonekana juu ya matokeo ya utafutaji ikiwa na bendera ya Featured kwa wanunuzi wengi zaidi.',
       'boost_choose_product': 'Chagua bidhaa ya kuangazia',
       'boost_no_products': 'Hakuna bidhaa za kuangazia. Ongeza bidhaa kwanza.',
       'boost_package_title': 'Chagua kifurushi',
-      'boost_package_note': 'Malipo moja tu — hakuna ada za ziada za kila siku. Kifurushi kinajionyesha mara moja baada ya malipo kukamilika.',
+      'boost_package_note':
+          'Malipo moja tu — hakuna ada za ziada za kila siku. Kifurushi kinajionyesha mara moja baada ya malipo kukamilika.',
       'boost_days': 'Siku {count}',
       'boost_benefit1': 'Juu ya utafutaji',
       'boost_benefit2': 'Bendera ya Featured',
@@ -762,9 +730,11 @@ class LocalizationService {
       'boost_method_billpay': 'Namba ya kontoli (BillPay) — lipa kwa M-Pesa/Tigo/Airtel',
       'boost_pay_now': 'Lipa TZS {amount}',
       'boost_processing': 'Tunatayarisha malipo...',
-      'boost_push_sent': 'Ombi limetumwa! Angalia simu yako (USSD) na ubonyeze 1 kukamilisha malipo ya TZS {amount}.',
+      'boost_push_sent':
+          'Ombi limetumwa! Angalia simu yako (USSD) na ubonyeze 1 kukamilisha malipo ya TZS {amount}.',
       'boost_billpay_number': 'Namba yako ya kontoli ni {number}',
-      'boost_billpay_instructions': 'Fungua M-Pesa > Lipa > BillPay, ingiza namba ya kontoli na ulipe jumla ya TZS {amount}. Tunathibitisha mara malipo yaonekane.',
+      'boost_billpay_instructions':
+          'Fungua M-Pesa > Lipa > BillPay, ingiza namba ya kontoli na ulipe jumla ya TZS {amount}. Tunathibitisha mara malipo yaonekane.',
       'boost_done': 'Fanyika!',
       'boost_error': 'Imeshindwa: {reason}',
       'boost_no_products_title': 'Hakuna Bidhaa',
@@ -818,8 +788,7 @@ class LocalizationService {
           'Tutakupa namba ya kontoli. Lipa kutoka mfuko wako wa M-Pesa, Tigo au Airtel kwa namba hiyo.',
       'boost_products_owned': 'Bidhaa {count}',
       'boost_pay_cta': 'ANGAZIA',
-      'boost_secure_note':
-          'Malipo salama kwa M-Pesa, Tigo, Airtel, HaloPesa, EzyPesa au CRDB',
+      'boost_secure_note': 'Malipo salama kwa M-Pesa, Tigo, Airtel, HaloPesa, EzyPesa au CRDB',
       'boost_processing_body':
           'Tumeituma ombi la malipo ya {amount}. Thibitisha kwenye simu yako ili tuendelee.',
       'boost_please_wait':
@@ -874,15 +843,12 @@ class LocalizationService {
       'test_mode': 'Hali ya Majaribio',
       'no_internet_connection': 'Hakuna Mtandao',
       'no_internet_connection_lower': 'Hakuna mtandao',
-      'check_connection_try_again':
-          'Tafadhali angalia muunganisho wako na ujaribu tena',
-      'enable_internet_to_continue':
-          'Tafadhali washa mtandao wako\nkuendelea kutumia Soko Vibe',
+      'check_connection_try_again': 'Tafadhali angalia muunganisho wako na ujaribu tena',
+      'enable_internet_to_continue': 'Tafadhali washa mtandao wako\nkuendelea kutumia Soko Vibe',
       'play_queue': 'Orodha ya Nyimbo',
       'queue_is_empty': 'Orodha haina nyimbo',
       'enter_password_to_switch': 'Ingiza nywila kubadili akaunti',
-      'wrong_password_switch_error':
-          'Nywila si sahihi au hitilafu kubadili akaunti',
+      'wrong_password_switch_error': 'Nywila si sahihi au hitilafu kubadili akaunti',
       'cannot_remove_last_account': 'Huwezi kuondoa akaunti yako ya mwisho',
       'remove_account': 'Ondoa Akaunti',
       'remove_account_confirm': 'Ondoa {email}?',
@@ -899,8 +865,7 @@ class LocalizationService {
       'new_users_7_days': 'Watumiaji Wapya (siku 7)',
       'full_delete': 'Futa Kabisa',
       'delete_user_forever': 'Futa Mtumiaji Milele',
-      'delete_user_forever_confirm':
-          'Hii itafuta mtumiaji huyu na data zake milele. Una uhakika?',
+      'delete_user_forever_confirm': 'Hii itafuta mtumiaji huyu na data zake milele. Una uhakika?',
       'delete_forever': 'Futa Milele',
       'user_permanently_deleted': 'Mtumiaji amefutwa milele',
       'user_updated': 'Mtumiaji amesasishwa: {action}',
@@ -910,8 +875,7 @@ class LocalizationService {
       'warning_sent': 'Onyo limetumwa',
       'warning_sent_blocked': 'Onyo la 3 limetumwa — akaunti imefungwa',
       'warning_reason': 'Sababu ya Onyo',
-      'warning_will_block_after_3':
-          'Baada ya maonyo 3 akaunti itafungwa (kusimamishwa).',
+      'warning_will_block_after_3': 'Baada ya maonyo 3 akaunti itafungwa (kusimamishwa).',
       'warning_reason_required': 'Tafadhali andika sababu ya onyo',
       'hidden': ' [IMEFICHWA]',
       'no_active_fraud_alerts': 'Hakuna tahadhari za ulaghai',
@@ -923,12 +887,10 @@ class LocalizationService {
       'mobile_money_fee': 'Ada ya Pesa ya Simu',
       'calculating_payment_fee': 'Inahesabi ada ya malipo ya pesa ya simu...',
       'commission_percentage': '3.5% ya bei ya bidhaa',
-      'net_earnings_formula':
-          'Mapato Halisi = Bei - Ada ya Kuchakata - Ada ya Soko Vibe',
+      'net_earnings_formula': 'Mapato Halisi = Bei - Ada ya Kuchakata - Ada ya Soko Vibe',
       'phone_example': 'mfano 0712345678',
       'choose_boost_package': 'Chagua kifurushi cha uangaziaji',
-      'payment_after_continue':
-          'Utaombwa kukamilisha malipo baada ya kuendelea',
+      'payment_after_continue': 'Utaombwa kukamilisha malipo baada ya kuendelea',
       'select_package': 'Chagua kifurushi',
       'proceed_to_checkout': 'Nenda kwa Malipo',
       'order_summary': 'Muhtasari wa Agizo',
@@ -945,14 +907,11 @@ class LocalizationService {
       'please_log_in_first': 'Tafadhali ingia kwanza',
       'payment_initiation_failed': 'Malipo yameanza kushindwa',
       'payment_not_confirmed': 'Malipo hayajathibitishwa bado',
-      'boosting_will_complete':
-          'Malipo yamepokelewa. Uangaziaji utakamilika hivi punde.',
+      'boosting_will_complete': 'Malipo yamepokelewa. Uangaziaji utakamilika hivi punde.',
       'product_now_boosted': 'Bidhaa yako sasa imeangaziwa.',
       'payment_failed_try_again': 'Malipo yameshindwa. Jaribu tena.',
-      'payment_timeout':
-          'Muda umeisha — malipo hayajathibitishwa. Tafadhali jaribu tena.',
-      'check_phone_complete_payment':
-          'Angalia simu yako na kamilisha malipo kwenye M-Pesa',
+      'payment_timeout': 'Muda umeisha — malipo hayajathibitishwa. Tafadhali jaribu tena.',
+      'check_phone_complete_payment': 'Angalia simu yako na kamilisha malipo kwenye M-Pesa',
       'complete_payment_on_phone': 'Kamilisha malipo kwenye simu yako.',
       'check_payment_status': 'Angalia Hali ya Malipo',
       'checking': 'Inaangalia...',
@@ -1079,8 +1038,7 @@ class LocalizationService {
       'unarchived': 'Imetolewa kwenye hifadhi',
       'shortcut_added': 'Njia ya haraka imeongezwa',
       'add_shortcut': 'Ongeza Njia ya Haraka',
-      'shortcut_not_supported':
-          'Njia ya haraka haijaungana kwenye skrini ya nyumbani',
+      'shortcut_not_supported': 'Njia ya haraka haijaungana kwenye skrini ya nyumbani',
       'view_profile': 'Angalia Wasifu',
       'mark_as_read': 'Weka Kama Imesomwa',
       'mark_all_read': 'Weka Zote Kama Zimesomwa',
@@ -1152,8 +1110,7 @@ class LocalizationService {
       'get_started': 'Anza',
       'done': 'Imekamilika',
       'onboarding_title1': 'Karibu Soko Vibe',
-      'onboarding_desc1':
-          'Nunua na uza bidhaa Tanzania nzima kwa urahisi na usalama.',
+      'onboarding_desc1': 'Nunua na uza bidhaa Tanzania nzima kwa urahisi na usalama.',
       'onboarding_title2': 'Malipo Salama',
       'onboarding_desc2': 'Escrow inalinda malipo yako mpaka bidhaa ifike.',
       'onboarding_title3': 'Anza Kuuza',
@@ -1207,23 +1164,23 @@ class LocalizationService {
       'server_status': 'Hali ya Seva',
       'database': 'Hifadhidata',
       'storage': 'Hifadhi',
-    'size': 'Saizi',
-    'color': 'Rangi',
-    'ram': 'RAM',
-    'processor': 'Prosesaa',
-    'screen_size': 'Ukubwa wa Skrini',
-    'battery': 'Betri',
-    'network': 'Mtandao',
-    'fuel_type': 'Aina ya Mafuta',
-    'transmission': 'Aina ya Gia',
-    'mileage': 'Kilometa',
-    'year': 'Mwaka',
-    'material': 'Nyenzo',
-    'availability': 'Upatikanaji',
-    'make': 'Mtengenezaji',
-    'os': 'Mfumo wa Uendeshaji',
-    'show_x_results': 'Onesha Matokeo ({0})',
-    'top_rated': 'Bora Zaidi',
+      'size': 'Saizi',
+      'color': 'Rangi',
+      'ram': 'RAM',
+      'processor': 'Prosesaa',
+      'screen_size': 'Ukubwa wa Skrini',
+      'battery': 'Betri',
+      'network': 'Mtandao',
+      'fuel_type': 'Aina ya Mafuta',
+      'transmission': 'Aina ya Gia',
+      'mileage': 'Kilometa',
+      'year': 'Mwaka',
+      'material': 'Nyenzo',
+      'availability': 'Upatikanaji',
+      'make': 'Mtengenezaji',
+      'os': 'Mfumo wa Uendeshaji',
+      'show_x_results': 'Onesha Matokeo ({0})',
+      'top_rated': 'Bora Zaidi',
       'whatsapp_status': 'Hali ya WhatsApp',
       'close': 'Funga',
       'learn_more': 'Jifunze Zaidi',
@@ -1239,8 +1196,7 @@ class LocalizationService {
       'enter_your_phone': 'Weka namba yako ya simu',
       'phone_used_for_txns': 'Itatumika kwa miamala na arifa',
       'phone_format_hint': '255xxxxxxxxx',
-      'onboarding_phone_footer_hint':
-          'Bonyeza "Endelea" kuendelea au "Ruka" kuruka hatua hii',
+      'onboarding_phone_footer_hint': 'Bonyeza "Endelea" kuendelea au "Ruka" kuruka hatua hii',
       'skip': 'Ruka',
       'next': 'Endelea',
       'onboarding_start': 'Anza',
@@ -1254,8 +1210,7 @@ class LocalizationService {
       'onboarding_chat_desc':
           'Wasiliana moja kwa moja na wauzaji, uliza maswali, na kamilisha biashara kwa urahisi.',
       'onboarding_language_title': 'Chagua Lugha',
-      'onboarding_language_desc':
-          'Tumia Soko Vibe kwa lugha unayopenda — Kiswahili au English.',
+      'onboarding_language_desc': 'Tumia Soko Vibe kwa lugha unayopenda — Kiswahili au English.',
       'onboarding_phone_title': 'Namba ya Simu',
       'onboarding_phone_desc':
           'Weka namba yako ya simu kwa miamala salama na arifa za maagizo yako.',
@@ -1271,8 +1226,7 @@ class LocalizationService {
       'view': 'Angalia',
       'order_already_paid': 'Oda hii tayari imelipwa.',
       'preparing_payment_wait': 'Inaandaa malipo... Tafadhali subiri.',
-      'check_phone_enter_pin':
-          'Angalia simu yako — weka PIN kukamilisha malipo.',
+      'check_phone_enter_pin': 'Angalia simu yako — weka PIN kukamilisha malipo.',
       'dispute_notify_admin': 'Hii itaarifu admin kukagua muamala huu.',
       'dispute_opened_msg': 'Mgogoro umefunguliwa. Admin atakagua.',
       'dispute_failed': 'Imeshindwa kufungua mgogoro',
@@ -1297,7 +1251,8 @@ class LocalizationService {
       'payment_pending_label': 'Malipo Yanachakatwa',
       'in_escrow_label': 'Imehifadhiwa kwenye Escrow',
       'goods_arrived_title': 'Mzigo Umefika?',
-      'goods_arrived_body': 'Thibitisha mzigo umefika ili kufungua dirisha la ukaguzi (dakika 30). Pesa zitasalia kwenye escrow hadi uthibitishe upokeaji.',
+      'goods_arrived_body':
+          'Thibitisha mzigo umefika ili kufungua dirisha la ukaguzi (dakika 30). Pesa zitasalia kwenye escrow hadi uthibitishe upokeaji.',
       'goods_arrived_button': 'Nimepokea — Fungua Ukaguzi',
       'inspection_deadline_hint': 'Ukague bidhaa na uthibitishe kabla ya',
       'auto_release_countdown_hint': 'Pesa zitolewe kiotomatiki baada ya',
@@ -1324,8 +1279,10 @@ class LocalizationService {
       'uploading_evidence': 'Inapakia ushahidi...',
       'dispute_case_title': 'Mgogoro Uko Chini ya Uchunguzi',
       'dispute_evidence_label': 'Ushahidi uliowasilishwa',
-      'dispute_held_buyer': 'Pesa zinabaki escrow hadi admin atoe uamuzi. Muuzaji na admin wanaweza kuona ushahidi wako.',
-      'dispute_held_seller': 'Pesa zinabaki escrow hadi admin atoe uamuzi. Pitia ushahidi na ungana na msaada ukihitaji kujibu.',
+      'dispute_held_buyer':
+          'Pesa zinabaki escrow hadi admin atoe uamuzi. Muuzaji na admin wanaweza kuona ushahidi wako.',
+      'dispute_held_seller':
+          'Pesa zinabaki escrow hadi admin atoe uamuzi. Pitia ushahidi na ungana na msaada ukihitaji kujibu.',
       'dispute_resolution_label': 'Mgogoro umekamilika. Uamuzi: ',
       'dispute_refunded': 'Pesa zimerejeshwa kwa mnunuzi',
       'dispute_released': 'Pesa zimetolewa kwa muuzaji',
@@ -1384,8 +1341,7 @@ class LocalizationService {
       'transport_note': 'Maelezo Mafupi',
       'transport_submit': 'Hifadhi Taarifa za Usafirishaji',
       'transport_saved': 'Taarifa za usafirishaji zimehifadhiwa',
-      'transport_fill':
-          'Jaza taarifa za usafirishaji ulizochagua (basi, bodaboda au pikipiki)',
+      'transport_fill': 'Jaza taarifa za usafirishaji ulizochagua (basi, bodaboda au pikipiki)',
       'buyer_transport_done':
           'Umehifadhi taarifa za usafirishaji. Muuzaji atatumia hizo taarifa kutuma bidhaa.',
       'buyer_transport_label': 'Taarifa za Usafirishaji za Mnunuzi',
@@ -1400,11 +1356,9 @@ class LocalizationService {
       'disputed_label': 'Mgogoro',
       'quoted_label': 'Nukuu Imepeanwa',
       'cancelled_label': 'Imeghairiwa',
-      'enter_valid_shipping_cost':
-          'Tafadhali ingiza gharama sahihi ya usafirishaji',
+      'enter_valid_shipping_cost': 'Tafadhali ingiza gharama sahihi ya usafirishaji',
       'shipping_cost_set': 'Gharama ya Usafirishaji Imewekwa!',
-      'shipping_cost_set_body':
-          'Muuzaji ameweka gharama ya usafirishaji TZS {0}. Lipa sasa.',
+      'shipping_cost_set_body': 'Muuzaji ameweka gharama ya usafirishaji TZS {0}. Lipa sasa.',
       'shipping_cost_submitted': 'Gharama ya usafirishaji imetumwa kwa mnunuzi',
       'quote_sync_warning':
           'Taarifa ya quote haikufika kwa mnunuzi. Angalia muunganisho na ujaribu tena.',
@@ -1414,13 +1368,11 @@ class LocalizationService {
       'bus_name': 'Jina la Basi',
       'plate_number': 'Namba ya Gari',
       'order_shipped_success': 'Bidhaa Imesafirishwa! Mnunuzi ataarifiwa.',
-      'dispatch_required_fields':
-          'Tafadhali jaza jina la basi na namba ya gari',
+      'dispatch_required_fields': 'Tafadhali jaza jina la basi na namba ya gari',
       'new_request': 'Ombi Mpya',
       'enter_shipping_cost': 'Weka Gharama ya Usafirishaji',
       'free_delivery': 'Usafirishaji Bure',
-      'free_delivery_note':
-          'Mwuzaji ndiye analipia usafirishaji — mnunuzi halipi',
+      'free_delivery_note': 'Mwuzaji ndiye analipia usafirishaji — mnunuzi halipi',
       'free_delivery_confirmed':
           'Mnunuzi atalipwa bei ya bidhaa pekee, hakuna gharama za usafirishaji',
       'sending_label': 'Inatuma...',
@@ -1441,10 +1393,8 @@ class LocalizationService {
       'total_payment': 'Jumla ya Malipo',
       'seller_receives_percent': 'Muuzaji anapokea ({0}% toka kwake)',
       'soko_commission_percent': 'Commission ya Soko Vibe ({0}%)',
-      'mongike_fee_info':
-          'ClickPesa huchargia TZS {0} kwa kila malipo ya mobile money',
-      'shipping_quote_info':
-          'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote',
+      'mongike_fee_info': 'ClickPesa huchargia TZS {0} kwa kila malipo ya mobile money',
+      'shipping_quote_info': 'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote',
       'region_hint': 'Mkoa / Region',
       'district_hint': 'Wilaya / District',
       'ward_hint': 'Kata / Ward',
@@ -1455,20 +1405,16 @@ class LocalizationService {
       'sending': 'Inatuma...',
       'submit_shipping_request': 'Tuma Ombi la Usafirishaji',
       'enter_phone_error': 'Tafadhali ingiza namba ya simu',
-      'fill_full_address_error':
-          'Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)',
+      'fill_full_address_error': 'Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)',
       'delivery_type': 'Aina ya Usafirishaji',
       'delivery_within_region': 'Ndani ya Mkoa',
       'delivery_outside_region': 'Nje ya Mkoa',
       'select_region': 'Chagua Mkoa',
-      'address_filled_confirm':
-          'Anwani imejazwa kiotomatiki. Thibitisha kisha tuma agizo.',
+      'address_filled_confirm': 'Anwani imejazwa kiotomatiki. Thibitisha kisha tuma agizo.',
       'new_order_title': 'Order Mpya Imewasilishwa!',
-      'new_order_body':
-          '{0} anataka kununua {1}. Ingiza gharama ya usafirishaji.',
+      'new_order_body': '{0} anataka kununua {1}. Ingiza gharama ya usafirishaji.',
       'customer': 'Mnunuzi',
-      'order_submitted_success':
-          'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
+      'order_submitted_success': 'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
       'error_format': 'Hitilafu: {0}',
       'app_analytics': 'Analytics za App',
       'current_status': 'Hali ya sasa: ',
@@ -1511,20 +1457,17 @@ class LocalizationService {
       'bank_name_label': 'Jina la Benki',
       'quantity_prefix': 'x{0} ',
       'mongike_processing_fee': 'Ada ya Kuchakata ya ClickPesa',
-      'shipping_cost_note':
-          'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote.',
+      'shipping_cost_note': 'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote.',
       'shipping_address_title': 'Anwani ya Usafirishaji',
       'phone_label_title': 'Namba ya Simu',
       'send_shipping_request': 'Tuma Ombi la Usafirishaji',
       'shipping_info':
           'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
       'enter_full_address': 'Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)',
-      'order_submitted':
-          'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
+      'order_submitted': 'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
       'error_prefix': 'Hitilafu: ',
       'new_order_notification': 'Order Mpya Imewasilishwa!',
-      'buyer_wants_to_buy':
-          '{buyer} anataka kununua {product}. Ingiza gharama ya usafirishaji.',
+      'buyer_wants_to_buy': '{buyer} anataka kununua {product}. Ingiza gharama ya usafirishaji.',
       'min_price_hint': 'Kuanzia',
       'max_price_hint': 'Hadi',
       'location_hint': 'Mf. Dar es Salaam, Arusha...',
@@ -1546,9 +1489,9 @@ class LocalizationService {
       'boost_still_pending_title': 'Bado tunasubiri malipo',
       'boost_still_pending_body':
           'Bado hatujapata uthibitisho wa malipo ya TZS {amount}. Ukishapokea ujumbe wa kudhibiti kwenye simu yako, bofya 1 kukamilisha. Tutakuonyesha kuwa imeweka pale tu malipo yakiingia.',
-      'boost_payment_failed': 'Malipo ya kuangaza yameshindwa. Fedha hazikubwa — jaribu tena au wasiliana na msaada.',
-      'boost_confirmed_body':
-          'Malipo yamekubwa. Bidhaa yako imeongezwa kwa kiungo cha Featured.',
+      'boost_payment_failed':
+          'Malipo ya kuangaza yameshindwa. Fedha hazikubwa — jaribu tena au wasiliana na msaada.',
+      'boost_confirmed_body': 'Malipo yamekubwa. Bidhaa yako imeongezwa kwa kiungo cha Featured.',
       'like_notification_title': '{user} amependa bidhaa yako',
       'seller_unknown_error': 'Hitilafu: muuzaji hajulikani.',
       'actions_title': 'Vitendo',
@@ -1559,8 +1502,7 @@ class LocalizationService {
       'send_first_message': 'Tuma ujumbe wa kwanza!',
       'otp_will_be_sent_to_email': 'OTP itatumwa kwenye barua pepe yako',
       'enter_otp_email_sent': 'Ingiza OTP uliopokea kwenye barua pepe yako',
-      'seller_quote_subtitle':
-          'Weka gharama ya usafirishaji kwa ombi la mnunuzi',
+      'seller_quote_subtitle': 'Weka gharama ya usafirishaji kwa ombi la mnunuzi',
       'dispatch_subtitle': 'Weka proof of delivery na tracking number',
       'payout_subtitle': 'Tuma pesa kwa mobile money yako',
       'processing_label': 'Inachakata...',
@@ -1618,8 +1560,7 @@ class LocalizationService {
       'product_featured_for_days': 'Bidhaa imeangaziwa kwa siku {days}',
       'admin': 'Msimamizi',
       'pending_escrow': 'Escrow Inasubiri',
-      'escrow_awaiting_confirmation':
-          'Escrow: TZS {0} (inasubiri uthibitisho wa mteja)',
+      'escrow_awaiting_confirmation': 'Escrow: TZS {0} (inasubiri uthibitisho wa mteja)',
 
       'otp_code_hint': 'Ingiza Msimbo wa OTP',
       'verify_your_number': 'Thibitisha Namba Yako',
@@ -1635,8 +1576,7 @@ class LocalizationService {
       'login_with_phone': 'Ingia kwa namba ya simu',
       'no_account_yet': 'Bado huna akaunti? Unda Akaunti',
       'create_your_account': 'Unda Akaunti Yako',
-      'signup_subtitle':
-          'Jiunge na Soko Vibe na uanze kununua, kuuza na kuungana na jamii.',
+      'signup_subtitle': 'Jiunge na Soko Vibe na uanze kununua, kuuza na kuungana na jamii.',
       'email_optional': 'Barua pepe (hiari)',
       'already_have_account': 'Tayari una akaunti? Ingia',
       'password_strength': 'Nguvu ya Nenosiri',
@@ -1696,18 +1636,15 @@ class LocalizationService {
       'share_receipt': 'Shiriki Risiti',
       'receipt_saved': 'Risiti imehifadhiwa',
       'seller_statement': 'Taarifa za Kifedha',
-      'seller_statement_footer':
-          'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya kifedha',
+      'seller_statement_footer': 'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya kifedha',
       'seller_statement_subtitle': 'SELLER STATEMENT',
       'buyer_statement': 'Taarifa za Malipo',
-      'buyer_statement_footer':
-          'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya malipo',
+      'buyer_statement_footer': 'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya malipo',
       'buyer_statement_subtitle': 'BUYER STATEMENT',
       'total_refunds': 'Jumla ya Marejesho',
       'total_credits': 'Jumla ya Mapato',
       'net_spend': 'MATUMIZI YA JUMLA',
-      'buyer_no_payments_subtitle':
-          'Taarifa zako za malipo zitaonekana hapa utakapobuy bidhaa',
+      'buyer_no_payments_subtitle': 'Taarifa zako za malipo zitaonekana hapa utakapobuy bidhaa',
       'info_name': 'JINA',
       'info_phone': 'SIMU',
       'info_email': 'BARUA PEPE',
@@ -1723,13 +1660,11 @@ class LocalizationService {
       'expenses_column': 'Matumizi',
       'balance_column': 'Salio',
       'no_payments_yet': 'Hakuna malipo bado',
-      'no_payments_subtitle':
-          'Taarifa za kifedha zitaonekana hapo ukianza kuuza',
+      'no_payments_subtitle': 'Taarifa za kifedha zitaonekana hapo ukianza kuuza',
       'scan_qr_full_info': 'SCAN QR CODE KWA TAARIFA KAMILI',
       'scan_qr_hint': 'Scan hii QR code kupata taarifa zote za statement',
       'your_statement': 'Statement Yako',
-      'statement_ready_body':
-          'Statement yako ya kifedha iko tayari. Angalia app.',
+      'statement_ready_body': 'Statement yako ya kifedha iko tayari. Angalia app.',
       'statement_sent_notification': 'Statement imetumwa kwa notification',
       'statement_saved': 'Statement imehifadhiwa',
       'error_label': 'Hitilafu',
@@ -1774,21 +1709,19 @@ class LocalizationService {
       'withdraw': 'Toa',
       'deposit': 'Weka',
       'error_occurred': 'Hitilafu imetokea',
-      'error_poor_network':
-          'Mtandao dhaifu. Tafadhali angalia muunganisho wako.',
+      'error_poor_network': 'Mtandao dhaifu. Tafadhali angalia muunganisho wako.',
       'error_no_permission':
           'Huna ruhusa ya kufanya kitendo hiki. Tafadhali jitoke na uingie tena.',
-      'network_unstable':
-          'Mtandao haufikiki. Data iliyohifadhiwa inaonekana.',
+      'network_unstable': 'Mtandao haufikiki. Data iliyohifadhiwa inaonekana.',
       'please_stay_on_screen': 'Tafadhali kaa kwenye skrini hii',
       'error_not_found': 'Taarifa uliyoiomba haikupatikana.',
       'error_already_exists': 'Kitu hiki tayari kipo.',
-      'error_index_building':
-          'Hifadhidata inajengwa. Tafadhali jaribu tena baada ya muda.',
+      'error_index_building': 'Hifadhidata inajengwa. Tafadhali jaribu tena baada ya muda.',
       'error_session_expired': 'Kipindi chako kimeisha. Tafadhali ingia tena.',
       'error_generic': 'Kuna tatizo limetokea. Tafadhali jaribu tena.',
       'error_id_label': 'Namba ya tatizo',
-      'error_occurred_with_id': 'Kuna tatizo limetokea. Tafadhali jaribu tena.\n\nNamba ya tatizo: {0}',
+      'error_occurred_with_id':
+          'Kuna tatizo limetokea. Tafadhali jaribu tena.\n\nNamba ya tatizo: {0}',
       'error_no_account': 'Hakuna akaunti iliyopatikana kwa barua pepe hii.',
       'error_wrong_password': 'Nenosiri si sahihi. Tafadhali jaribu tena.',
       'error_invalid_email': 'Anwani ya barua pepe si sahihi.',
@@ -1796,31 +1729,26 @@ class LocalizationService {
       'error_email_in_use': 'Akaunti yenye barua pepe hii tayari ipo.',
       'error_operation_not_allowed': 'Njia hii ya kuingia haijawashwa.',
       'error_weak_password': 'Nenosiri ni fupi sana. Tumia angalau herufi 6.',
-      'error_too_many_attempts':
-          'Umejaribu mara nyingi sana. Tafadhali jaribu baadaye.',
-      'error_payment_failed': 'Malipo hayajakamilika. Hakuna fedha zilizothibitishwa kuwa zimehamishwa. Tafadhali jaribu tena.',
+      'error_too_many_attempts': 'Umejaribu mara nyingi sana. Tafadhali jaribu baadaye.',
+      'error_payment_failed':
+          'Malipo hayajakamilika. Hakuna fedha zilizothibitishwa kuwa zimehamishwa. Tafadhali jaribu tena.',
       'error_upload_failed': 'Imeshindwa kupakia faili. Tafadhali jaribu tena.',
-      'error_invalid_credentials':
-          'Barua pepe au nenosiri si sahihi. Tafadhali jaribu tena.',
+      'error_invalid_credentials': 'Barua pepe au nenosiri si sahihi. Tafadhali jaribu tena.',
       'error_timeout': 'Muda umeisha. Mtandao dhaifu.',
-      'auth_google_failed':
-          'Kuingia kwa Google kumeshindwa. Tafadhali jaribu tena.',
+      'auth_google_failed': 'Kuingia kwa Google kumeshindwa. Tafadhali jaribu tena.',
       'auth_google_cancelled':
           'Umesitisha kuingia kwa Google. Tafadhali chagua akaunti na jaribu tena.',
-      'auth_no_account':
-          'Hakuna akaunti kwa namba hii. Tafadhali sajili kwanza.',
+      'auth_no_account': 'Hakuna akaunti kwa namba hii. Tafadhali sajili kwanza.',
       'auth_wrong_phone':
           'Namba ya simu si sahihi. Weka namba sahihi ya Tanzania (mfano 0712345678).',
       'auth_otp_invalid': 'OTP si sahihi. Angalia SMS na jaribu tena.',
       'auth_otp_expired': 'OTP imeisha muda. Tuma OTP mpya.',
-      'auth_otp_rate_limited':
-          'Umejaribu mara nyingi sana. Subiri kidogo kisha jaribu tena.',
+      'auth_otp_rate_limited': 'Umejaribu mara nyingi sana. Subiri kidogo kisha jaribu tena.',
       'auth_otp_send_failed': 'Imeshindwa kutuma OTP. Jaribu tena.',
       'auth_login_required': 'Tafadhali ingia kwanza kuendelea.',
       'product_limit_kyc_needed':
           'Umefikia kikomo cha bidhaa 5 bila KYC. Tafadhali kamilisha uthibitisho wa KYC kuweza kuongeza bidhaa zaidi.',
-      'comment_edit_own_only':
-          'Unaweza kufuta maoni na majibu yako mwenyewe pekee.',
+      'comment_edit_own_only': 'Unaweza kufuta maoni na majibu yako mwenyewe pekee.',
       'kyc_id_national': 'Kitambulisho cha Taifa',
       'kyc_id_passport': 'Pasipoti',
       'kyc_id_drivers': 'Leseni ya Udereva',
@@ -1906,10 +1834,8 @@ class LocalizationService {
       'unknown_user_display': 'Haijulikani',
 
       'tos_title': 'SHERIA NA MASHARTI YA SOKO VIBE',
-      'tos_last_updated':
-          'Ilisasishwa Mwisho: 16 Agosti 2026 | Tarehe ya Kuanza: 16 Agosti 2026',
-      'tos_section_1_title':
-          '1. KUKUBALI MASHARTI — MAKUBALIANO YANAYOFUNGA KISHERIA',
+      'tos_last_updated': 'Ilisasishwa Mwisho: 16 Agosti 2026 | Tarehe ya Kuanza: 16 Agosti 2026',
+      'tos_section_1_title': '1. KUKUBALI MASHARTI — MAKUBALIANO YANAYOFUNGA KISHERIA',
       'tos_section_1_body':
           '1.1 Kwa kupakua, kusakinisha, kufikia, kuvinjari, kujiandikisha, au kutumia Soko Vibe ("Jukwaa") kwa njia yoyote, unakiri, unawakilisha, unathibitisha, na unakubali kuwa umesoma, umeelewa, na unakubali KUFUNGWA KISHERIA na Sheria na Masharti haya ("Masharti", "Makubaliano"), iwapo wewe ni mtumiaji aliyesajiliwa au la.\n\n1.2 Masharti haya yanaunda MAKUBALIANO YA KISHERIA HALALI, YANAYOFUNGA, NA YANAYOTEKELEZEKA kati yako ("Mtumiaji", "wewe", "yako") na Soko Vibe ("sisi", "yetu", "Kampuni", "Jukwaa").\n\n1.3 Kama hukubaliani na Masharti haya kwa UKAMILIFU, LAZIMA USIFIKIE au kutumia Jukwaa kwa njia yoyote, na lazima ufute mara moja programu na nyenzo zote zinazohusiana.\n\n1.4 Tunahifadhi haki KAMILI NA YA KUPANDE MOJA kurekebisha, kuongeza, kusasisha, kuongezea, kusimamisha, au kukomesha Masharti haya wakati wowote, kwa sababu yoyote, bila taarifa. Mabadiliko yanaanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa.\n\n1.5 Kuendelea kwako kutumia Jukwaa baada ya mabadiliko yoyote kunajumuisha KUKUBALI KWAKO BILA SHAARTI Masharti yaliyorekebishwa. Kama hukubaliani na mabadiliko yoyote, SULUHISHO LAKO PEKEE NA LA KIPEKE ni kuacha mara moja kutumia Jukwaa na kufuta akaunti yako.\n\n1.6 NI WAJIBU WAKO PEKEE kukagua Masharti haya mara kwa mara. Tunapendekeza uangalie ukurasa huu angalau mara moja kwa mwezi. Tunaweza kuwataarifu watumiaji waliosajiliwa kuhusu mabadiliko makubwa kupitia barua pepe au arifa ndani ya programu, lakini kutopokea taarifa hiyo hakutabatilisha mabadiliko au kukubali kwako.\n\n1.7 Masharti haya yanaweza kuchapishwa kwa lugha mbalimbali kwa urahisi. Iwapo kutakuwa na mgogoro au kutofautiana katiya matoleo ya lugha mbalimbali, toleo la lugha ya Kiswahili litashinda na kuwa la kisheria.',
       'tos_section_2_title': '2. USTAHIKI, USAJILI, NA MAHITAJI YA AKAUNTI',
@@ -1918,8 +1844,7 @@ class LocalizationService {
       'tos_section_3_title': '3. HUDUMA ZA JUKWAA — JUKUMU NA VIKWAZO',
       'tos_section_3_body':
           '3.1 Soko Vibe hutoa jukwaa la teknolojia linalounganisha:\n  a) Wanunuzi na wauzaji wa bidhaa na huduma (Huduma za Soko).\n  b) Watumiaji na vipengele vya msaidizi vya AI.\n  c) Watumiaji na vifaa vya mawasiliano, malipo, na usafirishaji.\n\n3.2 JUKUMU KAMA MDHIBITI: Tunachukua nafasi YA MDHIBITI/mtoa jukwaa tu. SISI SI:\n  a) Mhusika katika muamala wowote kati ya wanunuzi na wauzaji.\n  b) Mwajiri, mkuu, au mshirika wa ubia wa muuzaji au mtoa huduma yeyote.\n  c) Mtoa huduma za usafirishaji au vifaa.\n  d) Taasisi ya fedha, benki, au mtoa huduma za malipo (isipokuwa kama wakala wa kuchakata malipo).\n\n3.3 HAKUNA DHAMANA YA MIAMALA: HATUTOI UWAKILISHJI AU DHAMANA YOYOTE kuhusu ubora, usalama, uhalali, au kufaa kwa bidhaa, huduma, au miamala yoyote inayowezeshwa kupitia Jukwaa. Miamala yote ni KWA HATARI YAKO MWENYEWE.\n\n3.4 HUDUMA ZA ESCROW: Tunawezesha malipo kupitia wasindikaji wa malipo wengine. Kwa kukamilisha ununuzi, malipo hushikiliwa kwenye escrow kama mwamuzi huru (neutral third party) hadi mnunuzi athibitishe kupokea mzigo ukiwa salama, kwa mujibu wa Sehemu ya 6.3. Sisi si benki na hatushikili amana au kutoa huduma za kifedha.\n\n3.5 MAREKEBISHO YA HUDUMA: Tunahifadhi HAKI KAMILI kurekebisha, kusimamisha, kuweka vikwazo, au kukomesha kipengele chochote cha Huduma wakati wowote, kwa taarifa au bila taarifa, na bila dhima kwako au kwa mtu mwingine yeyote.\n\n3.6 UPATIKANAJI WA HUDUMA: Hatuhakikishii kuwa Jukwaa litapatikana wakati wote, lisiloingiliwa, lisilo na makosa, au lisilo na virusi au vipengele vingine hatari. Tunaweza kufanya matengenezo, sasisho, au maboresho wakati wowote bila taarifa.\n\n3.7 HUDUMA ZA GUMZO (CHAT): Jukwaa linatoa mfumo wa ujumbe wa ndani kwa ajili ya mawasiliano kati ya wanunuzi na wauzaji. Kwa kutumia huduma ya gumzo, unakubali:\n  a) Mawasiliano yote ndani ya Jukwaa ni ya KIBINAFSI na ni SIRI kati yako na mhusika wa mawasiliano. Soko Vibe haisomi, kuchunguza, au kufichua mawasiliano hayo isipokuwa:\n     i) Inapohitajika na sheria, amri ya mahakama, au utafiti wa kisheria.\n     ii) Tunapoamini kwa nia njema kwamba mawasiliano yanajumuisha ulaghai, vitisho, matusi, au shughuli haramu.\n     iii) Inapohitajika kusuluhisha mgogoro kati ya watumiaji.\n  b) LAZIMA utumie lugha nzuri na kuheshimu watumiaji wengine kwenye gumzo.\n  c) NI MARUFUKU kutuma:\n     i) Ujumbe wa matusi, vitisho, unyanyasaji, au ubaguzi.\n     ii) Picha, video, au maudhui ya ngono, chafu, au ya kushangaza.\n     iii) Viungo vya ulaghai, matangazo ya uwongo, au maudhui yenye madhara.\n     iv) Taarifa za kibinafsi za watumiaji wengine bila ruhusa yao.\n     v) Maudhui yanayokiuka haki za miliki za watu wengine.\n  d) Ujumbe wote wa gumzo huhifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  e) Soko Vibe hana dhima kwa ukweli wa taarifa zinazotumwa kati ya watumiaji kupitia gumzo.\n  f) Unabeba dhima kamilia ya maneno na matendo yako ndani ya mfumo wa gumzo.\n\n3.8 UTHIBITISHO WA WATUMIAJI: Jukwaa linaweza kuomba uthibitisho wa utambulisho (KYC) kabla ya kukuza kiwango cha juu cha matumizi. Uthibitisho huu unashughulikiwa kwa mujibu wa Sera yetu ya Faragha na sheria za Ulinzi wa Taarifa Binafsi za Tanzania (PDPA 2022).\n\n3.9 MALIPO KUPITIA MFUMO MBALIMBALI: Tunawezesha malipo kupitia mfumo mbalimbali ikiwemo fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), benki, na huduma nyingine za malipo. Kila mfumo wa malipo una masharti yake ya ziada ambayo unaweza kukubaliwa kuukubali kabla ya kufanya malipo.\n\n3.10 KUPIGA BIDHAA (BOOST): Wauzaji wanaweza kulipa ada ya ziada ili kupiga bidhaa zao na kuzionyesha kwa umakini zaidi. Ada za kupiga bidhaa ni za HIARI, hazirejeshwi, na zinadhibitiwa na Soko Vibe pekee. Kupiga bidhaa hakikihakikishii mauzo.',
-      'tos_section_4_title':
-          '4. SHUGHULI ZILIZOPIGWA MARUFUKU — SERA KALI YA KUTOVUMILIA',
+      'tos_section_4_title': '4. SHUGHULI ZILIZOPIGWA MARUFUKU — SERA KALI YA KUTOVUMILIA',
       'tos_section_4_body':
           '4.1 Shughuli zifuatazo zimepigwa MARUFUKU KABISA kwenye Jukwaa. Ukiukwaji wa kifungu chochote kati ya hizi unajumuisha UKIUKWAJI WA KIMAUDHUI wa Masharti haya na kutasababisha KUSIMAMISHWA KWA AKAUNTI MARA MOJA NA KWA KUDUMU, kupoteza salio lolote, na uwezekano wa kurejeshwa kwa mamlaka za ulinzi:\n\n4.2 SHUGHULI HARAMU:\n  a) Kutumia Jukwaa kwa kusudi lolote haramu au kwa kukiuka sheria yoyote ya mitaa, kitaifa, au kimataifa.\n  b) Kujihusisha na utakatishaji fedha, ufadhili wa kigaidi, au uhalifu wowote wa kifedha.\n  c) Kuorodhesha, kuuza, au kuwezesha uuzaji wa vitu haramu ikiwemo lakini sio tu:\n     i) Dawa za kulevya haramu, madawa ya kulevya, na vitu vinavyodhibitiwa.\n     ii) Silaha, bunduki, risasi, vilipuzi, na vifaa vya silaha.\n     iii) Bidhaa ghushi, bandia, au zilizokiwa hakimiliki.\n     iv) Mali iliyoibwa au vitu vilivyopatikana kwa njia haramu.\n     v) Nyenzo hatari, sumu, au vitu vya hatari.\n     vi) Mabaki ya binadamu, sehemu za mwili, au maji ya mwili.\n     vii) Spishi zilizo hatarini kutoweka au bidhaa zilizotengenezwa kutoka kwa spishi zilizo hatarini.\n     viii) Nyenzo za ponografia, chafu, au ngono waziwazi.\n     ix) Vitu vinavyokiuka haki za miliki.\n     x) Vitu vyovyote ambavyo uuzaji wake umepigwa marufuku na sheria ya Tanzania.\n\n4.3 SHUGHULI ZA ULAGHAI NA UDANGANYIFU:\n  a) Kuchapisha matangazo ya uwongo, ya kupotosha, ya udanganyifu, au ya ulaghai.\n  b) Kupotosha hali, ukweli, asili, au vipimo vya bidhaa.\n  c) Kujihusisha na ghiliba ya bei, zabuni bandia, au miamala feki.\n  d) Kuunda akaunti feki, maoni feki, au kuongeza ukadiriaji bandia.\n  e) Kujifanya mtu au shirika lingine, au kudai uhusiano kwa uwongo.\n  f) Kutumia njia za malipo zilizoibwa au za ulaghai.\n  g) Ulaghai wa kurejeshewa fedha au kupinga miamala halali bila sababu halali.\n\n4.4 TABIA ZA KUKERA NA KUDHURU:\n  a) Kuwasumbua, kutukana, kutishia, kufuatilia, kutisha, au kumnyanyasa mtumiaji mwingine.\n  b) Kuchapisha matamshi ya chuki, maudhui ya ubaguzi, au maudhui yanayochochea vurugu.\n  c) Kushiriki taarifa za kibinafsi za wengine bila kibali chao cha wazi (doxxing).\n  d) Kutoa tuhuma za uwongo, taarifa za kukashifu, au ripoti za uovu.\n  e) Kujihusisha na aina yoyote ya ubaguzi kulingana na rangi, kabila, jinsia, dini, umri, ulemavu, au mwelekeo wa kijinsia.\n\n4.5 UKIUKWAJI WA KITAALAM:\n  a) Kupakia misimbo hatari, virusi, wadudu, farasi wa Trojan, au programu yoyote hatari.\n  b) Kujaribu kudukia, kuvunja, kukwepa, au kuzima hatua zozote za usalama, usimbaji fiche, au udhibiti wa ufikiaji.\n  c) Kugeuza uhandisi, kukusanya, kutenganisha, au kujaribu kupata msimbo wa chanzo.\n  d) Kutumia boti za kiotomatiki, vikwarua, vitambaa, buibui, au hati kufikia Jukwaa bila idhini yetu ya maandishi.\n  e) Kuingilia au kuvuruga seva, mitandao, au shughuli za Jukwaa.\n  f) Kufanya upimaji wa kupenya au uchunguzi wa udhaifu bila idhini ya maandishi ya awali.\n  g) Kujaribu kuzidisha sana Jukwaa kwa mashambulizi ya kukatalia huduma (DOS) au kukatalia huduma kusambazwa (DDOS).\n\n4.6 UKIUKWAJI WA SOKO:\n  a) Kukamilisha miamala nje ya Jukwaa ili kukwepa ada (ikiwemo kubadilishana maelezo ya mawasiliano kwa madhumuni hayo).\n  b) Kuendesha matokeo ya utafutaji, kategoria, au lebo.\n  c) Kuorodhesha bidhaa kwenye kategoria zisizo sahihi.\n  d) Kuunda orodha rudufu za bidhaa sawa.\n  e) Kuorodhesha huduma bila leseni zinazofaa au sifa inapohitajika.\n  f) Kushindwa kutimiza maagizo baada ya kupokea malipo.\n  g) Kukataa kuwasilisha bidhaa baada ya kupokea malipo.\n  h) Kudai malipo ya ziada nje ya mfumo wa malipo wa Jukwaa.\n\n4.7 ADHABU ZA UKIUKWAJI:\n  a) KUSIMAMISHWA KWA AKAUNTI MARA MOJA NA KWA KUDUMU.\n  b) KUPOTEZA malipo yoyote yanayosubiri, salio la pochi, au manufaa.\n  c) KUREJESHWA kwa mamlaka za ulinzi kwa mashitaka ya jinai.\n  d) DHIMA YA KIRAIA kwa uharibifu wote, gharama, na matumizi yanayotokezwa na sisi au wahusika walioathiriwa.\n  e) MARUFUKU DAIMA kutoka kutumia Jukwaa au huduma zozote zinazohusiana.\n  f) KUCHAPISHWA kwa ukiukwaji (bila data za kibinafsi) kama onyo kwa wengine.\n\n4.8 HAKUNA MFUMO WA ONYO kwa shughuli zilizopigwa marufuku. Ukiukwaji husababisha hatua mara moja bila taarifa ya awali.',
       'tos_section_5_title': '5. KUORODHESHA NA KUUZA — MAHITAJI MADHUBUTI',
@@ -1964,14 +1889,12 @@ class LocalizationService {
       'tos_section_chat_body':
           '3A.1 Huduma za Gumzo: Jukwaa linatoa mfumo wa ujumbe wa ndani kwa ajili ya mawasiliano kati ya wanunuzi na wauzaji. Kwa kutumia huduma ya gumzo, unakubali:\n  a) Mawasiliano yote ndani ya Jukwaa ni ya KIBINAFSI na ni SIRI kati yako na mhusika wa mawasiliano. Soko Vibe haisomi, kuchunguza, au kufichua mawasiliano hayo isipokuwa:\n     i) Inapohitajika na sheria, amri ya mahakama, au utafiti wa kisheria.\n     ii) Tunapoamini kwa nia njema kwamba mawasiliano yanajumuisha ulaghai, vitisho, matusi, au shughuli haramu.\n     iii) Inapohitajika kusuluhisha mgogoro kati ya watumiaji.\n  b) LAZIMA utumie lugha nzuri na kuheshimu watumiaji wengine kwenye gumzo.\n  c) NI MARUFUKU kutuma ujumbe wa matusi, vitisho, unyanyasaji, au ubaguzi.\n  d) NI MARUFUKU kutuma picha, video, au maudhui ya ngono, chafu, au ya kushangaza.\n  e) NI MARUFUKU kutuma viungo vya ulaghai, matangazo ya uwongo, au maudhui yenye madhara.\n  f) NI MARUFUKU kutuma taarifa za kibinafsi za watumiaji wengine bila ruhusa yao.\n  g) Ujumbe wote wa gumzo huhifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  h) Soko Vibe hana dhima kwa ukweli wa taarifa zinazotumwa kati ya watumiaji kupitia gumzo.\n  i) Unabeba dhima kamilia ya maneno na matendo yako ndani ya mfumo wa gumzo.',
 
-      'tos_section_withhold_title':
-          '17. HAKI YA KUZUIA, KUSHIKILIA, NA KUTAIFISHA FEDHA',
+      'tos_section_withhold_title': '17. HAKI YA KUZUIA, KUSHIKILIA, NA KUTAIFISHA FEDHA',
       'tos_section_withhold_body':
           '17.1 HAKI YA KUZUIA FEDHA: Soko Vibe inahifadhi haki KAMILI na ya moja kwa moja ya:\n  a) Kuzaa, kushikilia, au kuzuia pesa zozote zilizopo kwenye pochi (wallet) ya mtumiaji.\n  b) Kuzuiwa kutoa pesa kutoka kwenye escrow au pochi.\n  c) Kutaifisha pesa zote zilizopo kwenye akaunti ya mtumiaji.\n  hii inatumika pale mtumiaji atakapobainika:\n  i) Kutenda udanganyifu, utapeli, au shughuli haramu kupitia Jukwaa.\n  ii) Kuuza bidhaa haramu, feki, au zilizopigwa marufuku.\n  iii) Kuhujumu mfumo, server, au miundombinu ya Jukwaa.\n  iv) Kukiuka masharti makuu ya matumizi (Terms of Service) kwa ukatili.\n  v) Kujihusisha na tabia ya matusi, unyanyasaji, au lugha chafu kwa kiwango cha 3-strike policy.\n\n17.2 HAKI YA KUTAIFISHA FEDHA ZA MATUSI: Kama ilivyoelezwa katika Sehemu ya 4.6, mtumiaji aliyefungiwa akaunti yake kwa sababu ya matusi, lugha chafu, au unyanyasaji wa mara kwa mara, pesa zake ZOTE zilizopo kwenye pochi na escrow ZITATAIFISHWA na kuwa MALI YA JUKWAA kama FAINI YA UKIUKWAJI WA MAKUBALIANO.\n\n17.3 UTATUZI: Mtumiaji ana haki ya kuwasilisha malalamiko kuhusu uamuzi wa kuzuia au kutaifisha fedha ndani ya siku 30 kutoka tarehe ya uamuzi. Malalamiko yatasikilizwa na timu yetu ya utatuzi wa migogoro ndani ya siku 14. Baada ya hapo, uamuzi ni WA MWISHO.\n\n17.4 SHERIA INAYOTUMIKA: Haki ya kuzuia na kutaifisha fedha inafanyika kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, ikiwemoSheria ya Mkataba wa Kisheria na sheria za ulinzi wa wateja. Uamuzi wowote wa mahakama unaothibitisha batili ya kuzuia fedha utatekelezwa mara moja.\n\n17.5 UWEKESHAJI WA DHIKI: Ukiukwaji wa kifungu hiki na mtumiaji yeyote unaweza kusababisha hatua za ziada za kisheria, ikiwemo:\n  a) Kuwasilisha madai mahakamani.\n  b) Kuripoti kwa mamlaka husika za serikali.\n  c) Kuchukua hatua zote za kisheria zinazopatikana kulinda haki za Jukwaa.',
 
       'pp_title': 'SERA YA FARAGHI YA SOKO VIBE',
-      'pp_last_updated':
-          'Ilisasishwa Mwisho: 29 Julai 2026 | Tarehe ya Kuanza: 29 Julai 2026',
+      'pp_last_updated': 'Ilisasishwa Mwisho: 29 Julai 2026 | Tarehe ya Kuanza: 29 Julai 2026',
       'pp_section_1_title': '1. UTANGULIZI NA WIGI',
       'pp_section_1_body':
           '1.1 Sera hii ya Faragha ("Sera") inaunda makubaliano ya kisheria yanayofunga kati yako ("Mtumiaji", "wewe", "yako", "Mhusika wa Data") na Soko Vibe ("sisi", "yetu", "Kampuni", "Jukwaa"), kampuni iliyosajiliwa na kufanya kazi kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania.\n\n1.2 Sera hii inasimamia ukusanyaji, matumizi, uhifadhi, uchakataji, uhamishaji, ufichuzi, na ulinzi wa data yako ya kibinafsi unapofikia, kujiandikisha, au kutumia programu ya simu ya Soko Vibe, tovuti, au huduma zozote zinazohusiana, vipengele, maudhui, au programu (kwa pamoja "Huduma").\n\n1.3 Kwa kufikia au kutumia Huduma zetu kwa njia yoyote, unakiri wazi kuwa umesoma, umeelewa, na unakubali kwa hiari masharti yote ya Sera hii. Kama hukubaliani na kifungu chochote cha Sera hii, LAZIMA UACHE MARA MOJA kutumia Huduma zetu na ufute akaunti yako.\n\n1.4 Sera hii ni nyongeza ya na inapaswa kusomwa pamoja na Sheria na Masharti yetu. Iwapo kuna mgogoro kati ya Sera hii na Sheria na Masharti, Sheria na Masharti yatashinda isipokuwa Sera hii inatoa ulinzi zaidi kwa data yako ya kibinafsi.\n\n1.5 Tunahifadhi haki kamili ya kurekebisha, kuongezea, kusasisha, au kubadilisha Sera hii wakati wowote bila taarifa ya awali. Marekebisho yoyote yataanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa. Kuendelea kwako kutumia Huduma baada ya marekebisho yoyote hujumuisha KUKUBALI KWAKO BILA SHAARTI Sera iliyorekebishwa.\n\n1.6 NI Wajibu WAKO PEKEE kukagua Sera hii mara kwa mara. Tunapendekeza sana uangalie ukurasa huu mara kwa mara kwa mabadiliko yoyote. Tutawataarifu watumiaji waliosajiliwa kuhusu mabadiliko MAKUBWA kupitia barua pepe au arifa ndani ya programu, lakini kutopokea taarifa hiyo hakutabatilisha mabadiliko.\n\n1.7 Sera hii inawatumia watumiaji wote wa Jukwaa, ikiwemo lakini sio tu wanunuzi, wauzaji, waendeshaji, madereva, na wageni wanaovinjari Jukwaa bila kujisajili.',
@@ -1987,8 +1910,7 @@ class LocalizationService {
       'pp_section_5_title': '5. MADHUMUNI NA MSINGI WA KISHERIA WA UCHAKATAJI',
       'pp_section_5_body':
           '5.1 Tunachakata data yako ya kibinafsi kwa madhumuni yafuatayo, kwa kuzingatia misingi ifuatayo ya kisheria:\n\n5.2 ULAZIMA WA KIMKATABA:\n  a) Kuunda na kudumisha akaunti yako kwenye Jukwaa.\n  b) Kuwezesha miamala kati ya wanunuzi na wauzaji.\n  c) Kuunganisha waendeshaji na madereva na kuchakata huduma za usafiri.\n  d) Kuchakata malipo, huduma za escrow, na malipo.\n  e) Kutoa usaidizi kwa wateja na utatuzi wa migogoro.\n  f) Kuwasilisha bidhaa, huduma, na maudhui ya kidijitali.\n\n5.3 UTIIFU WA SHERIA:\n  a) Kutii Sheria ya Ulinzi wa Data Tanzania, 2022.\n  b) Kutii Sheria ya Kupambana na Utakatishaji Fedha Tanzania.\n  c) Kutii Sheria ya Miamala ya Kielektroniki Tanzania.\n  d) Kutii wajibu wa kuripoti kodi kwa Mamlaka ya Mapato Tanzania (TRA).\n  e) Kutii amri za mahakama, taratibu za kisheria, au maombi ya serikali.\n  f) Kutekeleza Sheria na Masharti yetu na Sera hii ya Faragha.\n  g) Kuzuia, kugundua, na kuchunguza ulaghai, utakatishaji fedha, na shughuli nyingine haramu.\n\n5.4 MAMBO HALALI:\n  a) Kuboresha, kuongeza, na kubinafsisha Jukwaa na Huduma.\n  b) Kuchambua tabia za watumiaji na mwelekeo ili kuboresha matumizi.\n  c) Kuunda vipengele vipya, bidhaa, na huduma.\n  d) Kuhakikisha usalama na uadilifu wa Jukwaa.\n  e) Kutuma ujumbe wa kiutawala, arifa za usalama, na sasisho za huduma.\n  f) Kuzalisha uchambuzi na ripoti zilizojumlishwa, bila jina.\n  g) Kufanya utafiti wa soko na mipango ya biashara.\n\n5.5 IDHINI:\n  a) Kutuma mawasiliano ya masoko na matangazo (inayoweza kutenguliwa wakati wowote).\n  b) Kukusanya data sahihi ya eneo kwa vipengele visivyo muhimu.\n  c) Kutumia data yako kwa uchunguzi wa tabia na ubinafsishaji.\n  d) Kushiriki data yako na washirika wateule wa tatu kwa madhumuni yao wenyewe.\n  e) Kuchakata data nyeti ya kibinafsi ambapo idhini ya wazi inahitajika.',
-      'pp_section_6_title':
-          '6. KUSHIRIKI NA KUFICHUA DATA — MASHARTI MADHUBUTI',
+      'pp_section_6_title': '6. KUSHIRIKI NA KUFICHUA DATA — MASHARTI MADHUBUTI',
       'pp_section_6_body':
           '6.1 KANUNO YA JUMLA: HATUUZI na HATUTAUZA taarifa zako za kibinafsi kwa mtu yeyote wa tatu chini ya hali yoyote. Ukiukwaji wowote wa kanuni hii na mfanyakazi, mkandarasi, au wakala yeyote utasababisha kukomeshwa mara moja na hatua za kisheria.\n\n6.2 TUNAWEZA KUSHIRIKI TAARIFA ZAKO NA MAKUNDI YAFUATAYO YA WAPOKEAJI, KWA KUTII MAJUKUMU MADHUBUTI YA KIMKATABA:\n  a) WATUMIAJI WENGINE: Kama inavyohitajika kuwezesha miamala na mawasiliano kati ya watumiaji, ikijumuisha:\n     i) Kushiriki jina lako, picha, na ukadiriaji na washirika watarajiwa wa muamala.\n     ii) Kushiriki eneo lako la kuokota na madereva waliokabidhiwa.\n     iii) Kushiriki anwani yako ya uwasilishaji na wauzaji na washirika wa uwasilishaji.\n     iv) Kushiriki namba yako ya simu na washirika wa muamala baada ya muamala kuthibitishwa.\n\n  b) WATOZA HUDUMA NA WACHAKATAJI DATA (wote wamefungwa na Makubaliano ya Uchakataji Data):\n     i) Watoa huduma za miundombinu ya wingu (Google Cloud Platform, Firebase).\n     ii) Wasindikaji wa malipo (ClickPesa, waendeshaji fedha za mkononi, benki).\n     iii) Huduma za uthibitisho wa utambulisho.\n     iv) Huduma za arifa za push (OneSignal).\n     v) Watoa huduma za lango la SMS (Meseji, huduma za aina ya Twilio).\n     vi) Huduma za kuhifadhi picha na video (Cloudinary).\n     vii) Huduma za ramani na eneo (Google Maps).\n     viii) Huduma za uchambuzi na kuripoti ajali.\n     ix) Huduma za uwasilishaji barua pepe.\n     x) Majukwaa ya usaidizi kwa wateja.\n\n  c) MAMLAKA ZA ULINZI NA KANUNI:\n     i) Inapohitajika na sheria inayotumika, amri ya mahakama, au taratibu za kisheria.\n     ii) Tunapoamini kwa nia njema kwamba ufichuzi ni muhimu kulinda haki zetu, usalama wako, au usalama wa wengine.\n     iii) Kuchunguza, kuzuia, au kuchukua hatua kuhusu shughuli zinazoshukiwa kuwa haramu, ulaghai, au ukiukwaji wa Sheria na Masharti yetu.\n     iv) Kutii hati ya mahakama halali, wito wa mahakama, au ombi lingine linalofunga kisheria.\n\n  d) WAPOKEAJI WA BIASHARA:\n     i) Katika tukio la muungano, upatikanaji, upangaji upya, kufilisika, au uuzaji wa mali zetu zote au kiasi kikubwa cha mali zetu.\n     ii) Shirika litakalopata litafungwa na Sera hii na haliwezi kutumia data yako kwa njia tofauti kimaudhui kutoka kwa ilivyoelezwa hapa.\n     iii) Utaarifiwa kupitia barua pepe na arifa ndani ya programu kuhusu uhamisho wowote kama huo angalau siku 30 kabla.\n\n6.3 UHAMISHO WA DATA KIMATAIFA:\n  a) Data yako inaweza kuhamishwa na kuchakatwa katika nchi nje ya Tanzania ambako watoa huduma wetu wanafanya kazi.\n  b) Tunahakikisha kuwa ulinzi unaofaa umewekwa, ikijumuisha:\n     i) Vifungu vya Kawaida vya Kimkataba (SCCs) vilivyopitishwa na mamlaka husika za ulinzi wa data.\n     ii) Kanuni za Biashara Zinazofunga (BCRs) inapotumika.\n     iii) Uthibitisho kwamba nchi mpokeaji ina sheria za kutosha za ulinzi wa data.\n  c) Unakubali wazi uhamisho huo wa kimataifa kwa kutumia Huduma zetu.\n\n6.4 HATUTAWAHI:\n  a) Kuuza taarifa zako za kibinafsi kwa mtu yeyote wa tatu.\n  b) Kukodisha au kukopesha taarifa zako za kibinafsi.\n  c) Kushiriki data yako nyeti ya kibinafsi bila idhini yako ya wazi.\n  d) Kutumia data yako kwa madhumuni yasiyolingana na yale yaliyofichuliwa katika Sera hii bila kupata idhini yako.',
       'pp_section_7_title': '7. SERA YA UHIFADHI NA KUFUTA DATA',
@@ -2062,8 +1984,7 @@ class LocalizationService {
       'all_orders': 'Oda Zote',
       'track_order': 'Fuatilia Agizo',
       'last_updated': 'Ilisasishwa',
-      'escrow_secure_note':
-          'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji',
+      'escrow_secure_note': 'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji',
       'live_updates': 'Taarifa za wakati halisi',
       'awaiting_quotes': 'Nukuu Zinazosubiri',
       'needs_action': 'Zinahitaji Hatua',
@@ -2091,8 +2012,7 @@ class LocalizationService {
       'map_location': 'Mahali',
       'map_you': 'Wewe',
       'my_location': 'Mahali pangu',
-      'maintenance_underway':
-          'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
+      'maintenance_underway': 'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
       'order_bus': 'Basi',
       'order_plate': 'Namba ya gari',
       'order_tracking': 'Ufuatiliaji',
@@ -2111,8 +2031,7 @@ class LocalizationService {
       'ussd_push_charge_note': 'Inatozwa kwa mteja pamoja na ada za MNO.',
       'clickpesa_payout_fees': 'Ada za Utoaji za ClickPesa',
       'mobile_money_payouts': 'Utoaji kwa Mobile Money (M-Pesa, Airtel, Tigo)',
-      'payout_charge_note':
-          'Inatozwa kwa biashara. Inaweza kukabidhiwa kwa mpokeaji.',
+      'payout_charge_note': 'Inatozwa kwa biashara. Inaweza kukabidhiwa kwa mpokeaji.',
       'bank_eft_ach': 'Bank EFT / ACH',
       'bank_eft_ach_flat_fee': 'Ada maalum (0 – 20,000,000 TZS)',
       'bank_tiss': 'Bank TISS (TZS)',
@@ -2133,8 +2052,7 @@ class LocalizationService {
       'seller_withdrawal_payout': 'Utoaji wa Muuzaji (payout)',
       'payout_fee_tiered': 'Ada ya utoaji (kulingana na viwango)',
       'example_ussd_push': 'Mfano: TZS 100,000 kupitia USSD Push',
-      'clickpesa_gateway_fee_tiered':
-          'Ada ya Lango la ClickPesa (kulingana na viwango)',
+      'clickpesa_gateway_fee_tiered': 'Ada ya Lango la ClickPesa (kulingana na viwango)',
       'soko_vibe_commission_calc': 'Kodi ya Soko Vibe (3.5%)',
       'total_buyer_pays': 'Jumla Atoayo Mnunuzi',
       'seller_receives_before_fee': 'Muuzaji Anapokea (kabla ya ada ya utoaji)',
@@ -2198,8 +2116,7 @@ class LocalizationService {
           'Imeshindikana kupakia selfie yako. Angalia muunganisho wako na ujaribu tena.',
       'change_password': 'Badilisha Nenosiri',
       'account_selection_subtitle': 'Jionee mwenyewe/Look for yourself',
-      'transaction_fee_breakdown':
-          'Ada: -TZS {fee} | Soko Vibe: -TZS {commission}',
+      'transaction_fee_breakdown': 'Ada: -TZS {fee} | Soko Vibe: -TZS {commission}',
       'withdrawal_fee_detail': 'Ada: TZS {fee} | {date}',
       'withdrawal_failed_detail': 'Imeshindikana: {reason}',
       'admin_note_label': 'Admin: {note}',
@@ -2237,15 +2154,13 @@ class LocalizationService {
       'choose_account_type': 'Chagua Aina ya Akaunti',
       'communication': 'Mawasiliano',
       'communication_sub': 'Wasiliana na wauzaji na wanunuzi',
-      'confirm_failed_msg':
-          'Imeshindwa kuthibitisha upokeaji. Tafadhali jaribu tena.',
+      'confirm_failed_msg': 'Imeshindwa kuthibitisha upokeaji. Tafadhali jaribu tena.',
       'confirm_logout': 'Thibitisha Kutoka',
       'confirm_password': 'Thibitisha Nenosiri',
       'contact_us': 'Wasiliana Nasi',
       'contact_us_sub': 'Piga simu au tuandie barua pepe',
       'confirm_receipt': 'Thibitisha Upokeaji',
-      'otp_security_warning':
-          'USIJIGAWANIE NAMBARI HII MPAKA UPOKEE NA KUKAGUA BIDHAA YAKO.',
+      'otp_security_warning': 'USIJIGAWANIE NAMBARI HII MPAKA UPOKEE NA KUKAGUA BIDHAA YAKO.',
       'delivery_otp_label': 'Nambari ya Uthibitisho',
       'otp_waiting': 'Subiri muuzaji atume nambari...',
       'share_otp_with_seller': 'Mpa nambari hii muuzaji ili athibitishe utoaji',
@@ -2264,8 +2179,7 @@ class LocalizationService {
       'deactivate': 'Simamisha',
       'delete_account_confirm':
           'Hii itafuta akaunti yako na data zake zote kabisa. Hatua hii haiwezi kutenduliwa.',
-      'delete_account_failed':
-          'Imeshindwa kufuta akaunti. Tafadhali jaribu tena.',
+      'delete_account_failed': 'Imeshindwa kufuta akaunti. Tafadhali jaribu tena.',
       'delete_confirm': 'Futa bidhaa hii kabisa?',
       'delete_failed': 'Imeshindwa kufuta',
       'delete_kyc': 'Futa KYC',
@@ -2277,16 +2191,14 @@ class LocalizationService {
       'delete_product': 'Futa Bidhaa',
       'delete_selected': 'Futa Zilizochaguliwa',
       'deleting_label': 'Inafutwa...',
-      'delivery_confirmed_msg':
-          'Upokeaji umethibitishwa. Asante kwa kununua na Soko Vibe!',
+      'delivery_confirmed_msg': 'Upokeaji umethibitishwa. Asante kwa kununua na Soko Vibe!',
       'deselect_all': 'Ondoa Uchaguzi Wote',
       'developer': 'Msanidi Programu',
       'discovery': 'Ugunduzi',
       'dismiss': 'Puuza',
       'email_not_registered': 'Barua pepe hii haijasajiliwa',
       'enter_email': 'Ingiza barua pepe yako kwanza',
-      'enter_email_reset_hint':
-          'Ingiza barua pepe yako upokee kiungo cha kuweka upya nenosiri',
+      'enter_email_reset_hint': 'Ingiza barua pepe yako upokee kiungo cha kuweka upya nenosiri',
       'enter_password': 'Ingiza nenosiri',
       'enter_phone_withdraw': 'Tafadhali ingiza namba yako ya simu',
       'enter_pin': 'Ingiza PIN',
@@ -2354,8 +2266,7 @@ class LocalizationService {
       'loading_error': 'Imeshindwa kupakia oda zako',
       'login_prompt': 'Tayari una akaunti? Ingia',
       'login_required': 'Inahitajika kuingia kwanza',
-      'logout_confirm_message':
-          'Una uhakika unataka kutoka kwenye akaunti yako?',
+      'logout_confirm_message': 'Una uhakika unataka kutoka kwenye akaunti yako?',
       'maintenance': 'Matengenezo',
       'manage_orders': 'Simamia Oda',
       'mark_featured': 'Weka kama Iliyoangaziwa',
@@ -2373,8 +2284,7 @@ class LocalizationService {
       'no_orders_this_filter': 'Hakuna oda zinazolingana na kichujio hiki',
       'no_payment_methods': 'Muuzaji hajaweka njia za malipo bado.',
       'no_phone_number_for_seller': 'Hakuna namba ya simu kwa {0} bado',
-      'no_products_matching_filters':
-          'Hakuna bidhaa zinazolingana na vichujio vyako',
+      'no_products_matching_filters': 'Hakuna bidhaa zinazolingana na vichujio vyako',
       'no_purchases_yet': 'Hujanunua chochote bado',
       'no_reports': 'Hakuna ripoti bado',
       'open': 'Fungua',
@@ -2385,8 +2295,7 @@ class LocalizationService {
       'otp_invalid': 'OTP batili',
       'password_length': 'Angalau herufi 8',
       'password_mismatch': 'Manenosiri hayalingani',
-      'password_reset_email_sent':
-          'Kiungo cha kuweka upya nenosiri kimetumwa kwa barua pepe yako',
+      'password_reset_email_sent': 'Kiungo cha kuweka upya nenosiri kimetumwa kwa barua pepe yako',
       'payout': 'Uondoaji wa Fedha',
       'permission_denied': 'Ruhusa imekataliwa',
       'permission_permanently_denied':
@@ -2433,8 +2342,7 @@ class LocalizationService {
       'review_hint': 'Andika maoni mafupi (hiari)...',
       'reviews_count': 'maoni',
       'revoke_kyc': 'Batilisha KYC',
-      'revoke_kyc_confirm':
-          'Una uhakika unataka kubatilisha uthibitisho huu wa KYC?',
+      'revoke_kyc_confirm': 'Una uhakika unataka kubatilisha uthibitisho huu wa KYC?',
       'search_products_users_hint': 'Tafuta bidhaa au watumiaji',
       'search_users': 'Tafuta watumiaji...',
       'select': 'Chagua',
@@ -2523,7 +2431,8 @@ class LocalizationService {
       'max_5_images': 'Hadi picha 5',
       'media_received': 'Picha zimepokelewa — tayari kuuza kwenze Soko Vibe',
       'media_received_banner': 'Picha zimepokelewa — uuze kwenze Soko Vibe',
-      'sell_on_soko_hint': 'Jaza maelezo ya bidhaa kisha chapisha — picha/video tayari imeambatanishwa.',
+      'sell_on_soko_hint':
+          'Jaza maelezo ya bidhaa kisha chapisha — picha/video tayari imeambatanishwa.',
       'choose_gallery': 'Chagua kutoka albamu',
       'product_video': 'Video ya bidhaa (hiari)',
       'add_video': 'Ongeza video (moja tu)',
@@ -2541,8 +2450,10 @@ class LocalizationService {
       'otp_ready_msg': 'Nambari ya uthibitisho ipo tayari — mpa muuzaji kuikamilisha utoaji.',
       'dispatch_details': 'Taarifa za usafirishaji',
       'view_address': 'Mahali ya uwasilishaji',
-      'escrow_funds_held': 'Malipo ya mnunuzi yametunzwa kwenye escrow. Tuma bidhaa ili hela itolewe kwako.',
-      'arrival_confirmed_msg': 'Mzigo umefika. Dirisha la ukaguzi limefunguliwa — thibitisha upokeaji kabla ya dakika 30.',
+      'escrow_funds_held':
+          'Malipo ya mnunuzi yametunzwa kwenye escrow. Tuma bidhaa ili hela itolewe kwako.',
+      'arrival_confirmed_msg':
+          'Mzigo umefika. Dirisha la ukaguzi limefunguliwa — thibitisha upokeaji kabla ya dakika 30.',
       'verdict_review_required': 'Amri inahitaji kupitiwa',
       'flash_sale_price': 'Bei ya flash sale',
       'change_profile_picture': 'Badilisha picha ya wasifu',
@@ -2579,12 +2490,10 @@ class LocalizationService {
       'artwork_pack_resume': 'Endelea',
       'artwork_pack_retry': 'Jaribu tena',
       'artwork_pack_cancel': 'Ghairi',
-      'artwork_pack_error':
-          'Hatukuweza kupakua data za ziada kwa sasa. Tafadhali jaribu tena.',
+      'artwork_pack_error': 'Hatukuweza kupakua data za ziada kwa sasa. Tafadhali jaribu tena.',
       'artwork_pack_insufficient_storage':
           'Hakuna nafasi ya kutosha kwenye simu yako. Freesha nafasi kisha jaribu tena.',
-      'artwork_pack_offline':
-          'Huna muunganisho wa intaneti. Pakua data za ziada ukiwa mtandaoni.',
+      'artwork_pack_offline': 'Huna muunganisho wa intaneti. Pakua data za ziada ukiwa mtandaoni.',
       'artwork_pack_download_size': 'Unapakua {0}',
       'artwork_pack_remaining': 'Zilizo baki {0}',
       'artwork_pack_files': 'Picha {0}',
@@ -2599,8 +2508,7 @@ class LocalizationService {
       'artwork_pack_installed_body':
           'Unatumia picha zilizopakuliwa. Hakuna data ya ziada inahitajika.',
       'artwork_pack_manage': 'Picha za categories',
-      'artwork_pack_manage_body':
-          'Pakua, sasisha, au futa picha za categories zilizopakuliwa.',
+      'artwork_pack_manage_body': 'Pakua, sasisha, au futa picha za categories zilizopakuliwa.',
       'artwork_pack_freespace': 'Freesha nafasi',
       'artwork_pack_storage_used': 'Nafasi inayotumika',
       'artwork_pack_offline_mode': 'Haupatani nafasi ya kupakua',
@@ -2608,8 +2516,7 @@ class LocalizationService {
           'Unaweza kutumia Soko Vibe kwa kawaida. Picha za categories zitaonekana baada ya kupakua data.',
       'artwork_pack_mb': 'MB',
       'artwork_pack_not_available': 'Hakuna picha za ziada zinapatikana sasa.',
-      'missing_category_hint':
-          'Category haikupatikana. Rudi kwenye categories kuchagua nyingine.',
+      'missing_category_hint': 'Category haikupatikana. Rudi kwenye categories kuchagua nyingine.',
       'all_categories': 'Category zote', // category explorer section heading
     },
     'en': {
@@ -2637,8 +2544,7 @@ class LocalizationService {
       'chat_seller': 'Chat Seller',
       'messages': 'Messages',
       'messages_subtitle': 'Stay connected with buyers and sellers',
-      'trust_banner_msg':
-          'Keep payments inside Soko Vibe. Never share your OTP.',
+      'trust_banner_msg': 'Keep payments inside Soko Vibe. Never share your OTP.',
       'for_you': 'For You',
       'nearby': 'Nearby',
       'set_location_title': 'Set your location to see nearby products.',
@@ -2646,8 +2552,7 @@ class LocalizationService {
       'no_nearby': 'No products near you yet.',
       'explore_marketplace': 'Explore Marketplace',
       'login_required_title': 'Sign in to continue',
-      'login_required_body':
-          'You need an account to do this. Browsing is free.',
+      'login_required_body': 'You need an account to do this. Browsing is free.',
       'maybe_later': 'Maybe later',
       'total': 'Total',
       'no_products': 'No products yet',
@@ -2738,8 +2643,7 @@ class LocalizationService {
       'select_payment': 'Select Payment Method',
       'total_amount': 'Total',
       'chat_with_seller': 'Chat with Seller',
-      'chat_first':
-          'You need to chat with the seller before buying. Start a conversation?',
+      'chat_first': 'You need to chat with the seller before buying. Start a conversation?',
       'chat_now': 'Chat Now',
       'send': 'Send',
       'message_sent': 'Message sent',
@@ -2792,8 +2696,7 @@ class LocalizationService {
       'deny': 'Deny',
       'permission_required': 'Permission Required',
       'permission_camera': 'Camera access is needed for video calls',
-      'permission_microphone':
-          'Microphone access is needed for voice calls and voice messages',
+      'permission_microphone': 'Microphone access is needed for voice calls and voice messages',
       'permission_storage': 'Storage access is needed to read music files',
       'permission_photos': 'Photo access is needed to share images',
       'auto_lock': 'Auto-Lock',
@@ -2893,7 +2796,8 @@ class LocalizationService {
       'missing_product_hint': 'Product not found. Return to the shop and pick another one.',
       'change_number': 'Change',
       'discard_draft': 'Discard draft?',
-      'discard_draft_body': 'You have filled in part of the listing. Going back will keep it as a draft.',
+      'discard_draft_body':
+          'You have filled in part of the listing. Going back will keep it as a draft.',
       'discard': 'Discard',
       'keep_editing': 'Keep editing',
       'expired_label': 'Expired',
@@ -2905,7 +2809,8 @@ class LocalizationService {
       'pay_on_delivery': 'Cash on delivery',
       'pay_on_delivery_sub': 'Only if the seller agrees',
       'shipping_quoted_later': 'The seller confirms the delivery fee',
-      'checkout_pay_later_note': 'You pay after the seller confirms delivery. Funds are held in escrow.',
+      'checkout_pay_later_note':
+          'You pay after the seller confirms delivery. Funds are held in escrow.',
       'occurrences': 'Occurrences',
       'user_message': 'User message',
       'technical_details': 'Technical details',
@@ -3048,12 +2953,10 @@ class LocalizationService {
       'cooldown': 'Wait',
       'regular_gifts': 'Regular Gifts',
       'otp_sent': 'OTP sent to your phone number',
-      'reset_phone_subtitle':
-          'Enter the phone number on your profile. We will send an SMS OTP.',
+      'reset_phone_subtitle': 'Enter the phone number on your profile. We will send an SMS OTP.',
       'phone_not_registered':
           'No account found for this number. Register or add your phone in Profile.',
-      'phone_not_linked':
-          'This number is not linked to your account yet. Use email reset instead.',
+      'phone_not_linked': 'This number is not linked to your account yet. Use email reset instead.',
       'masked_email_hint': 'We will send a link to: ',
       'sending_otp': 'Sending OTP...',
       'verifying_otp': 'Verifying...',
@@ -3080,8 +2983,7 @@ class LocalizationService {
       'tap_to_boost': 'Tap to boost',
       'password_reset_email_sent': 'Password reset link sent to your email',
       'email_not_registered': 'This email is not registered',
-      'enter_email_reset_hint':
-          'Enter your email to receive a password reset link',
+      'enter_email_reset_hint': 'Enter your email to receive a password reset link',
       'confirm_logout': 'Confirm Logout',
       'logout_confirm_message': 'Are you sure you want to logout?',
       'delete_account_failed': 'Failed to delete account. Please try again.',
@@ -3126,8 +3028,7 @@ class LocalizationService {
       'loading': 'Loading...',
       'no_results_soko': 'No results in Soko Vibe',
       'try_different': 'Try different keywords or browse categories',
-      'trouble_connecting':
-          'Soko Vibe is having trouble connecting. Please try again.',
+      'trouble_connecting': 'Soko Vibe is having trouble connecting. Please try again.',
       'try_again': 'Try Again',
       'total_sales': 'Total Sales',
       'amount_received': 'Amount Received',
@@ -3149,8 +3050,7 @@ class LocalizationService {
       'delete_message_confirm': 'Delete this message?',
       'editing_message': 'Editing message',
       'deleted_message': 'Message deleted',
-      'delete_time_expired':
-          'Time expired. You can only delete within 15 minutes.',
+      'delete_time_expired': 'Time expired. You can only delete within 15 minutes.',
       'forwarded_message': 'Forwarded',
       'message_deleted': 'This message has been deleted',
       'pay_now': 'Pay Now',
@@ -3178,8 +3078,7 @@ class LocalizationService {
       'value_eg': 'Value (e.g. Large, Red)',
       'price_adj_label': 'Price ±',
       'verify_email_title': 'Verify Email',
-      'verify_email_sent':
-          'We have sent you a verification email. Check your inbox.',
+      'verify_email_sent': 'We have sent you a verification email. Check your inbox.',
       'verified_continue': "I've Verified - Continue",
       'resend_verification': 'Resend Email',
       'email_not_verified': 'Email not yet verified. Please verify first.',
@@ -3197,8 +3096,7 @@ class LocalizationService {
       'get_location': 'Get my location',
       'location_disabled': 'Location services are disabled',
       'location_denied': 'Location permission has been permanently denied',
-      'location_permission_denied':
-          'Location permission denied. Please try again.',
+      'location_permission_denied': 'Location permission denied. Please try again.',
       'location_title': 'Allow location access',
       'location_disclosure':
           'Soko Vibe uses your location to show products near you and help sellers find buyers in your area. Your precise location is never shared publicly.',
@@ -3245,8 +3143,7 @@ class LocalizationService {
       'seller_label': 'Seller: ',
       'subtotal': 'Subtotal',
       'phone_label': 'Phone: ',
-      'send_money_instructions':
-          'Send money to each seller via Airtel Money, Mixx, or Halopesa',
+      'send_money_instructions': 'Send money to each seller via Airtel Money, Mixx, or Halopesa',
       'flip': 'Flip',
       'connected': 'Connected',
       'ringing': 'Ringing...',
@@ -3282,8 +3179,7 @@ class LocalizationService {
       'ai_greeting':
           'Hello! Welcome to Soko Vibe. I\'m AI Dalali — your assistant for finding products, prices and sellers. I\'m here to help!\n\n• I search products directly from Soko Vibe — prices, seller, location and phone are all here.\n• If a product isn\'t in Soko Vibe, I\'ll tell you honestly and give you external market price estimates.\n• Send a product photo, I\'ll analyze it and search Soko Vibe.\n\nYou can type, speak, or send a photo — whatever works for you!',
       'processing_payment': 'Processing Payment...',
-      'complete_payment_clickpesa':
-          'Complete payment on your phone via ClickPesa\nOrder: {0}',
+      'complete_payment_clickpesa': 'Complete payment on your phone via ClickPesa\nOrder: {0}',
       'receipt': 'Receipt',
       'receipt_subtitle': 'Your payment has been completed successfully',
       'payment_details': 'Payment Details',
@@ -3294,8 +3190,7 @@ class LocalizationService {
       'status_completed': 'Completed',
       'status_escrow': 'In Escrow',
       'status_pending': 'Pending',
-      'purchase_successful':
-          'Purchase successful! Check your transaction history.',
+      'purchase_successful': 'Purchase successful! Check your transaction history.',
       'cannot_buy_own': 'You cannot buy your own product',
       'whatsapp': 'WhatsApp',
       'whatsapp_product_inquiry':
@@ -3354,14 +3249,14 @@ class LocalizationService {
       'requests_empty_hint': 'Post your request and let sellers come to you',
       'requests_error': 'Failed to load requests. Check your connection.',
       'unlock_contact': 'Unlock Contact',
-      'unlock_contact_ad_msg':
-          'Watch one video ad to unlock the buyer\'s contact',
+      'unlock_contact_ad_msg': 'Watch one video ad to unlock the buyer\'s contact',
       'contact_unlocked': 'Contact unlocked!',
       'locked_contact_hint': 'Contact hidden',
       'locked_short': 'Locked',
       'contact_unlocked_short': 'Unlocked',
       'ignore_offline': 'This may be an offline issue — make sure you are connected and try again.',
-      'account_suspended_seller': 'Your account is suspended — contact admin to start selling again.',
+      'account_suspended_seller':
+          'Your account is suspended — contact admin to start selling again.',
       'invalid_whatsapp': 'Enter a valid WhatsApp number',
       'enter_budget': 'Enter a valid budget',
       'whatsapp_contact': 'WhatsApp',
@@ -3374,17 +3269,14 @@ class LocalizationService {
       'send_whatsapp_message': 'Send WhatsApp Message',
       'contact_seller_via_whatsapp': 'Contact seller directly via WhatsApp',
       'phone_number_missing': 'Phone number not available',
-      'group_whatsapp_message':
-          'I am creating a Soko Vibe group. Please add me.',
+      'group_whatsapp_message': 'I am creating a Soko Vibe group. Please add me.',
       'create_group_description': 'Create a group on WhatsApp',
-      'after_create_group_share':
-          'After creating the group, share the WhatsApp link',
+      'after_create_group_share': 'After creating the group, share the WhatsApp link',
       'group_chat_title': 'Group Chat',
       'continue_group_chat_whatsapp': 'Continue group chat on WhatsApp',
       'ai_hear_error':
           'Sorry chief, I cannot hear clearly. Please try again or type the product name.',
-      'ai_generic_error':
-          'Sorry chief, something went wrong. Please try again.',
+      'ai_generic_error': 'Sorry chief, something went wrong. Please try again.',
       'ai_insights': 'AI advice to grow your business',
       'ai_insights_empty': 'Get AI advice by tapping the refresh icon above.',
       'regenerate': 'Refresh',
@@ -3409,8 +3301,7 @@ class LocalizationService {
       'otp_sent_email': 'OTP has been sent to your email. Check your inbox.',
       'failed_to_send_otp': 'Failed to send OTP',
       'network_error_try_again': 'Network error. Please try again.',
-      'password_reset_success_login':
-          'Password has been reset! You can now login.',
+      'password_reset_success_login': 'Password has been reset! You can now login.',
       'failed_to_reset_password': 'Failed to reset password',
       'enter_email_otp_hint': 'Enter your email to receive a reset OTP.',
       'enter_otp_title': 'Enter OTP',
@@ -3426,8 +3317,7 @@ class LocalizationService {
       'enter_id_number_please': 'Please enter your ID number',
       'upload_id_image_please': 'Please upload your ID image',
       'take_selfie_please': 'Please take your selfie',
-      'failed_to_upload_image':
-          'Failed to upload image. Check your connection.',
+      'failed_to_upload_image': 'Failed to upload image. Check your connection.',
       'kyc_approved_success': 'KYC approved! You can now sell products.',
       'kyc_submitted': 'KYC submitted.',
       'kyc_under_review': 'Under review...',
@@ -3438,12 +3328,10 @@ class LocalizationService {
       'identification_label': 'ID Document:',
       'kyc_pending': 'KYC Pending Review',
       'kyc_pending_subtitle': 'KYC is under review...',
-      'kyc_pending_desc':
-          'Your information is being reviewed. You will be notified once approved.',
+      'kyc_pending_desc': 'Your information is being reviewed. You will be notified once approved.',
       'kyc_rejected_default': 'KYC was rejected. Resubmit after corrections.',
       'fill_identity_info': 'Fill in your identification details',
-      'upload_id_selfie_instruction':
-          'Upload your ID image and selfie for verification.',
+      'upload_id_selfie_instruction': 'Upload your ID image and selfie for verification.',
       'as_on_id': 'As it appears on your ID',
       'id_type': 'ID Type',
       'id_number': 'ID Number',
@@ -3462,15 +3350,12 @@ class LocalizationService {
       'kyc_passport_number': 'Passport Number',
       'kyc_passport_image': 'Passport Photo',
       'kyc_shop_video': 'Your Shop Video',
-      'kyc_shop_video_desc':
-          'Record a short video (30 seconds or less) showing your shop.',
+      'kyc_shop_video_desc': 'Record a short video (30 seconds or less) showing your shop.',
       'kyc_take_video': 'Record Video',
       'kyc_video_record': 'Record or Choose Video',
       'kyc_video_selected': 'Video selected',
-      'kyc_video_too_large':
-          'Video is too large (over 90MB). Record a shorter video.',
-      'kyc_video_upload_failed':
-          'Failed to upload the video. Check your connection and try again.',
+      'kyc_video_too_large': 'Video is too large (over 90MB). Record a shorter video.',
+      'kyc_video_upload_failed': 'Failed to upload the video. Check your connection and try again.',
       'kyc_enter_first_name': 'Please enter your first name',
       'kyc_enter_middle_name': 'Please enter your middle name',
       'kyc_enter_last_name': 'Please enter your last name',
@@ -3480,30 +3365,24 @@ class LocalizationService {
       'kyc_enter_email': 'Please enter a valid email',
       'kyc_otp_label': 'OTP Code',
       'kyc_otp_sent': 'An OTP code was sent. Enter it to verify.',
-      'kyc_otp_send_failed':
-          'Failed to send the code. Check your connection and retry.',
+      'kyc_otp_send_failed': 'Failed to send the code. Check your connection and retry.',
       'kyc_enter_otp': 'Please enter the OTP code',
-      'kyc_otp_invalid':
-          'The code is incorrect or expired. Try requesting a new one.',
+      'kyc_otp_invalid': 'The code is incorrect or expired. Try requesting a new one.',
       'kyc_phone_verified': 'Phone number verified',
       'kyc_email_verified': 'Email verified',
-      'kyc_verify_phone_required':
-          'Verify your phone number with the OTP before submitting',
-      'kyc_verify_email_required':
-          'Verify your email with the OTP before submitting',
+      'kyc_verify_phone_required': 'Verify your phone number with the OTP before submitting',
+      'kyc_verify_email_required': 'Verify your email with the OTP before submitting',
       'kyc_passport_required': 'Enter the passport number (at least 6 characters)',
       'kyc_upload_video_please': 'Please upload a video of your shop',
       'kyc_fee_title': 'Verification Fee',
-      'kyc_fee_one_time':
-          'One time only — never charged again even if KYC is rejected.',
+      'kyc_fee_one_time': 'One time only — never charged again even if KYC is rejected.',
       'kyc_fee_paid': 'Fee Paid',
       'kyc_fee_paid_desc': 'The fee is settled. You can now submit your KYC.',
       'kyc_fee_pay_button': 'Pay TZS {0}',
       'kyc_fee_get_control': 'Get Control Number',
       'kyc_fee_method_ussd': 'Phone Push (USSD)',
       'kyc_fee_method_billpay': 'BillPay (Control Number)',
-      'kyc_fee_ussd_sent':
-          'A push was sent to your phone. Complete the payment on your phone.',
+      'kyc_fee_ussd_sent': 'A push was sent to your phone. Complete the payment on your phone.',
       'kyc_fee_waiting': 'Waiting for payment confirmation...',
       'kyc_fee_check_again': 'Check Again',
       'kyc_fee_not_paid_yet': 'Payment has not been confirmed yet.',
@@ -3512,10 +3391,8 @@ class LocalizationService {
           'Enter this number in your M-Pesa under the Pay by BillPay menu.',
       'kyc_fee_copy': 'Copy',
       'kyc_fee_copied': 'Number copied',
-      'kyc_fee_unpaid_error':
-          'Pay the verification fee before submitting KYC.',
-      'kyc_fee_load_failed':
-          'Failed to load fee status. Check your connection.',
+      'kyc_fee_unpaid_error': 'Pay the verification fee before submitting KYC.',
+      'kyc_fee_load_failed': 'Failed to load fee status. Check your connection.',
       'kyc_fee_retry': 'Retry',
       'kyc_tap_to_watch': 'Tap to watch the video',
       'request_refund': 'Request Refund?',
@@ -3534,8 +3411,7 @@ class LocalizationService {
       'auto_payout': 'Auto Payout',
       'manual_payout': 'Manual Payout',
       'flash_sales_active': '{0} Flash Sale Ongoing',
-      'create_flash_sale_prompt':
-          'Create a flash sale to discount your products',
+      'create_flash_sale_prompt': 'Create a flash sale to discount your products',
       'open_whatsapp': 'Open WhatsApp',
       'add_product_first': 'Add a product first',
       'seller_earnings': 'Seller Earnings',
@@ -3545,15 +3421,16 @@ class LocalizationService {
       'tx_history': 'Transaction History',
       'whatsapp_not_installed': 'WhatsApp not installed, opened website',
       'seller_earnings_subtitle': '{0} sales | Tap for details & withdrawal',
-      'boost_plans':
-          'Bronze TZS 1,500/3d · Silver TZS 3,000/7d · Gold TZS 10,000/30d',
+      'boost_plans': 'Bronze TZS 1,500/3d · Silver TZS 3,000/7d · Gold TZS 10,000/30d',
       // ── Boost Purchase Flow ──
       'boost_screen_title': 'Boost Your Product',
-      'boost_screen_subtitle': 'Pick a package. Your product jumps to the top of search results with a Featured badge, in front of many more buyers.',
+      'boost_screen_subtitle':
+          'Pick a package. Your product jumps to the top of search results with a Featured badge, in front of many more buyers.',
       'boost_choose_product': 'Choose a product to boost',
       'boost_no_products': 'No products to boost yet. Add a product first.',
       'boost_package_title': 'Choose a package',
-      'boost_package_note': 'One flat payment — no daily fees, no contracts. Your boost goes live as soon as payment is confirmed.',
+      'boost_package_note':
+          'One flat payment — no daily fees, no contracts. Your boost goes live as soon as payment is confirmed.',
       'boost_days': '{count} days',
       'boost_benefit1': 'Top of search',
       'boost_benefit2': 'Featured badge',
@@ -3566,9 +3443,11 @@ class LocalizationService {
       'boost_method_billpay': 'BillPay control number — pay via M-Pesa/Tigo/Airtel',
       'boost_pay_now': 'Pay TZS {amount}',
       'boost_processing': 'Preparing payment...',
-      'boost_push_sent': 'Request sent! Check your phone (USSD) and press 1 to complete payment of TZS {amount}.',
+      'boost_push_sent':
+          'Request sent! Check your phone (USSD) and press 1 to complete payment of TZS {amount}.',
       'boost_billpay_number': 'Your control number is {number}',
-      'boost_billpay_instructions': 'Open M-Pesa > Pay > BillPay, enter the control number and pay the total of TZS {amount}. We confirm as soon as the payment appears.',
+      'boost_billpay_instructions':
+          'Open M-Pesa > Pay > BillPay, enter the control number and pay the total of TZS {amount}. We confirm as soon as the payment appears.',
       'boost_done': 'Done!',
       'boost_error': 'Failed: {reason}',
       'boost_no_products_title': 'No Products',
@@ -3585,8 +3464,7 @@ class LocalizationService {
       'boost_trust_instant': 'Instant activation',
       'boost_trust_no_subscription': 'No monthly plan',
       'boost_section_why': 'What a boost gets you',
-      'boost_section_why_caption':
-          'Every package includes all of these. Nothing extra to pay.',
+      'boost_section_why_caption': 'Every package includes all of these. Nothing extra to pay.',
       'boost_why_1': 'Position #1 in search results',
       'boost_why_2': 'Promoted badge on your listing',
       'boost_why_3': 'Featured in the top sponsored carousel',
@@ -3622,8 +3500,7 @@ class LocalizationService {
           'We give you a control number. Pay it from your M-Pesa, Tigo or Airtel wallet using that number.',
       'boost_products_owned': '{count} products',
       'boost_pay_cta': 'BOOST NOW',
-      'boost_secure_note':
-          'Secure payment via M-Pesa, Tigo, Airtel, HaloPesa, EzyPesa or CRDB',
+      'boost_secure_note': 'Secure payment via M-Pesa, Tigo, Airtel, HaloPesa, EzyPesa or CRDB',
       'boost_processing_body':
           'We sent your payment request for {amount}. Approve it on your phone so we can continue.',
       'boost_please_wait':
@@ -3653,10 +3530,8 @@ class LocalizationService {
       'ends': 'Ends',
       'no_internet_connection': 'No Internet Connection',
       'no_internet_connection_lower': 'No internet connection',
-      'check_connection_try_again':
-          'Please check your connection and try again',
-      'enable_internet_to_continue':
-          'Please enable your internet\nto continue using Soko Vibe',
+      'check_connection_try_again': 'Please check your connection and try again',
+      'enable_internet_to_continue': 'Please enable your internet\nto continue using Soko Vibe',
       'play_queue': 'Play Queue',
       'queue_is_empty': 'Queue is empty',
       'enter_password_to_switch': 'Enter password to switch account',
@@ -3688,8 +3563,7 @@ class LocalizationService {
       'warning_sent': 'Warning sent',
       'warning_sent_blocked': '3rd warning sent — account blocked',
       'warning_reason': 'Warning Reason',
-      'warning_will_block_after_3':
-          'After 3 warnings the account will be blocked (suspended).',
+      'warning_will_block_after_3': 'After 3 warnings the account will be blocked (suspended).',
       'warning_reason_required': 'Please enter a warning reason',
       'hidden': ' [HIDDEN]',
       'no_active_fraud_alerts': 'No active fraud alerts',
@@ -3701,8 +3575,7 @@ class LocalizationService {
       'mobile_money_fee': 'Mobile Money Fee',
       'calculating_payment_fee': 'Calculating mobile money fee...',
       'commission_percentage': '3.5% of product price',
-      'net_earnings_formula':
-          'Net Earnings = Price - Processing Fee - Soko Vibe Commission',
+      'net_earnings_formula': 'Net Earnings = Price - Processing Fee - Soko Vibe Commission',
       'phone_example': 'e.g. 0712345678',
       'choose_boost_package': 'Choose your boost package',
       'proceed_to_checkout': 'Proceed to Checkout',
@@ -3717,19 +3590,16 @@ class LocalizationService {
           'The TZS {0} fee covers gateway costs (ClickPesa). Soko Vibe receives the full TZS {1}.',
       'plan': 'Plan',
       'duration': 'Duration',
-      'payment_after_continue':
-          'You will be prompted to complete payment after continue',
+      'payment_after_continue': 'You will be prompted to complete payment after continue',
       'select_package': 'Select a package',
       'please_log_in_first': 'Please log in first',
       'payment_initiation_failed': 'Payment initiation failed',
       'payment_not_confirmed': 'Payment not confirmed yet',
-      'boosting_will_complete':
-          'Payment received. Boosting will complete shortly.',
+      'boosting_will_complete': 'Payment received. Boosting will complete shortly.',
       'product_now_boosted': 'Your product is now boosted.',
       'payment_failed_try_again': 'Payment failed. Try again.',
       'payment_timeout': 'Payment timed out — not confirmed. Please try again.',
-      'check_phone_complete_payment':
-          'Check your phone and complete payment on M-Pesa',
+      'check_phone_complete_payment': 'Check your phone and complete payment on M-Pesa',
       'complete_payment_on_phone': 'Complete payment on your phone.',
       'check_payment_status': 'Check Payment Status',
       'checking': 'Checking...',
@@ -3843,8 +3713,7 @@ class LocalizationService {
       'delete_user': 'Delete User',
       'delete_user_confirm': 'Delete all messages and remove user %s?',
       'block_user': 'Block User',
-      'block_user_confirm':
-          'Block %s? You will not receive messages from them.',
+      'block_user_confirm': 'Block %s? You will not receive messages from them.',
       'unmute': 'Unmute',
       'unpinned': 'Unpinned',
       'pinned': 'Pinned',
@@ -3892,8 +3761,7 @@ class LocalizationService {
       'open_dispute': 'Open Dispute',
       'dispute_title': 'Open Dispute?',
       'cancel_order_title': 'Cancel Order?',
-      'dispute_description':
-          'Are you sure you want to open a dispute for this order?',
+      'dispute_description': 'Are you sure you want to open a dispute for this order?',
       'cancel_order_description': 'Are you sure you want to cancel this order?',
       'sort_by': 'Sort By',
       'area': 'Area',
@@ -3925,11 +3793,9 @@ class LocalizationService {
       'get_started': 'Get Started',
       'done': 'Done',
       'onboarding_title1': 'Welcome to Soko Vibe',
-      'onboarding_desc1':
-          'Buy and sell products across Tanzania easily and securely.',
+      'onboarding_desc1': 'Buy and sell products across Tanzania easily and securely.',
       'onboarding_title2': 'Secure Payments',
-      'onboarding_desc2':
-          'Escrow protects your payment until the product arrives.',
+      'onboarding_desc2': 'Escrow protects your payment until the product arrives.',
       'onboarding_title3': 'Start Selling',
       'onboarding_desc3': 'List your products for free and reach many buyers.',
       'ai_assistant': 'AI Assistant',
@@ -3974,30 +3840,29 @@ class LocalizationService {
       'product_management': 'Product Management',
       'order_management': 'Order Management',
       'view_all': 'View All',
-      'maintenance_message':
-          'Soko Vibe is currently under maintenance. Please try again later.',
+      'maintenance_message': 'Soko Vibe is currently under maintenance. Please try again later.',
       'system_health': 'System Health',
       'last_checked': 'Last Checked',
       'server_status': 'Server Status',
       'database': 'Database',
       'storage': 'Storage',
-    'size': 'Size',
-    'color': 'Color',
-    'ram': 'RAM',
-    'processor': 'Processor',
-    'screen_size': 'Screen Size',
-    'battery': 'Battery',
-    'network': 'Network',
-    'fuel_type': 'Fuel Type',
-    'transmission': 'Transmission',
-    'mileage': 'Mileage',
-    'year': 'Year',
-    'material': 'Material',
-    'availability': 'Availability',
-    'make': 'Make',
-    'os': 'Operating System',
-    'show_x_results': 'Show {0} Results',
-    'top_rated': 'Top Rated',
+      'size': 'Size',
+      'color': 'Color',
+      'ram': 'RAM',
+      'processor': 'Processor',
+      'screen_size': 'Screen Size',
+      'battery': 'Battery',
+      'network': 'Network',
+      'fuel_type': 'Fuel Type',
+      'transmission': 'Transmission',
+      'mileage': 'Mileage',
+      'year': 'Year',
+      'material': 'Material',
+      'availability': 'Availability',
+      'make': 'Make',
+      'os': 'Operating System',
+      'show_x_results': 'Show {0} Results',
+      'top_rated': 'Top Rated',
       'whatsapp_status': 'WhatsApp Status',
       'close': 'Close',
       'learn_more': 'Learn More',
@@ -4023,8 +3888,7 @@ class LocalizationService {
       'bank_name_label': 'Bank Name',
       'quantity_prefix': 'x{0} ',
       'mongike_processing_fee': 'ClickPesa Processing Fee',
-      'shipping_cost_note':
-          'Shipping cost will be added after the seller provides a quote.',
+      'shipping_cost_note': 'Shipping cost will be added after the seller provides a quote.',
       'shipping_address_title': 'Shipping Address',
       'region_hint': 'Region',
       'district_hint': 'District',
@@ -4037,20 +3901,17 @@ class LocalizationService {
       'shipping_info':
           'The seller will provide the shipping cost. You will pay product total + shipping after agreeing.',
       'enter_phone_error': 'Please enter phone number',
-      'enter_full_address':
-          'Please enter complete address (Region, District, Street)',
+      'enter_full_address': 'Please enter complete address (Region, District, Street)',
       'delivery_type': 'Delivery Type',
       'delivery_within_region': 'Within Region',
       'delivery_outside_region': 'Outside Region',
       'select_region': 'Select Region',
-      'address_filled_confirm':
-          'Address filled automatically. Review then submit your order.',
+      'address_filled_confirm': 'Address filled automatically. Review then submit your order.',
       'order_submitted':
           'Your order has been submitted. The seller will provide the shipping cost.',
       'error_prefix': 'Error: ',
       'new_order_notification': 'New Order Received!',
-      'buyer_wants_to_buy':
-          '{buyer} wants to buy {product}. Enter shipping cost.',
+      'buyer_wants_to_buy': '{buyer} wants to buy {product}. Enter shipping cost.',
       'min_price_hint': 'Min',
       'max_price_hint': 'Max',
       'location_hint': 'e.g. Dar es Salaam, Arusha...',
@@ -4089,8 +3950,7 @@ class LocalizationService {
       'enter_your_phone': 'Enter your phone number',
       'phone_used_for_txns': 'Used for transactions and notifications',
       'phone_format_hint': '255xxxxxxxxx',
-      'onboarding_phone_footer_hint':
-          'Tap "Next" to continue or "Skip" to skip this step',
+      'onboarding_phone_footer_hint': 'Tap "Next" to continue or "Skip" to skip this step',
       'skip': 'Skip',
       'next': 'Next',
       'onboarding_start': 'Get Started',
@@ -4104,8 +3964,7 @@ class LocalizationService {
       'onboarding_chat_desc':
           'Connect directly with sellers, ask questions, and close deals with ease.',
       'onboarding_language_title': 'Choose Your Language',
-      'onboarding_language_desc':
-          'Use Soko Vibe in the language you love — Swahili or English.',
+      'onboarding_language_desc': 'Use Soko Vibe in the language you love — Swahili or English.',
       'onboarding_phone_title': 'Your Phone Number',
       'onboarding_phone_desc':
           'Enter your phone number for secure transactions and order notifications.',
@@ -4121,10 +3980,8 @@ class LocalizationService {
       'view': 'View',
       'order_already_paid': 'This order has already been paid.',
       'preparing_payment_wait': 'Preparing payment... Please wait.',
-      'check_phone_enter_pin':
-          'Check your phone — enter PIN to complete payment.',
-      'dispute_notify_admin':
-          'This will notify the admin to review this transaction.',
+      'check_phone_enter_pin': 'Check your phone — enter PIN to complete payment.',
+      'dispute_notify_admin': 'This will notify the admin to review this transaction.',
       'dispute_opened_msg': 'Dispute has been opened. Admin will review.',
       'dispute_failed': 'Failed to raise dispute',
       'cancel_order_refund_message':
@@ -4148,7 +4005,8 @@ class LocalizationService {
       'payment_pending_label': 'Payment Pending',
       'in_escrow_label': 'Secured in Escrow',
       'goods_arrived_title': 'Has the order arrived?',
-      'goods_arrived_body': 'Confirm the item has arrived to open the 30-minute inspection window. Money stays in escrow until you confirm receipt.',
+      'goods_arrived_body':
+          'Confirm the item has arrived to open the 30-minute inspection window. Money stays in escrow until you confirm receipt.',
       'goods_arrived_button': 'I received it - Open Inspection',
       'inspection_deadline_hint': 'Inspect the item and confirm receipt within',
       'auto_release_countdown_hint': 'Auto-release in',
@@ -4175,8 +4033,10 @@ class LocalizationService {
       'uploading_evidence': 'Uploading evidence...',
       'dispute_case_title': 'Case Under Review',
       'dispute_evidence_label': 'Submitted evidence',
-      'dispute_held_buyer': 'Funds stay in escrow until an admin decides. The seller and admin can see your evidence.',
-      'dispute_held_seller': 'Funds stay in escrow until an admin decides. Review the evidence and contact support if you need to respond.',
+      'dispute_held_buyer':
+          'Funds stay in escrow until an admin decides. The seller and admin can see your evidence.',
+      'dispute_held_seller':
+          'Funds stay in escrow until an admin decides. Review the evidence and contact support if you need to respond.',
       'dispute_resolution_label': 'Dispute resolved. Decision: ',
       'dispute_refunded': 'Funds refunded to the buyer',
       'dispute_released': 'Funds released to the seller',
@@ -4235,8 +4095,7 @@ class LocalizationService {
       'transport_note': 'Short Note',
       'transport_submit': 'Save Transport Details',
       'transport_saved': 'Transport details saved',
-      'transport_fill':
-          'Fill in the transport details you chose (bus, bodaboda or motorcycle)',
+      'transport_fill': 'Fill in the transport details you chose (bus, bodaboda or motorcycle)',
       'buyer_transport_done':
           'Transport details saved. The seller will use them to send your goods.',
       'buyer_transport_label': 'Buyer Transport Details',
@@ -4253,8 +4112,7 @@ class LocalizationService {
       'cancelled_label': 'Cancelled',
       'enter_valid_shipping_cost': 'Please enter a valid shipping cost',
       'shipping_cost_set': 'Shipping Cost Set!',
-      'shipping_cost_set_body':
-          'Seller has set shipping cost TZS {0}. Pay now.',
+      'shipping_cost_set_body': 'Seller has set shipping cost TZS {0}. Pay now.',
       'shipping_cost_submitted': 'Shipping cost sent to buyer',
       'quote_sync_warning':
           'Quote notification did not reach the buyer. Check your connection and try again.',
@@ -4263,15 +4121,13 @@ class LocalizationService {
       'mark_shipped': 'Mark Shipped',
       'bus_name': 'Bus Name',
       'plate_number': 'Plate Number',
-      'order_shipped_success':
-          'Order marked as shipped! Buyer will be notified.',
+      'order_shipped_success': 'Order marked as shipped! Buyer will be notified.',
       'dispatch_required_fields': 'Please fill in bus name and plate number',
       'new_request': 'New Request',
       'enter_shipping_cost': 'Enter Shipping Cost',
       'free_delivery': 'Free Delivery',
       'free_delivery_note': 'Seller covers shipping — buyer pays nothing',
-      'free_delivery_confirmed':
-          'Buyer will only be charged the product price, no shipping fees',
+      'free_delivery_confirmed': 'Buyer will only be charged the product price, no shipping fees',
       'sending_label': 'Sending...',
       'send_shipping_to_buyer': 'Send Cost to Buyer',
       'dispatch_title': 'Dispatch',
@@ -4290,15 +4146,12 @@ class LocalizationService {
       'total_payment': 'Total Payment',
       'seller_receives_percent': 'Seller receives ({0}% from them)',
       'soko_commission_percent': 'Soko Vibe Commission ({0}%)',
-      'mongike_fee_info':
-          'ClickPesa charges TZS {0} per mobile money transaction',
-      'shipping_quote_info':
-          'Shipping cost will be added after the seller provides a quote',
+      'mongike_fee_info': 'ClickPesa charges TZS {0} per mobile money transaction',
+      'shipping_quote_info': 'Shipping cost will be added after the seller provides a quote',
       'shipping_info_message':
           'The seller will provide the shipping cost. You will pay the total product cost + shipping after agreeing.',
       'submit_shipping_request': 'Submit Shipping Request',
-      'fill_full_address_error':
-          'Please fill in the full address (Region, District, Street)',
+      'fill_full_address_error': 'Please fill in the full address (Region, District, Street)',
       'new_order_title': 'New Order Received!',
       'new_order_body': '{0} wants to buy {1}. Enter the shipping cost.',
       'customer': 'Buyer',
@@ -4391,8 +4244,7 @@ class LocalizationService {
       'product_featured_for_days': 'Product featured for {days} days',
       'admin': 'Admin',
       'pending_escrow': 'Pending Escrow',
-      'escrow_awaiting_confirmation':
-          'Escrow: TZS {0} (awaiting buyer confirmation)',
+      'escrow_awaiting_confirmation': 'Escrow: TZS {0} (awaiting buyer confirmation)',
 
       'otp_code_hint': 'Enter OTP Code',
       'verify_your_number': 'Verify Your Number',
@@ -4469,18 +4321,15 @@ class LocalizationService {
       'share_receipt': 'Share Receipt',
       'receipt_saved': 'Receipt saved',
       'seller_statement': 'Seller Statement',
-      'seller_statement_footer':
-          'Soko Vibe © {year} — This is an official financial statement',
+      'seller_statement_footer': 'Soko Vibe © {year} — This is an official financial statement',
       'seller_statement_subtitle': 'SELLER STATEMENT',
       'buyer_statement': 'Payment Statement',
-      'buyer_statement_footer':
-          'Soko Vibe © {year} — This is an official payment statement',
+      'buyer_statement_footer': 'Soko Vibe © {year} — This is an official payment statement',
       'buyer_statement_subtitle': 'BUYER STATEMENT',
       'total_refunds': 'Total Refunds',
       'total_credits': 'Total Credits',
       'net_spend': 'NET SPEND',
-      'buyer_no_payments_subtitle':
-          'Your payment history will appear here once you buy something',
+      'buyer_no_payments_subtitle': 'Your payment history will appear here once you buy something',
       'info_name': 'NAME',
       'info_phone': 'PHONE',
       'info_email': 'EMAIL',
@@ -4496,13 +4345,11 @@ class LocalizationService {
       'expenses_column': 'Expenses',
       'balance_column': 'Balance',
       'no_payments_yet': 'No payments yet',
-      'no_payments_subtitle':
-          'Financial details will appear once you start selling',
+      'no_payments_subtitle': 'Financial details will appear once you start selling',
       'scan_qr_full_info': 'SCAN QR CODE FOR FULL DETAILS',
       'scan_qr_hint': 'Scan this QR code for all statement details',
       'your_statement': 'Your Statement',
-      'statement_ready_body':
-          'Your financial statement is ready. Check the app.',
+      'statement_ready_body': 'Your financial statement is ready. Check the app.',
       'statement_sent_notification': 'Statement sent via notification',
       'statement_saved': 'Statement saved',
       'error_label': 'Error',
@@ -4547,19 +4394,15 @@ class LocalizationService {
       'withdraw': 'Withdraw',
       'deposit': 'Deposit',
       'error_occurred': 'An error occurred',
-      'error_poor_network':
-          'Poor internet connection. Please check your network.',
+      'error_poor_network': 'Poor internet connection. Please check your network.',
       'error_no_permission':
           'You do not have permission to perform this action. Please try logging out and back in.',
-      'network_unstable':
-          'Network unstable. Showing saved data.',
+      'network_unstable': 'Network unstable. Showing saved data.',
       'please_stay_on_screen': 'Please stay on this screen',
       'error_not_found': 'The requested information was not found.',
       'error_already_exists': 'This item already exists.',
-      'error_index_building':
-          'The database index is still building. Please try again shortly.',
-      'error_session_expired':
-          'Your session has expired. Please sign in again.',
+      'error_index_building': 'The database index is still building. Please try again shortly.',
+      'error_session_expired': 'Your session has expired. Please sign in again.',
       'error_generic': 'Something went wrong. Please try again.',
       'error_id_label': 'Error ID',
       'error_occurred_with_id': 'Something went wrong. Please try again.\n\nError ID: {0}',
@@ -4569,32 +4412,27 @@ class LocalizationService {
       'error_account_disabled': 'This account has been disabled.',
       'error_email_in_use': 'An account with this email already exists.',
       'error_operation_not_allowed': 'This sign-in method is not enabled.',
-      'error_weak_password':
-          'The password is too weak. Use at least 6 characters.',
+      'error_weak_password': 'The password is too weak. Use at least 6 characters.',
       'error_too_many_attempts': 'Too many attempts. Please try again later.',
-      'error_timeout': 'The request timed out. Please check your internet connection and try again.',
-      'error_payment_failed': 'Payment was not completed. No confirmed funds were transferred. Please try again.',
+      'error_timeout':
+          'The request timed out. Please check your internet connection and try again.',
+      'error_payment_failed':
+          'Payment was not completed. No confirmed funds were transferred. Please try again.',
       'error_upload_failed': 'Failed to upload file. Please try again.',
-      'error_invalid_credentials':
-          'Invalid login credentials. Please try again.',
+      'error_invalid_credentials': 'Invalid login credentials. Please try again.',
       'auth_google_failed': 'Google sign-in failed. Please try again.',
-      'auth_google_cancelled':
-          'Google sign-in cancelled. Please choose an account and try again.',
-      'auth_no_account':
-          'No account found for this number. Please register first.',
+      'auth_google_cancelled': 'Google sign-in cancelled. Please choose an account and try again.',
+      'auth_no_account': 'No account found for this number. Please register first.',
       'auth_wrong_phone':
           'Incorrect phone number. Please enter a valid Tanzanian number (e.g. 0712345678).',
-      'auth_otp_invalid':
-          'OTP is incorrect. Please check the SMS and try again.',
+      'auth_otp_invalid': 'OTP is incorrect. Please check the SMS and try again.',
       'auth_otp_expired': 'OTP has expired. Please request a new OTP.',
-      'auth_otp_rate_limited':
-          'Too many attempts. Please wait a moment and try again.',
+      'auth_otp_rate_limited': 'Too many attempts. Please wait a moment and try again.',
       'auth_otp_send_failed': 'Failed to send OTP. Please try again.',
       'auth_login_required': 'Please log in to continue.',
       'product_limit_kyc_needed':
           'You have reached the limit of 5 products without KYC. Please complete KYC verification to add more products.',
-      'comment_edit_own_only':
-          'You can only delete your own comments and replies.',
+      'comment_edit_own_only': 'You can only delete your own comments and replies.',
       'kyc_id_national': 'National ID',
       'kyc_id_passport': 'Passport',
       'kyc_id_drivers': "Driver's License",
@@ -4674,21 +4512,17 @@ class LocalizationService {
       'unknown_user_display': 'Unknown',
 
       'tos_title': 'SOKO VIBE TERMS OF SERVICE',
-      'tos_last_updated':
-          'Last Updated: 16 August 2026 | Effective Date: 16 August 2026',
-      'tos_section_1_title':
-          '1. ACCEPTANCE OF TERMS — LEGALLY BINDING AGREEMENT',
+      'tos_last_updated': 'Last Updated: 16 August 2026 | Effective Date: 16 August 2026',
+      'tos_section_1_title': '1. ACCEPTANCE OF TERMS — LEGALLY BINDING AGREEMENT',
       'tos_section_1_body':
           '1.1 By downloading, installing, accessing, browsing, registering on, or using Soko Vibe ("the Platform") in any manner whatsoever, you acknowledge, represent, warrant, and agree that you have read, understood, and agree to be LEGALLY BOUND by these Terms of Service ("Terms", "Agreement"), whether or not you are a registered user.\n\n1.2 These Terms constitute a VALID, BINDING, AND ENFORCEABLE LEGAL CONTRACT between you ("User", "you", "your") and Soko Vibe ("we", "our", "us", "the Company", "the Platform").\n\n1.3 If you do not UNCONDITIONALLY agree to these Terms in their entirety, you MUST NOT access or use the Platform in any way, and you must immediately delete the application and any related materials in your possession.\n\n1.4 We reserve the ABSOLUTE AND UNILATERAL right to modify, amend, update, supplement, suspend, or terminate these Terms at any time, for any reason, with or without notice. Changes become EFFECTIVE IMMEDIATELY upon posting on the Platform.\n\n1.5 Your continued use of the Platform after any changes constitutes your UNQUALIFIED ACCEPTANCE of the modified Terms. If you do not agree with any modification, your SOLE AND EXCLUSIVE REMEDY is to immediately stop using the Platform and delete your account.\n\n1.6 It is your SOLE RESPONSIBILITY to review these Terms periodically. We recommend checking this page at least once per month. We may notify registered users of material changes via email or in-app notification, but failure to receive such notification shall not invalidate the changes or your acceptance thereof.\n\n1.7 These Terms may be published in multiple languages for convenience. In the event of any conflict or inconsistency between different language versions, the Kiswahili language version shall prevail and be binding.',
-      'tos_section_2_title':
-          '2. ELIGIBILITY, REGISTRATION, AND ACCOUNT REQUIREMENTS',
+      'tos_section_2_title': '2. ELIGIBILITY, REGISTRATION, AND ACCOUNT REQUIREMENTS',
       'tos_section_2_body':
           '2.1 AGE REQUIREMENT: You MUST be at least 18 (eighteen) years of age to use the Platform. By using the Platform, you represent and warrant under penalty of perjury that you are at least 18 years old.\n\n2.2 LEGAL CAPACITY: You must have the full legal capacity to enter into binding contracts. If you are using the Platform on behalf of a business or entity, you represent and warrant that you have the authority to bind that entity to these Terms.\n\n2.3 ACCURATE INFORMATION: You must provide accurate, current, and complete registration information. You agree to update your information promptly if it changes. Providing false or misleading information is a material breach of these Terms.\n\n2.4 SINGLE ACCOUNT ONLY: Each natural person or legal entity may maintain only ONE (1) account on the Platform. Creating, attempting to create, or maintaining multiple accounts is STRICTLY PROHIBITED and will result in the immediate and permanent suspension of all associated accounts and forfeiture of any balances or benefits.\n\n2.5 ACCOUNT SECURITY: You are SOLELY AND FULLY RESPONSIBLE for:\n  a) Maintaining the confidentiality of your password, login credentials, and authentication tokens.\n  b) All activities that occur under your account, whether authorized by you or not.\n  c) Immediately notifying us of any unauthorized use of your account or security breach.\n  d) Ensuring that you log out of your account at the end of each session, especially on shared devices.\n\n2.6 ACCOUNT SUSPENSION AND TERMINATION: We reserve the ABSOLUTE RIGHT to refuse registration, suspend, terminate, or restrict your account at our SOLE DISCRETION, without prior notice, liability, or obligation to provide reasons. Grounds for suspension or termination include but are not limited to:\n  a) Violation of any provision of these Terms.\n  b) Suspicion of fraudulent, abusive, or illegal activity.\n  c) Providing false, misleading, or incomplete information.\n  d) Multiple account creation.\n  e) Engaging in prohibited activities as defined in Section 4.\n  f) Receiving an excessive number of complaints or negative ratings.\n  g) Failure to complete KYC verification when required.\n  h) Any activity that, in our sole judgment, poses a risk to the Platform, its users, or our reputation.\n\n2.7 ACCOUNT DELETION: You may delete your account at any time through the Settings menu. Upon deletion, your account will be deactivated immediately and permanently deleted after a 90-day cooling-off period, subject to legal data retention requirements.\n\n2.8 KYC VERIFICATION: Users who wish to sell products on the Platform must submit to KYC (Know Your Customer) verification. KYC approval is at the SOLE DISCRETION of the Platform administrator. Without KYC approval, sellers may list a maximum of FIVE (5) products. Sellers may be required to undergo periodic re-verification.',
       'tos_section_3_title': '3. PLATFORM SERVICES — ROLE AND LIMITATIONS',
       'tos_section_3_body':
           '3.1 Soko Vibe provides a technology platform that connects:\n  a) Buyers and sellers of goods and services (Marketplace Services).\n  b) Users with AI-powered assistant features.\n  c) Users with communication, payment, and delivery facilitation tools.\n\n3.2 ROLE AS INTERMEDIARY: We act SOLELY as an intermediary/platform provider. We are NOT:\n  a) A party to any transaction between buyers and sellers.\n  b) An employer, principal, or joint venture partner of any seller or service provider.\n  c) A provider of delivery or logistics services.\n  d) A financial institution, bank, or payment service provider (except as an agent for payment processing).\n\n3.3 NO WARRANTY OF TRANSACTIONS: We make NO REPRESENTATIONS OR WARRANTIES regarding the quality, safety, legality, or suitability of any products, services, or transactions facilitated through the Platform. All transactions are AT YOUR OWN RISK.\n\n3.4 ESCROW SERVICES: We facilitate payments through third-party payment processors. When you complete a purchase, payments are held in escrow as a neutral third party until the buyer confirms safe receipt, in accordance with Section 6.3. We are not a bank and do not hold deposits or provide financial services.\n\n3.5 SERVICE MODIFICATION: We reserve the ABSOLUTE RIGHT to modify, suspend, restrict, or discontinue any aspect of the Services at any time, with or without notice, and without liability to you or any third party.\n\n3.6 SERVICE AVAILABILITY: We do not guarantee that the Platform will be available at all times, uninterrupted, error-free, or free from viruses or other harmful components. We may perform maintenance, updates, or upgrades at any time without notice.',
-      'tos_section_4_title':
-          '4. PROHIBITED ACTIVITIES — STRICT ZERO-TOLERANCE POLICY',
+      'tos_section_4_title': '4. PROHIBITED ACTIVITIES — STRICT ZERO-TOLERANCE POLICY',
       'tos_section_4_body':
           '4.1 The following activities are STRICTLY PROHIBITED on the Platform. Violation of any of these provisions constitutes a MATERIAL BREACH of these Terms and will result in IMMEDIATE AND PERMANENT ACCOUNT TERMINATION, forfeiture of any balances, and potentially referral to law enforcement authorities:\n\n4.2 ILLEGAL ACTIVITIES:\n  a) Using the Platform for any unlawful purpose or in violation of any applicable local, national, or international law.\n  b) Engaging in money laundering, terrorist financing, or any financial crime.\n  c) Listing, selling, or facilitating the sale of illegal items including but not limited to:\n     i) Illegal drugs, narcotics, and controlled substances.\n     ii) Weapons, firearms, ammunition, explosives, and weapon accessories.\n     iii) Counterfeit, replica, or pirated goods.\n     iv) Stolen property or items obtained through illegal means.\n     v) Hazardous, toxic, or dangerous materials.\n     vi) Human remains, body parts, or bodily fluids.\n     vii) Endangered species or products made from endangered species.\n     viii) Pornographic, obscene, or sexually explicit materials.\n     ix) Items that infringe intellectual property rights.\n     x) Any item whose sale is prohibited by Tanzanian law.\n\n4.3 FRAUDULENT AND DECEPTIVE ACTIVITIES:\n  a) Posting false, misleading, deceptive, or fraudulent listings, reviews, or content.\n  b) Misrepresenting the condition, authenticity, origin, or specifications of products.\n  c) Engaging in price manipulation, shill bidding, or fake transactions.\n  d) Creating fake accounts, fake reviews, or artificially inflating ratings.\n  e) Impersonating any person or entity, or falsely claiming affiliation.\n  f) Using stolen or fraudulent payment methods.\n  g) Chargeback fraud or disputing legitimate transactions without valid reason.\n\n4.4 ABUSIVE AND HARMFUL CONDUCT:\n  a) Harassing, abusing, threatening, stalking, intimidating, or bullying other users.\n  b) Posting hate speech, discriminatory content, or content that incites violence.\n  c) Sharing personal information of others without their explicit consent (doxxing).\n  d) Making false accusations, defamatory statements, or malicious reports.\n  e) Engaging in any form of discrimination based on race, ethnicity, gender, religion, age, disability, or sexual orientation.\n\n4.5 TECHNICAL VIOLATIONS:\n  a) Uploading malicious code, viruses, worms, Trojan horses, or any harmful software.\n  b) Attempting to hack, crack, bypass, or disable any security measures, encryption, or access controls.\n  c) Reverse engineering, decompiling, disassembling, or attempting to derive source code.\n  d) Using automated bots, scrapers, crawlers, spiders, or scripts to access the Platform without our express written permission.\n  e) Interfering with or disrupting the Platform\'s servers, networks, or operations.\n  f) Performing penetration testing or vulnerability scanning without prior written authorization.\n  g) Attempting to overwhelm the Platform through denial-of-service (DOS) or distributed denial-of-service (DDOS) attacks.\n\n4.6 MARKETPLACE VIOLATIONS:\n  a) Completing transactions outside the Platform to avoid fees (including exchanging contact information expressly for this purpose).\n  b) Manipulating search results, categories, or tags.\n  c) Listing products in incorrect categories.\n  d) Creating duplicate listings for the same product.\n  e) Listing services without proper licensing or qualifications where required.\n  f) Failing to fulfill orders after accepting payment.\n  g) Refusing to deliver products after receiving payment.\n  h) Demanding additional payment outside the Platform\'s payment system.\n\n4.7 PENALTIES FOR VIOLATION:\n  a) IMMEDIATE AND PERMANENT ACCOUNT SUSPENSION.\n  b) FORFEITURE of any pending payments, wallet balances, or benefits.\n  c) REFERRAL to law enforcement authorities for criminal prosecution.\n  d) CIVIL LIABILITY for all damages, costs, and expenses incurred by us or affected parties.\n  e) PERMANENT BAN from using the Platform or any associated services.\n  f) PUBLICATION of the violation (without personal data) as a deterrent to others.\n\n4.8 There is NO WARNING SYSTEM for prohibited activities. Violation results in immediate action without prior notice.',
       'tos_section_5_title': '5. LISTING AND SELLING — STRICT REQUIREMENTS',
@@ -4709,12 +4543,10 @@ class LocalizationService {
       'tos_section_10_title': '10. INTELLECTUAL PROPERTY RIGHTS',
       'tos_section_10_body':
           '10.1 PLATFORM OWNERSHIP:\n  a) The Platform, including its design, code, graphics, logos, trademarks, trade dress, user interface, algorithms, databases, and all content not provided by users, is the SOLE AND EXCLUSIVE PROPERTY of Soko Vibe.\n  b) All intellectual property rights are protected by Tanzanian and international copyright, trademark, patent, and trade secret laws.\n  c) No license or right to any intellectual property is granted to you except as expressly stated herein.\n\n10.2 USER CONTENT LICENSE:\n  a) You retain ownership of content you post.\n  b) By posting content, you grant Soko Vibe a NON-EXCLUSIVE, WORLDWIDE, ROYALTY-FREE, PERPETUAL, IRREVOCABLE, SUB-LICENSABLE, AND TRANSFERABLE license to use, reproduce, modify, adapt, publish, display, distribute, and create derivative works of your content on the Platform and in connection with our business.\n  c) This license survives termination of your account for the purpose of maintaining Platform integrity and historical data.\n\n10.3 REPRESENTATIONS AND WARRANTIES:\n  a) You represent and warrant that you own all content you post, or have all necessary rights, licenses, and permissions to post it.\n  b) You represent and warrant that your content does not infringe any third-party intellectual property rights.\n  c) You agree to indemnify us for any claims arising from your content.\n\n10.4 COPYRIGHT INFRINGEMENT:\n  a) We respect intellectual property rights and expect users to do the same.\n  b) We will respond to clear notices of alleged copyright infringement.\n  c) Repeat infringers may have their accounts terminated.\n  d) To report infringement, contact us with full details of the allegedly infringing content.\n\n10.5 RESTRICTIONS: You may not copy, modify, distribute, sell, lease, reverse engineer, decompile, disassemble, or create derivative works of any part of the Platform without our express written permission.',
-      'tos_section_11_title':
-          '11. LIMITATION OF LIABILITY — COMPREHENSIVE DISCLAIMER',
+      'tos_section_11_title': '11. LIMITATION OF LIABILITY — COMPREHENSIVE DISCLAIMER',
       'tos_section_11_body':
           '11.1 THE PLATFORM AND ALL SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT ANY WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, TITLE, OR COURSE OF PERFORMANCE.\n\n11.2 WE MAKE NO WARRANTY THAT:\n  a) The Platform will meet your requirements or expectations.\n  b) The Platform will be uninterrupted, timely, secure, or error-free.\n  c) The results obtained from using the Platform will be accurate or reliable.\n  d) The quality of any products, services, information, or other material purchased or obtained through the Platform will meet your expectations.\n  e) Any errors in the Platform will be corrected.\n\n11.3 TO THE MAXIMUM EXTENT PERMITTED BY LAW, SOKO VIBE, ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, AFFILIATES, SUCCESSORS, AND ASSIGNS SHALL NOT BE LIABLE FOR ANY:\n  a) Indirect, incidental, special, consequential, exemplary, or punitive damages.\n  b) Loss of profits, revenue, business opportunities, goodwill, or anticipated savings.\n  c) Loss of data, content, or information.\n  d) Loss of privacy or security.\n  e) Personal injury or property damage.\n  f) Damages resulting from transactions between users.\n  g) Damages resulting from acts of God, natural disasters, war, terrorism, or force majeure events.\n\n11.4 OUR TOTAL CUMULATIVE LIABILITY TO YOU FOR ANY CLAIM ARISING FROM THESE TERMS OR YOUR USE OF THE PLATFORM SHALL NOT EXCEED THE TOTAL AMOUNT OF FEES PAID BY YOU TO US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR ONE HUNDRED THOUSAND TANZANIAN SHILLINGS (TZS 100,000), WHICHEVER IS GREATER.\n\n11.5 THIS LIMITATION OF LIABILITY APPLIES WHETHER THE CLAIM IS BASED ON CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY, PRODUCT LIABILITY, OR ANY OTHER LEGAL THEORY, AND EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.\n\n11.6 SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OF CERTAIN WARRANTIES OR THE LIMITATION OF CERTAIN DAMAGES. IF YOU RESIDE IN SUCH A JURISDICTION, SOME OF THESE LIMITATIONS MAY NOT APPLY TO YOU TO THE EXTENT PROHIBITED BY LAW.\n\n11.7 THE DISCLAIMERS AND LIMITATIONS IN THIS SECTION ARE FUNDAMENTAL TERMS OF THIS AGREEMENT AND THE PLATFORM WOULD NOT BE PROVIDED WITHOUT SUCH DISCLAIMERS AND LIMITATIONS.',
-      'tos_section_12_title':
-          '12. INDEMNIFICATION — YOUR OBLIGATION TO PROTECT US',
+      'tos_section_12_title': '12. INDEMNIFICATION — YOUR OBLIGATION TO PROTECT US',
       'tos_section_12_body':
           '12.1 You agree to INDEMNIFY, DEFEND, AND HOLD HARMLESS Soko Vibe, its affiliates, subsidiaries, parents, officers, directors, employees, agents, contractors, licensors, service providers, successors, and assigns from and against ANY AND ALL claims, liabilities, damages, losses, costs, expenses, and fees (including but not limited to reasonable attorneys\' fees, court costs, settlement amounts, and expert witness fees) arising from or related to:\n\n  a) Your use of or access to the Platform.\n  b) Your violation of any provision of these Terms.\n  c) Your violation of any third-party rights, including but not limited to intellectual property rights, privacy rights, or contractual rights.\n  d) Your posted content, listings, reviews, or communications.\n  e) Any transaction you enter into through the Platform.\n  f) Your violation of any applicable law, regulation, or ordinance.\n  h) Your negligence, fraud, willful misconduct, or intentional acts.\n  i) Any dispute between you and another user.\n\n12.2 We reserve the right, at YOUR EXPENSE, to assume the exclusive defense and control of any matter subject to indemnification. You agree to cooperate with our defense of such claims.\n\n12.3 This indemnification obligation survives termination of your account and these Terms.',
       'tos_section_13_title': '13. TERMINATION AND SUSPENSION',
@@ -4735,14 +4567,12 @@ class LocalizationService {
       'tos_section_chat_body':
           '3A.1 Chat Services: The Platform provides an internal messaging system for communication between buyers and sellers. By using the chat service, you agree that:\n  a) All communications within the Platform are PRIVATE and CONFIDENTIAL between you and the other party. Soko Vibe does not read, monitor, or disclose these communications except:\n     i) When required by law, court order, or legal process.\n     ii) When we reasonably believe communications involve fraud, threats, profanity, or unlawful activity.\n     iii) When necessary to resolve disputes between users.\n  b) You MUST use respectful language and treat other users with dignity.\n  c) Sending abusive messages, threats, harassment, or discriminatory content is STRICTLY PROHIBITED.\n  d) Sending sexually explicit, violent, or disturbing content is STRICTLY PROHIBITED.\n  e) Sending phishing links, false advertisements, or harmful content is STRICTLY PROHIBITED.\n  f) Sharing other users\' personal information without their consent is STRICTLY PROHIBITED.\n  g) All chat messages are retained for the duration of your account plus 90 days after account deletion.\n  h) Soko Vibe assumes no liability for the truthfulness of information exchanged between users through chat.\n  i) You bear full responsibility for your words and actions within the messaging system.',
 
-      'tos_section_withhold_title':
-          '17. RIGHT TO WITHHOLD, DETAIN, AND FORFEIT FUNDS',
+      'tos_section_withhold_title': '17. RIGHT TO WITHHOLD, DETAIN, AND FORFEIT FUNDS',
       'tos_section_withhold_body':
           '17.1 RIGHT TO WITHHOLD FUNDS: Soko Vibe reserves the COMPLETE and IMMEDIATE right to:\n  a) Seize, detain, or withhold any funds in a user\'s wallet.\n  b) Prevent withdrawal of funds from escrow or wallet.\n  c) Forfeit all funds in a user\'s account.\n  This applies when a user is found to have:\n  i) Committed fraud, deception, or unlawful activity through the Platform.\n  ii) Sold prohibited, counterfeit, or banned products.\n  iii) Damaged the Platform\'s systems, servers, or infrastructure.\n  iv) Grossly violated the Terms of Service.\n  v) Engaged in repeated profanity, abuse, or offensive conduct under the 3-strike policy.\n\n17.2 RIGHT TO FORFEIT PROFANITY FUNDS: As described in Section 4.6, a user whose account is terminated for profanity, offensive language, or repeated harassment will have ALL funds in their wallet and escrow FORFEITED and become PLATFORM PROPERTY as a Penalty Fee for Breach of Contract.\n\n17.3 DISPUTE PROCESS: A user has the right to submit complaints regarding fund withholding or forfeiture decisions within 30 days. Complaints will be reviewed by our dispute resolution team within 14 days. After that, the decision is FINAL.\n\n17.4 APPLICABLE LAW: The right to withhold and forfeit funds is exercised in accordance with the laws of the United Republic of Tanzania, including the Contract Law Act and consumer protection legislation. Any court ruling overturning a fund withholding decision shall be executed immediately.\n\n17.5 ENFORCEMENT: Violation of this clause by any user may result in:\n  a) Filing legal claims in court.\n  b) Reporting to relevant government authorities.\n  c) Taking all available legal action to protect Soko Vibe\'s rights.',
 
       'pp_title': 'SOKO VIBE PRIVACY POLICY',
-      'pp_last_updated':
-          'Last Updated: 29 July 2026 | Effective Date: 29 July 2026',
+      'pp_last_updated': 'Last Updated: 29 July 2026 | Effective Date: 29 July 2026',
       'pp_section_1_title': '1. INTRODUCTION AND SCOPE',
       'pp_section_1_body':
           '1.1 This Privacy Policy ("Policy") constitutes a legally binding agreement between you ("User", "you", "your", "Data Subject") and Soko Vibe ("we", "our", "us", "the Company", "the Platform"), a company duly registered and operating under the laws of the United Republic of Tanzania.\n\n1.2 This Policy governs the collection, use, storage, processing, transfer, disclosure, and protection of your personal data when you access, register on, or use the Soko Vibe mobile application, website, or any related services, features, content, or applications (collectively, the "Services").\n\n1.3 By accessing or using our Services in any manner whatsoever, you explicitly acknowledge that you have read, understood, and freely consent to all terms of this Policy. If you do not agree with any provision of this Policy, you must IMMEDIATELY cease using our Services and delete your account.\n\n1.4 This Policy is supplementary to and should be read in conjunction with our Terms of Service. In the event of any conflict between this Policy and the Terms of Service, the Terms of Service shall prevail unless this Policy provides greater protection for your personal data.\n\n1.5 We reserve the absolute right to modify, amend, update, or replace this Policy at any time without prior notice. Any modifications shall become effective IMMEDIATELY upon posting on the Platform. Your continued use of the Services after any modification constitutes your UNCONDITIONAL acceptance of the modified Policy.\n\n1.6 It is your SOLE RESPONSIBILITY to review this Policy periodically. We strongly recommend that you check this page regularly for any changes. We will notify registered users of MATERIAL changes via email or in-app notification, but failure to receive such notification shall not invalidate the changes.\n\n1.7 This Policy applies to all users of the Platform, including but not limited to buyers, sellers, and visitors who browse the Platform without registering.',
@@ -4758,8 +4588,7 @@ class LocalizationService {
       'pp_section_5_title': '5. PURPOSES AND LEGAL BASIS FOR PROCESSING',
       'pp_section_5_body':
           '5.1 We process your personal data for the following purposes, based on the following legal bases:\n\n5.2 CONTRACTUAL NECESSITY:\n  a) To create and maintain your account on the Platform.\n  b) To facilitate transactions between buyers and sellers.\n  c) To process payments, escrow services, and payouts.\n  d) To provide customer support and dispute resolution.\n  e) To deliver products, services, and digital content.\n\n5.3 LEGAL COMPLIANCE:\n  a) To comply with the Tanzania Data Protection Act, 2022.\n  b) To comply with the Tanzania Anti-Money Laundering Act.\n  c) To comply with the Tanzania Electronic Transactions Act.\n  d) To comply with tax reporting obligations to the Tanzania Revenue Authority (TRA).\n  e) To comply with court orders, legal process, or governmental requests.\n  f) To enforce our Terms of Service and this Privacy Policy.\n  g) To prevent, detect, and investigate fraud, money laundering, and other illegal activities.\n\n5.4 LEGITIMATE INTERESTS:\n  a) To improve, optimize, and personalize the Platform and Services.\n  b) To analyze user behavior and trends to enhance user experience.\n  c) To develop new features, products, and services.\n  d) To ensure the security and integrity of the Platform.\n  e) To send administrative messages, security alerts, and service updates.\n  f) To generate aggregated, anonymized analytics and reports.\n  g) To conduct market research and business planning.\n\n5.5 CONSENT:\n  a) To send marketing and promotional communications (withdrawable at any time).\n  b) To collect precise location data for non-essential features.\n  c) To use your data for profiling and personalization.\n  d) To share your data with selected third-party partners for their own purposes.\n  e) To process sensitive personal data where explicit consent is required.',
-      'pp_section_6_title':
-          '6. DATA SHARING AND DISCLOSURE — STRICT CONDITIONS',
+      'pp_section_6_title': '6. DATA SHARING AND DISCLOSURE — STRICT CONDITIONS',
       'pp_section_6_body':
           '6.1 GENERAL PRINCIPLE: We DO NOT and WILL NOT sell your personal information to any third party under any circumstances. Any violation of this principle by any employee, contractor, or agent will result in immediate termination and legal action.\n\n6.2 WE MAY SHARE YOUR INFORMATION WITH THE FOLLOWING CATEGORIES OF RECIPIENTS, SUBJECT TO STRICT CONTRACTUAL OBLIGATIONS:\n  a) OTHER USERS: As necessary to facilitate transactions and communications between users, including:\n     i) Sharing your name, photo, and rating with potential transaction partners.\n     ii) Sharing your delivery address with sellers and delivery partners.\n     iii) Sharing your phone number with transaction parties after a confirmed transaction.\n\n  b) SERVICE PROVIDERS AND DATA PROCESSORS (all bound by Data Processing Agreements):\n     i) Cloud infrastructure providers (Google Cloud Platform, Firebase).\n     ii) Payment processors (ClickPesa, mobile money operators, banks).\n     iii) Identity verification services.\n     iv) Push notification services (OneSignal).\n     v) SMS gateway providers (Meseji, Twilio-type services).\n     vi) Image and video hosting services (Cloudinary).\n     vii) Mapping and location services (OpenStreetMap).\n     viii) Analytics and crash reporting services.\n     ix) Email delivery services.\n     x) Customer support platforms.\n\n  c) LAW ENFORCEMENT AND REGULATORY AUTHORITIES:\n     i) When required by applicable law, court order, or legal process.\n     ii) When we believe in good faith that disclosure is necessary to protect our rights, your safety, or the safety of others.\n     iii) To investigate, prevent, or take action regarding suspected illegal activities, fraud, or violations of our Terms.\n     iv) To comply with a valid warrant, subpoena, or other legally binding request.\n\n  d) BUSINESS TRANSFEREES:\n     i) In the event of a merger, acquisition, reorganization, bankruptcy, or sale of all or substantially all of our assets.\n     ii) The acquiring entity will be bound by this Policy and may not use your data in a manner materially different from what is described herein.\n     iii) You will be notified via email and in-app notification of any such transfer at least 30 days in advance.\n\n6.3 INTERNATIONAL DATA TRANSFERS:\n  a) Your data may be transferred to and processed in countries outside Tanzania where our service providers operate.\n  b) We ensure that appropriate safeguards are in place, including:\n     i) Standard Contractual Clauses (SCCs) adopted by relevant data protection authorities.\n     ii) Binding Corporate Rules (BCRs) where applicable.\n     iii) Verification that the recipient country has adequate data protection laws.\n  c) You explicitly consent to such international transfers by using our Services.\n\n6.4 WE WILL NEVER:\n  a) Sell your personal information to any third party.\n  b) Rent or lease your personal information.\n  c) Share your sensitive personal data without your explicit consent.\n  d) Use your data for purposes incompatible with those disclosed in this Policy without obtaining your consent.',
       'pp_section_7_title': '7. DATA RETENTION AND DELETION POLICY',
@@ -4832,8 +4661,7 @@ class LocalizationService {
       'all_orders': 'All Orders',
       'track_order': 'Track Order',
       'last_updated': 'Updated',
-      'escrow_secure_note':
-          'Your money is safely held in escrow until you confirm receipt',
+      'escrow_secure_note': 'Your money is safely held in escrow until you confirm receipt',
       'live_updates': 'Live updates',
       'awaiting_quotes': 'Awaiting Quotes',
       'needs_action': 'Needs Action',
@@ -4861,8 +4689,7 @@ class LocalizationService {
       'map_location': 'Location',
       'map_you': 'You',
       'my_location': 'My location',
-      'maintenance_underway':
-          'The app is under maintenance. Please come back later.',
+      'maintenance_underway': 'The app is under maintenance. Please come back later.',
       'order_bus': 'Bus',
       'order_plate': 'Plate',
       'order_tracking': 'Tracking',
@@ -4881,8 +4708,7 @@ class LocalizationService {
       'ussd_push_charge_note': 'Charged to the customer on top of MNO fees.',
       'clickpesa_payout_fees': 'ClickPesa Payout Fees',
       'mobile_money_payouts': 'Mobile Money Payouts (M-Pesa, Airtel, Tigo)',
-      'payout_charge_note':
-          'Charged to the business. Can be passed to the recipient.',
+      'payout_charge_note': 'Charged to the business. Can be passed to the recipient.',
       'bank_eft_ach': 'Bank EFT / ACH',
       'bank_eft_ach_flat_fee': 'Flat fee (0 – 20,000,000 TZS)',
       'bank_tiss': 'Bank TISS (TZS)',
@@ -4967,8 +4793,7 @@ class LocalizationService {
           'Failed to upload your selfie. Check your connection and try again.',
       'change_password': 'Change Password',
       'account_selection_subtitle': 'Look for yourself',
-      'transaction_fee_breakdown':
-          'Fee: -TZS {fee} | Soko Vibe: -TZS {commission}',
+      'transaction_fee_breakdown': 'Fee: -TZS {fee} | Soko Vibe: -TZS {commission}',
       'withdrawal_fee_detail': 'Fee: TZS {fee} | {date}',
       'withdrawal_failed_detail': 'Failed: {reason}',
       'admin_note_label': 'Admin: {note}',
@@ -4984,8 +4809,7 @@ class LocalizationService {
       'activate': 'Activate',
       'ad': 'Ad',
       'ad_required': 'An ad is required to continue',
-      'ai_chat_greeting':
-          "Hi! I'm the Soko Vibe assistant. Ask me anything about our marketplace.",
+      'ai_chat_greeting': "Hi! I'm the Soko Vibe assistant. Ask me anything about our marketplace.",
       'bidhaa_ina_flash_sale': 'This product already has an active flash sale',
       'broadcast_confirm_body':
           'Send this notification to ALL app users?\n\nTitle: {title}\n\nMessage: {body}',
@@ -4998,12 +4822,10 @@ class LocalizationService {
       'confirm_receipt': 'Confirm Receipt',
       'contact_us': 'Contact Us',
       'contact_us_sub': 'Call us or send an email',
-      'otp_security_warning':
-          'DO NOT SHARE THIS OTP UNTIL YOU RECEIVE & INSPECT YOUR ITEM.',
+      'otp_security_warning': 'DO NOT SHARE THIS OTP UNTIL YOU RECEIVE & INSPECT YOUR ITEM.',
       'delivery_otp_label': 'Delivery Verification Code',
       'otp_waiting': 'Waiting for seller to send the code...',
-      'share_otp_with_seller':
-          'Share this code with the seller to confirm delivery',
+      'share_otp_with_seller': 'Share this code with the seller to confirm delivery',
       'otp_copied': 'OTP copied',
       'enter_buyer_otp': 'Enter the verification code from the buyer',
       'otp_attempts_remaining': 'Attempts remaining: {0}',
@@ -5023,8 +4845,7 @@ class LocalizationService {
       'delete_orders_title': 'Delete Orders?',
       'delete_selected': 'Delete Selected',
       'deleting_label': 'Deleting...',
-      'delivery_confirmed_msg':
-          'Delivery confirmed. Thank you for shopping with Soko Vibe!',
+      'delivery_confirmed_msg': 'Delivery confirmed. Thank you for shopping with Soko Vibe!',
       'deselect_all': 'Deselect All',
       'discovery': 'Discovery',
       'dismiss': 'Dismiss',
@@ -5088,8 +4909,7 @@ class LocalizationService {
       'resolved': 'Resolved',
       'review_hint': 'Write a short review (optional)...',
       'revoke_kyc': 'Revoke KYC',
-      'revoke_kyc_confirm':
-          'Are you sure you want to revoke this KYC approval?',
+      'revoke_kyc_confirm': 'Are you sure you want to revoke this KYC approval?',
       'search_products_users_hint': 'Search products or users',
       'search_users': 'Search users...',
       'select': 'Select',
@@ -5157,7 +4977,8 @@ class LocalizationService {
       'max_5_images': 'Max 5 photos',
       'media_received': 'Media received — ready to sell on Soko Vibe',
       'media_received_banner': 'Media received — sell on Soko Vibe',
-      'sell_on_soko_hint': 'Fill in the product details then publish — the photo/video is already attached.',
+      'sell_on_soko_hint':
+          'Fill in the product details then publish — the photo/video is already attached.',
       'choose_gallery': 'Choose from gallery',
       'product_video': 'Product video (optional)',
       'add_video': 'Add video (max 1)',
@@ -5172,11 +4993,14 @@ class LocalizationService {
       'product_hidden': 'Product hidden',
       'product_hidden_until': 'Product temporarily hidden',
       'product_unhidden': 'Product is visible again',
-      'otp_ready_msg': 'The verification code is ready — send it to the seller to complete delivery.',
+      'otp_ready_msg':
+          'The verification code is ready — send it to the seller to complete delivery.',
       'dispatch_details': 'Delivery details',
       'view_address': 'Delivery location',
-      'escrow_funds_held': 'The buyer\'s payment is held in escrow. Deliver the product to get your money.',
-      'arrival_confirmed_msg': 'The parcel has arrived. The inspection window is open — confirm the handover within 30 seconds.',
+      'escrow_funds_held':
+          'The buyer\'s payment is held in escrow. Deliver the product to get your money.',
+      'arrival_confirmed_msg':
+          'The parcel has arrived. The inspection window is open — confirm the handover within 30 seconds.',
       'verdict_review_required': 'Verdict requires review',
       'flash_sale_price': 'Flash sale price',
       'change_profile_picture': 'Change profile picture',
@@ -5221,8 +5045,7 @@ class LocalizationService {
       'artwork_pack_remaining': '{0} left',
       'artwork_pack_files': 'Picha {0}',
       'artwork_pack_photos_count': 'Idi ya picha',
-      'artwork_pack_wifi_note':
-          'This may use your mobile data. Download over Wi-Fi to save data.',
+      'artwork_pack_wifi_note': 'This may use your mobile data. Download over Wi-Fi to save data.',
       'artwork_pack_only_wifi': 'Download over Wi-Fi only',
       'artwork_pack_update_available': 'New photos are available',
       'artwork_pack_update_body':
@@ -5232,8 +5055,7 @@ class LocalizationService {
       'artwork_pack_installed_body':
           'You are using the downloaded photos. No additional data needed.',
       'artwork_pack_manage': 'Category photos',
-      'artwork_pack_manage_body':
-          'Download, update, or remove your downloaded category photos.',
+      'artwork_pack_manage_body': 'Download, update, or remove your downloaded category photos.',
       'artwork_pack_freespace': 'Free up space',
       'artwork_pack_storage_used': 'Space used',
       'artwork_pack_offline_mode': 'No download space available',
@@ -5275,11 +5097,7 @@ class LocalizationService {
   /// [humanizeKey] because a caller-supplied sentence reads better than a key
   /// guessed back into English — and because most keys missing from the maps
   /// are new copy whose fallback was written alongside the call site.
-  static String translate(
-    String key,
-    String languageCode, {
-    String? fallback,
-  }) {
+  static String translate(String key, String languageCode, {String? fallback}) {
     final localized = translations[languageCode]?[key];
     if (localized != null && localized.isNotEmpty) return localized;
     final english = translations['en']?[key];
@@ -5288,11 +5106,7 @@ class LocalizationService {
     return humanizeKey(key);
   }
 
-  static String trParams(
-    String key,
-    String languageCode,
-    Map<String, String> params,
-  ) {
+  static String trParams(String key, String languageCode, Map<String, String> params) {
     String text = translate(key, languageCode);
     for (final entry in params.entries) {
       text = text.replaceAll('{${entry.key}}', entry.value);

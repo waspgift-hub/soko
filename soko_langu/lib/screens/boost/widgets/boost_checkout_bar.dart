@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../extensions/context_tr.dart';
 import '../../../theme/app_colors.dart';
@@ -58,28 +58,21 @@ class BoostCheckoutBar extends StatelessWidget {
                           Container(
                             width: 7,
                             height: 7,
-                            decoration: BoxDecoration(
-                              color: tier.accent,
-                              shape: BoxShape.circle,
-                            ),
+                            decoration: BoxDecoration(color: tier.accent, shape: BoxShape.circle),
                           ),
                           const SizedBox(width: 5),
                           Text(
                             '${context.tr('boost_tier_${tier.key}').toUpperCase()}  ·  ${context.trParams('boost_days', {'count': '${tier.days}'})}',
-                            style: AppTypography.statusChip(
-                              scheme.onSurfaceVariant,
-                            ),
+                            style: AppTypography.statusChip(scheme.onSurfaceVariant),
                           ),
                         ],
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        context.formatPriceInt(
-                          tier.price,
-                          currencyOverride: 'TZS',
-                        ),
-                        style: AppTypography.amount(scheme.onSurface)
-                            .copyWith(fontSize: 21, fontWeight: FontWeight.w700),
+                        context.formatPriceInt(tier.price, currencyOverride: 'TZS'),
+                        style: AppTypography.amount(
+                          scheme.onSurface,
+                        ).copyWith(fontSize: 21, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -100,18 +93,11 @@ class BoostCheckoutBar extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.lock_rounded,
-                    size: 12,
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  Icon(Icons.lock_rounded, size: 12, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 5),
                   Text(
                     context.tr('boost_secure_note'),
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
                   ),
                 ],
               ),

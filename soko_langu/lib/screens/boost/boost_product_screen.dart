@@ -72,8 +72,7 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
     super.dispose();
   }
 
-  bool get _phoneValid =>
-      _phoneCtrl.text.replaceAll(RegExp(r'\D'), '').length >= 9;
+  bool get _phoneValid => _phoneCtrl.text.replaceAll(RegExp(r'\D'), '').length >= 9;
 
   String? get _phoneError =>
       _phoneAttempted && !_phoneValid ? context.tr('boost_phone_invalid') : null;
@@ -106,10 +105,7 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ProductPicker(
-        products: _mine,
-        selectedId: _product?.id,
-      ),
+      builder: (context) => _ProductPicker(products: _mine, selectedId: _product?.id),
     );
     if (picked != null && mounted) setState(() => _product = picked);
   }
@@ -177,12 +173,7 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
     unawaited(
       Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute<void>(
-          builder: (_) => BoostProgressOverlay(
-            tier: _tier,
-            methodLabel: _method == BoostPayMethod.billpay
-                ? context.tr('boost_pay_billpay')
-                : context.tr('boost_pay_ussd'),
-          ),
+          builder: (_) => BoostProgressOverlay(tier: _tier),
           fullscreenDialog: true,
         ),
       ),
@@ -198,10 +189,7 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
   Future<void> _showSuccess(Product product) async {
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
-        builder: (_) => BoostSuccessOverlay(
-          productName: product.name,
-          tier: _tier,
-        ),
+        builder: (_) => BoostSuccessOverlay(productName: product.name, tier: _tier),
         fullscreenDialog: true,
       ),
     );
@@ -269,73 +257,65 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.tr('boost_screen_title')),
-        centerTitle: false,
-      ),
+      appBar: AppBar(title: Text(context.tr('boost_screen_title')), centerTitle: false),
       body: SafeArea(
         bottom: false,
         child: _loadingProducts
             ? const Center(child: DsLoadingDots())
             : _product == null
-                ? const _NoProducts()
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.s4,
-                      AppSpacing.s2,
-                      AppSpacing.s4,
-                      AppSpacing.s8,
-                    ),
-                    children: [
-                      BoostHeroPanel(
-                        product: _product,
-                        canSwitchProduct: _mine.length > 1,
-                        onTapProduct: _pickProduct,
-                      ),
-                      const SizedBox(height: AppSpacing.s6),
-                      _SectionLabel(
-                        title: context.tr('boost_section_why'),
-                        caption: context.tr('boost_section_why_caption'),
-                      ),
-                      const SizedBox(height: AppSpacing.s3),
-                      const BoostValuePropGrid(),
-                      const SizedBox(height: AppSpacing.s7),
-                      _SectionLabel(
-                        title: context.tr('boost_section_package'),
-                        caption: context.tr('boost_package_note'),
-                      ),
-                      const SizedBox(height: AppSpacing.s3),
-                      for (final tier in BoostTier.all)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.s3),
-                          child: BoostTierCard(
-                            tier: tier,
-                            selected: tier.key == _tier.key,
-                            onTap: () => setState(() => _tier = tier),
-                          ),
-                        ),
-                      const SizedBox(height: AppSpacing.s2),
-                      BoostReachPanel(tier: _tier),
-                      const SizedBox(height: AppSpacing.s7),
-                      BoostPaymentSection(
-                        phoneController: _phoneCtrl,
-                        method: _method,
-                        provider: _provider,
-                        phoneError: _phoneError,
-                        onMethodChanged: (m) => setState(() => _method = m),
-                        onProviderChanged: (p) => setState(() => _provider = p),
-                      ),
-                    ],
+            ? const _NoProducts()
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.s4,
+                  AppSpacing.s2,
+                  AppSpacing.s4,
+                  AppSpacing.s8,
+                ),
+                children: [
+                  BoostHeroPanel(
+                    product: _product,
+                    canSwitchProduct: _mine.length > 1,
+                    onTapProduct: _pickProduct,
                   ),
+                  const SizedBox(height: AppSpacing.s6),
+                  _SectionLabel(
+                    title: context.tr('boost_section_why'),
+                    caption: context.tr('boost_section_why_caption'),
+                  ),
+                  const SizedBox(height: AppSpacing.s3),
+                  const BoostValuePropGrid(),
+                  const SizedBox(height: AppSpacing.s7),
+                  _SectionLabel(
+                    title: context.tr('boost_section_package'),
+                    caption: context.tr('boost_package_note'),
+                  ),
+                  const SizedBox(height: AppSpacing.s3),
+                  for (final tier in BoostTier.all)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                      child: BoostTierCard(
+                        tier: tier,
+                        selected: tier.key == _tier.key,
+                        onTap: () => setState(() => _tier = tier),
+                      ),
+                    ),
+                  const SizedBox(height: AppSpacing.s2),
+                  BoostReachPanel(tier: _tier),
+                  const SizedBox(height: AppSpacing.s7),
+                  BoostPaymentSection(
+                    phoneController: _phoneCtrl,
+                    method: _method,
+                    provider: _provider,
+                    phoneError: _phoneError,
+                    onMethodChanged: (m) => setState(() => _method = m),
+                    onProviderChanged: (p) => setState(() => _provider = p),
+                  ),
+                ],
+              ),
       ),
       bottomNavigationBar: _product == null
           ? null
-          : BoostCheckoutBar(
-              tier: _tier,
-              paying: _paying,
-              enabled: !_loadingProducts,
-              onPay: _pay,
-            ),
+          : BoostCheckoutBar(tier: _tier, paying: _paying, enabled: !_loadingProducts, onPay: _pay),
     );
   }
 }
@@ -362,14 +342,7 @@ class _SectionLabel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        Text(
-          caption,
-          style: TextStyle(
-            color: scheme.onSurfaceVariant,
-            fontSize: 12,
-            height: 1.4,
-          ),
-        ),
+        Text(caption, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12, height: 1.4)),
       ],
     );
   }
@@ -393,9 +366,7 @@ class _ProductPicker extends StatelessWidget {
       builder: (context, scrollCtrl) => Container(
         decoration: BoxDecoration(
           color: scheme.surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius2.xxl),
-          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius2.xxl)),
         ),
         child: Column(
           children: [
@@ -428,13 +399,8 @@ class _ProductPicker extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    context.trParams('boost_products_owned', {
-                      'count': '${products.length}',
-                    }),
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 12,
-                    ),
+                    context.trParams('boost_products_owned', {'count': '${products.length}'}),
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
                   ),
                 ],
               ),
@@ -473,16 +439,10 @@ class _ProductPicker extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      context.formatPriceInt(
-                        p.price.toInt(),
-                        currencyOverride: 'TZS',
-                      ),
+                      context.formatPriceInt(p.price.toInt(), currencyOverride: 'TZS'),
                     ),
                     trailing: selected
-                        ? Icon(
-                            Icons.check_circle_rounded,
-                            color: scheme.primary,
-                          )
+                        ? Icon(Icons.check_circle_rounded, color: scheme.primary)
                         : null,
                     onTap: () => Navigator.pop(context, p),
                   );
@@ -515,29 +475,18 @@ class _NoProducts extends StatelessWidget {
                 color: scheme.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.inventory_2_outlined,
-                size: 40,
-                color: scheme.primary,
-              ),
+              child: Icon(Icons.inventory_2_outlined, size: 40, color: scheme.primary),
             ),
             const SizedBox(height: AppSpacing.s4),
             Text(
               context.tr('boost_no_products_title'),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: scheme.onSurface,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: scheme.onSurface),
             ),
             const SizedBox(height: AppSpacing.s2),
             Text(
               context.tr('boost_no_products'),
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: scheme.onSurfaceVariant,
-                height: 1.45,
-              ),
+              style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
             ),
             const SizedBox(height: AppSpacing.s5),
             DsButton(

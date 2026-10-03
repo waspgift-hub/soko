@@ -17,13 +17,8 @@ import '../boost_tiers.dart';
 /// double charges happen.
 class BoostProgressOverlay extends StatefulWidget {
   final BoostTier tier;
-  final String methodLabel;
 
-  const BoostProgressOverlay({
-    super.key,
-    required this.tier,
-    required this.methodLabel,
-  });
+  const BoostProgressOverlay({super.key, required this.tier});
 
   @override
   State<BoostProgressOverlay> createState() => _BoostProgressOverlayState();
@@ -34,18 +29,13 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
   late final AnimationController _pulse;
   int _step = 0;
 
-  static const List<Duration> _stepDelays = [
-    Duration(milliseconds: 900),
-    Duration(seconds: 5),
-  ];
+  static const List<Duration> _stepDelays = [Duration(milliseconds: 900), Duration(seconds: 5)];
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat(reverse: true);
 
     for (final delay in _stepDelays) {
       Future.delayed(delay, () {
@@ -88,9 +78,7 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
                       height: 108 + _pulse.value * 14,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: tierColor.withValues(
-                          alpha: 0.10 + _pulse.value * 0.10,
-                        ),
+                        color: tierColor.withValues(alpha: 0.10 + _pulse.value * 0.10),
                       ),
                       child: Center(
                         child: Container(
@@ -99,16 +87,9 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: tierColor.withValues(alpha: 0.16),
-                            border: Border.all(
-                              color: tierColor.withValues(alpha: 0.5),
-                              width: 1.5,
-                            ),
+                            border: Border.all(color: tierColor.withValues(alpha: 0.5), width: 1.5),
                           ),
-                          child: Icon(
-                            Icons.sms_rounded,
-                            size: 36,
-                            color: tierColor,
-                          ),
+                          child: Icon(Icons.sms_rounded, size: 36, color: tierColor),
                         ),
                       ),
                     ),
@@ -118,26 +99,12 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
                 Text(
                   context.tr('boost_processing'),
                   textAlign: TextAlign.center,
-                  style: AppTypography.screenTitle(Colors.white)
-                      .copyWith(fontSize: 22),
-                ),
-                const SizedBox(height: AppSpacing.s2),
-                Text(
-                  widget.methodLabel,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: tierColor.withValues(alpha: 0.85),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTypography.screenTitle(Colors.white).copyWith(fontSize: 22),
                 ),
                 const SizedBox(height: AppSpacing.s2),
                 Text(
                   context.trParams('boost_processing_body', {
-                    'amount': context.formatPriceInt(
-                      widget.tier.price,
-                      currencyOverride: 'TZS',
-                    ),
+                    'amount': context.formatPriceInt(widget.tier.price, currencyOverride: 'TZS'),
                   }),
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -147,11 +114,7 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s7),
-                DsPaymentStatusTimeline(
-                  step: _step,
-                  labels: labels,
-                  color: tierColor,
-                ),
+                DsPaymentStatusTimeline(step: _step, labels: labels, color: tierColor),
                 const SizedBox(height: AppSpacing.s2),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -176,9 +139,7 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                   ),
                   child: Row(
                     children: [
@@ -222,11 +183,7 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
 /// wallet app, so this screen's only job is to make that number impossible to
 /// mistype.
 class BoostBillPaySheet extends StatelessWidget {
-  const BoostBillPaySheet({
-    super.key,
-    required this.controlNumber,
-    required this.tier,
-  });
+  const BoostBillPaySheet({super.key, required this.controlNumber, required this.tier});
 
   final String controlNumber;
   final BoostTier tier;
@@ -248,18 +205,13 @@ class BoostBillPaySheet extends StatelessWidget {
                   color: scheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                child: Icon(
-                  Icons.receipt_long_rounded,
-                  size: 20,
-                  color: scheme.primary,
-                ),
+                child: Icon(Icons.receipt_long_rounded, size: 20, color: scheme.primary),
               ),
               const SizedBox(width: AppSpacing.s3),
               Expanded(
                 child: Text(
                   context.tr('boost_receipt_title'),
-                  style: AppTypography.screenTitle(scheme.onSurface)
-                      .copyWith(fontSize: 19),
+                  style: AppTypography.screenTitle(scheme.onSurface).copyWith(fontSize: 19),
                 ),
               ),
             ],
@@ -267,26 +219,16 @@ class BoostBillPaySheet extends StatelessWidget {
           const SizedBox(height: AppSpacing.s4),
           Text(
             context.tr('boost_billpay_number_label'),
-            style: TextStyle(
-              color: scheme.onSurfaceVariant,
-              fontSize: 12.5,
-            ),
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
           ),
           const SizedBox(height: AppSpacing.s2),
           _CopyableControlNumber(number: controlNumber),
           const SizedBox(height: AppSpacing.s4),
           Text(
             context.trParams('boost_billpay_instructions', {
-              'amount': context.formatPriceInt(
-                tier.price,
-                currencyOverride: 'TZS',
-              ),
+              'amount': context.formatPriceInt(tier.price, currencyOverride: 'TZS'),
             }),
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 13,
-              height: 1.45,
-            ),
+            style: TextStyle(color: scheme.onSurface, fontSize: 13, height: 1.45),
           ),
           const SizedBox(height: AppSpacing.s5),
           DsButton(
@@ -314,14 +256,12 @@ class _CopyableControlNumber extends StatelessWidget {
       onTap: () async {
         await Clipboard.setData(ClipboardData(text: number));
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('boost_copied'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('boost_copied'))));
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s4,
-          vertical: AppSpacing.s3),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s4, vertical: AppSpacing.s3),
         decoration: BoxDecoration(
           color: scheme.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -332,18 +272,12 @@ class _CopyableControlNumber extends StatelessWidget {
             Expanded(
               child: Text(
                 number,
-                style: AppTypography.amount(scheme.onSurface).copyWith(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 3,
-                ),
+                style: AppTypography.amount(
+                  scheme.onSurface,
+                ).copyWith(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 3),
               ),
             ),
-            Icon(
-              Icons.copy_rounded,
-              size: 18,
-              color: scheme.primary,
-            ),
+            Icon(Icons.copy_rounded, size: 18, color: scheme.primary),
           ],
         ),
       ),
@@ -354,11 +288,7 @@ class _CopyableControlNumber extends StatelessWidget {
 /// Post-payment confirmation. Only reachable once the server has committed the
 /// boost batch, so it is safe to celebrate here.
 class BoostSuccessOverlay extends StatelessWidget {
-  const BoostSuccessOverlay({
-    super.key,
-    required this.productName,
-    required this.tier,
-  });
+  const BoostSuccessOverlay({super.key, required this.productName, required this.tier});
 
   final String productName;
   final BoostTier tier;
@@ -381,8 +311,7 @@ class BoostSuccessOverlay extends StatelessWidget {
               Text(
                 context.tr('boost_complete'),
                 textAlign: TextAlign.center,
-                style: AppTypography.screenTitle(Colors.white)
-                    .copyWith(fontSize: 26),
+                style: AppTypography.screenTitle(Colors.white).copyWith(fontSize: 26),
               ),
               const SizedBox(height: AppSpacing.s2),
               Text(
@@ -400,35 +329,23 @@ class BoostSuccessOverlay extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(AppRadius2.xl),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
-                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                 ),
                 child: Column(
                   children: [
-                    _SummaryRow(
-                      label: context.tr('product'),
-                      value: productName,
-                    ),
+                    _SummaryRow(label: context.tr('product'), value: productName),
                     _SummaryRow(
                       label: context.tr('boost_tier_label'),
                       value: context.tr('boost_tier_${tier.key}'),
                     ),
                     _SummaryRow(
                       label: context.tr('boost_package_title'),
-                      value: context.trParams('boost_days', {
-                        'count': '${tier.days}',
-                      }),
+                      value: context.trParams('boost_days', {'count': '${tier.days}'}),
                     ),
-                    DsDivider(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
+                    DsDivider(color: Colors.white.withValues(alpha: 0.12)),
                     _SummaryRow(
                       label: context.tr('total'),
-                      value: context.formatPriceInt(
-                        tier.price,
-                        currencyOverride: 'TZS',
-                      ),
+                      value: context.formatPriceInt(tier.price, currencyOverride: 'TZS'),
                       highlight: true,
                     ),
                   ],
@@ -465,17 +382,14 @@ class _SuccessRing extends StatefulWidget {
   State<_SuccessRing> createState() => _SuccessRingState();
 }
 
-class _SuccessRingState extends State<_SuccessRing>
-    with SingleTickerProviderStateMixin {
+class _SuccessRingState extends State<_SuccessRing> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..forward();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+      ..forward();
   }
 
   @override
@@ -503,19 +417,14 @@ class _RingBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pop = Motion.overshootSpring.transform(
-      (progress - 0.35).clamp(0.0, 1.0) / 0.65,
-    );
+    final pop = Motion.overshootSpring.transform((progress - 0.35).clamp(0.0, 1.0) / 0.65);
     return Container(
       width: 104,
       height: 104,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: const Color(0xFF00C853).withValues(alpha: 0.14),
-        border: Border.all(
-          color: const Color(0xFF00C853).withValues(alpha: 0.55),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF00C853).withValues(alpha: 0.55), width: 2),
       ),
       child: Center(
         child: Transform.scale(
@@ -523,15 +432,8 @@ class _RingBody extends StatelessWidget {
           child: Container(
             width: 66,
             height: 66,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFF00C853),
-            ),
-            child: const Icon(
-              Icons.check_rounded,
-              size: 40,
-              color: Colors.black,
-            ),
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF00C853)),
+            child: const Icon(Icons.check_rounded, size: 40, color: Colors.black),
           ),
         ),
       ),
@@ -540,11 +442,7 @@ class _RingBody extends StatelessWidget {
 }
 
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-  });
+  const _SummaryRow({required this.label, required this.value, this.highlight = false});
 
   final String label;
   final String value;
@@ -559,10 +457,7 @@ class _SummaryRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
-              fontSize: 12.5,
-            ),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12.5),
           ),
           const SizedBox(width: AppSpacing.s4),
           Expanded(

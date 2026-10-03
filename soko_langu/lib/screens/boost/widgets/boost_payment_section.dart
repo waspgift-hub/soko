@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../extensions/context_tr.dart';
@@ -61,36 +61,26 @@ class BoostPaymentSection extends StatelessWidget {
               FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s]')),
               LengthLimitingTextInputFormatter(16),
             ],
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.4),
             decoration: InputDecoration(
               hintText: context.tr('boost_phone_hint'),
               errorText: phoneError,
               prefixIcon: const Icon(Icons.smartphone_rounded, size: 20),
               filled: true,
-              fillColor: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.4),
+              fillColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
+                borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 1.6,
-                ),
+                borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.6),
               ),
             ),
           ),
@@ -110,8 +100,7 @@ class BoostPaymentSection extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.zero,
               itemCount: boostProviders.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: AppSpacing.s2),
+              separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.s2),
               itemBuilder: (context, i) {
                 final (key, label, brand) = boostProviders[i];
                 return _ProviderTile(
@@ -167,11 +156,7 @@ class BoostPaymentSection extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
+  const _Header({required this.icon, required this.title, required this.subtitle});
 
   final IconData icon;
   final String title;
@@ -196,18 +181,15 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: TextStyle(
-                color: scheme.onSurface,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              )),
               Text(
-                subtitle,
+                title,
                 style: TextStyle(
-                  color: scheme.onSurfaceVariant,
-                  fontSize: 11.5,
+                  color: scheme.onSurface,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
+              Text(subtitle, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11.5)),
             ],
           ),
         ),
@@ -356,11 +338,7 @@ class _Segment extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 15,
-                color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
-              ),
+              Icon(icon, size: 15, color: selected ? scheme.onPrimary : scheme.onSurfaceVariant),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -370,8 +348,7 @@ class _Segment extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
-                    color:
-                        selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                    color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
                   ),
                 ),
               ),

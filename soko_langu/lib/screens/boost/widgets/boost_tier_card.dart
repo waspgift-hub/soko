@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../extensions/context_tr.dart';
@@ -14,12 +14,7 @@ import '../boost_tiers.dart';
 /// its own feature list and price-per-day, which a ~110dp column cannot hold
 /// without truncating the reason to upgrade.
 class BoostTierCard extends StatelessWidget {
-  const BoostTierCard({
-    super.key,
-    required this.tier,
-    required this.selected,
-    required this.onTap,
-  });
+  const BoostTierCard({super.key, required this.tier, required this.selected, required this.onTap});
 
   final BoostTier tier;
   final bool selected;
@@ -40,9 +35,7 @@ class BoostTierCard extends StatelessWidget {
         curve: Motion.easeOutCubic,
         padding: const EdgeInsets.all(AppSpacing.s4),
         decoration: BoxDecoration(
-          color: selected
-              ? tier.accent.withValues(alpha: 0.07)
-              : scheme.surface,
+          color: selected ? tier.accent.withValues(alpha: 0.07) : scheme.surface,
           borderRadius: BorderRadius.circular(AppRadius2.xl),
           border: Border.all(
             color: selected ? tier.accent : scheme.outlineVariant,
@@ -90,8 +83,9 @@ class BoostTierCard extends StatelessWidget {
                               context.tr('boost_tier_${tier.key}'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.screenTitle(scheme.onSurface)
-                                  .copyWith(fontSize: 19),
+                              style: AppTypography.screenTitle(
+                                scheme.onSurface,
+                              ).copyWith(fontSize: 19),
                             ),
                           ),
                           if (tier.popular) ...[
@@ -106,13 +100,8 @@ class BoostTierCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        context.trParams('boost_days', {
-                          'count': '${tier.days}',
-                        }),
-                        style: TextStyle(
-                          color: scheme.onSurfaceVariant,
-                          fontSize: 12.5,
-                        ),
+                        context.trParams('boost_days', {'count': '${tier.days}'}),
+                        style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
                       ),
                     ],
                   ),
@@ -126,14 +115,10 @@ class BoostTierCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  context.formatPriceInt(
-                    tier.price,
-                    currencyOverride: 'TZS',
-                  ),
-                  style: AppTypography.amount(scheme.onSurface).copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  context.formatPriceInt(tier.price, currencyOverride: 'TZS'),
+                  style: AppTypography.amount(
+                    scheme.onSurface,
+                  ).copyWith(fontSize: 22, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: AppSpacing.s2),
                 Padding(
@@ -142,10 +127,7 @@ class BoostTierCard extends StatelessWidget {
                     context.trParams('boost_per_day', {
                       'amount': tier.pricePerDay.toStringAsFixed(0),
                     }),
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
                   ),
                 ),
                 const Spacer(),
@@ -170,11 +152,7 @@ class BoostTierCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         context.tr(key),
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontSize: 12.5,
-                          height: 1.3,
-                        ),
+                        style: TextStyle(color: scheme.onSurface, fontSize: 12.5, height: 1.3),
                       ),
                     ),
                   ],
@@ -208,9 +186,7 @@ class _SelectedCheck extends StatelessWidget {
           width: selected ? 2 : 1.5,
         ),
       ),
-      child: selected
-          ? Icon(Icons.check_rounded, size: 15, color: Colors.black)
-          : null,
+      child: selected ? Icon(Icons.check_rounded, size: 15, color: Colors.black) : null,
     );
   }
 }
@@ -231,8 +207,7 @@ class _SavingTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (selected ? tier.accent : scheme.primary)
-            .withValues(alpha: 0.12),
+        color: (selected ? tier.accent : scheme.primary).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       child: Text(

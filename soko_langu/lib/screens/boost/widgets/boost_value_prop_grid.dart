@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../extensions/context_tr.dart';
 import '../../../theme/app_dimens.dart';
@@ -46,9 +46,7 @@ class _ValuePropCell extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.16),
-        ),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.16)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

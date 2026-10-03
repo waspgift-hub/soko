@@ -112,8 +112,7 @@ class BoostTier {
 
   static const String goldKey = 'gold';
 
-  static BoostTier byKey(String key) =>
-      all.firstWhere((t) => t.key == key, orElse: () => all[1]);
+  static BoostTier byKey(String key) => all.firstWhere((t) => t.key == key, orElse: () => all[1]);
 }
 
 /// Everything a single boost buys, keyed for [trParams]-style lookup. Used by
@@ -140,3 +139,13 @@ const boostProviders = <(String, String, Color)>[
   ('ezy', 'EzyPesa', Color(0xFF00A651)),
   ('crdb', 'CRDB', Color(0xFF00539F)),
 ];
+
+/// Abbreviates a projected figure. `1296` reads as noise next to an estimate,
+/// so thousands collapse to one decimal (`1.3K`) and very large ones drop the
+/// decimal entirely (`69K`). Shared so the stat tiles and the comparison bars
+/// never disagree about how a number should read.
+String formatBoostCount(int value) {
+  if (value < 1000) return '$value';
+  final k = value / 1000;
+  return '${k.toStringAsFixed(k >= 100 ? 0 : 1)}K';
+}

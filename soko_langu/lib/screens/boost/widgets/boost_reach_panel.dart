@@ -37,11 +37,7 @@ class BoostReachPanel extends StatelessWidget {
                   color: tier.accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: Icon(
-                  Icons.insights_rounded,
-                  size: 18,
-                  color: tier.accent,
-                ),
+                child: Icon(Icons.insights_rounded, size: 18, color: tier.accent),
               ),
               const SizedBox(width: AppSpacing.s3),
               Expanded(
@@ -57,13 +53,8 @@ class BoostReachPanel extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      context.trParams('boost_reach_window', {
-                        'count': '${tier.days}',
-                      }),
-                      style: TextStyle(
-                        color: scheme.onSurfaceVariant,
-                        fontSize: 11.5,
-                      ),
+                      context.trParams('boost_reach_window', {'count': '${tier.days}'}),
+                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11.5),
                     ),
                   ],
                 ),
@@ -106,11 +97,7 @@ class BoostReachPanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.s3),
           Text(
             context.tr('boost_reach_estimate_note'),
-            style: TextStyle(
-              color: scheme.onSurfaceVariant,
-              fontSize: 11,
-              height: 1.35,
-            ),
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11, height: 1.35),
           ),
         ],
       ),
@@ -119,11 +106,7 @@ class BoostReachPanel extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+  const _Stat({required this.icon, required this.value, required this.label});
 
   final IconData icon;
   final int value;
@@ -138,19 +121,16 @@ class _Stat extends StatelessWidget {
         const SizedBox(height: 6),
         CountUpText(
           value: value,
-          style: AppTypography.amount(scheme.onSurface)
-              .copyWith(fontSize: 19, fontWeight: FontWeight.w700),
+          style: AppTypography.amount(
+            scheme.onSurface,
+          ).copyWith(fontSize: 19, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),
         Text(
           label,
           textAlign: TextAlign.center,
           maxLines: 2,
-          style: TextStyle(
-            color: scheme.onSurfaceVariant,
-            fontSize: 10.5,
-            height: 1.25,
-          ),
+          style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 10.5, height: 1.25),
         ),
       ],
     );
@@ -181,16 +161,14 @@ class _ComparisonBars extends StatelessWidget {
           label: context.tr('boost_compare_normal'),
           factor: normalFactor,
           color: scheme.outline,
-          trailing: '${tier.normalViews}',
+          trailing: formatBoostCount(tier.normalViews),
         ),
         const SizedBox(height: AppSpacing.s2),
         _Bar(
           label: context.tr('boost_compare_boosted'),
           factor: boostedFactor,
           color: tier.accent,
-          trailing: context.trParams('boost_compare_multiplier', {
-            'x': tier.viewMultiplier,
-          }),
+          trailing: context.trParams('boost_compare_multiplier', {'x': tier.viewMultiplier}),
         ),
       ],
     );
