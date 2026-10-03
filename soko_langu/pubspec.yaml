@@ -115,8 +115,13 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icons/app_icon_full.png"
-  # No adaptive_icon_background: the brand icon is full-bleed — adding a color
-  # background layer + 16% inset shows a black ring and shrinks the artwork.
+  # This regenerates only the LEGACY launcher icons (mipmap-*/ic_launcher*.png
+  # and the iOS AppIcon set). The Android 8+ adaptive icon is hand-authored and
+  # lives in android/app/src/main/res/mipmap-anydpi-v26/, with vector foreground
+  # and monochrome layers in res/drawable/ic_launcher_{foreground,monochrome}.xml.
+  # Adding adaptive_icon_background/foreground keys here would make this tool
+  # overwrite those with raster layers, so they are deliberately absent.
+  # To change the mark, edit tools/brand-icon/ and re-run its generate step.
   remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the

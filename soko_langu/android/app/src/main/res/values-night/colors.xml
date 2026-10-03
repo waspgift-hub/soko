@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="splash_background">#FF000000</color>
+    <!-- The launcher icon is white-on-black-mark only in the default qualifier;
+         keeping the same value here stops the icon inverting between themes. -->
+    <color name="ic_launcher_background">#FFFFFFFF</color>
     <!-- Widget: Dashboard (dark theme) -->
     <color name="widget_dashboard_bg">#FF000000</color>
     <color name="widget_text_primary">#FFFFFFFF</color>
