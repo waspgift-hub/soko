@@ -10,7 +10,7 @@ const { clickpesaCollect, clickpesaCreateBillPayOrder, calcGatewayFee } = requir
 // Contact (phone/email) verification OTPs reuse the same store the auth login
 // flow uses, so a seller never has two unrelated OTP systems. SMS goes through
 // the real sms-service (Meseji → Notify Africa); email through the SMTP mailer.
-const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp } = require('../../services/otp-store');
+const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp, createOtpHash, verifyOtpHash } = require('../../services/otp-store');
 const smsService = require('../../services/sms-service');
 const { sendMail } = require('../../services/mailer');
 
@@ -447,10 +447,14 @@ async function mirrorToFirestore(row) {
 // ---------------------------------------------------------------------------
 
 const CONTACT_OTP_TTL_SECONDS = 300; // 5 minutes, same as auth
-const CONTACT_OTP_KEY_LIMIT = 7; // send OTP per (userId, channel) within TTL
 
-function hashContactOtp(otp) {
-  return crypto.createHash('sha256').update(String(otp)).digest('hex');
+// Binds a contact OTP to the exact contact value it was sent to. The old key
+// `kyc:{channel}:{userId}` carried no contact, so a code sent to number A
+// verified a claim for number B. The key now embeds a short hash of the
+// NORMALISED contact: verifying for B looks up a different record and fails.
+function contactOtpKey(userId, channel, normalisedContact) {
+  const contactHash = crypto.createHash('sha256').update(String(normalisedContact)).digest('hex').slice(0, 16);
+  return `kyc:${channel}:${userId}:${contactHash}`;
 }
 
 // Normalise a Tanzanian phone like the auth flow does (0/255 prefix both OK).
@@ -485,8 +489,8 @@ async function sendContactOtp({ userId, channel, value }) {
     const clean = cleanPhoneForOtp(value);
     if (!clean) throw httpError(400, 'KYC_PHONE_INVALID', 'Invalid phone number');
     const smsText = `Soko Vibe KYC code: ${otp}. Inatumika dakika 5.`;
-    const key = `kyc:phone:${userId}`;
-    await saveOtp(key, hashContactOtp(otp), CONTACT_OTP_TTL_SECONDS);
+    const key = contactOtpKey(userId, 'phone', clean);
+    await saveOtp(key, createOtpHash(otp), CONTACT_OTP_TTL_SECONDS);
     const sent = await smsService.sendSms(clean, smsText);
     // A store entry for a code the seller never received only lets a later,
     // unrelated verification attempt race against it. The route answers 502 and
@@ -496,8 +500,8 @@ async function sendContactOtp({ userId, channel, value }) {
   }
   const email = cleanEmailForOtp(value);
   if (!email || !email.includes('@')) throw httpError(400, 'KYC_EMAIL_INVALID', 'Invalid email address');
-  const key = `kyc:email:${userId}`;
-  await saveOtp(key, hashContactOtp(otp), CONTACT_OTP_TTL_SECONDS);
+  const key = contactOtpKey(userId, 'email', email);
+  await saveOtp(key, createOtpHash(otp), CONTACT_OTP_TTL_SECONDS);
   const subject = 'Soko Vibe — Uthibitisho wa anwani';
   const html = `
     <html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto">
@@ -514,24 +518,20 @@ async function sendContactOtp({ userId, channel, value }) {
   return { sent, expiresInSec: CONTACT_OTP_TTL_SECONDS, email };
 }
 
-// Verify a submitted OTP. Reuses the auth timing-safe compare + attempt bump
-// so a brute-forcer hits the same lockout as the login flow.
+// Verify a submitted OTP. The lookup key is re-derived from the CLAIMED
+// contact, so a code sent to number A can never verify number B: the records
+// live under different keys. Attempts bump only on a failed compare.
 async function verifyContactOtp({ userId, channel, value, otp }) {
-  const key = `kyc:${channel}:${userId}`;
+  const normalised = channel === 'phone' ? cleanPhoneForOtp(value) : cleanEmailForOtp(value);
+  if (!normalised) throw httpError(400, 'KYC_OTP_INVALID', 'OTP si sahihi');
+  const key = contactOtpKey(userId, channel, normalised);
   const record = await getOtp(key);
   if (!record || record.used) throw httpError(400, 'KYC_OTP_INVALID', 'OTP is invalid or already used');
   if (Date.now() > record.expiresAt) throw httpError(400, 'KYC_OTP_EXPIRED', 'OTP imeisha wakati wake');
-  const attempts = await bumpAttempts(key);
-  if (attempts > 5) throw httpError(400, 'KYC_OTP_LIMIT', 'Jaribio nyingi mno — tuma OTP mpya');
-  const hashed = hashContactOtp(String(otp || ''));
-  // `otpHash`, not `value`: otp-store.saveOtp persists { otpHash, expiresAt,
-  // used, attempts }, so record.value was always undefined and
-  // Buffer.from(undefined) threw a TypeError that the route turned into
-  // "KYC_PHONE_OTP_INVALID" no matter which code the user typed. KYC
-  // verification could never succeed.
-  const a = Buffer.from(record.otpHash);
-  const b = Buffer.from(hashed);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+  if ((record.attempts || 0) >= 5) throw httpError(400, 'KYC_OTP_LIMIT', 'Jaribio nyingi mno — tuma OTP mpya');
+  if (!verifyOtpHash(String(otp || ''), record.otpHash)) {
+    const attempts = await bumpAttempts(key);
+    if (attempts >= 5) throw httpError(400, 'KYC_OTP_LIMIT', 'Jaribio nyingi mno — tuma OTP mpya');
     throw httpError(400, 'KYC_OTP_INVALID', 'OTP si sahihi');
   }
   await markUsed(key);
