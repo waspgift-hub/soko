@@ -12,8 +12,14 @@ void main() {
       );
 
   test('prefers the explicit image', () {
+    expect(cat(image: 'https://cdn/electronics.webp').displayImage,
+        'https://cdn/electronics.webp');
+  });
+
+  test('ignores a non-remote image so the artwork pack is not shadowed', () {
+    // A stale bundle path must not win over an installed pack file.
     expect(cat(image: 'assets/images/categories/electronics.jpg').displayImage,
-        'assets/images/categories/electronics.jpg');
+        isNull);
   });
 
   test('uses a remote icon URL when image is missing', () {

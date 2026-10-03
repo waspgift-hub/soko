@@ -85,13 +85,19 @@ class _ArtworkPackScreenState extends State<ArtworkPackScreen> {
   }
 
   Future<void> _startDownload() async {
-    await _service.downloadPack();
+    final ok = await _service.downloadPack();
     if (!mounted) return;
+    if (ok) return;
+    // Any non-success gets a message. Previously only `status == failed` showed
+    // one, so an attempt that returned early or was rejected silently left the
+    // user staring at an unchanged screen with no idea what happened.
     final failed = _service.status == ArtworkStatus.failed;
     if (failed) {
       _reportFailure('download');
       _toast(context.tr('artwork_pack_error'));
+      return;
     }
+    _toast(context.tr('artwork_pack_error'));
   }
 
   void _reportFailure(String stage) {

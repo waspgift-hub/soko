@@ -448,7 +448,11 @@ void main() {
       final cats = await client.fetchCategories();
       expect(cats.length, 2);
       expect(cats.first.name, 'Electronics');
-      expect(cats.first.icon, 'https://i/e.png');
+      // The legacy `iconUrl` column is artwork, not an icon name: the icon
+      // comes from the compiled taxonomy so a stale bundled path can never
+      // reach `IconData`, and the URL lands in `image` instead.
+      expect(cats.first.icon, 'devices');
+      expect(cats.first.image, 'https://i/e.png');
       expect(cats.first.subcategories.single.name, 'Phones & Tablets');
       expect(cats.first.subcategories.single.id, 'phones');
       expect(cats.last.order, 2);

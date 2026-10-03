@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/product_model.dart';
 import '../models/category_model.dart';
+import '../data/marketplace_taxonomy.dart';
 import 'api_config.dart';
 import '../utils/category_icons.dart';
 import '../utils/network_error.dart';
@@ -196,6 +197,30 @@ class ProductApiClient {
   List<Category>? _categories;
   Map<String, String>? _categoryIdByName;
 
+  /// Narrows the legacy `iconUrl` column to values that are genuinely remote
+  /// artwork.
+  ///
+  /// The column has held both CDN URLs and bundled asset paths. Only an
+  /// `http(s)`/`//` value can be handed to `CachedNetworkImage`; anything else
+  /// is not artwork and is left to the artwork pack and the icon fallback.
+  static String? _asRemoteArtwork(String? raw) {
+    if (raw == null) return null;
+    final v = raw.trim();
+    if (v.isEmpty) return null;
+    return (v.startsWith('http') || v.startsWith('//')) ? v : null;
+  }
+
+  /// Swahili subcategory label from the compiled-in taxonomy, or null when the
+  /// server knows a subcategory the app taxonomy does not.
+  static String? _taxonomySubNameSw(String parentId, String subId) {
+    final cat = taxonomyById(parentId);
+    if (cat == null) return null;
+    for (final s in cat.subs) {
+      if (s.id == subId) return s.nameSw.isEmpty ? null : s.nameSw;
+    }
+    return null;
+  }
+
   /// Public category tree (server flattens parents + children, keeps them
   /// ordered by sortOrder). Cached in memory: the list is near-static.
   Future<List<Category>> fetchCategories() async {
@@ -229,12 +254,15 @@ class ProductApiClient {
           .toList();
       final byParent = <String, List<SubCategory>>{};
       for (final r in raw.where((r) => r.parentId != null)) {
-        byParent.putIfAbsent(r.parentId!, () => []).add(
+        // Bound to a local because record fields are not promoted by `where`.
+        final parentId = r.parentId!;
+        final subId = r.slug.isNotEmpty ? r.slug : r.id;
+        byParent.putIfAbsent(parentId, () => []).add(
               SubCategory(
-                id: r.slug.isNotEmpty ? r.slug : r.id,
+                id: subId,
                 name: r.name,
-                nameSw: r.name,
-                image: r.iconUrl,
+                nameSw: _taxonomySubNameSw(parentId, subId) ?? r.name,
+                image: _asRemoteArtwork(r.iconUrl),
               ),
             );
       }
@@ -244,9 +272,18 @@ class ProductApiClient {
             (r) => Category(
               id: r.id,
               name: r.name,
-              nameSw: r.name,
-              icon: r.iconUrl ?? CategoryIconNames.package,
-              image: r.iconUrl,
+              nameSw: taxonomyById(r.slug.isNotEmpty ? r.slug : r.id)
+                      ?.nameSw ??
+                  r.name,
+              // `iconUrl` is a legacy column that has held both remote URLs and
+              // bundled asset paths. Treating it as an icon name is what let a
+              // stale path reach `IconData`; treating it as artwork is what
+              // made `Image.asset` throw. Only a real URL counts as artwork,
+              // and the compiled-in taxonomy supplies the canonical icon name
+              // and Swahili label that the API never carried.
+              icon: taxonomyById(r.slug.isNotEmpty ? r.slug : r.id)?.icon ??
+                  CategoryIconNames.package,
+              image: _asRemoteArtwork(r.iconUrl),
               subcategories: byParent[r.id] ?? const [],
               isActive: true,
               order: r.sortOrder,

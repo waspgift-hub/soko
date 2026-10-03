@@ -1,10 +1,14 @@
-// Seeds the canonical marketplace taxonomy into Firestore `categories`.
+// Seeds the canonical marketplace taxonomy into the `categories` table.
 //
 // Mirrors lib/data/marketplace_taxonomy.dart (the single source of truth the
 // Flutter app falls back to offline). The v1 GET /products/categories route
 // only returns rows with isActive:true, so every doc here must be active or
 // the home category grid renders empty. Doc ids are stable slugs: root id = taxonomy id, child id = "<root>__<sub>" because sub slugs
-// (e.g. "cleaning") repeat across parents and Firestore ids are global.
+// (e.g. "cleaning") repeat across parents and ids are global.
+//
+// Category photographs are NOT seeded here. They ship in the downloadable
+// Category Artwork Pack on R2 and the app resolves them by taxonomy id; this
+// file owns names, slugs and ordering only.
 require('dotenv').config();
 
 const { getStore } = require('../config/database');
@@ -12,7 +16,7 @@ const { getStore } = require('../config/database');
 const TAXONOMY = [
   {
     id: 'electronics', name: 'Electronics & Technology', nameSw: 'Elektroniki na Teknolojia',
-    image: 'assets/images/categories/electronics.jpg', order: 1,
+order: 1,
     subs: [
       ['tvs', 'TVs', 'TV'],
       ['audio', 'Audio & Speakers', 'Sauti na Spika'],
@@ -25,7 +29,7 @@ const TAXONOMY = [
   },
   {
     id: 'computers', name: 'Computers & Office', nameSw: 'Kompyuta na Ofisi',
-    image: 'assets/images/categories/computers.jpg', order: 2,
+order: 2,
     subs: [
       ['laptops', 'Laptops', 'Laptop'],
       ['desktops', 'Desktops', 'Desktop'],
@@ -37,7 +41,7 @@ const TAXONOMY = [
   },
   {
     id: 'phones', name: 'Phones & Accessories', nameSw: 'Simu na Vifaa',
-    image: 'assets/images/categories/phones.jpg', order: 3,
+order: 3,
     subs: [
       ['smartphones', 'Smartphones', 'Simu Janja'],
       ['feature_phones', 'Feature Phones', 'Simu za Kawaida'],
@@ -50,7 +54,7 @@ const TAXONOMY = [
   },
   {
     id: 'fashion', name: 'Fashion & Clothing', nameSw: 'Mavazi',
-    image: 'assets/images/categories/fashion.jpg', order: 4,
+order: 4,
     subs: [
       ['menswear', "Men's Clothing", 'Mavazi ya Wanaume'],
       ['womenswear', "Women's Clothing", 'Mavazi ya Wanawake'],
@@ -63,7 +67,7 @@ const TAXONOMY = [
   },
   {
     id: 'shoes_bags', name: 'Shoes & Bags', nameSw: 'Viatu na Mifuko',
-    image: 'assets/images/categories/shoes_bags.jpg', order: 5,
+order: 5,
     subs: [
       ['sneakers', 'Sneakers', 'Sneakers'],
       ['mens_shoes', "Men's Shoes", 'Viatu vya Wanaume'],
@@ -76,7 +80,7 @@ const TAXONOMY = [
   },
   {
     id: 'health', name: 'Beauty & Personal Care', nameSw: 'Urembo na Utunzaji',
-    image: 'assets/images/categories/health.jpg', order: 6,
+order: 6,
     subs: [
       ['skincare', 'Skincare', 'Utunzaji wa Ngozi'],
       ['makeup', 'Makeup', 'Vipodozi'],
@@ -88,7 +92,7 @@ const TAXONOMY = [
   },
   {
     id: 'home_garden', name: 'Home & Furniture', nameSw: 'Nyumba na Samani',
-    image: 'assets/images/categories/home_garden.jpg', order: 7,
+order: 7,
     subs: [
       ['sofas', 'Sofas', 'Sofa'],
       ['beds', 'Beds & Mattresses', 'Vitanda na Magodoro'],
@@ -101,7 +105,7 @@ const TAXONOMY = [
   },
   {
     id: 'kitchen', name: 'Kitchen & Household', nameSw: 'Jikoni na Nyumbani',
-    image: 'assets/images/categories/kitchen.jpg', order: 8,
+order: 8,
     subs: [
       ['cookware', 'Cookware & Pots', 'Vyungu na Sufuria'],
       ['appliances', 'Kitchen Appliances', 'Vifaa vya Jikoni'],
@@ -112,7 +116,7 @@ const TAXONOMY = [
   },
   {
     id: 'automotive', name: 'Vehicles & Motorcycles', nameSw: 'Magari na Pikipiki',
-    image: 'assets/images/categories/automotive.jpg', order: 9,
+order: 9,
     subs: [
       ['cars', 'Cars', 'Magari'],
       ['motorcycles', 'Motorcycles', 'Pikipiki'],
@@ -125,7 +129,7 @@ const TAXONOMY = [
   },
   {
     id: 'business', name: 'Building & Hardware', nameSw: 'Ujenzi na Vifaa',
-    image: 'assets/images/categories/building.jpg', order: 10,
+order: 10,
     subs: [
       ['cement', 'Cement & Concrete', 'Saruji'],
       ['paint', 'Paint', 'Rangi'],
@@ -138,7 +142,7 @@ const TAXONOMY = [
   },
   {
     id: 'agriculture', name: 'Agriculture & Farming', nameSw: 'Kilimo na Ufugaji',
-    image: 'assets/images/categories/agriculture.jpg', order: 11,
+order: 11,
     subs: [
       ['tractors', 'Tractors & Machinery', 'Matrekta'],
       ['seeds', 'Seeds & Seedlings', 'Mbegu'],
@@ -150,7 +154,7 @@ const TAXONOMY = [
   },
   {
     id: 'food', name: 'Food & Beverages', nameSw: 'Chakula na Vinywaji',
-    image: 'assets/images/categories/food.jpg', order: 12,
+order: 12,
     subs: [
       ['grains', 'Grains & Flour', 'Nafaka na Unga'],
       ['oil', 'Cooking Oil', 'Mafuta ya Kupikia'],
@@ -163,7 +167,7 @@ const TAXONOMY = [
   },
   {
     id: 'maternal', name: 'Baby, Kids & Toys', nameSw: 'Watoto na Vichezeo',
-    image: 'assets/images/categories/maternal.jpg', order: 13,
+order: 13,
     subs: [
       ['diapers', 'Diapers & Wipes', 'Nephi'],
       ['babycloth', 'Baby Clothing', 'Nguo za Watoto'],
@@ -175,7 +179,7 @@ const TAXONOMY = [
   },
   {
     id: 'sports', name: 'Sports & Outdoors', nameSw: 'Michezo',
-    image: 'assets/images/categories/sports.jpg', order: 14,
+order: 14,
     subs: [
       ['fitness', 'Fitness Equipment', 'Vifaa vya Mazoezi'],
       ['football', 'Football', 'Mpira wa Miguu'],
@@ -187,7 +191,7 @@ const TAXONOMY = [
   },
   {
     id: 'books', name: 'Books & Stationery', nameSw: 'Vitabu',
-    image: 'assets/images/categories/books.jpg', order: 15,
+order: 15,
     subs: [
       ['textbooks', 'Textbooks', 'Vitabu vya Shule'],
       ['novels', 'Novels & Storybooks', 'Riwaya'],
@@ -200,7 +204,7 @@ const TAXONOMY = [
   },
   {
     id: 'jewelry', name: 'Jewelry & Accessories', nameSw: 'Vito na Mapambo',
-    image: 'assets/images/categories/jewelry.jpg', order: 16,
+order: 16,
     subs: [
       ['necklaces', 'Necklaces', 'Shanga'],
       ['rings', 'Rings', 'Pete'],
@@ -212,7 +216,7 @@ const TAXONOMY = [
   },
   {
     id: 'solar', name: 'Electrical & Solar', nameSw: 'Umeme na Sola',
-    image: 'assets/images/categories/solar.jpg', order: 17,
+order: 17,
     subs: [
       ['panels', 'Solar Panels', 'Paneli za Sola'],
       ['batteries', 'Solar Batteries', 'Betri za Sola'],
@@ -224,7 +228,7 @@ const TAXONOMY = [
   },
   {
     id: 'hobbies', name: 'Hobbies, Arts & Crafts', nameSw: 'Sanaa na Ufundi',
-    image: 'assets/images/categories/hobbies.jpg', order: 18,
+order: 18,
     subs: [
       ['instruments', 'Musical Instruments', 'Ala za Muziki'],
       ['painting', 'Art & Painting', 'Uchoraji'],
@@ -235,7 +239,7 @@ const TAXONOMY = [
   },
   {
     id: 'pets', name: 'Pets & Animals', nameSw: 'Wanyama',
-    image: 'assets/images/categories/pets.jpg', order: 19,
+order: 19,
     subs: [
       ['dogs', 'Dogs', 'Mbwa'],
       ['cats', 'Cats', 'Paka'],
@@ -247,7 +251,7 @@ const TAXONOMY = [
   },
   {
     id: 'services', name: 'Physical Services', nameSw: 'Huduma',
-    image: 'assets/images/categories/services.jpg', order: 20,
+order: 20,
     subs: [
       ['repair', 'Repair & Maintenance', 'Ukarabati'],
       ['tailoring', 'Tailoring & Design', 'Ushonaji'],
@@ -279,7 +283,13 @@ async function seedCategories() {
   for (const t of TAXONOMY) {
     const rootData = {
       name: t.name, nameSw: t.nameSw, slug: t.id,
-      iconUrl: t.image, sortOrder: t.order,
+      // Explicitly cleared, not merely omitted. This column used to carry a
+      // Flutter bundle path such as 'assets/images/categories/x.jpg' for photos
+      // that were removed from the app bundle. Clients read it as artwork, so
+      // every category tile tried to load a file that no longer exists. Writing
+      // null makes a re-run of this seed repair every already-seeded row.
+      iconUrl: null,
+      sortOrder: t.order,
       parentId: null, isActive: true,
     };
     const rootDoc = {

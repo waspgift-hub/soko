@@ -24,11 +24,19 @@ class Category {
     this.order = 0,
   });
 
-  /// Artwork for this category: explicit [image] first, then a remote
-  /// URL carried in [icon] by the v1 API.
+  /// Remote artwork URL for this category, or null when there is none.
+  ///
+  /// Only an `http(s)`/`//` value qualifies. The legacy `icon` column has
+  /// carried both CDN URLs and Flutter bundle paths, and a bundle path is not
+  /// artwork — accepting one here made every category tile attempt a load of
+  /// a file that no longer exists and fall through to the icon, which is what
+  /// kept the installed artwork pack invisible. Category photographs are
+  /// resolved by taxonomy id through `CategoryArtworkService` instead.
   String? get displayImage {
-    if (image != null && image!.isNotEmpty) return image;
-    if (icon.startsWith('http')) return icon;
+    final v = image?.trim() ?? '';
+    if (v.isNotEmpty && (v.startsWith('http') || v.startsWith('//'))) return v;
+    final i = icon.trim();
+    if (i.startsWith('http') || i.startsWith('//')) return i;
     return null;
   }
 

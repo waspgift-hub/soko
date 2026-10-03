@@ -13,10 +13,9 @@ void main() {
     }
   });
 
-  test('every category has image, icon, subs, and brands or a reason', () {
+  test('every category has icon, subs, and brands or a reason', () {
     for (final c in kMarketplaceTaxonomy) {
       expect(c.name.isNotEmpty, true, reason: c.id);
-      expect(c.image.endsWith('.jpg'), true, reason: c.id);
       expect(c.icon.isNotEmpty, true, reason: c.id);
       expect(c.subs.length, greaterThanOrEqualTo(4), reason: c.id);
       final subIds = c.subs.map((s) => s.id).toList();
@@ -25,6 +24,16 @@ void main() {
     final brandless =
         kMarketplaceTaxonomy.where((c) => c.brands.isEmpty).toList();
     expect(brandless.map((c) => c.id), ['services']);
+  });
+
+  test('no category points at a bundled photo that is not shipped', () {
+    // Category photographs ship in the downloadable artwork pack and are
+    // resolved by taxonomy id, not by a path compiled into the binary. A
+    // non-null `image` here means someone re-added a bundle reference, which
+    // is the exact regression that made 20 category photos unreachable.
+    for (final c in kMarketplaceTaxonomy) {
+      expect(c.image, isNull, reason: c.id);
+    }
   });
 
   test('popular flags reference known flag keys', () {

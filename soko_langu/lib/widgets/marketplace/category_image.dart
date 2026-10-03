@@ -9,16 +9,27 @@ import '../../services/category_artwork/category_artwork_service.dart';
 ///
 /// Resolution order, always terminating in something renderable:
 ///
-/// 1. [imageUrl] — remote URL from the API, or a bundled asset path.
-/// 2. [localPath] — a file from the installed artwork pack, looked up by
-///    stable taxonomy id through [CategoryArtworkService].
+/// 1. [imageUrl], when it is a real remote URL — the only tier that touches
+///    the network.
+/// 2. [localPath], else the installed artwork pack looked up by stable
+///    taxonomy id through [CategoryArtworkService].
 /// 3. [fallback] — a Material icon.
 ///
-/// The local pack is looked up by id, never by display name, so the mapping
-/// survives localization. Screens pass the taxonomy id and this widget does
-/// the rest; no screen implements its own asset lookup.
+/// There is deliberately no bundled-asset tier. Category photographs ship in
+/// the downloadable artwork pack and are addressed by taxonomy id, not by a
+/// path compiled into the binary. An earlier version accepted a bundle path
+/// here and ranked it *above* the pack; when those photos were removed from
+/// the bundle, `Image.asset` threw, the error handler fell through to the
+/// icon, and the entire downloaded pack stayed invisible on every screen —
+/// the one outcome the pack exists to prevent. Keeping a single artwork
+/// source removes that whole class of divergence.
+///
+/// The pack is looked up by id, never by display name, so the mapping survives
+/// localization. Screens pass the taxonomy id and this widget does the rest;
+/// no screen implements its own asset lookup.
 class CategoryImage extends StatelessWidget {
-  /// Remote URL or bundled asset path. Takes precedence over [localPath].
+  /// Remote artwork URL. Only an `http(s)`/`//` value counts; anything else is
+  /// ignored so a stale path cannot shadow the installed artwork pack.
   final String? imageUrl;
 
   /// Explicit local file path, e.g. from the seller's own artwork upload.
@@ -31,9 +42,6 @@ class CategoryImage extends StatelessWidget {
   /// Stable subcategory id (`phones`). Requires [categoryId] because a
   /// subcategory slug alone is not unique across categories.
   final String? subcategoryId;
-
-  /// Bundled lightweight placeholder, used when no pack file exists yet.
-  final String? placeholderAsset;
 
   final IconData fallback;
   final BoxFit fit;
@@ -48,7 +56,6 @@ class CategoryImage extends StatelessWidget {
     this.localPath,
     this.categoryId,
     this.subcategoryId,
-    this.placeholderAsset,
     required this.fallback,
     this.fit = BoxFit.cover,
     this.iconSize = 28,
@@ -57,11 +64,16 @@ class CategoryImage extends StatelessWidget {
     this.borderRadius = BorderRadius.zero,
   });
 
-  bool get _hasRemote => imageUrl != null && imageUrl!.isNotEmpty;
-
-  bool get _isRemoteUrl =>
-      _hasRemote &&
-      (imageUrl!.startsWith('http') || imageUrl!.startsWith('//'));
+  /// [imageUrl] only when it is genuinely remote.
+  ///
+  /// This is the single gate that keeps a non-URL out of every branch below.
+  /// A bundled path used to be accepted here, which is how a photo deleted
+  /// from the app bundle ended up permanently shadowing the artwork pack.
+  String? get _remoteUrl {
+    final v = imageUrl?.trim();
+    if (v == null || v.isEmpty) return null;
+    return (v.startsWith('http') || v.startsWith('//')) ? v : null;
+  }
 
   /// Resolved pack file for this tile, or null when the pack has no artwork
   /// for the id (or is not installed at all).
@@ -83,30 +95,31 @@ class CategoryImage extends StatelessWidget {
   }
 
   Widget _buildArt(BuildContext context) {
-    if (_hasRemote && _isRemoteUrl) return _remoteArt(context);
-    if (_hasRemote && !_isRemoteUrl) return _bundledAsset(context);
+    // Tier 1: a real remote URL is the strongest signal we have.
+    final remote = _remoteUrl;
+    if (remote != null) return _remoteArt(context, remote);
 
+    // Tier 2/3: an explicit file, then the installed pack. Both are local, so
+    // they are cheap and cannot fail on a flaky connection.
     final packPath = _packPath();
     if (packPath != null) return _fileArt(context, packPath);
-
-    if (placeholderAsset != null) return _bundledAsset(context);
 
     return _iconFallback(context);
   }
 
-  Widget _remoteArt(BuildContext context) {
+  Widget _remoteArt(BuildContext context, String url) {
     return CachedNetworkImage(
-      imageUrl: imageUrl!,
+      imageUrl: url,
       fit: fit,
       memCacheWidth: memCacheSize,
       memCacheHeight: memCacheSize,
       placeholder: (context, _) => _iconFallback(context),
-      errorWidget: (context, _, _) => _fallbackAfterFailure(context),
+      errorWidget: (context, _, _) => _iconFallback(context),
     );
   }
 
   /// Pack file. An unreadable file (deleted by the OS, truncated by a crash)
-  /// degrades to the placeholder rather than throwing inside the build.
+  /// degrades to the icon rather than throwing inside the build.
   Widget _fileArt(BuildContext context, String path) {
     return Image.file(
       File(path),
@@ -114,24 +127,8 @@ class CategoryImage extends StatelessWidget {
       cacheWidth: memCacheSize,
       cacheHeight: memCacheSize,
       gaplessPlayback: true,
-      errorBuilder: (context, _, _) => _fallbackAfterFailure(context),
+      errorBuilder: (context, _, _) => _iconFallback(context),
     );
-  }
-
-  Widget _bundledAsset(BuildContext context) {
-    return Image.asset(
-      imageUrl!,
-      fit: fit,
-      errorBuilder: (context, _, _) => _fallbackAfterFailure(context),
-    );
-  }
-
-  /// The tile has artwork on record but it could not be painted. Falling
-  /// through to the icon here is what keeps a corrupt or half-deleted pack
-  /// from ever showing a broken-image box.
-  Widget _fallbackAfterFailure(BuildContext context) {
-    if (placeholderAsset != null && !_hasRemote) return _bundledAsset(context);
-    return _iconFallback(context);
   }
 
   Widget _iconFallback(BuildContext context) {

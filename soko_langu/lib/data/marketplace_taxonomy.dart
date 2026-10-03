@@ -50,7 +50,15 @@ class TaxonomyCategory {
   final String name;
   final String nameSw;
   final String icon;
-  final String image;
+
+  /// Optional bundled-asset path, e.g. `assets/images/categories/x.jpg`.
+  ///
+  /// Normally null: category photographs ship in the downloadable Category
+  /// Artwork Pack and are resolved by id through `CategoryArtworkService`, not
+  /// by a path compiled into the binary. Set this only for a photo that is
+  /// deliberately small enough to bundle, so the pack is still the primary
+  /// source and this is its offline stand-in.
+  final String? image;
   final int order;
   final bool popular;
   final List<String> aliases;
@@ -63,7 +71,7 @@ class TaxonomyCategory {
     required this.name,
     this.nameSw = '',
     required this.icon,
-    required this.image,
+    this.image,
     required this.order,
     this.popular = false,
     this.aliases = const [],
@@ -80,7 +88,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Electronics & Technology',
     nameSw: 'Elektroniki na Teknolojia',
     icon: 'devices',
-    image: 'assets/images/categories/electronics.jpg',
     order: 1,
     popular: true,
     aliases: ['Electronics'],
@@ -115,7 +122,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Computers & Office',
     nameSw: 'Kompyuta na Ofisi',
     icon: 'computer',
-    image: 'assets/images/categories/computers.jpg',
     order: 2,
     popular: true,
     subs: [
@@ -151,7 +157,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Phones & Accessories',
     nameSw: 'Simu na Vifaa',
     icon: 'smartphone',
-    image: 'assets/images/categories/phones.jpg',
     order: 3,
     popular: true,
     subs: [
@@ -191,7 +196,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Fashion & Clothing',
     nameSw: 'Mavazi',
     icon: 'checkroom',
-    image: 'assets/images/categories/fashion.jpg',
     order: 4,
     popular: true,
     aliases: ['Fashion'],
@@ -227,7 +231,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Shoes & Bags',
     nameSw: 'Viatu na Mifuko',
     icon: 'shoes',
-    image: 'assets/images/categories/shoes_bags.jpg',
     order: 5,
     subs: [
       TaxonomySub('sneakers', 'Sneakers', 'shoes', nameSw: 'Sneakers', aliases: ['Shoes']),
@@ -262,7 +265,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Beauty & Personal Care',
     nameSw: 'Urembo na Utunzaji',
     icon: 'spa',
-    image: 'assets/images/categories/health.jpg',
     order: 6,
     popular: true,
     aliases: ['Health & Beauty', 'Health'],
@@ -292,7 +294,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Home & Furniture',
     nameSw: 'Nyumba na Samani',
     icon: 'chair',
-    image: 'assets/images/categories/home_garden.jpg',
     order: 7,
     popular: true,
     aliases: ['Home & Garden', 'Home'],
@@ -323,7 +324,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Kitchen & Household',
     nameSw: 'Jikoni na Nyumbani',
     icon: 'kitchen',
-    image: 'assets/images/categories/kitchen.jpg',
     order: 8,
     subs: [
       TaxonomySub('cookware', 'Cookware & Pots', 'pots', nameSw: 'Vyungu na Sufuria', aliases: ['Kitchen & Dining']),
@@ -351,7 +351,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Vehicles & Motorcycles',
     nameSw: 'Magari na Pikipiki',
     icon: 'car',
-    image: 'assets/images/categories/automotive.jpg',
     order: 9,
     popular: true,
     aliases: ['Automotive'],
@@ -393,7 +392,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Building & Hardware',
     nameSw: 'Ujenzi na Vifaa',
     icon: 'construction',
-    image: 'assets/images/categories/building.jpg',
     order: 10,
     aliases: ['Business & Industrial', 'Business'],
     subs: [
@@ -424,7 +422,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Agriculture & Farming',
     nameSw: 'Kilimo na Ufugaji',
     icon: 'agriculture',
-    image: 'assets/images/categories/agriculture.jpg',
     order: 11,
     aliases: ['Agriculture'],
     subs: [
@@ -452,7 +449,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Food & Beverages',
     nameSw: 'Chakula na Vinywaji',
     icon: 'fastfood',
-    image: 'assets/images/categories/food.jpg',
     order: 12,
     aliases: ['Food'],
     subs: [
@@ -479,7 +475,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Baby, Kids & Toys',
     nameSw: 'Watoto na Vichezeo',
     icon: 'child_care',
-    image: 'assets/images/categories/maternal.jpg',
     order: 13,
     aliases: ['Maternal & Kids', 'Kids, Baby & Maternity', 'Kids'],
     subs: [
@@ -511,7 +506,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Sports & Outdoors',
     nameSw: 'Michezo',
     icon: 'soccer',
-    image: 'assets/images/categories/sports.jpg',
     order: 14,
     aliases: ['Sports & Entertainment', 'Sports'],
     subs: [
@@ -539,7 +533,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Books & Stationery',
     nameSw: 'Vitabu',
     icon: 'book',
-    image: 'assets/images/categories/books.jpg',
     order: 15,
     subs: [
       TaxonomySub('textbooks', 'Textbooks', 'book', nameSw: 'Vitabu vya Shule'),
@@ -568,7 +561,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Jewelry & Accessories',
     nameSw: 'Vito na Mapambo',
     icon: 'diamond',
-    image: 'assets/images/categories/jewelry.jpg',
     order: 16,
     subs: [
       TaxonomySub('necklaces', 'Necklaces', 'necklace', nameSw: 'Shanga', aliases: ['Jewelry']),
@@ -596,7 +588,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Electrical & Solar',
     nameSw: 'Umeme na Sola',
     icon: 'solar',
-    image: 'assets/images/categories/solar.jpg',
     order: 17,
     subs: [
       TaxonomySub('panels', 'Solar Panels', 'solar', nameSw: 'Paneli za Sola'),
@@ -623,7 +614,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Hobbies, Arts & Crafts',
     nameSw: 'Sanaa na Ufundi',
     icon: 'palette',
-    image: 'assets/images/categories/hobbies.jpg',
     order: 18,
     subs: [
       TaxonomySub('instruments', 'Musical Instruments', 'guitar', nameSw: 'Ala za Muziki'),
@@ -648,7 +638,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Pets & Animals',
     nameSw: 'Wanyama',
     icon: 'pets',
-    image: 'assets/images/categories/pets.jpg',
     order: 19,
     subs: [
       TaxonomySub('dogs', 'Dogs', 'dog', nameSw: 'Mbwa'),
@@ -673,7 +662,6 @@ const List<TaxonomyCategory> kMarketplaceTaxonomy = [
     name: 'Physical Services',
     nameSw: 'Huduma',
     icon: 'handyman',
-    image: 'assets/images/categories/services.jpg',
     order: 20,
     aliases: ['Services'],
     subs: [
