@@ -20,15 +20,15 @@ class AdsPromoBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
             colors: [
-              cs.tertiary.withValues(alpha: 0.18),
-              cs.tertiary.withValues(alpha: 0.04),
+              cs.primary.withValues(alpha: 0.18),
+              cs.primary.withValues(alpha: 0.04),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: cs.tertiary.withValues(alpha: 0.1),
+              color: cs.primary.withValues(alpha: 0.1),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -48,13 +48,13 @@ class AdsPromoBanner extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: cs.tertiary.withValues(alpha: 0.16),
+                        color: cs.primary.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         context.tr('boost_promo_title'),
                         style: TextStyle(
-                          color: cs.tertiary,
+                          color: cs.primary,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.2,
@@ -85,13 +85,15 @@ class AdsPromoBanner extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
-                        color: cs.tertiary,
+                        color: cs.primary,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         context.tr('boost_promo_cta'),
                         style: TextStyle(
-                          color: cs.surface,
+                          // green fills take black text, per the brand rule in
+                          // app_colors.dart — white on #00C853 fails contrast
+                          color: cs.onPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -107,7 +109,7 @@ class AdsPromoBanner extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: cs.tertiary.withValues(alpha: 0.08),
+                    color: cs.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -116,13 +118,13 @@ class AdsPromoBanner extends StatelessWidget {
                       Icon(
                         Icons.rocket_launch_rounded,
                         size: 48,
-                        color: cs.tertiary,
+                        color: cs.primary,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         context.tr('boost_product'),
                         style: TextStyle(
-                          color: cs.tertiary,
+                          color: cs.primary,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                           letterSpacing: 1.1,
