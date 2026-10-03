@@ -30,7 +30,14 @@ double getUssdPushFee(double amount) {
 
 class TransactionFeeBreakdown {
   final double productPrice;
-  static const double platformCommissionPercent = 0.035;
+
+  /// Platform commission as a fraction of the product price (0.035 = 3.5%).
+  ///
+  /// Mutable because the owner sets the rate from the admin panel, and the app
+  /// must charge and display exactly what the server charges. It used to be a
+  /// hardcoded `const 0.035`, which meant the app quoted a fee the server never
+  /// took. Refreshed at startup by `PlatformConfigService.loadCommissionRate()`.
+  static double platformCommissionPercent = 0.035;
   final double processingFee;
   final double platformFee;
   final double payoutFee;

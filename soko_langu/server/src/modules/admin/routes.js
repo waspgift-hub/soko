@@ -25,6 +25,32 @@ function invalidateProductCache(product) {
 
 const router = Router();
 
+/**
+ * Public read of the platform commission rate.
+ *
+ * Declared BEFORE `router.use(authenticateAdmin)` on purpose: a buyer must be
+ * shown the rate they are charged before paying, so this cannot sit behind
+ * admin auth — same reasoning that leaves `GET /config/ads` open. Nothing
+ * secret is returned, only a percentage.
+ *
+ * The Flutter app caches this at startup and uses it in place of the previously
+ * hardcoded 3.5%, which is how the app came to disagree with the server.
+ */
+router.get('/config/commission', async (req, res) => {
+  try {
+    const s = (await settingsService.getSettings()) || {};
+    res.json({
+      success: true,
+      data: { platformCommissionPct: settingsService.commissionPercent(s) },
+    });
+  } catch (e) {
+    // Must not block the client. It falls back to charging 0, which is the same
+    // default the server charges when the rate is unknown.
+    console.error('[config:commission] read failed:', e?.message || e);
+    res.json({ success: true, data: { platformCommissionPct: 0 } });
+  }
+});
+
 // All admin routes require admin access: a correct x-admin-secret alone, or
 // strict Firebase auth + admin role (suspended/deleted stay blocked).
 router.use(authenticateAdmin);

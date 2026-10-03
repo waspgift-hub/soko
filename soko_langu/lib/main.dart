@@ -36,6 +36,7 @@ import 'services/groq_service.dart';
 import 'services/localization_service.dart';
 import 'services/error_reporting_service.dart';
 import 'services/local_cache_service.dart';
+import 'services/platform_config_service.dart';
 import 'services/network_state_service.dart';
 import 'repositories/product_repository.dart';
 import 'services/notification_service.dart';
@@ -119,6 +120,11 @@ void main() async {
   } catch (e) {
     debugPrint('LocalCacheService: init failed — $e');
   }
+
+  // Owner-controlled money settings (commission rate). Fire-and-forget: a slow
+  // or failed fetch must not delay first paint, and the service keeps the
+  // previous value rather than resetting the rate.
+  unawaited(PlatformConfigService.instance.loadCommissionRate());
 
   // --- Global error handlers (must be set before runApp to catch startup crashes) ---
   if (!kIsWeb) {
