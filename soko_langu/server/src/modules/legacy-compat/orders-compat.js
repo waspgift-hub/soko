@@ -26,7 +26,39 @@ try {
 const db = getFirebaseFirestore();
 const shippingValidation = require('../shipping/shipping-validation');
 const MAX_DAILY_SALE_AMOUNT = config.business.maxDailySaleAmount;
+const { getSettings, commissionPercent } = require('../admin/settings-service');
+
 const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
+
+/**
+ * Platform commission as a fraction of the product price (0.035 = 3.5%).
+ *
+ * Precedence:
+ *  1. `paymentsAndCurrency.platformCommissionPct` from admin settings — what the
+ *     owner sets in the admin panel, so a rate change applies to the next order
+ *     instead of the next deploy. Without this the panel field was inert: it
+ *     saved to Firestore but no payment path read it.
+ *  2. `PLATFORM_COMMISSION_PERCENT` env var.
+ *  3. 0 — Soko Vibe charges no platform fee by default.
+ *
+ * Resolved per request rather than captured at module load so a panel change
+ * takes effect immediately. settings-service caches for 300s, which bounds the
+ * Firestore cost to one read every five minutes.
+ */
+async function commissionRate() {
+  try {
+    const s = await getSettings();
+    const v = commissionPercent(s);
+    if (v > 0) return v;
+    // A stored 0 is a legitimate "free" setting, so only fall through to the
+    // env chain when the field is absent entirely.
+    if (s?.paymentsAndCurrency?.platformCommissionPct !== undefined) return 0;
+  } catch (_) {
+    // Firestore unavailable: fall through to the env/default chain.
+  }
+  const env = Number(PLATFORM_COMMISSION_PERCENT);
+  return Number.isFinite(env) && env >= 0 ? env : 0;
+}
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -282,7 +314,7 @@ router.post('/clickpesa/preview-ussd-push', paymentLimiter, async (req, res) => 
 
     // Same money math as the payment route, so quote and charge agree.
     const effectivePrice = await resolveEffectivePrice(db, productId, productPrice);
-    const commission = Math.round(effectivePrice * PLATFORM_COMMISSION_PERCENT);
+    const commission = Math.round(effectivePrice * (await commissionRate()));
     // BillPay's 1% is deducted from the collected amount; USSD push is charged
     // by ClickPesa on top, so it is never pre-added.
     const gatewayFee = isBillPay ? calcGatewayFee('billpay', effectivePrice, provider) : 0;
@@ -391,7 +423,7 @@ router.post('/create-marketplace-payment-link', paymentLimiter, async (req, res)
     const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
 
     // Include shipping + platform commission + gateway fee in total sent to ClickPesa
-    const commission = Math.round(effectivePrice * PLATFORM_COMMISSION_PERCENT);
+    const commission = Math.round(effectivePrice * (await commissionRate()));
     // BillPay 1% fee is deducted from collected amount (add it on top so seller still
     // gets full total). USSD Push fee is charged to the customer by ClickPesa on top,
     // so never pre-add it or the processing fee is charged twice.
@@ -582,7 +614,7 @@ router.post('/transactions/create', asyncHandler(async (req, res) => {
   // USSD Push fee is charged to the customer by ClickPesa on top of the amount, so
   // we don't pre-add it here — totalAmount reflects what is actually sent to ClickPesa.
   const processingFee = 0;
-  const platformFee = Math.round(price * PLATFORM_COMMISSION_PERCENT);
+  const platformFee = Math.round(price * (await commissionRate()));
   // Buyer (payer) bears commission; seller receives the full price.
   const totalAmount = price + platformFee;
   const sellerReceives = price;

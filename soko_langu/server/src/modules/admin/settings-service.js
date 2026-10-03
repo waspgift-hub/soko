@@ -193,4 +193,27 @@ async function saveSettings(patch) {
   return merged;
 }
 
-module.exports = { getSettings, saveSettings, getSettingsMasked, DEFAULTS, safeMerge };
+/**
+ * Platform commission as a fraction of the product price (0.035 = 3.5%).
+ *
+ * The admin field is labelled "(%)", so an owner who types "3.5" means 3.5%
+ * while the stored value the payment math wants is 0.035. Rather than force one
+ * unit on the operator, accept both: a value above 1 is read as a percentage
+ * and divided down. Anything outside 0–100 is nonsense and yields 0 (no fee),
+ * which is the safe direction — the platform never overcharges.
+ */
+function commissionPercent(settings) {
+  const v = Number(settings?.paymentsAndCurrency?.platformCommissionPct);
+  if (!Number.isFinite(v) || v < 0) return 0;
+  if (v > 1) return v <= 100 ? v / 100 : 0;
+  return v;
+}
+
+module.exports = {
+  getSettings,
+  saveSettings,
+  getSettingsMasked,
+  commissionPercent,
+  DEFAULTS,
+  safeMerge,
+};
