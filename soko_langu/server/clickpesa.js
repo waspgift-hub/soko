@@ -276,6 +276,31 @@ async function clickpesaPayoutPreview({ amount, orderReference, phoneNumber }) {
   });
 }
 
+/**
+ * Asks ClickPesa what a USSD push of [amount] would actually cost, per payment
+ * method.
+ *
+ * The local USSD_PUSH_FEE_TIERS only covers ClickPesa's own fee. ClickPesa
+ * charges that "in addition to the charges of the MNOs", so the phone balance
+ * drops by more than the tier table predicts. This endpoint is the only source
+ * that knows the real figure, so the buyer is quoted the number they will be
+ * debited rather than an estimate.
+ *
+ * Returns { activeMethods: [{ name, status, fee }], sender } as ClickPesa sends
+ * it; callers must treat every field as optional.
+ */
+async function clickpesaUssdPushPreview({ amount, orderReference, phoneNumber }) {
+  const body = {
+    amount: String(amount),
+    orderReference,
+    currency: 'TZS',
+  };
+  if (phoneNumber) {
+    body.phoneNumber = phoneNumber;
+  }
+  return api('POST', '/payments/preview-ussd-push-request', body);
+}
+
 /** Normalizes the ClickPesa balance payload to a TZS amount (number). */
 async function clickpesaBalance() {
   const raw = await api('GET', '/account/balance');
@@ -326,6 +351,7 @@ module.exports = {
   clickpesaPaymentStatus,
   clickpesaPayout,
   clickpesaPayoutPreview,
+  clickpesaUssdPushPreview,
   clickpesaBalance,
   clickpesaRawBalances,
   clickpesaQueryPayments,

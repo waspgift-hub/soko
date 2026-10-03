@@ -6,7 +6,11 @@ const admin = require('firebase-admin');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { requireUser, isOwnerOrAdmin } = require('./auth-helpers');
 const { sendOneSignalNotification } = require('./notify');
-const { clickpesaCollect, calcGatewayFee } = require('../../../clickpesa');
+const {
+  clickpesaCollect,
+  clickpesaUssdPushPreview,
+  calcGatewayFee,
+} = require('../../../clickpesa');
 const { resolveEffectivePrice } = require('../../../money');
 const { paymentLimiter } = require('../../middleware/rateLimiter');
 const config = require('../../config');
@@ -242,6 +246,100 @@ async function checkDuplicatePayment(productId, buyerId) {
 }
 
 const router = express.Router();
+
+/**
+ * Quotes the real cost of a USSD push before the buyer commits, so the amount
+ * shown at checkout is the amount that leaves their phone balance.
+ *
+ * Why this exists: ClickPesa charges its own fee "in addition to the charges of
+ * the MNOs", so the local USSD_PUSH_FEE_TIERS table under-quotes every
+ * transaction by the MNO fee the buyer never sees. This route asks ClickPesa
+ * for the authoritative per-method fee.
+ *
+ * The chargeable total is recomputed here with the exact same inputs and
+ * arithmetic as /create-marketplace-payment-link (flash-sale-aware price,
+ * shipping, commission, gateway fee) rather than trusting a client-supplied
+ * total — otherwise a client could quote a fee for an amount it never charges,
+ * and the number shown would still not match the debit.
+ */
+router.post('/clickpesa/preview-ussd-push', paymentLimiter, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
+    const { productPrice, productId, phone, shippingCost, paymentMethod, provider } = req.body;
+    if (!productPrice || !productId || !phone) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (req.body.buyerId && decoded.uid !== req.body.buyerId) {
+      return res.status(403).json({ error: 'Buyer ID mismatch' });
+    }
+
+    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
+
+    // Same money math as the payment route, so quote and charge agree.
+    const effectivePrice = await resolveEffectivePrice(db, productId, productPrice);
+    const commission = Math.round(effectivePrice * PLATFORM_COMMISSION_PERCENT);
+    // BillPay's 1% is deducted from the collected amount; USSD push is charged
+    // by ClickPesa on top, so it is never pre-added.
+    const gatewayFee = isBillPay ? calcGatewayFee('billpay', effectivePrice, provider) : 0;
+    const totalAmount = effectivePrice + Math.round(shippingCost || 0) + commission + gatewayFee;
+
+    // BillPay does not use USSD push, so there is no per-method fee to quote.
+    if (isBillPay) {
+      return res.json({
+        success: true,
+        totalAmount,
+        platformFee: commission,
+        gatewayFee,
+        methods: [],
+      });
+    }
+
+    // orderReference is required by ClickPesa but unused for a preview; send a
+    // stable alphanumeric placeholder so nothing downstream tries to reconcile
+    // it against a real order.
+    const previewRef = `pv${Date.now().toString(36)}`;
+    let raw;
+    try {
+      raw = await clickpesaUssdPushPreview({
+        amount: totalAmount,
+        orderReference: previewRef,
+        phoneNumber: phone,
+      });
+    } catch (e) {
+      // A preview failure must never block checkout. The client falls back to
+      // its local tier table, which is an underestimate but not a wrong order.
+      console.error('[CLICKPESA-PREVIEW] ClickPesa call failed:', e.message);
+      return res.status(502).json({ error: 'Fee preview unavailable' });
+    }
+
+    // Normalise: ClickPesa nests the payload under `data` on some responses, and
+    // `fee` is absent when a method is unavailable.
+    const payload = (raw && typeof raw === 'object' && raw.data && typeof raw.data === 'object') ? raw.data : raw;
+    const activeMethods = Array.isArray(payload?.activeMethods) ? payload.activeMethods : [];
+    const methods = activeMethods.map((m) => ({
+      name: typeof m?.name === 'string' ? m.name : '',
+      status: typeof m?.status === 'string' ? m.status : 'UNKNOWN',
+      fee: Number.isFinite(Number(m?.fee)) ? Number(m.fee) : null,
+    }));
+
+    res.json({
+      success: true,
+      totalAmount,
+      platformFee: commission,
+      gatewayFee,
+      methods,
+    });
+  } catch (e) {
+    console.error('[CLICKPESA-PREVIEW] error:', e.message);
+    res.status(500).json({ error: 'Fee preview failed' });
+  }
+});
+
 router.post('/create-marketplace-payment-link', paymentLimiter, async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
