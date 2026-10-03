@@ -2,14 +2,22 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/product_service.dart';
+import '../../models/product_publish_stage.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/product_preview_sheet.dart';
+import '../../services/transfer/transfer_item.dart';
+import '../../services/transfer/transfer_progress.dart';
+import '../../widgets/transfer/media_upload_list.dart';
+import '../../widgets/transfer/transfer_progress_bar.dart';
+import '../../theme/design_tokens.dart';
 import '../../utils/network_error.dart';
 import '../../app/app_transitions.dart';
 import '../../app/routes.dart';
@@ -64,6 +72,31 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String? _existingVideoUrl;
   bool _isWholesale = false;
   bool _saving = false;
+
+  /// Current publish phase, so the UI shows what is actually happening instead
+  /// of an unexplained spinner.
+  ProductPublishStage? _publishStage;
+
+  /// Live upload batch while photos are being sent, so the screen can render
+  /// one real progress row per file. Null outside an upload.
+  TransferBatch? _activeBatch;
+
+  /// Human-readable label for the current phase. Kept as a getter so the copy
+  /// always matches the stage the service is actually in.
+  String? get _publishStageLabel {
+    final stage = _publishStage;
+    if (stage == null) return null;
+    return switch (stage) {
+      ProductPublishStage.checking => context.tr('publishing_check'),
+      ProductPublishStage.uploadingImages =>
+        context.tr('publishing_uploading_images'),
+      ProductPublishStage.saving => context.tr('publishing_saving'),
+      ProductPublishStage.uploadingVideo =>
+        context.tr('publishing_uploading_video'),
+      ProductPublishStage.done => context.tr('publishing_done'),
+    };
+  }
+
   List<_VariantEntry> _variants = [];
 
   void _addVariant() => setState(() => _variants.add(_VariantEntry()));
@@ -585,6 +618,53 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final priceText = _priceController.text.replaceAll(',', '').trim();
+    final parsedPrice = double.tryParse(priceText);
+    if (parsedPrice == null || parsedPrice <= 0) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.tr('enter_valid_price'))));
+      return;
+    }
+
+    // Onyesho la bidhaa kabla ya kuchapisha. Picha zilizochaguliwa bado ziko
+    // ndani ya simu, hivyo preview inaonyesha haraka bila kupakia chochote.
+    final confirmed = await _confirmPreview(parsedPrice);
+    if (!confirmed || !mounted) return;
+
+    await _publish(parsedPrice);
+  }
+
+  /// Shows the buyer-facing preview and returns true when the seller confirms.
+  Future<bool> _confirmPreview(double price) async {
+    final stockText = _stockController.text.replaceAll(',', '').trim();
+    return ProductPreviewSheet.show(
+      context,
+      preview: ProductPreviewSheet(
+        name: _nameController.text,
+        price: price,
+        category: _selectedCategory,
+        subcategory: _selectedSubcategory,
+        stock: int.tryParse(stockText) ?? 0,
+        condition: _selectedCondition,
+        description: _descriptionController.text,
+        brand: _brandController.text,
+        location: _locationController.text,
+        district: _selectedDistrict,
+        isWholesale: _isWholesale,
+        variants: _buildVariantData(),
+        sellerId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        newImagePaths: _newImages.map((f) => f.path).toList(),
+        existingImageUrls: _existingImages,
+        hasVideo: _videoFile != null || (_existingVideoUrl?.isNotEmpty ?? false),
+        publishLabel: _isEditing
+            ? context.tr('update_product')
+            : context.tr('sell_product'),
+        isEditing: _isEditing,
+      ),
+    );
+  }
+
+  Future<void> _publish(double parsedPrice) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final tr = context.tr;
@@ -594,25 +674,30 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
 
-    final priceText = _priceController.text.replaceAll(',', '').trim();
     final stockText = _stockController.text.replaceAll(',', '').trim();
-    final parsedPrice = double.tryParse(priceText);
     final parsedStock = int.tryParse(stockText);
-    if (parsedPrice == null || parsedPrice <= 0) {
-      messenger.showSnackBar(SnackBar(content: Text(tr('enter_valid_price'))));
-      setState(() => _saving = false);
-      return;
-    }
     if (parsedStock == null || parsedStock < 0) {
       messenger.showSnackBar(SnackBar(content: Text(tr('enter_valid_stock'))));
-      setState(() => _saving = false);
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _publishStage = ProductPublishStage.checking;
+    });
     String? createdId;
     try {
       final variantData = _buildVariantData();
+
+      // Step 1 of publish: upload the picked photos as independently tracked
+      // items so the seller sees one real row per file. Done here rather than
+      // inside the service because the rows are UI state; the service is handed
+      // the resulting URLs so nothing is uploaded twice.
+      final List<String>? uploadedImageUrls = await _uploadPickedImages();
+
+      // The seller dismissed the retry sheet, or gave up on this batch.
+      if (!mounted || uploadedImageUrls == null) return;
+
       if (_isEditing) {
         await _productService.updateProduct(
           productId: widget.product!.id,
@@ -637,6 +722,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
               : null,
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
+          uploadedNewImages: uploadedImageUrls.isEmpty
+              ? null
+              : uploadedImageUrls,
           imageMetadata: [..._existingMeta, ..._newMeta].isEmpty
               ? null
               : [..._existingMeta, ..._newMeta],
@@ -653,6 +741,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           currency: 'TZS',
           stock: parsedStock,
           imageFiles: _newImages,
+          imageUrls: uploadedImageUrls,
           imageMetadata: _newMeta.isEmpty ? null : _newMeta,
           videoFile: _videoFile,
           videoUrl: _videoFile == null ? _existingVideoUrl : null,
@@ -669,10 +758,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
           barcode: _barcodeController.text.isNotEmpty
               ? _barcodeController.text.trim()
               : null,
+          onProgress: (stage) {
+            if (mounted) setState(() => _publishStage = stage);
+          },
         );
       }
 
       if (!mounted) return;
+      // Video is uploaded after the listing is live, so the seller is told up
+      // front instead of wondering where their clip went.
+      if (_videoFile != null && createdId != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(tr('video_will_attach'))),
+        );
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -724,6 +823,142 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
+  /// Uploads the newly picked photos as individually tracked transfers.
+  ///
+  /// Returns the CDN URLs in pick order, or null when the seller backed out of
+  /// a batch that had failures. Only the failed rows are re-sent on retry, so a
+  /// four-photo listing with one bad photo costs one re-upload, not four.
+  ///
+  /// Returns an empty list when there is nothing new to send, which is the
+  /// normal edit case where every photo already lives on the CDN.
+  Future<List<String>?> _uploadPickedImages() async {
+    if (_newImages.isEmpty) return const [];
+
+    setState(() => _publishStage = ProductPublishStage.uploadingImages);
+
+    final batch =
+        _productService.buildImageUploadBatch(_newImages);
+    _activeBatch = batch;
+
+    while (true) {
+      await batch.startAll();
+      if (!mounted) {
+        await batch.dispose();
+        return null;
+      }
+
+      final failures = batch.failedItems.toList();
+      if (failures.isEmpty) break;
+
+      // Offer a retry per row rather than restarting the batch: the succeeded
+      // photos are already stored and re-sending them is pure waste.
+      final retry = await _showUploadFailures(batch);
+      if (!retry || !mounted) {
+        await batch.dispose();
+        _activeBatch = null;
+        return null;
+      }
+      await batch.retryFailed();
+    }
+
+    final urls = batch.succeededValues<String>().cast<String>();
+    await batch.dispose();
+    _activeBatch = null;
+    return urls;
+  }
+
+  /// Explains what failed and why, with a retry that re-runs only those files.
+  Future<bool> _showUploadFailures(TransferBatch batch) async {
+    final failures = batch.failedItems.toList();
+    final messenger = ScaffoldMessenger.of(context);
+    final first = failures.first.progressSnapshot.failure;
+
+    final reasons = <String>{
+      for (final f in failures)
+        _describeFailure(f.progressSnapshot.failure),
+    };
+
+    final retry = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(Icons.cloud_off_rounded, color: Theme.of(ctx).colorScheme.error),
+        title: Text(context.tr('upload_failed')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              failures.length == 1
+                  ? context.tr('upload_failed_one')
+                  : context.tr('upload_failed_many', {'n': '${failures.length}'}),
+            ),
+            const SizedBox(height: Ds.sp3),
+            // Name the cause. "Something went wrong" gives the seller nothing
+            // to act on; these are the actual conditions they can fix.
+            for (final r in reasons)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Ds.sp1),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.chevron_right_rounded, size: 16),
+                    const SizedBox(width: Ds.sp1),
+                    Expanded(child: Text(r, style: const TextStyle(fontSize: 13))),
+                  ],
+                ),
+              ),
+            const SizedBox(height: Ds.sp2),
+            Text(
+              failures.map((f) => f.label).join(', '),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(context.tr('cancel')),
+          ),
+          if (first == null || first.isRetryable)
+            FilledButton.icon(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(context.tr('try_again')),
+            ),
+        ],
+      ),
+    );
+
+    if (retry != true) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.tr('upload_cancelled_notice'))),
+      );
+    }
+    return retry == true;
+  }
+
+  /// Maps a failure to copy the seller can act on. Falls back to the network
+  /// error translator for cases already carrying a localized message.
+  String _describeFailure(TransferFailure? failure) {
+    if (failure == null) return context.tr('upload_failed_generic');
+    return switch (failure.kind) {
+      TransferFailureKind.offline => context.tr('err_no_internet'),
+      TransferFailureKind.interrupted => context.tr('err_upload_interrupted'),
+      TransferFailureKind.cancelled => context.tr('upload_cancelled_notice'),
+      TransferFailureKind.permissionDenied => context.tr('err_permission_denied_media'),
+      TransferFailureKind.tooLarge => context.tr('err_file_too_large'),
+      TransferFailureKind.unsupportedType => context.tr('err_unsupported_file'),
+      TransferFailureKind.server => context.tr('err_server'),
+      TransferFailureKind.authExpired => context.tr('err_session_expired'),
+      TransferFailureKind.unreadableSource => context.tr('err_file_unreadable'),
+      TransferFailureKind.unknown => context.tr('upload_failed_generic'),
+    };
+  }
+
   /// After a successful upload: switch to Home and open the new listing.
   void _openCreatedProduct(String productId) {
     final rootCtx = rootNavigatorKey.currentContext;
@@ -766,10 +1001,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
           style: TextStyle(color: Theme.of(context).colorScheme.primary),
         ),
         actions: [
+          // Onyesho:fungua preview bila kuchapisha, ili muuzaji ajiruhusu
+          // kuangalia kabla ya kutuma.
+          if (!_saving)
+            IconButton(
+              tooltip: context.tr('preview'),
+              icon: const Icon(Icons.visibility_outlined),
+              onPressed: () {
+                final price =
+                    double.tryParse(_priceController.text.replaceAll(',', '').trim());
+                if (price == null || price <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(context.tr('enter_valid_price'))),
+                  );
+                  return;
+                }
+                _confirmPreview(price);
+              },
+            ),
           TextButton(
             onPressed: _saving ? null : _submit,
             child: _saving
-                ? const GoogleLoading(size: 20, strokeWidth: 2)
+                ? GoogleLoading(size: 20, strokeWidth: 2)
                 : Text(
                     _isEditing
                         ? context.tr('update_product').toUpperCase()
@@ -780,7 +1033,41 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Onyesho la hatua inayoendelea. Hana spinner isiyoeleweka: muuzaji
+            // anaona kama picha zinapakia au bidhaa inahifadhiwa.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              child: _saving
+                  ? Container(
+                      width: double.infinity,
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Ds.sp4,
+                        vertical: Ds.sp2,
+                      ),
+                      child: Row(
+                        children: [
+                          const GoogleLoading(size: 14, strokeWidth: 2),
+                          const SizedBox(width: Ds.sp2),
+                          Expanded(
+                            child: Text(
+                              _publishStageLabel ?? '',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(
             16,
@@ -1349,8 +1636,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
           ),
         ),
+              ),
+          ],
+        ),
       ),
-      ),
+    ),
     );
   }
 }

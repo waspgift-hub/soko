@@ -43,6 +43,10 @@ enum MediaOwner {
 /// deliberately no silent fallback from R2 to Cloudinary: a half-migrated
 /// upload path would scatter assets across two hosts, so the user is asked to
 /// retry instead.
+///
+/// Every method takes an optional `onProgress(sent, total)` callback. It is
+/// forwarded to whichever backend is active and is simply ignored by backends
+/// that cannot report bytes, rather than those backends inventing a value.
 class MediaService {
   static bool get _useR2 => ApiConfig.kUseMediaApi;
 
@@ -50,9 +54,14 @@ class MediaService {
     XFile file, {
     String folder = 'soko_langu',
     MediaOwner owner = MediaOwner.product,
+    MediaProgressCallback? onProgress,
   }) {
     return _useR2
-        ? R2MediaService.uploadImage(file, ownerType: owner.wireValue)
+        ? R2MediaService.uploadImage(
+            file,
+            ownerType: owner.wireValue,
+            onProgress: onProgress,
+          )
         : CloudinaryService.uploadImage(file, folder: folder);
   }
 
@@ -60,9 +69,14 @@ class MediaService {
     XFile file, {
     String folder = 'soko_langu',
     MediaOwner owner = MediaOwner.product,
+    MediaProgressCallback? onProgress,
   }) {
     return _useR2
-        ? R2MediaService.uploadVideo(file, ownerType: owner.wireValue)
+        ? R2MediaService.uploadVideo(
+            file,
+            ownerType: owner.wireValue,
+            onProgress: onProgress,
+          )
         : CloudinaryService.uploadVideo(file);
   }
 
@@ -70,9 +84,14 @@ class MediaService {
     String filePath, {
     String folder = 'soko_langu',
     MediaOwner owner = MediaOwner.product,
+    MediaProgressCallback? onProgress,
   }) {
     return _useR2
-        ? R2MediaService.uploadFromPath(filePath, ownerType: owner.wireValue)
+        ? R2MediaService.uploadFromPath(
+            filePath,
+            ownerType: owner.wireValue,
+            onProgress: onProgress,
+          )
         : CloudinaryService.uploadFromPath(filePath, folder: folder);
   }
 
@@ -80,9 +99,14 @@ class MediaService {
     List<XFile> files, {
     String folder = 'soko_langu',
     MediaOwner owner = MediaOwner.product,
+    void Function(int index, int sent, int total)? onProgress,
   }) {
     return _useR2
-        ? R2MediaService.uploadMultiple(files, ownerType: owner.wireValue)
+        ? R2MediaService.uploadMultiple(
+            files,
+            ownerType: owner.wireValue,
+            onProgress: onProgress,
+          )
         : CloudinaryService.uploadMultiple(files, folder: folder);
   }
 
@@ -91,8 +115,9 @@ class MediaService {
   static Future<String> uploadFileAsImage(
     File file, {
     MediaOwner owner = MediaOwner.user,
+    MediaProgressCallback? onProgress,
   }) {
-    return uploadImage(XFile(file.path), owner: owner);
+    return uploadImage(XFile(file.path), owner: owner, onProgress: onProgress);
   }
 
   /// Uploads a KYC identity document to the private store.
@@ -101,13 +126,23 @@ class MediaService {
   /// Kept out of [uploadImage] on purpose: identity documents must never share a
   /// code path with public marketplace media, where a mistaken flag or owner
   /// would publish a passport photo.
-  static Future<String> uploadKycImage(XFile file) {
+  static Future<String> uploadKycImage(
+    XFile file, {
+    MediaProgressCallback? onProgress,
+  }) {
     if (!_useR2) {
       throw NetworkError(
         message: 'KYC documents require private R2 storage',
         userMessage: 'Tafadhali jaribu tena',
       );
     }
-    return R2MediaService.uploadKycImage(file);
+    return R2MediaService.uploadKycImage(file, onProgress: onProgress);
   }
 }
+
+/// Byte-count progress callback shared by every upload entry point.
+///
+/// [total] is the real size of the payload actually being sent, which for an
+/// image is the *compressed* size — reporting the original would let the bar
+/// stall below 100% on a large photo.
+typedef MediaProgressCallback = void Function(int sent, int total);
