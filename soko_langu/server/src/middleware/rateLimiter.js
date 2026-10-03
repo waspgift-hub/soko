@@ -142,6 +142,17 @@ const aiLimiter = rateLimit({ max: 20, windowMs: 60000 });
 // authenticated uid and falls back to the IP only when there is no session.
 const userKeyed = (req) => (req.user && req.user.id ? `u:${req.user.id}` : `ip:${clientIp(req)}`);
 
+// Lyrics lookup is a cache hit most of the time (24h TTL per song), but the AI
+// fallback spends provider tokens on every miss, and a miss is cheap to force by
+// asking for songs that do not exist. 10/minute per user is generous for someone
+// flipping through their own library and stops this endpoint being used as a
+// token faucet. Defined here because it depends on `userKeyed`.
+const lyricsLimiter = rateLimit({
+  max: 10,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
+
 // OTP: a loose global ceiling. The real per-target guards (per-phone cooldown,
 // per-phone quota, per-IP quota) live in otpGuard and are keyed on the phone
 // number, which is what actually stops one target being spammed.
@@ -194,6 +205,7 @@ module.exports = {
   paymentLimiter,
   searchLimiter,
   aiLimiter,
+  lyricsLimiter,
   otpRequestLimiter,
   otpVerifyLimiter,
   handoverLimiter,
