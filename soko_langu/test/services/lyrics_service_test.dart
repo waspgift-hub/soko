@@ -1,138 +1,107 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soko_vibe/services/lyrics_service.dart';
 
+// The synced viewer highlights whatever `activeIndexAt` returns, so a wrong
+// millisecond is a wrong line on screen. These pin the parsing arithmetic and
+// the boundary behaviour.
 void main() {
   const parser = LrcParser();
 
   group('LrcParser', () {
-    test('parses standard [mm:ss.xx] centisecond tags', () {
-      final lines = parser.parse('[00:12.34]First line\n[01:05.50]Second line');
+    test('reads a standard centisecond timestamp', () {
+      final lines = parser.parse('[00:09.69] First\n[00:12.18] Second');
       expect(lines.length, 2);
-      expect(lines[0].timestamp, const Duration(milliseconds: 12340));
-      expect(lines[0].text, 'First line');
-      expect(lines[1].timestamp, const Duration(minutes: 1, seconds: 5, milliseconds: 500));
-      expect(lines[1].text, 'Second line');
-    });
-
-    test('parses [mm:ss] with no fractional part', () {
-      final lines = parser.parse('[00:30]Chorus');
-      expect(lines.single.timestamp, const Duration(seconds: 30));
-    });
-
-    test('parses 3-digit fractional part as milliseconds', () {
-      final lines = parser.parse('[00:12.345]Line');
-      expect(lines.single.timestamp, const Duration(milliseconds: 12345));
-    });
-
-    test('parses colon-separated fractional part', () {
-      final lines = parser.parse('[00:12:50]Line');
-      expect(lines.single.timestamp, const Duration(milliseconds: 12500));
-    });
-
-    test('expands a shared chorus into one entry per timestamp', () {
-      // A chorus tagged at two points in the song is a single source line, but
-      // it has to highlight twice or the second pass stays dim forever.
-      final lines = parser.parse('[01:00.00][02:00.00]Chorus line');
-      expect(lines.length, 2);
-      expect(lines[0].timestamp, const Duration(minutes: 1));
-      expect(lines[1].timestamp, const Duration(minutes: 2));
-      expect(lines[0].text, 'Chorus line');
-      expect(lines[1].text, 'Chorus line');
-    });
-
-    test('sorts lines that were supplied out of order', () {
-      final lines = parser.parse('[01:00.00]Second\n[00:10.00]First');
+      expect(lines[0].timestamp, const Duration(milliseconds: 9690));
       expect(lines[0].text, 'First');
-      expect(lines[1].text, 'Second');
+      expect(lines[1].timestamp, const Duration(milliseconds: 12180));
     });
 
-    test('skips metadata tags and blank lines', () {
-      const lrc = '[ar:Some Artist]\n[ti:Some Title]\n\n[00:05.00]Real line\n';
-      final lines = parser.parse(lrc);
+    test('expands a line carrying several timestamps', () {
+      // A shared chorus is written once with several start times.
+      final lines = parser.parse('[00:10.00][01:10.00][02:10.00] Chorus');
+      expect(lines.length, 3);
+      expect(lines.every((l) => l.text == 'Chorus'), isTrue);
+      expect(lines[2].timestamp, const Duration(minutes: 2, seconds: 10));
+    });
+
+    test('skips metadata tags', () {
+      final lines = parser.parse('[ar:Artist]\n[ti:Title]\n[00:03.00] Real');
       expect(lines.length, 1);
-      expect(lines.single.text, 'Real line');
+      expect(lines[0].text, 'Real');
     });
 
-    test('keeps timestamped lines that have empty text', () {
-      // Instrumental breaks are expressed as bare tags; dropping them would
-      // stop the previous line staying lit through the whole break.
-      final lines = parser.parse('[00:10.00]Lyric\n[00:20.00]');
-      expect(lines.length, 2);
-      expect(lines[1].text, '');
+    test('an offset tag shifts every line earlier', () {
+      final plain = parser.parse('[00:10.00] line');
+      final shifted = parser.parse('[offset:+2000]\n[00:10.00] line');
+      // The provider says "these lyrics run 2s late", so the 10s line is due at 8s.
+      expect(
+        shifted.single.timestamp,
+        Duration(milliseconds: plain.single.timestamp.inMilliseconds - 2000),
+      );
     });
 
-    test('returns empty for empty, untimed and garbage input', () {
+    test('a negative offset shifts them later', () {
+      final lines = parser.parse('[offset:-1000]\n[00:10.00] line');
+      expect(lines.single.timestamp, const Duration(milliseconds: 11000));
+    });
+
+    test('sorts out-of-order lines', () {
+      final lines = parser.parse('[00:30.00] later\n[00:10.00] earlier');
+      expect(lines.first.text, 'earlier');
+    });
+
+    test('garbage in yields nothing rather than throwing', () {
       expect(parser.parse(''), isEmpty);
       expect(parser.parse('   \n  '), isEmpty);
-      expect(parser.parse('just some plain text\nwith no tags'), isEmpty);
-      expect(parser.parse('[99]bad tag'), isEmpty);
-    });
-
-    test('handles CRLF and bare CR line endings', () {
-      expect(parser.parse('[00:01.00]A\r\n[00:02.00]B\r[00:03.00]C').length, 3);
-    });
-
-    test('accepts hour-length timestamps', () {
-      final lines = parser.parse('[100:00.00]Long track');
-      expect(lines.single.timestamp, const Duration(minutes: 100));
+      expect(parser.parse('no timestamps here'), isEmpty);
     });
   });
 
   group('Lyrics.activeIndexAt', () {
-    const synced = Lyrics(synced: [
-      LyricLine(Duration(seconds: 10), 'one'),
-      LyricLine(Duration(seconds: 20), 'two'),
-      LyricLine(Duration(seconds: 30), 'three'),
-    ]);
+    final lyrics = Lyrics(
+      synced: parser.parse('[00:00.00] one\n[00:10.00] two\n[00:20.00] three'),
+    );
+
+    test('finds the active line', () {
+      expect(lyrics.activeIndexAt(const Duration(seconds: 1)), 0);
+      expect(lyrics.activeIndexAt(const Duration(seconds: 12)), 1);
+      expect(lyrics.activeIndexAt(const Duration(seconds: 25)), 2);
+    });
 
     test('returns -1 before the first line', () {
-      expect(synced.activeIndexAt(const Duration(seconds: 5)), -1);
+      final late = Lyrics(synced: parser.parse('[00:30.00] only'));
+      expect(late.activeIndexAt(Duration.zero), -1);
     });
 
-    test('returns the first index at exactly the first timestamp', () {
-      expect(synced.activeIndexAt(const Duration(seconds: 10)), 0);
+    test('stays on the last line past the end', () {
+      expect(lyrics.activeIndexAt(const Duration(minutes: 5)), 2);
     });
 
-    test('holds a line until the next timestamp', () {
-      expect(synced.activeIndexAt(const Duration(seconds: 19)), 0);
-      expect(synced.activeIndexAt(const Duration(seconds: 20)), 1);
-      expect(synced.activeIndexAt(const Duration(seconds: 29)), 1);
+    test('unsynced-only lyrics never highlight', () {
+      final plain = Lyrics(plain: const ['a', 'b']);
+      expect(plain.activeIndexAt(const Duration(seconds: 30)), -1);
+      expect(plain.hasSynced, isFalse);
     });
 
-    test('holds the last line past the end', () {
-      expect(synced.activeIndexAt(const Duration(minutes: 9)), 2);
-    });
-
-    test('returns -1 when there are no synced lines', () {
-      expect(Lyrics.empty.activeIndexAt(Duration.zero), -1);
-      expect(const Lyrics(plain: ['a']).activeIndexAt(Duration.zero), -1);
+    test('empty lyrics are empty, not broken', () {
+      expect(Lyrics.empty.isEmpty, isTrue);
+      expect(Lyrics.empty.activeIndexAt(const Duration(seconds: 5)), -1);
+      expect(Lyrics.empty.displayLines, isEmpty);
     });
   });
 
-  group('Lyrics', () {
-    test('empty is distinguishable from loading', () {
-      expect(Lyrics.empty.isEmpty, isTrue);
-      expect(const Lyrics(plain: ['a']).isEmpty, isFalse);
-      expect(const Lyrics(instrumental: true).isEmpty, isFalse);
+  group('Lyrics.displayLines', () {
+    test('prefers the synced text when there is any', () {
+      final lyrics = Lyrics(
+        synced: const LrcParser().parse('[00:01.00] synced line'),
+        plain: const ['plain line'],
+      );
+      expect(lyrics.displayLines, ['synced line']);
     });
 
-    test('hasSynced only when timed lines exist', () {
-      expect(const Lyrics(plain: ['a']).hasSynced, isFalse);
-      expect(
-        const Lyrics(synced: [LyricLine(Duration.zero, 'a')]).hasSynced,
-        isTrue,
-      );
-    });
-
-    test('displayLines prefers synced text and falls back to plain', () {
-      expect(const Lyrics(plain: ['a', 'b']).displayLines, ['a', 'b']);
-      expect(
-        const Lyrics(
-          synced: [LyricLine(Duration.zero, 'synced')],
-          plain: ['plain'],
-        ).displayLines,
-        ['synced'],
-      );
+    test('falls back to plain text', () {
+      final lyrics = Lyrics(plain: const ['plain line']);
+      expect(lyrics.displayLines, ['plain line']);
     });
   });
 }

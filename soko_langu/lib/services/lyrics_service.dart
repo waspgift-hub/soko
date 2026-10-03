@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+
+import 'api_config.dart';
 
 /// One timed lyric line parsed from LRC text.
 class LyricLine {
@@ -86,9 +89,24 @@ class LrcParser {
   /// Parses [raw] into time-ordered lines. Untimed or malformed input yields
   /// an empty list rather than throwing — a lyrics provider is best-effort and
   /// must never take the player down.
+  ///
+  /// An `[offset:+N]` tag shifts the whole file N ms earlier. It used to be
+  /// skipped as generic metadata, which silently desynchronised any track whose
+  /// provider recorded an offset.
+  ///
+  /// Per the LRC convention a POSITIVE offset shifts lyrics earlier, so it is
+  /// SUBTRACTED from each stamp: `[offset:+2000]` makes a 00:10 line due at 00:08.
   List<LyricLine> parse(String raw) {
     if (raw.trim().isEmpty) return const [];
     final lines = <LyricLine>[];
+
+    var offsetMs = 0;
+    final offsetMatch = RegExp(
+      r'\[offset:([+-]?\d+)\]',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    if (offsetMatch != null) offsetMs = int.tryParse(offsetMatch.group(1)!) ?? 0;
+
     for (final rawLine in raw.split(RegExp(r'\r\n|\r|\n'))) {
       final line = rawLine.trim();
       if (line.isEmpty) continue;
@@ -109,7 +127,13 @@ class LrcParser {
             ? int.parse(fracRaw)
             : int.parse(fracRaw.padRight(3, '0'));
         lines.add(
-          LyricLine(Duration(minutes: min, seconds: sec, milliseconds: fracMs), text),
+          LyricLine(
+            Duration(
+              milliseconds:
+                  min * 60000 + sec * 1000 + fracMs - offsetMs,
+            ),
+            text,
+          ),
         );
       }
     }
@@ -202,12 +226,27 @@ class LyricsService {
 
   /// Exact match, then search. The order matters: search alone regularly picks
   /// a karaoke or cover version of the same title.
+  ///
+  /// The server is tried first, because it adds the AI fallback for songs the
+  /// database does not have, and because it is the only place a provider can be
+  /// cached and rate limited. LRCLIB stays as a direct fallback for when the
+  /// app's own backend is unreachable (poor network on the device, server down).
   Future<Lyrics> fetch({
     required String track,
     String artist = '',
     String album = '',
     Duration? duration,
   }) async {
+    if (track.trim().isEmpty) return Lyrics.empty;
+
+    final viaServer = await fetchViaServer(
+      track: track,
+      artist: artist,
+      album: album,
+      duration: duration,
+    );
+    if (!viaServer.isEmpty) return viaServer;
+
     if (duration != null && duration > Duration.zero) {
       final exact = await fetchExact(
         track: track,
@@ -218,6 +257,91 @@ class LyricsService {
       if (!exact.isEmpty) return exact;
     }
     return search(track: track, artist: artist, duration: duration);
+  }
+
+  /// Asks our own backend for lyrics.
+  ///
+  /// Going direct to LRCLIB from the app meant every phone on the network hit a
+  /// free community API with no key, no cache and no backoff, which is how a
+  /// popular feature gets an upstream to block. The server caches per song for
+  /// 24h and can generate lyrics through the AI gateway when no database row
+  /// matches - neither of which is possible from the client.
+  ///
+  /// Returns [Lyrics.empty] on any failure, so [fetch] falls through to the
+  /// direct provider rather than surfacing an error to the player.
+  Future<Lyrics> fetchViaServer({
+    required String track,
+    String artist = '',
+    String album = '',
+    Duration? duration,
+    bool allowAi = true,
+  }) async {
+    if (track.trim().isEmpty) return Lyrics.empty;
+
+    // The endpoint is authenticated (it can spend AI tokens), so an
+    // unauthenticated call is expected to fail and simply falls through.
+    String? token;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      token = user == null ? null : await user.getIdToken();
+    } catch (_) {
+      token = null;
+    }
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/music/lyrics').replace(
+      queryParameters: {
+        'title': track,
+        if (artist.trim().isNotEmpty) 'artist': artist,
+        if (album.trim().isNotEmpty) 'album': album,
+        if (duration != null) 'durationMs': '${duration.inMilliseconds}',
+        if (!allowAi) 'ai': '0',
+      },
+    );
+
+    try {
+      final res = await _client
+          .get(uri, headers: {if (token != null) 'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) return Lyrics.empty;
+      final body = jsonDecode(res.body);
+      final data = body is Map ? body['data'] : null;
+      if (data is! Map) return Lyrics.empty;
+
+      final lrc = (data['lrc'] as String?) ?? '';
+      final synced = const LrcParser().parse(lrc);
+
+      // Plain text with no timestamps still deserves to display, evenly timed,
+      // so the synced view has something to follow.
+      final plain = synced.isEmpty
+          ? lrc
+              .split(RegExp(r'\r\n|\r|\n'))
+              .map((l) => l.replaceAll(RegExp(r'^\[\d{1,3}:\d{2}[.:]?\d{0,3}\]\s*'), '').trim())
+              .where((l) => l.isNotEmpty)
+              .toList(growable: false)
+          : const <String>[];
+
+      return Lyrics(
+        synced: synced.isEmpty && plain.isNotEmpty && duration != null
+            ? _estimate(plain, duration)
+            : synced,
+        plain: synced.isEmpty ? plain : const <String>[],
+      );
+    } catch (_) {
+      return Lyrics.empty;
+    }
+  }
+
+  /// Spreads unsynced lines across a known duration so the viewer can still
+  /// highlight in step with playback.
+  static List<LyricLine> _estimate(List<String> lines, Duration duration) {
+    if (lines.isEmpty) return const [];
+    final stepMs = duration.inMilliseconds <= 0
+        ? 0
+        : (duration.inMilliseconds / lines.length).round();
+    return [
+      for (var i = 0; i < lines.length; i++)
+        LyricLine(Duration(milliseconds: i * stepMs), lines[i]),
+    ];
   }
 
   /// Higher is better. Synced lyrics dominate, then duration proximity.

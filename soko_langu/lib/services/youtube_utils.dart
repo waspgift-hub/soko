@@ -1,9 +1,21 @@
 /// YouTube URL helpers for the profile media queue.
 ///
-/// Sellers paste plain YouTube links (watch / youtu.be / shorts / live /
-/// embed) as a product video. YouTube never serves directly playable mp4
-/// URLs, so these links play through the privacy-enhanced nocookie embed in
-/// a WebView instead of the video_player engine.
+/// SCOPE: this exists for YouTube RESULTS in the music tab, not for seller
+/// product videos. Sellers upload their own video file (see
+/// add_product_screen.dart `_pickVideo` → Cloudflare R2) and it plays through
+/// the normal video_player engine; no seller-facing screen anywhere accepts a
+/// YouTube URL for a listing.
+///
+/// Why YouTube is not a seller-video path: YouTube never serves directly
+/// playable mp4 URLs, so an embedded link only plays while the uploader permits
+/// embedding. That permission is the uploader's choice, and YouTube answers 101
+/// / 150 / 153 — "cannot play inside the app" — when it is withheld. Music
+/// videos in particular almost always have embedding disabled, so a feature
+/// built on embedded YouTube looks broken in exactly the place users try it.
+///
+/// The helpers below therefore only recognise a YouTube link so it can be
+/// played through the privacy-enhanced nocookie embed, with an explicit
+/// "watch on YouTube" escape when the uploader says no.
 bool _validVideoId(String id) =>
     RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
 

@@ -11,6 +11,7 @@ import '../../services/profile_media_controller.dart';
 import '../../services/profile_media_session.dart';
 import '../../services/youtube_search_service.dart';
 import '../../widgets/ads/ad_slot.dart';
+import '../../widgets/song_cover.dart';
 import '../../theme/app_dimens.dart';
 import '../../services/ads/ad_config.dart';
 
@@ -63,6 +64,9 @@ String _fmtMs(int ms) {
         album: s.album == 'Unknown' ? '' : s.album,
         duration:
             s.durationMs > 0 ? Duration(milliseconds: s.durationMs) : null,
+        // Carried on the item so the player screen shows the real cover
+        // without asking for the media permission a second time.
+        artwork: s.artwork,
       );
 
 class _LocalSongsTab extends StatefulWidget {
@@ -78,6 +82,12 @@ class _LocalSongsTabState extends State<_LocalSongsTab>
   List<LocalSong>? _songs;
   bool _loading = true;
   bool _denied = false;
+
+  /// On-device library search. Held in state so typing filters the list that is
+  /// already in memory — the songs are already scanned, so this never touches
+  /// the network or re-reads the media store.
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
 
   bool get _supported =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
@@ -159,51 +169,106 @@ class _LocalSongsTabState extends State<_LocalSongsTab>
         ),
       );
     }
-    final songs = _songs ?? const <LocalSong>[];
-    if (songs.isEmpty) {
+    final all = _songs ?? const <LocalSong>[];
+    // Search filters what is shown but the play queue stays the whole library,
+    // so tapping a result does not stop the next song after it.
+    final songs = MusicLibraryService.search(all, _query);
+    if (all.isEmpty) {
       return Center(child: Text(context.tr('no_songs_found')));
     }
-    return ListView.separated(
-      itemCount: songs.length + 1,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        if (i == songs.length) {
-          // Footer placement: after the last track so the ad is never between
-          // two tappable rows and never interferes with playback controls.
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppInsets.lg),
-            child: AdSlot(
-              placement: AdPlacement.musicFeedFooter,
-              variant: AdSlotVariant.feedGap,
-            ),
-          );
-        }
-        final s = songs[i];
-        return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.music_note)),
-          title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            s.artist,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+    if (songs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off, size: 48),
+            const SizedBox(height: 8),
+            Text('${context.tr('no_songs_found')} — "$_query"'),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: [
+        _buildSearchField(),
+        Expanded(
+          child: ListView.separated(
+            itemCount: songs.length + 1,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              if (i == songs.length) {
+                // Footer placement: after the last track so the ad is never
+                // between two tappable rows and never interferes with playback
+                // controls.
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppInsets.lg),
+                  child: AdSlot(
+                    placement: AdPlacement.musicFeedFooter,
+                    variant: AdSlotVariant.feedGap,
+                  ),
+                );
+              }
+              final s = songs[i];
+              return ListTile(
+                leading: SongCover(song: s, size: 48),
+                title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  s.displayArtist.isEmpty ? s.displayAlbum : s.displayArtist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Text(
+                  _fmtMs(s.durationMs),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+                onTap: () async {
+                  await ProfileMediaSession.instance.playMusicQueue(
+                    items: all.map(_songItem).toList(),
+                    startAt: all.indexOf(s),
+                  );
+                  if (context.mounted) context.push(AppRoutes.nowPlaying);
+                },
+              );
+            },
           ),
-          trailing: Text(
-            _fmtMs(s.durationMs),
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 12,
-            ),
-          ),
-          onTap: () async {
-            await ProfileMediaSession.instance.playMusicQueue(
-              items: songs.map(_songItem).toList(),
-              startAt: i,
-            );
-            if (context.mounted) context.push(AppRoutes.nowPlaying);
-          },
-        );
-      },
+        ),
+      ],
     );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppInsets.lg, AppInsets.sm, AppInsets.lg, 4),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _query = v),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          isDense: true,
+          prefixIcon: const Icon(Icons.search),
+          hintText: context.tr('search_local_songs', 'Search songs on your phone'),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override

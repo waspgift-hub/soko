@@ -207,13 +207,23 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
         child: SizedBox(
           width: size,
           height: size,
-          child: thumb != null && thumb.isNotEmpty
-              ? Image.network(
-                  thumb,
+          // Local songs carry their embedded art on the item, so a device track
+          // finally shows its real cover instead of the gradient placeholder.
+          // Network results (YouTube) keep using the thumbnail URL.
+          child: item.artwork != null
+              ? Image.memory(
+                  item.artwork!,
                   fit: BoxFit.cover,
+                  gaplessPlayback: true,
                   errorBuilder: (_, _, _) => _artworkFallback(scheme),
                 )
-              : _artworkFallback(scheme),
+              : thumb != null && thumb.isNotEmpty
+                  ? Image.network(
+                      thumb,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _artworkFallback(scheme),
+                    )
+                  : _artworkFallback(scheme),
         ),
       ),
     );

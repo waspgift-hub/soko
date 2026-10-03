@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show File;
+import 'dart:typed_data';
 
 import 'package:video_player/video_player.dart';
 
@@ -27,6 +28,14 @@ class ProfileMediaItem {
   /// render a seek bar before the player has loaded the file.
   final Duration? duration;
 
+  /// Embedded cover art bytes, for tracks that live on the device.
+  ///
+  /// Held on the item rather than looked up at render time so the player screen
+  /// does not need the media permission again, and so a song's cover cannot
+  /// change under the queue while it is playing. Network items use
+  /// [thumbnailUrl] instead and leave this null.
+  final Uint8List? artwork;
+
   const ProfileMediaItem({
     required this.id,
     required this.title,
@@ -36,6 +45,7 @@ class ProfileMediaItem {
     this.artist = '',
     this.album = '',
     this.duration,
+    this.artwork,
   });
 
   bool get isLocalFile => localPath != null && localPath!.isNotEmpty;
