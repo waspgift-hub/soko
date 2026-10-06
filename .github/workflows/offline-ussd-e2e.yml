@@ -1,0 +1,83 @@
+name: Offline USSD E2E Build
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'offline_ussd/**'
+      - 'offline_ussd_app/**'
+      - '.github/workflows/offline-ussd-e2e.yml'
+  pull_request:
+    paths:
+      - 'offline_ussd/**'
+      - 'offline_ussd_app/**'
+      - '.github/workflows/offline-ussd-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-e2e:
+    name: Offline USSD protocol E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run E2E tests
+        working-directory: offline_ussd
+        run: npm test
+
+  windows-exe:
+    name: Build Windows EXE
+    needs: protocol-e2e
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build portable EXE
+        working-directory: offline_ussd
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          npx --yes @yao-pkg/pkg@6.0.0 . --targets node20-win-x64 --output dist/SokoLangu-USSD.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SokoLangu-USSD-Windows
+          path: offline_ussd/dist/SokoLangu-USSD.exe
+
+  android-apk:
+    name: Build Offline USSD APK
+    needs: protocol-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+      - name: Generate Android project
+        run: flutter create --platforms=android --org com.sokolangu --project-name soko_langu_offline_ussd offline_ussd_build
+      - name: Install client source
+        run: |
+          cp offline_ussd_app/pubspec.yaml offline_ussd_build/pubspec.yaml
+          rm -rf offline_ussd_build/lib
+          cp -R offline_ussd_app/lib offline_ussd_build/lib
+      - name: Build release APK
+        working-directory: offline_ussd_build
+        run: |
+          flutter pub get
+          flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SokoLangu-Offline-USSD-APK
+          path: offline_ussd_build/build/app/outputs/flutter-apk/app-release.apk
