@@ -1,0 +1,15 @@
+name: soko_langu_offline_ussd
+description: Soko Langu offline LAN USSD client
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+
+flutter:
+  uses-material-design: true
