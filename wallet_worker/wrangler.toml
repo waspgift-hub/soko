@@ -1,0 +1,13 @@
+name = "soko-vibe-wallet"
+main = "src/index.ts"
+compatibility_date = "2026-10-10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "soko-vibe-wallet"
+database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+
+[vars]
+MONGIKE_BASE_URL = ""
+MONGIKE_COLLECTION_PATH = ""
+MONGIKE_STATUS_PATH = ""
