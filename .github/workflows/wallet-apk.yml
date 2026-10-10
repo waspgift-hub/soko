@@ -1,0 +1,39 @@
+name: Build Soko Vibe Wallet APK
+on:
+  push:
+    paths:
+      - 'wallet_app/**'
+      - '.github/workflows/wallet-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.0'
+          channel: stable
+          cache: true
+      - name: Create Android scaffold
+        run: flutter create --platforms=android --org tz.sokovibe --project-name soko_vibe_wallet build_wallet
+      - name: Copy wallet source
+        run: |
+          cp wallet_app/pubspec.yaml build_wallet/pubspec.yaml
+          cp wallet_app/lib/main.dart build_wallet/lib/main.dart
+      - name: Get packages
+        working-directory: build_wallet
+        run: flutter pub get
+      - name: Build small ARM64 APK
+        working-directory: build_wallet
+        env:
+          SOKO_WALLET_API: ${{ secrets.SOKO_WALLET_API }}
+          SOKO_WALLET_TOKEN: ${{ secrets.SOKO_WALLET_TOKEN }}
+        run: flutter build apk --release --target-platform android-arm64 --dart-define=SOKO_WALLET_API="$SOKO_WALLET_API" --dart-define=SOKO_WALLET_TOKEN="$SOKO_WALLET_TOKEN"
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: soko-vibe-wallet-arm64
+          path: build_wallet/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
