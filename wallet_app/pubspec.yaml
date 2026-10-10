@@ -1,0 +1,15 @@
+name: soko_vibe_wallet
+description: Soko Vibe private wallet client
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+
+flutter:
+  uses-material-design: true
