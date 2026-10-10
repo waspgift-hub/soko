@@ -7,15 +7,18 @@ CREATE TABLE IF NOT EXISTS wallets (
 
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
   wallet_id TEXT NOT NULL,
   amount_tzs INTEGER NOT NULL,
   phone TEXT NOT NULL,
   provider TEXT NOT NULL,
   status TEXT NOT NULL,
   mongike_id TEXT,
+  reference TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(mongike_id)
+  UNIQUE(mongike_id),
+  UNIQUE(order_id)
 );
 
 CREATE TABLE IF NOT EXISTS ledger (
@@ -37,3 +40,4 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 
 CREATE INDEX IF NOT EXISTS idx_payments_wallet ON payments(wallet_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_wallet ON ledger(wallet_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_payment_type ON ledger(payment_id, type);
