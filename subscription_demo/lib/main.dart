@@ -116,7 +116,11 @@ class _SubscriptionFlowState extends State<SubscriptionFlow> {
           CircleAvatar(backgroundColor: selected ? green : const Color(0xFFF1F1F1), child: Icon(Icons.workspace_premium, color: selected ? Colors.white : ink)),
           const SizedBox(width: 13),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)), if (featured) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: green, borderRadius: BorderRadius.circular(99)), child: const Text('BEST', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))]]),
+            Row(children: [
+              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+              if (featured) const SizedBox(width: 8),
+              if (featured) Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: green, borderRadius: BorderRadius.circular(99)), child: const Text('BEST', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))),
+            ]),
             const SizedBox(height: 5), Text(sub, style: const TextStyle(color: Colors.black54)), const SizedBox(height: 7), Text('TZS ${money(amount)}', style: const TextStyle(color: green, fontWeight: FontWeight.w900, fontSize: 18)),
           ])),
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off, color: selected ? green : Colors.black26),
