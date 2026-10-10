@@ -1,172 +1,283 @@
 import 'package:flutter/material.dart';
 
-const green = Color(0xFF0B7A4B);
-const pale = Color(0xFFEAF6F1);
-const ink = Color(0xFF111111);
+const green = Color(0xFF0A8F52);
+const greenDark = Color(0xFF006B3D);
+const greenLight = Color(0xFFE4F7ED);
+const ink = Color(0xFF101417);
+const muted = Color(0xFF5C6874);
 
-void main() => runApp(const DemoApp());
+void main() => runApp(const SokoVibeApp());
 
-class DemoApp extends StatelessWidget {
-  const DemoApp({super.key});
+class SokoVibeApp extends StatelessWidget {
+  const SokoVibeApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Soko Vibe Premium',
-      theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: green), scaffoldBackgroundColor: Colors.white),
-      home: const SubscriptionFlow(),
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: Colors.white,
+        colorScheme: ColorScheme.fromSeed(seedColor: green),
+        fontFamily: 'sans',
+      ),
+      home: const PremiumScreen(),
     );
   }
 }
 
-class SvLogo extends StatelessWidget {
-  const SvLogo({super.key});
+class PremiumScreen extends StatefulWidget {
+  const PremiumScreen({super.key});
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: 38, height: 38,
-    decoration: BoxDecoration(border: Border.all(color: ink, width: 1.8), borderRadius: BorderRadius.circular(11)),
-    alignment: Alignment.center,
-    child: const Text('SV', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: -1.5)),
-  );
+  State<PremiumScreen> createState() => _PremiumScreenState();
 }
 
-class SubscriptionFlow extends StatefulWidget {
-  const SubscriptionFlow({super.key});
-  @override
-  State<SubscriptionFlow> createState() => _SubscriptionFlowState();
-}
+class _PremiumScreenState extends State<PremiumScreen> {
+  bool yearly = true;
+  String selected = 'Seller Pro';
 
-class _SubscriptionFlowState extends State<SubscriptionFlow> {
-  int step = 0;
-  String plan = 'Seller Plus';
-  int price = 14900;
-  String paymentMethod = 'M-Pesa';
+  int get monthlyPrice => selected == 'Seller Plus'
+      ? 14900
+      : selected == 'Seller Pro'
+          ? 29900
+          : 79900;
 
-  void next() => setState(() => step = step < 7 ? step + 1 : 0);
-  void previous() => setState(() => step = step > 0 ? step - 1 : 0);
+  int get yearlyPrice => selected == 'Seller Plus'
+      ? 149900
+      : selected == 'Seller Pro'
+          ? 299900
+          : 799900;
 
   @override
   Widget build(BuildContext context) {
+    final price = yearly ? yearlyPrice : monthlyPrice;
+    final period = yearly ? '/ mwaka' : '/ mwezi';
+
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        leading: step == 0 ? null : IconButton(onPressed: previous, icon: const Icon(Icons.arrow_back_rounded)),
-        title: const Row(children: [SvLogo(), SizedBox(width: 10), Text('Soko Vibe', style: TextStyle(color: ink, fontWeight: FontWeight.w900))]),
-        actions: [Padding(padding: const EdgeInsets.only(right: 18), child: Center(child: Text('${step + 1}/8', style: const TextStyle(color: green, fontWeight: FontWeight.w800))))],
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: GreenGlowPainter()),
+              ),
+            ),
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              child: Column(
+                children: [
+                  _header(),
+                  const SizedBox(height: 24),
+                  _hero(),
+                  const SizedBox(height: 25),
+                  _benefits(),
+                  const SizedBox(height: 22),
+                  _billingToggle(),
+                  const SizedBox(height: 16),
+                  _planCard('Seller Plus', 14900, 149900, '50 AI actions / siku'),
+                  _planCard('Seller Pro', 29900, 299900, '200 AI actions / siku', popular: true),
+                  _planCard('Business', 79900, 799900, '500 AI actions / siku'),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: FilledButton.icon(
+                      onPressed: () => _showPayment(context, price, period),
+                      icon: const Icon(Icons.workspace_premium_rounded),
+                      label: Text('Subscribe now  •  TZS ${money(price)} $period'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: green,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Restore purchase'),
+                    style: TextButton.styleFrom(foregroundColor: green, textStyle: const TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                  const Divider(height: 26),
+                  const Text('Kwa kuendelea, unakubali Terms of Service na Privacy Policy.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 11.5)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      body: Column(children: [
-        LinearProgressIndicator(value: (step + 1) / 8, minHeight: 3, backgroundColor: const Color(0xFFE8E8E8), valueColor: const AlwaysStoppedAnimation(green)),
-        Expanded(child: AnimatedSwitcher(duration: const Duration(milliseconds: 220), child: buildScreen())),
-      ]),
     );
   }
 
-  Widget shell(Widget content, String actionText, VoidCallback action) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(22, 28, 22, 30),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [content, const SizedBox(height: 24), SizedBox(width: double.infinity, height: 55, child: FilledButton(onPressed: action, style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17))), child: Text(actionText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))))]),
-  );
+  Widget _header() => Row(
+        children: [
+          const SvLogo(),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Soko Vibe', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: ink, letterSpacing: -1)),
+              Text('Nunua • Bei Bora • Maendeleo', style: TextStyle(fontSize: 10.5, color: muted, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+          IconButton(onPressed: () => Navigator.maybePop(context), icon: const Icon(Icons.close_rounded, size: 29, color: ink)),
+        ],
+      );
 
-  Widget buildScreen() {
-    switch (step) {
-      case 0: return shell(intro(), 'Angalia Plans', next);
-      case 1: return shell(plans(), 'Endelea na $plan', next);
-      case 2: return shell(details(), 'Endelea kulipa', next);
-      case 3: return shell(methods(), 'Endelea', next);
-      case 4: return shell(confirm(), 'Lipa TZS ${money(price)}', next);
-      case 5: return shell(processing(), 'Demo: Malipo yamefanikiwa', next);
-      case 6: return shell(success(), 'Simamia Subscription', next);
-      default: return shell(manage(), 'Rudi mwanzo', () => setState(() => step = 0));
-    }
+  Widget _hero() => Column(
+        children: [
+          const Text('Upgrade to', textAlign: TextAlign.center, style: TextStyle(fontSize: 39, height: .98, fontWeight: FontWeight.w900, color: ink, letterSpacing: -1.7)),
+          const Text('Soko Vibe Premium', textAlign: TextAlign.center, style: TextStyle(fontSize: 39, height: .98, fontWeight: FontWeight.w900, color: green, letterSpacing: -1.7)),
+          const SizedBox(height: 13),
+          const Text('Pata tools zaidi, visibility zaidi na ukue\nbiashara yako kwa Soko Vibe.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 16, height: 1.35, fontWeight: FontWeight.w500)),
+        ],
+      );
+
+  Widget _benefits() => Row(
+        children: [
+          _benefit(Icons.verified_user_rounded, 'Verified', 'Jenga trust'),
+          _divider(),
+          _benefit(Icons.storefront_rounded, 'Business', 'Manage shop'),
+          _divider(),
+          _benefit(Icons.bar_chart_rounded, 'Analytics', 'Track growth'),
+          _divider(),
+          _benefit(Icons.headset_mic_rounded, 'Support', 'Priority help'),
+        ],
+      );
+
+  Widget _benefit(IconData icon, String title, String sub) => Expanded(
+        child: Column(
+          children: [
+            Container(width: 48, height: 48, decoration: const BoxDecoration(color: greenLight, shape: BoxShape.circle), child: Icon(icon, color: green, size: 25)),
+            const SizedBox(height: 8),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: ink)),
+            const SizedBox(height: 3),
+            Text(sub, textAlign: TextAlign.center, style: const TextStyle(fontSize: 9.5, color: muted, height: 1.15)),
+          ],
+        ),
+      );
+
+  Widget _divider() => Container(width: 1, height: 70, margin: const EdgeInsets.symmetric(horizontal: 4), color: const Color(0xFFE2E7E4));
+
+  Widget _billingToggle() => Container(
+        height: 76,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: const Color(0xFFF7F9F8), borderRadius: BorderRadius.circular(38), border: Border.all(color: const Color(0xFFE5EBE8))),
+        child: Row(
+          children: [
+            Expanded(child: _toggle('Monthly', 'TZS ${money(monthlyPrice)} / month', !yearly)),
+            Expanded(child: Stack(clipBehavior: Clip.none, children: [_toggle('Yearly', 'TZS ${money(yearlyPrice)} / year', yearly), Positioned(top: -14, right: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: greenLight, borderRadius: BorderRadius.circular(20)), child: const Text('SAVE 30%', style: TextStyle(color: greenDark, fontSize: 9, fontWeight: FontWeight.w900))))])),
+          ],
+        ),
+      );
+
+  Widget _toggle(String title, String sub, bool active) => GestureDetector(
+        onTap: () => setState(() => yearly = title == 'Yearly'),
+        child: Container(
+          height: 66,
+          decoration: BoxDecoration(color: active ? green : Colors.transparent, borderRadius: BorderRadius.circular(33), boxShadow: active ? [BoxShadow(color: green.withOpacity(.20), blurRadius: 14, offset: const Offset(0, 6))] : null),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(title, style: TextStyle(color: active ? Colors.white : ink, fontWeight: FontWeight.w900, fontSize: 15)), const SizedBox(height: 2), Text(sub, style: TextStyle(color: active ? Colors.white : muted, fontSize: 9.5, fontWeight: FontWeight.w600))]),
+        ),
+      );
+
+  Widget _planCard(String title, int monthly, int yearlyAmount, String quota, {bool popular = false}) {
+    final active = selected == title;
+    final amount = yearly ? yearlyAmount : monthly;
+    return GestureDetector(
+      onTap: () => setState(() => selected = title),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(17, 17, 17, 16),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF7FCF9) : Colors.white,
+          borderRadius: BorderRadius.circular(23),
+          border: Border.all(color: active ? green : const Color(0xFFE2E7E4), width: active ? 2.2 : 1.2),
+          boxShadow: active ? [BoxShadow(color: green.withOpacity(.10), blurRadius: 18, offset: const Offset(0, 7))] : null,
+        ),
+        child: Column(
+          children: [
+            Row(children: [
+              Expanded(child: Text(yearly ? 'Yearly Plan' : 'Monthly Plan', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ink))),
+              if (popular) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: green, borderRadius: BorderRadius.circular(20)), child: const Text('MOST POPULAR', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))),
+            ]),
+            const SizedBox(height: 5),
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('TZS ${money(amount)}', style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900, color: ink, letterSpacing: -.7)), const SizedBox(width: 5), Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(yearly ? 'per year' : 'per month', style: const TextStyle(color: muted, fontSize: 11))) ]),
+            const SizedBox(height: 10),
+            _line('All premium features'), _line('No ads experience'), _line(quota), _line('Cancel anytime'),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, height: 46, child: active ? FilledButton(onPressed: () => _showPayment(context, amount, yearly ? '/ mwaka' : '/ mwezi'), style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))), child: const Text('Subscribe now', style: TextStyle(fontWeight: FontWeight.w900))) : OutlinedButton(onPressed: () => setState(() => selected = title), style: OutlinedButton.styleFrom(foregroundColor: green, side: const BorderSide(color: green), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))), child: Text('Choose $title', style: const TextStyle(fontWeight: FontWeight.w800))),),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget intro() => Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-    const SizedBox(height: 25),
-    Container(width: 116, height: 116, decoration: BoxDecoration(color: pale, borderRadius: BorderRadius.circular(36)), child: const Icon(Icons.workspace_premium_rounded, color: green, size: 60)),
-    const SizedBox(height: 25),
-    const Text('Soko Vibe Premium', textAlign: TextAlign.center, style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: ink)),
-    const SizedBox(height: 10),
-    const Text('Uwezo zaidi wa kuuza, kukua na kutumia Soko Vibe kwa nguvu zaidi.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 16, height: 1.45)),
-    const SizedBox(height: 28),
-    benefit(Icons.auto_awesome, 'AI zaidi kwa biashara yako'),
-    benefit(Icons.insights_rounded, 'Seller analytics na tools'),
-    benefit(Icons.block_rounded, 'Hakuna matangazo'),
-    benefit(Icons.flash_on_rounded, 'Priority features'),
-  ]);
+  Widget _line(String text) => Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(children: [const Icon(Icons.check_rounded, size: 18, color: green), const SizedBox(width: 7), Text(text, style: const TextStyle(color: muted, fontSize: 12.5, fontWeight: FontWeight.w600))]));
 
-  Widget benefit(IconData icon, String text) => Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [Container(width: 43, height: 43, decoration: BoxDecoration(color: pale, borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: green, size: 21)), const SizedBox(width: 12), Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)))]));
-
-  Widget plans() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Chagua plan yako', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink)),
-    const SizedBox(height: 7), const Text('Chagua inayolingana na biashara yako.', style: TextStyle(color: Colors.black54)), const SizedBox(height: 22),
-    planCard('Seller Plus', 14900, '50 AI actions / siku'),
-    planCard('Seller Pro', 29900, '200 AI actions / siku'),
-    planCard('Business', 79900, '500 AI actions / siku', featured: true),
-  ]);
-
-  Widget planCard(String title, int amount, String sub, {bool featured = false}) {
-    final selected = plan == title;
-    return GestureDetector(
-      onTap: () => setState(() { plan = title; price = amount; }),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 13), padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(color: selected ? pale : Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: selected ? green : const Color(0xFFD8D8D8), width: selected ? 2 : 1)),
-        child: Row(children: [
-          CircleAvatar(backgroundColor: selected ? green : const Color(0xFFF1F1F1), child: Icon(Icons.workspace_premium, color: selected ? Colors.white : ink)),
-          const SizedBox(width: 13),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-              if (featured) const SizedBox(width: 8),
-              if (featured) Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: green, borderRadius: BorderRadius.circular(99)), child: const Text('BEST', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))),
-            ]),
-            const SizedBox(height: 5), Text(sub, style: const TextStyle(color: Colors.black54)), const SizedBox(height: 7), Text('TZS ${money(amount)}', style: const TextStyle(color: green, fontWeight: FontWeight.w900, fontSize: 18)),
-          ])),
-          Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off, color: selected ? green : Colors.black26),
+  void _showPayment(BuildContext context, int amount, String period) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(22, 4, 22, 25),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Thibitisha subscription', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: ink)),
+          const SizedBox(height: 7),
+          Text('$selected  •  TZS ${money(amount)} $period', style: const TextStyle(color: muted, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 18),
+          _payOption(context, 'M-Pesa', Icons.phone_android_rounded),
+          _payOption(context, 'Airtel Money', Icons.phone_iphone_rounded),
+          _payOption(context, 'Mixx by Yas', Icons.account_balance_wallet_rounded),
+          _payOption(context, 'HaloPesa', Icons.payments_rounded),
+          const SizedBox(height: 7),
+          SizedBox(width: double.infinity, height: 52, child: FilledButton(onPressed: () { Navigator.pop(context); _success(context, amount); }, style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17))), child: const Text('Endelea na malipo', style: TextStyle(fontWeight: FontWeight.w900)))),
         ]),
       ),
     );
   }
 
-  Widget details() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Maelezo ya plan', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink)), const SizedBox(height: 20),
-    Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: ink, borderRadius: BorderRadius.circular(24)), child: Row(children: [const CircleAvatar(radius: 26, backgroundColor: green, child: Icon(Icons.workspace_premium, color: Colors.white)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(plan, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)), const SizedBox(height: 5), Text('TZS ${money(price)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900))]))])),
-    const SizedBox(height: 22), const Text('Kinachojumuishwa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), const SizedBox(height: 12),
-    check('AI quota kulingana na plan'), check('No ads'), check('Seller analytics'), check('Priority support'), check('Premium seller tools'),
-  ]);
+  Widget _payOption(BuildContext context, String name, IconData icon) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(13), decoration: BoxDecoration(color: const Color(0xFFF7F9F8), borderRadius: BorderRadius.circular(15)), child: Row(children: [CircleAvatar(radius: 19, backgroundColor: greenLight, child: Icon(icon, color: green, size: 20)), const SizedBox(width: 11), Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800))), const Icon(Icons.chevron_right_rounded, color: muted)]));
 
-  Widget check(String text) => Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [const Icon(Icons.check_circle, color: green), const SizedBox(width: 10), Text(text, style: const TextStyle(fontWeight: FontWeight.w600))]));
+  void _success(BuildContext context, int amount) {
+    showDialog<void>(context: context, builder: (context) => AlertDialog(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)), content: Column(mainAxisSize: MainAxisSize.min, children: [Container(width: 72, height: 72, decoration: const BoxDecoration(color: green, shape: BoxShape.circle), child: const Icon(Icons.check_rounded, color: Colors.white, size: 43)), const SizedBox(height: 17), const Text('Malipo yamefanikiwa!', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 7), Text('$selected imewezeshwa • TZS ${money(amount)}', textAlign: TextAlign.center, style: const TextStyle(color: muted)), const SizedBox(height: 17), SizedBox(width: double.infinity, child: FilledButton(onPressed: () => Navigator.pop(context), style: FilledButton.styleFrom(backgroundColor: green), child: const Text('Done')))])));
+  }
+}
 
-  Widget methods() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Njia ya malipo', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink)), const SizedBox(height: 8), const Text('Chagua njia ya malipo unayotaka.', style: TextStyle(color: Colors.black54)), const SizedBox(height: 22),
-    paymentCard('M-Pesa', Icons.phone_android), paymentCard('Airtel Money', Icons.phone_iphone), paymentCard('Mixx by Yas', Icons.account_balance_wallet), paymentCard('HaloPesa', Icons.payments_outlined),
-  ]);
+class SvLogo extends StatelessWidget {
+  const SvLogo({super.key});
 
-  Widget paymentCard(String name, IconData icon) {
-    final selected = paymentMethod == name;
-    return GestureDetector(onTap: () => setState(() => paymentMethod = name), child: Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: selected ? pale : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: selected ? green : const Color(0xFFD8D8D8), width: selected ? 2 : 1)), child: Row(children: [CircleAvatar(backgroundColor: selected ? green : const Color(0xFFF2F2F2), child: Icon(icon, color: selected ? Colors.white : ink)), const SizedBox(width: 12), Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))), Icon(selected ? Icons.check_circle : Icons.radio_button_off, color: selected ? green : Colors.black26)])));
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 45,
+        height: 45,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF13A964), Color(0xFF08763F)]),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: green.withOpacity(.16), blurRadius: 10, offset: const Offset(0, 5))],
+        ),
+        alignment: Alignment.center,
+        child: const Text('S', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+      );
+}
+
+class GreenGlowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..shader = const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFE5F8EE), Color(0xFFFFFFFF), Color(0xFFF1FBF6)]).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+    final blob = Paint()..color = const Color(0x3313A964);
+    canvas.drawCircle(Offset(-30, 150), 110, blob);
+    canvas.drawCircle(Offset(size.width + 30, 245), 85, blob);
   }
 
-  Widget confirm() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Thibitisha malipo', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink)), const SizedBox(height: 22),
-    summaryRow('Plan', plan), summaryRow('Bei', 'TZS ${money(price)}'), summaryRow('Malipo kupitia', paymentMethod), const Divider(height: 30), summaryRow('Jumla', 'TZS ${money(price)}', strong: true), const SizedBox(height: 20),
-    Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: const Color(0xFFFFF8DD), borderRadius: BorderRadius.circular(15)), child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(Icons.info_outline), SizedBox(width: 9), Expanded(child: Text('Demo hii inaonyesha UI ya payment flow. Gateway halisi itaunganishwa baadaye.'))])),
-  ]);
-
-  Widget summaryRow(String label, String value, {bool strong = false}) => Padding(padding: const EdgeInsets.only(bottom: 16), child: Row(children: [Expanded(child: Text(label, style: const TextStyle(color: Colors.black54))), Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: strong ? 20 : 15, color: strong ? green : ink))]));
-
-  Widget processing() => Column(crossAxisAlignment: CrossAxisAlignment.center, children: [const SizedBox(height: 85), Container(width: 112, height: 112, decoration: const BoxDecoration(color: pale, shape: BoxShape.circle), padding: const EdgeInsets.all(27), child: const CircularProgressIndicator(color: green, strokeWidth: 5)), const SizedBox(height: 28), const Text('Inathibitisha malipo...', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: ink)), const SizedBox(height: 10), const Text('Tafadhali subiri. Usifunge app.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54))]);
-
-  Widget success() => Column(crossAxisAlignment: CrossAxisAlignment.center, children: [const SizedBox(height: 55), Container(width: 112, height: 112, decoration: const BoxDecoration(color: green, shape: BoxShape.circle), child: const Icon(Icons.check_rounded, color: Colors.white, size: 66)), const SizedBox(height: 25), const Text('Malipo yamefanikiwa!', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink)), const SizedBox(height: 9), Text('$plan imewezeshwa kwenye akaunti yako.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54, fontSize: 16)), const SizedBox(height: 24), info('Transaction ID', 'SV-2026-001248'), info('Kiasi', 'TZS ${money(price)}'), info('Status', 'ACTIVE')]);
-
-  Widget info(String label, String value) => Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 9), padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13), decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(13)), child: Row(children: [Expanded(child: Text(label, style: const TextStyle(color: Colors.black54))), Text(value, style: const TextStyle(fontWeight: FontWeight.w800))]));
-
-  Widget manage() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Subscription yako', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink)), const SizedBox(height: 18),
-    Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: ink, borderRadius: BorderRadius.circular(24)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(plan, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 6), Text('TZS ${money(price)} / mwezi', style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), const SizedBox(height: 12), Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: green, borderRadius: BorderRadius.circular(99)), child: const Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)))])),
-    const SizedBox(height: 15), info('Inaanza', '10 Oct 2026'), info('Inaisha', '10 Nov 2026'), info('Auto-renew', 'Imewashwa'),
-  ]);
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 String money(int value) => value.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+$)'), (_) => ',');
