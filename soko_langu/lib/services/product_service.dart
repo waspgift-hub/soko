@@ -107,34 +107,19 @@ class ProductService {
       await user.reload();
       await user.getIdToken(true);
 
-      step = 'kyc-check';
+      // Product listing does not require KYC approval. KYC remains enforced
+      // by the dedicated sensitive flows (for example withdrawals/payouts).
+      // Keep the suspension guard here as an early, user-friendly check; the
+      // Firestore rules and authenticated API independently enforce it.
+      step = 'seller-profile-check';
       final userDoc = await _db.collection('users').doc(user.uid).get();
       final userData = userDoc.data();
-      // Firestore rules already block writes for suspended accounts
-      // (notSuspended()); fail early with a clear message instead of letting
-      // the write surface a raw permission-denied.
       if (userData?['isSuspended'] == true) {
         throw NetworkError(
           message: "Account suspended - cannot list products",
           userMessage: 'account_suspended_seller',
           originalError: Exception("Account suspended"),
         );
-      }
-      final kycApproved = userData?['kyc']?['approved'] == true;
-      if (!kycApproved) {
-        final productCount = await _db
-            .collection('products')
-            .where('sellerId', isEqualTo: user.uid)
-            .where('isActive', isEqualTo: true)
-            .count()
-            .get();
-        if ((productCount.count ?? 0) >= 5) {
-          throw NetworkError(
-            message: "KYC required - product limit reached",
-            userMessage: 'product_limit_kyc_needed',
-            originalError: Exception("KYC required - product limit reached"),
-          );
-        }
       }
 
       step = 'upload-images';
@@ -153,7 +138,7 @@ class ProductService {
       step = 'save-product';
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
-      bool sellerKycApproved = true;
+      final sellerKycApproved = userData?['kyc'] is Map && userData?['kyc']?['approved'] == true;
 
       if (userDoc.exists) {
         final data = userDoc.data()!;
