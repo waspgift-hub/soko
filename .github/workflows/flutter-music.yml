@@ -1,6 +1,7 @@
 name: Flutter validation
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - 'music_app/**'
@@ -29,6 +30,11 @@ jobs:
         uses: actions/checkout@v4
       - name: Check Cloudflare Worker JavaScript syntax
         run: node --input-type=module --check < ../music_backend/worker.js
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
