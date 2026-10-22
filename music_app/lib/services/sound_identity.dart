@@ -22,7 +22,7 @@ class SoundIdentity {
   Uint8List _makeWave() {
     const sampleRate = 22050;
     const seconds = 1.25;
-    const samples = (sampleRate * seconds).round();
+    final samples = (sampleRate * seconds).round();
     final dataBytes = samples * 2;
     final bytes = ByteData(44 + dataBytes);
     void ascii(int offset, String value) { for (var i = 0; i < value.length; i++) { bytes.setUint8(offset + i, value.codeUnitAt(i)); } }
