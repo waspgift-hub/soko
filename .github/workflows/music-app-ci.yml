@@ -62,6 +62,15 @@ jobs:
         run: flutter analyze
       - name: Run tests
         run: flutter test
+      - name: Build debug APK
+        run: flutter build apk --debug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sokovibe-music-debug-apk
+          path: music_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
       - name: Smoke test live Jamendo Worker
         env:
           MUSIC_API_URL: https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev
@@ -81,11 +90,3 @@ jobs:
           track_id=$(node -e 'process.stdout.write(String(require("/tmp/music-search.json").results[0].id))')
           curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/play/$track_id" -o /tmp/music-play.json
           node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(!t.id || u.protocol!=="https:") throw new Error("Play endpoint returned invalid URL: "+JSON.stringify(p)); if(typeof t.audiodownload_allowed!=="boolean" || (t.audiodownload_allowed && !t.audiodownload)) throw new Error("Download permission metadata is invalid: "+JSON.stringify(t)); console.log("Play URL and download license metadata OK for track", t.id, "download allowed:", t.audiodownload_allowed);'
-      - name: Build debug APK
-        run: flutter build apk --debug
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: sokovibe-music-debug-apk
-          path: music_app/build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
