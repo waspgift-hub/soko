@@ -48,7 +48,7 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
       debugShowCheckedModeBanner: false,
       title: 'Soko Vibe Music',
       themeMode: settings.themeMode,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF74B94A), brightness: Brightness.light, visualDensity: VisualDensity.standard, cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero)),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF74B94A), brightness: Brightness.light, visualDensity: VisualDensity.standard),
       darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFFB8F36B), brightness: Brightness.dark, visualDensity: VisualDensity.standard, scaffoldBackgroundColor: const Color(0xFF0B1110), cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero)),
       home: MusicHomePage(settings: settings, onSettingsChanged: refreshSettings),
     );
@@ -404,25 +404,25 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
-          Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+          Text('Appearance · Muonekano', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Theme'),
+                const Text('Theme · Mandhari'),
                 const SizedBox(height: 8),
                 SegmentedButton<ThemeMode>(
                   segments: const [
-                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System')),
-                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
-                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
+                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System · Mfumo')),
+                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light · Mwanga')),
+                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark · Giza')),
                   ],
                   selected: {settings.themeMode},
                   onSelectionChanged: (selection) => _chooseTheme(selection.first),
                 ),
                 const SizedBox(height: 20),
-                const Text('Accent colour'),
+                const Text('Accent colour · Rangi kuu'),
                 const SizedBox(height: 12),
                 Wrap(spacing: 12, runSpacing: 12, children: [
                   for (final color in colors)
@@ -445,14 +445,14 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
+          Text('Notifications · Arifa', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(
             child: Column(children: [
               SwitchListTile(
                 secondary: const Icon(Icons.notifications_active_outlined),
-                title: const Text('Daily listening reminder'),
-                subtitle: const Text('A gentle reminder to play music each day'),
+                title: const Text('Daily listening reminder · Kikumbusho cha kila siku'),
+                subtitle: const Text('Kumbusho la kusikiliza muziki kila siku'),
                 value: settings.dailyReminder,
                 onChanged: _changeReminder,
               ),
@@ -460,7 +460,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               ListTile(
                 enabled: settings.dailyReminder,
                 leading: const Icon(Icons.schedule),
-                title: const Text('Reminder time'),
+                title: const Text('Reminder time · Muda wa kumbusho'),
                 subtitle: Text(_timeLabel(context)),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: settings.dailyReminder ? _chooseReminderTime : null,
@@ -468,7 +468,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ]),
           ),
           const SizedBox(height: 20),
-          Text('About', style: Theme.of(context).textTheme.titleMedium),
+          Text('About · Kuhusu app', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(child: Column(children: [
             const ListTile(
@@ -479,7 +479,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('App version'),
+              title: const Text('App version · Toleo la app'),
               subtitle: const Text('0.1.0'),
               onTap: () => showAboutDialog(
                 context: context,
