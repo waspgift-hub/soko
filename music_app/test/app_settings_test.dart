@@ -34,6 +34,13 @@ void main() {
     expect(reloaded.startupSound, isFalse);
   });
 
+  test('music API defaults to the deployed music-api Worker', () {
+    expect(
+      MusicApi().baseUrl,
+      'https://music-api.sokovibe-co-tz.workers.dev',
+    );
+  });
+
   test('music API returns empty results for a blank query without networking', () async {
     final api = MusicApi(baseUrl: 'https://example.invalid');
     expect(await api.search('  '), isEmpty);
