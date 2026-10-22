@@ -1282,6 +1282,78 @@ class _OfflineLibraryPageState extends State<OfflineLibraryPage> {
   }
 }
 
+class _PlaybackWaveform extends StatefulWidget {
+  const _PlaybackWaveform({required this.playing, required this.color});
+
+  final bool playing;
+  final Color color;
+
+  @override
+  State<_PlaybackWaveform> createState() => _PlaybackWaveformState();
+}
+
+class _PlaybackWaveformState extends State<_PlaybackWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 720),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.playing) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PlaybackWaveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.playing && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.playing && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 18,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: List.generate(19, (index) {
+              final phase = (index * 0.72) + (_controller.value * 2 * math.pi);
+              final wave = (math.sin(phase) + 1) / 2;
+              final height = widget.playing ? 3.0 + wave * 14.0 : 3.0 + (index % 4) * 1.5;
+              return Container(
+                width: 3,
+                height: height,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(
+                  color: widget.color.withValues(
+                    alpha: widget.playing ? 0.55 + wave * 0.45 : 0.35,
+                  ),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _PlayerBar extends StatelessWidget {
   const _PlayerBar({required this.track, required this.player});
   final MusicTrack track;
@@ -1298,15 +1370,41 @@ class _PlayerBar extends StatelessWidget {
           child: Row(children: [
             ClipRRect(borderRadius: BorderRadius.circular(8), child: track.image.isEmpty ? const Icon(Icons.music_note, size: 32) : CachedNetworkImage(imageUrl: track.image, width: 48, height: 48, fit: BoxFit.cover, errorWidget: (_, __, ___) => const Icon(Icons.music_note))),
             const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              Text(track.artist, style: Theme.of(context).textTheme.bodySmall),
-            ])),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(track.artist, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 5),
+                  StreamBuilder<PlayerState>(
+                    stream: player.playerStateStream,
+                    initialData: player.playerState,
+                    builder: (context, snapshot) {
+                      final playing = snapshot.data?.playing ?? false;
+                      return _PlaybackWaveform(
+                        playing: playing,
+                        color: Theme.of(context).colorScheme.primary,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
             StreamBuilder<PlayerState>(
               stream: player.playerStateStream,
+              initialData: player.playerState,
               builder: (_, snap) {
                 final playing = snap.data?.playing ?? false;
-                return IconButton(onPressed: () => playing ? player.pause() : player.play(), icon: Icon(playing ? Icons.pause_circle : Icons.play_circle, size: 34));
+                return IconButton(
+                  tooltip: playing ? 'Pause' : 'Play',
+                  onPressed: () => playing ? player.pause() : player.play(),
+                  icon: Icon(
+                    playing ? Icons.pause_circle : Icons.play_circle,
+                    size: 34,
+                  ),
+                );
               },
             ),
           ]),
