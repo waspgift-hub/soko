@@ -171,7 +171,7 @@ async function handleSearch(env, query, page, limit) {
       limit: limit,
       offset: offset,
       audioformat: "mp32",
-      include: "licenses,musicinfo",
+      include: "licenses musicinfo",
       order: "relevance",
     });
 
@@ -207,7 +207,7 @@ async function handlePlay(env, trackId) {
       id: trackId,
       limit: 1,
       audioformat: "mp32",
-      include: "licenses,musicinfo",
+      include: "licenses musicinfo",
     });
 
     var tracks = (body.results || []).map(mapTrack).filter(Boolean);
@@ -247,7 +247,7 @@ async function handleRecommend(env, body) {
   var params = {
     limit: limit,
     audioformat: "mp32",
-    include: "licenses,musicinfo",
+    include: "licenses musicinfo",
     order: "popularity_total",
   };
 
