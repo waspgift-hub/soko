@@ -36,7 +36,7 @@ class SoundIdentity {
       final envelope = math.min((t / 0.025).clamp(0.0, 1.0), ((seconds - t) / 0.22).clamp(0.0, 1.0));
       final glide = 440 + 260 * math.sin(math.pi * t / seconds);
       final tone = math.sin(2 * math.pi * glide * t) + 0.34 * math.sin(2 * math.pi * glide * 1.5 * t) + 0.12 * math.sin(2 * math.pi * 110 * t);
-      final sample = (tone * envelope * 0.42 * 32767).round().clamp(-32768, 32767);
+      final sample = (tone * envelope * 0.42 * 32767).round().clamp(-32768, 32767).toInt();
       bytes.setInt16(44 + i * 2, sample, Endian.little);
     }
     return bytes.buffer.asUint8List();
