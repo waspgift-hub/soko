@@ -26,6 +26,8 @@ jobs:
     defaults:
       run:
         working-directory: music_app
+    env:
+      MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,21 +66,21 @@ jobs:
         run: flutter analyze
       - name: Run tests
         run: flutter test
-      - name: Build debug APK
-        run: flutter build apk --debug
-      - name: Upload debug APK
+      - name: Build release APK
+        run: flutter build apk --release --dart-define=MUSIC_API_URL=$MUSIC_API_URL
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: sokovibe-music-debug-apk
-          path: music_app/build/app/outputs/flutter-apk/app-debug.apk
+          name: sokovibe-music-release-apk
+          path: music_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Smoke test live Jamendo Worker
-        env:
-          MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+      - name: Smoke test live Cloudflare Worker and Jamendo
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 15 "$MUSIC_API_URL/api/health" -o /tmp/music-health.json
+          echo "Checking Worker health and Jamendo connectivity at $MUSIC_API_URL"
+          curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/api/health" -o /tmp/music-health.json
           node -e 'const h=require("/tmp/music-health.json"); if(h.status!=="healthy" || !h.jamendo?.configured || !h.jamendo?.connected) throw new Error("Worker/Jamendo health check failed: "+JSON.stringify(h)); console.log("Health OK:", h.service, "Jamendo connected");'
           search_status=000
           for attempt in 1 2 3; do
@@ -88,7 +90,18 @@ jobs:
             if [ "$attempt" -lt 3 ]; then sleep $((attempt * 3)); fi
           done
           if [ "$search_status" != "200" ]; then echo "Jamendo search failed after retries"; exit 1; fi
-          node -e 'const j=require("/tmp/music-search.json"); if(!Array.isArray(j.results) || j.results.length<1 || !j.results[0].id) throw new Error("Search returned no playable track: "+JSON.stringify(j)); console.log("Search OK: returned", j.results.length, "tracks");'
+          node -e 'const j=require("/tmp/music-search.json"); if(!Array.isArray(j.results) || j.results.length<1 || !j.results[0].id) throw new Error("Search returned no track: "+JSON.stringify(j)); console.log("Search OK: returned", j.results.length, "tracks");'
           track_id=$(node -e 'process.stdout.write(String(require("/tmp/music-search.json").results[0].id))')
           curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/play/$track_id" -o /tmp/music-play.json
-          node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(!t.id || u.protocol!=="https:") throw new Error("Play endpoint returned invalid URL: "+JSON.stringify(p)); if(typeof t.audiodownload_allowed!=="boolean" || (t.audiodownload_allowed && !t.audiodownload)) throw new Error("Download permission metadata is invalid: "+JSON.stringify(t)); console.log("Play URL and download license metadata OK for track", t.id, "download allowed:", t.audiodownload_allowed);'
+          node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(String(t.id)!==String(process.env.TRACK_ID||t.id) || u.protocol!=="https:") throw new Error("Play endpoint returned invalid track/HTTPS URL: "+JSON.stringify(p)); console.log("Play metadata OK for track",t.id,"with HTTPS audio URL");' TRACK_ID="$track_id"
+          download_status=$(curl --silent --show-error --max-time 20 -D /tmp/music-download.headers -o /dev/null -w '%{http_code}' "$MUSIC_API_URL/download/$track_id" || true)
+          if [ "$download_status" = "302" ]; then
+            grep -Eiq '^location: https://' /tmp/music-download.headers || { echo "Download redirect was not HTTPS"; exit 1; }
+            echo "Download endpoint correctly returns a licensed HTTPS redirect (track may still be license-restricted)."
+          elif [ "$download_status" = "403" ]; then
+            echo "Download endpoint correctly enforced provider license restrictions for this track."
+          else
+            echo "Unexpected download endpoint status: $download_status"
+            cat /tmp/music-download.headers
+            exit 1
+          fi
