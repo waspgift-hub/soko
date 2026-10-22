@@ -6,6 +6,7 @@ import 'services/music_api.dart';
 import 'services/notification_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/app_settings.dart';
+import 'services/offline_music_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -134,6 +135,43 @@ class _MusicHomePageState extends State<MusicHomePage> {
     }
   }
 
+  Future<void> downloadTrack(MusicTrack track) async {
+    if (track.license.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No license details are available for this track.')),
+      );
+      return;
+    }
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save for offline listening?'),
+        content: Text(
+          'Before downloading “${track.title}”, check the track license and Jamendo terms to confirm offline copying is allowed. License: ${track.license}',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('I checked the license')),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    try {
+      final url = await api.playUrl(track.id);
+      await OfflineMusicService().download(track, url);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved “${track.title}” for offline listening.')),
+      );
+      await NotificationService.instance.notifyDownloadComplete(track.title);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download failed: $error')),
+      );
+    }
+  }
+
   void showLyrics(MusicTrack track) {
     showModalBottomSheet<void>(
       context: context,
@@ -152,6 +190,13 @@ class _MusicHomePageState extends State<MusicHomePage> {
         title: const Text('Soko Vibe Music'),
         centerTitle: false,
         actions: [
+          IconButton(
+            tooltip: 'Offline library',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => OfflineLibraryPage(player: player),
+            )),
+            icon: const Icon(Icons.library_music_outlined),
+          ),
           IconButton(
             tooltip: 'App settings',
             onPressed: () async {
@@ -207,6 +252,11 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           trailing: Wrap(
                             spacing: 0,
                             children: [
+                              IconButton(
+                                tooltip: 'Download for offline',
+                                onPressed: () => downloadTrack(track),
+                                icon: const Icon(Icons.download_for_offline_outlined),
+                              ),
                               IconButton(
                                 tooltip: 'Show lyrics',
                                 onPressed: () => showLyrics(track),
@@ -557,6 +607,133 @@ class _TimedLyricLine {
   const _TimedLyricLine({required this.time, required this.text});
   final Duration time;
   final String text;
+}
+
+class OfflineLibraryPage extends StatefulWidget {
+  const OfflineLibraryPage({super.key, required this.player});
+  final AudioPlayer player;
+
+  @override
+  State<OfflineLibraryPage> createState() => _OfflineLibraryPageState();
+}
+
+class _OfflineLibraryPageState extends State<OfflineLibraryPage> {
+  final service = OfflineMusicService();
+  List<OfflineTrack> tracks = <OfflineTrack>[];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final result = await service.list();
+      if (mounted) setState(() => tracks = result);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not load your offline music.');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _import() async {
+    try {
+      await service.importLocalAudio();
+      await _reload();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not import audio: $e')),
+      );
+    }
+  }
+
+  Future<void> _play(OfflineTrack track) async {
+    try {
+      await widget.player.setFilePath(track.path);
+      await widget.player.play();
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This local audio file could not be played.')),
+      );
+    }
+  }
+
+  Future<void> _remove(OfflineTrack track) async {
+    await service.remove(track);
+    await _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Offline music'),
+        actions: [
+          IconButton(
+            tooltip: 'Import audio from device',
+            onPressed: _import,
+            icon: const Icon(Icons.add_to_photos_outlined),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Text(error!))
+              : tracks.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.library_music_outlined, size: 56),
+                            const SizedBox(height: 12),
+                            const Text('No offline music yet'),
+                            const SizedBox(height: 8),
+                            const Text('Download eligible tracks or import audio files from your device.'),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: _import,
+                              icon: const Icon(Icons.audio_file_outlined),
+                              label: const Text('Import local music'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _reload,
+                      child: ListView.builder(
+                        itemCount: tracks.length,
+                        itemBuilder: (context, index) {
+                          final track = tracks[index];
+                          return ListTile(
+                            leading: const CircleAvatar(child: Icon(Icons.music_note)),
+                            title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('${track.artist} · ${track.source}'),
+                            onTap: () => _play(track),
+                            trailing: PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'play') _play(track);
+                                if (value == 'remove') _remove(track);
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(value: 'play', child: Text('Play offline')),
+                                PopupMenuItem(value: 'remove', child: Text('Remove from offline library')),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+    );
+  }
 }
 
 class _PlayerBar extends StatelessWidget {
