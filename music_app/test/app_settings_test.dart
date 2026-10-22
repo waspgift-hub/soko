@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soko_vibe_music/models/music_track.dart';
 import 'package:soko_vibe_music/services/app_settings.dart';
@@ -59,6 +63,51 @@ void main() {
   test('music API returns empty results for a blank query without networking', () async {
     final api = MusicApi(baseUrl: 'https://example.invalid');
     expect(await api.search('  '), isEmpty);
+  });
+
+  test('search calls the Worker and parses its result envelope', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, '/search');
+      expect(request.url.queryParameters['q'], 'afrobeat');
+      return http.Response(
+        jsonEncode({
+          'query': 'afrobeat',
+          'count': 1,
+          'results': [
+            {
+              'id': '42',
+              'song': 'Test Song',
+              'artist': 'Test Artist',
+              'cover': 'https://example.test/cover.jpg',
+              'audio': 'https://worker.example.test/play/42',
+              'download': null,
+              'audiodownload_allowed': false,
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+
+    final results = await api.search('  afrobeat  ');
+
+    expect(results, hasLength(1));
+    expect(results.single.id, '42');
+    expect(results.single.title, 'Test Song');
+    expect(results.single.artist, 'Test Artist');
+    expect(results.single.downloadAllowed, isFalse);
+    api.close();
+  });
+
+  test('search reports an HTTP error instead of parsing an error page', () async {
+    final client = MockClient((_) async => http.Response('upstream failed', 502));
+    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+
+    await expectLater(api.search('afrobeat'), throwsA(isA<Exception>()));
+    api.close();
   });
 
   test('playback uses the Worker redirect endpoint', () async {
