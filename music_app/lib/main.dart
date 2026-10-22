@@ -5,6 +5,7 @@ import 'models/music_track.dart';
 import 'services/music_api.dart';
 import 'services/notification_service.dart';
 import 'services/lyrics_service.dart';
+import 'services/app_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,22 +13,52 @@ Future<void> main() async {
   runApp(const SokoVibeMusicApp());
 }
 
-class SokoVibeMusicApp extends StatelessWidget {
+class SokoVibeMusicApp extends StatefulWidget {
   const SokoVibeMusicApp({super.key});
 
   @override
+  State<SokoVibeMusicApp> createState() => _SokoVibeMusicAppState();
+}
+
+class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
+  final settings = AppSettings();
+  bool ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    settings.load().then((_) {
+      if (mounted) setState(() => ready = true);
+    });
+  }
+
+  void refreshSettings() => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
+    if (!ready) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
+        home: const Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+    final seed = Color(settings.colorSeed);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Soko Vibe Music',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
-      home: const MusicHomePage(),
+      themeMode: settings.themeMode,
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: seed, brightness: Brightness.light),
+      darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: seed, brightness: Brightness.dark),
+      home: MusicHomePage(settings: settings, onSettingsChanged: refreshSettings),
     );
   }
 }
 
 class MusicHomePage extends StatefulWidget {
-  const MusicHomePage({super.key});
+  const MusicHomePage({super.key, required this.settings, required this.onSettingsChanged});
+  final AppSettings settings;
+  final VoidCallback onSettingsChanged;
   @override
   State<MusicHomePage> createState() => _MusicHomePageState();
 }
@@ -39,7 +70,6 @@ class _MusicHomePageState extends State<MusicHomePage> {
   List<MusicTrack> tracks = [];
   MusicTrack? current;
   bool loading = false;
-  bool reminderEnabled = true;
   String? error;
 
   @override
@@ -50,10 +80,11 @@ class _MusicHomePageState extends State<MusicHomePage> {
 
   Future<void> _setupNotifications() async {
     final granted = await NotificationService.instance.requestPermission();
-    if (granted) {
-      await NotificationService.instance.scheduleDailyReminder(hour: 19);
-    } else {
-      if (mounted) setState(() => reminderEnabled = false);
+    if (granted && widget.settings.dailyReminder) {
+      await NotificationService.instance.scheduleDailyReminder(
+        hour: widget.settings.reminderHour,
+        minute: widget.settings.reminderMinute,
+      );
     }
   }
 
@@ -112,23 +143,6 @@ class _MusicHomePageState extends State<MusicHomePage> {
     );
   }
 
-  Future<void> _toggleReminder(bool enabled) async {
-    if (enabled) {
-      final granted = await NotificationService.instance.requestPermission();
-      if (!granted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
-          );
-        }
-        return;
-      }
-      await NotificationService.instance.scheduleDailyReminder(hour: 19);
-    } else {
-      await NotificationService.instance.cancelDailyReminder();
-    }
-    if (mounted) setState(() => reminderEnabled = enabled);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,24 +152,17 @@ class _MusicHomePageState extends State<MusicHomePage> {
         centerTitle: false,
         actions: [
           IconButton(
-            tooltip: 'Notification settings',
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              showDragHandle: true,
-              builder: (context) => SafeArea(
-                child: SwitchListTile(
-                  secondary: const Icon(Icons.notifications_active_outlined),
-                  title: const Text('Daily listening reminder'),
-                  subtitle: const Text('Every day at about 7:00 PM'),
-                  value: reminderEnabled,
-                  onChanged: (value) {
-                    Navigator.pop(context);
-                    _toggleReminder(value);
-                  },
+            tooltip: 'App settings',
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => AppSettingsPage(
+                  settings: widget.settings,
+                  onChanged: widget.onSettingsChanged,
                 ),
-              ),
-            ),
-            icon: const Icon(Icons.notifications_outlined),
+              ));
+              if (mounted) setState(() {});
+            },
+            icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
@@ -218,6 +225,179 @@ class _MusicHomePageState extends State<MusicHomePage> {
           ),
           if (current != null) _PlayerBar(track: current!, player: player),
         ]),
+      ),
+    );
+  }
+}
+
+class AppSettingsPage extends StatefulWidget {
+  const AppSettingsPage({super.key, required this.settings, required this.onChanged});
+  final AppSettings settings;
+  final VoidCallback onChanged;
+
+  @override
+  State<AppSettingsPage> createState() => _AppSettingsPageState();
+}
+
+class _AppSettingsPageState extends State<AppSettingsPage> {
+  static const colors = <int>[
+    0xFF2E7D32, 0xFF00897B, 0xFF1565C0, 0xFF6A1B9A,
+    0xFFEF6C00, 0xFFC62828, 0xFF37474F,
+  ];
+  bool _busy = false;
+
+  Future<void> _changeReminder(bool enabled) async {
+    if (enabled) {
+      final granted = await NotificationService.instance.requestPermission();
+      if (!granted) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
+        );
+        return;
+      }
+      await widget.settings.saveReminder(true);
+      await NotificationService.instance.scheduleDailyReminder(
+        hour: widget.settings.reminderHour,
+        minute: widget.settings.reminderMinute,
+      );
+    } else {
+      await widget.settings.saveReminder(false);
+      await NotificationService.instance.cancelDailyReminder();
+    }
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _chooseReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: widget.settings.reminderHour, minute: widget.settings.reminderMinute),
+    );
+    if (picked == null) return;
+    await widget.settings.saveReminderTime(picked.hour, picked.minute);
+    if (widget.settings.dailyReminder) {
+      await NotificationService.instance.scheduleDailyReminder(hour: picked.hour, minute: picked.minute);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _chooseTheme(ThemeMode? mode) async {
+    if (mode == null) return;
+    await widget.settings.saveTheme(mode);
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _chooseColor(int color) async {
+    await widget.settings.saveColor(color);
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  String _timeLabel(BuildContext context) => TimeOfDay(
+    hour: widget.settings.reminderHour,
+    minute: widget.settings.reminderMinute,
+  ).format(context);
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    return Scaffold(
+      appBar: AppBar(title: const Text('App settings')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        children: [
+          Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Theme'),
+                const SizedBox(height: 8),
+                SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System')),
+                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
+                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
+                  ],
+                  selected: {settings.themeMode},
+                  onSelectionChanged: (selection) => _chooseTheme(selection.first),
+                ),
+                const SizedBox(height: 20),
+                const Text('Accent colour'),
+                const SizedBox(height: 12),
+                Wrap(spacing: 12, runSpacing: 12, children: [
+                  for (final color in colors)
+                    InkWell(
+                      onTap: () => _chooseColor(color),
+                      customBorder: const CircleBorder(),
+                      child: Semantics(
+                        label: 'Choose accent colour',
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Color(color),
+                          child: settings.colorSeed == color
+                              ? const Icon(Icons.check, color: Colors.white)
+                              : null,
+                        ),
+                      ),
+                    ),
+                ]),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Daily listening reminder'),
+                subtitle: const Text('A gentle reminder to play music each day'),
+                value: settings.dailyReminder,
+                onChanged: _changeReminder,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                enabled: settings.dailyReminder,
+                leading: const Icon(Icons.schedule),
+                title: const Text('Reminder time'),
+                subtitle: Text(_timeLabel(context)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: settings.dailyReminder ? _chooseReminderTime : null,
+              ),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          Text('About', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: Column(children: [
+            const ListTile(
+              leading: Icon(Icons.music_note),
+              title: Text('Soko Vibe Music'),
+              subtitle: Text('Music discovery, player and lyrics'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('App version'),
+              subtitle: const Text('0.1.0'),
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: 'Soko Vibe Music',
+                applicationVersion: '0.1.0',
+                applicationLegalese: 'Made for music discovery.',
+              ),
+            ),
+          ])),
+          const SizedBox(height: 12),
+          Text(
+            'Settings are saved on this device. Music search and lyrics need an internet connection; downloaded/offline features depend on the relevant feature being implemented.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }
