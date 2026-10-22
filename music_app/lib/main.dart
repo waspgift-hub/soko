@@ -299,9 +299,11 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
     if (enabled) {
       final granted = await NotificationService.instance.requestPermission();
       if (!granted) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
+          );
+        }
         return;
       }
       await widget.settings.saveReminder(true);
