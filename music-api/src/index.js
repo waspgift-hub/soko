@@ -112,6 +112,8 @@ export default {
         return json({
           id: String(results[0].id),
           streaming_url: results[0].audio,
+          audiodownload: results[0].audiodownload || "",
+          audiodownload_allowed: results[0].audiodownload_allowed === true || results[0].audiodownload_allowed === 1,
           source: "Jamendo",
           license: results[0].license_ccurl || "",
         }, 200, origin);
