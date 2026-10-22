@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soko_vibe_music/models/music_track.dart';
 import 'package:soko_vibe_music/services/app_settings.dart';
 import 'package:soko_vibe_music/services/music_api.dart';
+import 'package:soko_vibe_music/services/download_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,24 @@ void main() {
   test('music API returns empty results for a blank query without networking', () async {
     final api = MusicApi(baseUrl: 'https://example.invalid');
     expect(await api.search('  '), isEmpty);
+  });
+
+  test('download metadata survives JSON serialization', () {
+    final original = DownloadedTrack(
+      id: 'track-42',
+      title: 'Offline Song',
+      artist: 'Soko Artist',
+      image: 'https://example.com/cover.jpg',
+      filePath: '/private/music/track-42.mp3',
+      downloadedAt: DateTime.utc(2026, 10, 22),
+    );
+    final restored = DownloadedTrack.fromJson(original.toJson());
+
+    expect(restored.id, original.id);
+    expect(restored.title, original.title);
+    expect(restored.artist, original.artist);
+    expect(restored.filePath, original.filePath);
+    expect(restored.downloadedAt, original.downloadedAt);
   });
 
   test('music track maps Jamendo response fields correctly', () {
