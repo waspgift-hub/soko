@@ -38,9 +38,19 @@ class _MusicAdminDashboardPageState extends State<MusicAdminDashboardPage> {
     final result = await widget.api.checkHealth();
     final jamendo = result['jamendo'];
     final ai = result['ai'];
-    return 'Service: ${result['status'] ?? 'unknown'} · '
-        'Jamendo: ${jamendo is Map ? (jamendo['connected'] == true ? 'connected' : 'not connected') : 'unknown'} · '
-        'AI: ${ai is Map ? (ai['configured'] == true ? 'configured' : 'not configured') : 'unknown'}';
+    final serviceStatus = (result['status'] ?? 'unknown').toString();
+    final jamendoConnected = jamendo is Map && jamendo['connected'] == true;
+    final aiConfigured = ai is Map && ai['configured'] == true;
+    final detail = 'Service: $serviceStatus · '
+        'Jamendo: ${jamendoConnected ? 'connected' : 'not connected'} · '
+        'AI: ${aiConfigured ? 'configured' : 'not configured'}';
+    if (serviceStatus != 'healthy' || !jamendoConnected) {
+      throw Exception('$detail. Check the Worker JAMENDO_CLIENT_ID secret and live Jamendo connectivity.');
+    }
+    if (!aiConfigured) {
+      throw Exception('$detail. Lyrics generation will fail until the Workers AI binding is configured.');
+    }
+    return detail;
   }
 
   Future<String> _search() async {
