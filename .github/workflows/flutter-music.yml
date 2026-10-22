@@ -27,11 +27,11 @@ jobs:
         working-directory: music_app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Check Cloudflare Worker JavaScript syntax
         run: node --input-type=module --check < ../music_backend/worker.js
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
