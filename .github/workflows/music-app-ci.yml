@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - "music_app/**"
+      - "music-api/**"
       - ".github/workflows/music-app-ci.yml"
   push:
     branches:
