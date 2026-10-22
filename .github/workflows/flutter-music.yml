@@ -1,0 +1,46 @@
+name: Flutter validation
+
+on:
+  pull_request:
+    paths:
+      - 'music_app/**'
+      - '.github/workflows/flutter-music.yml'
+  push:
+    branches:
+      - 'soko-vibe-music'
+      - 'fix/sokovibe-music-backend-url'
+    paths:
+      - 'music_app/**'
+      - '.github/workflows/flutter-music.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: music_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze Dart code
+        run: flutter analyze --no-pub
+      - name: Run tests
+        run: flutter test --no-pub
+      - name: Build debug APK
+        run: flutter build apk --debug --no-pub
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: soko-vibe-music-debug-apk
+          path: music_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
