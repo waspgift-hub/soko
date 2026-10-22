@@ -40,8 +40,19 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Generate missing Android platform files
-        run: flutter create --platforms=android --org=co.tz.sokovibe --project-name=soko_vibe_music .
+      - name: Generate missing Android platform files without replacing app manifest
+        run: |
+          manifest="android/app/src/main/AndroidManifest.xml"
+          saved_manifest=""
+          if [ -f "$manifest" ]; then
+            saved_manifest="$(mktemp)"
+            cp "$manifest" "$saved_manifest"
+          fi
+          flutter create --platforms=android --org=co.tz.sokovibe --project-name=soko_vibe_music .
+          if [ -n "$saved_manifest" ]; then
+            cp "$saved_manifest" "$manifest"
+            rm -f "$saved_manifest"
+          fi
       - name: Enable Android core library desugaring for notifications
         run: |
           python3 - <<'PY'
