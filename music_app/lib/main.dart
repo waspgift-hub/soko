@@ -251,11 +251,12 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           trailing: Wrap(
                             spacing: 0,
                             children: [
-                              IconButton(
-                                tooltip: 'Download for offline',
-                                onPressed: () => downloadTrack(track),
-                                icon: const Icon(Icons.download_for_offline_outlined),
-                              ),
+                              if (track.canDownload)
+                                IconButton(
+                                  tooltip: 'Download for offline',
+                                  onPressed: () => downloadTrack(track),
+                                  icon: const Icon(Icons.download_for_offline_outlined),
+                                ),
                               IconButton(
                                 tooltip: 'Show lyrics',
                                 onPressed: () => showLyrics(track),
