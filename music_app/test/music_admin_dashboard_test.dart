@@ -25,8 +25,13 @@ void main() {
     expect(find.text('Music admin dashboard'), findsOneWidget);
     expect(find.text('Backend health'), findsOneWidget);
     expect(find.text('Jamendo search'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('AI lyrics generation'),
+      300,
+      scrollable: find.byType(Scrollable),
+    );
     expect(find.text('AI lyrics generation'), findsOneWidget);
-    expect(find.text('Not tested yet'), findsNWidgets(5));
+    expect(find.text('Not tested yet'), findsWidgets);
     expect(requestCount, 0);
   });
 }
