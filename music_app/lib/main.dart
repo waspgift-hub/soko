@@ -236,12 +236,12 @@ class _MusicHomePageState extends State<MusicHomePage> {
     try {
       final results = await api.search(searchController.text.trim());
       if (mounted) setState(() => tracks = results);
-    } catch (_) {
-      if (mounted) setState(() => error = 'Search failed. Check your connection or API.');
+    } catch (e) {
+      if (mounted) setState(() => error = 'Search failed: $e');
       await NotificationService.instance.showImportant(
         id: 2010,
         title: 'Music search failed',
-        body: 'Check your internet connection and try again.',
+        body: e.toString().length > 160 ? '${e.toString().substring(0, 160)}…' : e.toString(),
         payload: 'retry_search',
       );
     } finally {
@@ -255,10 +255,10 @@ class _MusicHomePageState extends State<MusicHomePage> {
       final url = await api.playUrl(track.id);
       await player.setUrl(url);
       await player.play();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This track could not be played.')),
+          SnackBar(content: Text('Playback failed: $e')),
         );
       }
       await NotificationService.instance.notifyPlaybackFailed();
