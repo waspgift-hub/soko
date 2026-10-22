@@ -47,9 +47,9 @@ class _MusicAdminDashboardPageState extends State<MusicAdminDashboardPage> {
     if (serviceStatus != 'healthy' || !jamendoConnected) {
       throw Exception('$detail. Check the Worker JAMENDO_CLIENT_ID secret and live Jamendo connectivity.');
     }
-    if (!aiConfigured) {
-      throw Exception('$detail. Lyrics generation will fail until the Workers AI binding is configured.');
-    }
+    // Backend health and Jamendo availability are independent of the optional
+    // Workers AI binding. Report missing AI in the detail, but do not mark the
+    // entire music service unhealthy; the dedicated lyrics check tests AI.
     return detail;
   }
 
