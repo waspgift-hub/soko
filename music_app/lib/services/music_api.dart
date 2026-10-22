@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/music_track.dart';
 
 class MusicApi {
-  MusicApi({String? baseUrl}) : baseUrl = (baseUrl ?? const String.fromEnvironment('MUSIC_API_URL', defaultValue: 'https://music-api.sokovibe.co.tz')).replaceAll(RegExp(r'/$'), '');
+  MusicApi({String? baseUrl}) : baseUrl = (baseUrl ?? const String.fromEnvironment('MUSIC_API_URL', defaultValue: 'https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev')).replaceAll(RegExp(r'/$'), '');
 
   final String baseUrl;
 
