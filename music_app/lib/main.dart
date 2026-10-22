@@ -374,7 +374,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: genre,
+                    initialValue: genre,
                     decoration: const InputDecoration(labelText: 'Genre'),
                     items: const ['afrobeat', 'bongo flava', 'gospel', 'hip hop', 'acoustic']
                         .map((value) => DropdownMenuItem(value: value, child: Text(value)))
@@ -385,7 +385,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: language,
+                    initialValue: language,
                     decoration: const InputDecoration(labelText: 'Language'),
                     items: const ['English', 'Swahili']
                         .map((value) => DropdownMenuItem(value: value, child: Text(value)))
