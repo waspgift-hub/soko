@@ -25,7 +25,7 @@ void main() {
     expect(find.text('Music admin dashboard'), findsOneWidget);
     expect(find.text('Backend health'), findsOneWidget);
     expect(find.text('Jamendo search'), findsOneWidget);
-    await tester.ensureVisible(find.text('AI lyrics generation'));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1200));
     await tester.pumpAndSettle();
     expect(find.text('AI lyrics generation'), findsOneWidget);
     expect(find.text('Not tested yet'), findsWidgets);
