@@ -10,6 +10,10 @@ Lyrics are looked up separately through the public LRCLIB API. The app requests 
 
 The Flutter APK never contains the Jamendo client ID as a secret. The Worker keeps the provider credential server-side and requests a fresh playback URL when needed.
 
+## Live backend
+
+The default Worker URL is `https://music-api.sokovibe-co-tz.workers.dev`. Its `/play/:id` and `/download/:id` routes use HTTP redirects; the Flutter client calls these endpoints directly and lets the HTTP/audio client follow the redirect. Search results use `song`, `artist`, `cover`, `audio`, and `download` fields.
+
 ## Run
 
 ```bash
