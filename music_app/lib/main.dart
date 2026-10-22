@@ -136,9 +136,9 @@ class _MusicHomePageState extends State<MusicHomePage> {
   }
 
   Future<void> downloadTrack(MusicTrack track) async {
-    if (track.license.trim().isEmpty) {
+    if (!track.canDownload || track.downloadUrl == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No license details are available for this track.')),
+        const SnackBar(content: Text('Jamendo does not permit downloading this track.')),
       );
       return;
     }
@@ -147,18 +147,17 @@ class _MusicHomePageState extends State<MusicHomePage> {
       builder: (context) => AlertDialog(
         title: const Text('Save for offline listening?'),
         content: Text(
-          'Before downloading “${track.title}”, check the track license and Jamendo terms to confirm offline copying is allowed. License: ${track.license}',
+          'Jamendo marks this track as downloadable. Review its license before saving it offline. License: ${track.license}',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('I checked the license')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),
         ],
       ),
     );
     if (accepted != true || !mounted) return;
     try {
-      final url = await api.playUrl(track.id);
-      await OfflineMusicService().download(track, url);
+      await OfflineMusicService().download(track);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Saved “${track.title}” for offline listening.')),
