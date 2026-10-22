@@ -20,7 +20,7 @@ class MusicApi {
 
   Future<List<MusicTrack>> search(String query) async {
     if (query.trim().isEmpty) return <MusicTrack>[];
-    final uri = Uri.parse('${baseUrl}/search')
+    final uri = Uri.parse('$baseUrl/search')
         .replace(queryParameters: {'q': query.trim()});
     final response =
         await _client.get(uri).timeout(const Duration(seconds: 12));
@@ -48,7 +48,7 @@ class MusicApi {
     if (id.trim().isEmpty) {
       throw const FormatException('This track has no valid ID.');
     }
-    return '${baseUrl}/play/${Uri.encodeComponent(id)}';
+    return '$baseUrl/play/${Uri.encodeComponent(id)}';
   }
 
   /// /download/:id validates Jamendo's audiodownload_allowed flag on the
@@ -58,7 +58,7 @@ class MusicApi {
     if (id.trim().isEmpty) {
       throw const FormatException('This track has no valid ID.');
     }
-    return '${baseUrl}/download/${Uri.encodeComponent(id)}';
+    return '$baseUrl/download/${Uri.encodeComponent(id)}';
   }
 
   void close() => _client.close();
