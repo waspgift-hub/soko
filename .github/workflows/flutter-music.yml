@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check Cloudflare Worker JavaScript syntax
+        run: node --input-type=module --check < ../music_backend/worker.js
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
