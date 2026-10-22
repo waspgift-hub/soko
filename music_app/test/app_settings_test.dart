@@ -60,6 +60,8 @@ void main() {
       'artist': 'Test Artist',
       'image': 'https://example.com/cover.jpg',
       'streaming_url': 'https://example.com/audio.mp3',
+      'audiodownload': 'https://example.com/download.mp3',
+      'audiodownload_allowed': true,
     });
 
     expect(track.id, '123');
@@ -67,5 +69,7 @@ void main() {
     expect(track.artist, 'Test Artist');
     expect(track.image, 'https://example.com/cover.jpg');
     expect(track.streamUrl, 'https://example.com/audio.mp3');
+    expect(track.downloadUrl, 'https://example.com/download.mp3');
+    expect(track.downloadAllowed, isTrue);
   });
 }
