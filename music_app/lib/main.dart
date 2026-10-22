@@ -323,6 +323,140 @@ class _MusicHomePageState extends State<MusicHomePage> {
     }
   }
 
+  Future<void> loadRecommendations() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final results = await api.recommend(
+        mood: 'discover',
+        genre: 'afrobeat',
+        limit: 20,
+      );
+      if (!mounted) return;
+      setState(() => tracks = results);
+      if (results.isEmpty) {
+        setState(() => error = 'No recommendations are available right now.');
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = 'Recommendations failed: $e');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> showAiLyrics() async {
+    final themeController = TextEditingController();
+    String genre = 'afrobeat';
+    String language = 'English';
+    bool generating = false;
+    String? generated;
+    String? failure;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('AI Lyrics Studio'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: themeController,
+                    enabled: !generating,
+                    maxLength: 180,
+                    decoration: const InputDecoration(
+                      labelText: 'Song theme',
+                      hintText: 'Hope, love, a new beginning…',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: genre,
+                    decoration: const InputDecoration(labelText: 'Genre'),
+                    items: const ['afrobeat', 'bongo flava', 'gospel', 'hip hop', 'acoustic']
+                        .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+                        .toList(),
+                    onChanged: generating ? null : (value) {
+                      if (value != null) setDialogState(() => genre = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: language,
+                    decoration: const InputDecoration(labelText: 'Language'),
+                    items: const ['English', 'Swahili']
+                        .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+                        .toList(),
+                    onChanged: generating ? null : (value) {
+                      if (value != null) setDialogState(() => language = value);
+                    },
+                  ),
+                  if (generating) const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: LinearProgressIndicator(),
+                  ),
+                  if (failure != null) Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(failure!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
+                  if (generated != null) ...[
+                    const Divider(height: 24),
+                    SelectableText(generated!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5)),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(content: Text('Select the generated lyrics to copy them.')),
+                          );
+                        },
+                        icon: const Icon(Icons.text_fields),
+                        label: const Text('Lyrics generated'),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: generating ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+            FilledButton.icon(
+              onPressed: generating ? null : () async {
+                if (themeController.text.trim().isEmpty) {
+                  setDialogState(() => failure = 'Enter a song theme first.');
+                  return;
+                }
+                setDialogState(() { generating = true; failure = null; generated = null; });
+                try {
+                  final lyrics = await api.generateLyrics(
+                    theme: themeController.text.trim(),
+                    genre: genre,
+                    language: language,
+                  );
+                  if (dialogContext.mounted) setDialogState(() => generated = lyrics);
+                } catch (e) {
+                  if (dialogContext.mounted) setDialogState(() => failure = 'Lyrics generation failed: $e');
+                } finally {
+                  if (dialogContext.mounted) setDialogState(() => generating = false);
+                }
+              },
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Generate'),
+            ),
+          ],
+        ),
+      ),
+    );
+    themeController.dispose();
+  }
+
   void showLyrics(MusicTrack track) {
     showModalBottomSheet<void>(
       context: context,
@@ -341,6 +475,23 @@ class _MusicHomePageState extends State<MusicHomePage> {
         title: const Text('Soko Vibe Music'),
         centerTitle: false,
         actions: [
+          IconButton(
+            tooltip: 'AI Lyrics Studio',
+            onPressed: showAiLyrics,
+            icon: const Icon(Icons.lyrics_outlined),
+          ),
+          IconButton(
+            tooltip: 'Discover recommendations',
+            onPressed: loadRecommendations,
+            icon: const Icon(Icons.auto_awesome_outlined),
+          ),
+          IconButton(
+            tooltip: 'Backend diagnostics',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => MusicAdminDashboardPage(api: api),
+            )),
+            icon: const Icon(Icons.monitor_heart_outlined),
+          ),
           IconButton(
             tooltip: 'Offline library',
             onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
