@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'music_app/**'
+      - 'music_backend/**'
       - '.github/workflows/flutter-music.yml'
   push:
     branches:
