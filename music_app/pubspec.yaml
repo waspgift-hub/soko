@@ -1,0 +1,23 @@
+name: soko_vibe_music
+description: Soko Vibe Music - Flutter music discovery and player app.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  just_audio: ^0.9.40
+  cached_network_image: ^3.4.1
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
