@@ -18,14 +18,21 @@ class MusicTrack {
   });
 
   factory MusicTrack.fromJson(Map<String, dynamic> json) {
+    final rawDownloadAllowed = json['audiodownload_allowed'];
+    final downloadAllowed = rawDownloadAllowed == true ||
+        rawDownloadAllowed == 1 ||
+        rawDownloadAllowed?.toString() == '1';
+
     return MusicTrack(
       id: '${json['id'] ?? ''}',
-      title: '${json['title'] ?? 'Unknown title'}',
+      title: '${json['title'] ?? json['song'] ?? 'Unknown title'}',
       artist: '${json['artist'] ?? 'Unknown artist'}',
-      image: '${json['image'] ?? ''}',
-      streamUrl: json['streaming_url']?.toString(),
-      downloadUrl: json['audiodownload']?.toString(),
-      downloadAllowed: json['audiodownload_allowed'] == true || json['audiodownload_allowed'] == 1,
+      image: '${json['image'] ?? json['cover'] ?? ''}',
+      // The current Worker returns redirect endpoints in audio/download.
+      // Older backend payloads with direct URLs remain supported as well.
+      streamUrl: (json['streaming_url'] ?? json['audio'])?.toString(),
+      downloadUrl: (json['audiodownload'] ?? json['download'])?.toString(),
+      downloadAllowed: downloadAllowed,
     );
   }
 }
