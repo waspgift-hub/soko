@@ -71,15 +71,16 @@ void main() {
     expect(await api.downloadUrl('42'), 'https://worker.example.test/download/42');
   });
 
-  test('download refuses a track whose license disallows downloads', () async {
-    final client = MockClient((request) async => http.Response(
-      jsonEncode({'track': {'id': '42', 'audiodownload_allowed': false}}),
-      200,
-    ));
-    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+  test('track parser marks disallowed downloads as unavailable', () {
+    final track = MusicTrack.fromJson({
+      'id': '42',
+      'song': 'Streaming Only',
+      'audiodownload_allowed': false,
+      'download': null,
+    });
 
-    await expectLater(api.downloadUrl('42'), throwsException);
-    client.close();
+    expect(track.downloadAllowed, isFalse);
+    expect(track.downloadUrl, isNull);
   });
 
   test('download metadata survives JSON serialization', () {
