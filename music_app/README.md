@@ -48,3 +48,10 @@ Lyrics API documentation: https://lrclib.net/docs
   4. Add the matching `google-services.json` at `android/app/google-services.json` and apply the Google Services Gradle plugin as required by the project's Android Gradle setup.
   5. Run `flutter pub get`, `flutter analyze`, and `flutter test` on a machine with Flutter/Android tooling.
 - No Firebase project configuration or `google-services.json` is committed here. Until the project-specific setup is supplied, Google login reports a setup message instead of pretending authentication succeeded. Guest mode remains available.
+
+
+### Build and validation notes
+
+The `music_app` directory currently contains the Flutter source package but does not commit generated Android platform files. The Music CI workflow generates Android scaffolding on its runner, sets Android minSdk to 23 for Firebase compatibility, runs dependency resolution, Dart analysis and tests, and builds a debug APK artifact. That generated platform directory is temporary and is not added to this branch.
+
+A successful APK compile does **not** prove Google sign-in works at runtime. Real Google authentication still requires a registered Firebase Android app, enabled Google provider, matching package ID and SHA fingerprints, `google-services.json`, and Google Services Gradle configuration. The CI debug APK is therefore a compile artifact, not a release-ready or Firebase-configured build.
