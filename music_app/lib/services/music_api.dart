@@ -20,57 +20,46 @@ class MusicApi {
 
   Future<List<MusicTrack>> search(String query) async {
     if (query.trim().isEmpty) return <MusicTrack>[];
-    final uri = Uri.parse('$baseUrl/search')
+    final uri = Uri.parse('${baseUrl}/search')
         .replace(queryParameters: {'q': query.trim()});
     final response =
-        await _client.get(uri).timeout(const Duration(seconds: 10));
+        await _client.get(uri).timeout(const Duration(seconds: 12));
     if (response.statusCode != 200) {
-      throw Exception('Music API error: ${response.statusCode}');
+      throw Exception('Music API error: HTTP ${response.statusCode}');
     }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final results = decoded['results'] as List? ?? const <dynamic>[];
-    return results
-        .map((item) => MusicTrack.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ))
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Music API returned an invalid response.');
+    }
+    final rawResults = decoded['results'];
+    if (rawResults is! List) {
+      throw const FormatException('Music API response is missing results.');
+    }
+    return rawResults
+        .whereType<Map>()
+        .map((item) => MusicTrack.fromJson(Map<String, dynamic>.from(item)))
+        .where((track) => track.id.isNotEmpty)
         .toList();
   }
 
-  Future<Map<String, dynamic>> _fetchTrack(String id) async {
-    final response = await _client
-        .get(Uri.parse('$baseUrl/play/${Uri.encodeComponent(id)}'))
-        .timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Music provider could not retrieve this track.');
-    }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return decoded['track'] is Map
-        ? Map<String, dynamic>.from(decoded['track'] as Map)
-        : decoded;
-  }
-
+  /// The deployed music-api Worker returns HTTP 302 from /play/:id to
+  /// Jamendo's HTTPS stream. Do not JSON-decode the audio response.
   Future<String> playUrl(String id) async {
-    final track = await _fetchTrack(id);
-    final url = track['streaming_url']?.toString();
-    if (url == null || url.isEmpty || Uri.tryParse(url)?.scheme != 'https') {
-      throw Exception('No valid playable source returned.');
+    if (id.trim().isEmpty) {
+      throw const FormatException('This track has no valid ID.');
     }
-    return url;
+    return '${baseUrl}/play/${Uri.encodeComponent(id)}';
   }
 
+  /// /download/:id validates Jamendo's audiodownload_allowed flag on the
+  /// server, then redirects to the licensed download URL. DownloadService
+  /// follows that redirect and saves the audio bytes locally.
   Future<String> downloadUrl(String id) async {
-    final track = await _fetchTrack(id);
-    final allowed = track['audiodownload_allowed'] == true ||
-        track['audiodownload_allowed'] == 1;
-    final url = track['audiodownload']?.toString();
-    if (!allowed ||
-        url == null ||
-        url.isEmpty ||
-        Uri.tryParse(url)?.scheme != 'https') {
-      throw Exception(
-        'This track is streaming-only under its current license.',
-      );
+    if (id.trim().isEmpty) {
+      throw const FormatException('This track has no valid ID.');
     }
-    return url;
+    return '${baseUrl}/download/${Uri.encodeComponent(id)}';
   }
+
+  void close() => _client.close();
 }
