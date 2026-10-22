@@ -229,14 +229,15 @@ class _MusicHomePageState extends State<MusicHomePage> {
 
   Future<void> play(MusicTrack track) async {
     try {
-      setState(() => current = track);
       if (track.source == 'youtube') {
         await player.pause();
+        if (mounted) setState(() => current = null);
         final youtubeUri = Uri.https('www.youtube.com', '/watch', {'v': track.id});
         final opened = await launchUrl(youtubeUri, mode: LaunchMode.externalApplication);
         if (!opened) throw Exception('Could not open YouTube.');
         return;
       }
+      setState(() => current = track);
       final url = await api.playUrl(track.id);
       await player.setUrl(url);
       await player.play();
