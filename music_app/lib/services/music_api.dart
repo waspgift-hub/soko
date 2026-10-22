@@ -20,7 +20,7 @@ class MusicApi {
 
   Future<List<MusicTrack>> search(String query) async {
     if (query.trim().isEmpty) return <MusicTrack>[];
-    final uri = Uri.parse('${baseUrl}/search')
+    final uri = Uri.parse('$baseUrl/search')
         .replace(queryParameters: {'q': query.trim()});
     final response =
         await _client.get(uri).timeout(const Duration(seconds: 10));
@@ -38,7 +38,7 @@ class MusicApi {
 
   Future<Map<String, dynamic>> _fetchTrack(String id) async {
     final response = await _client
-        .get(Uri.parse('${baseUrl}/play/${Uri.encodeComponent(id)}'))
+        .get(Uri.parse('$baseUrl/play/${Uri.encodeComponent(id)}'))
         .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception('Music provider could not retrieve this track.');
