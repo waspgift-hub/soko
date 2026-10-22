@@ -704,7 +704,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           itemBuilder: (_, i) {
                             final track = tracks[i];
                             return TweenAnimationBuilder<double>(
-                              key: ValueKey('${track.id}-${i}'),
+                              key: ValueKey('${track.id}-$i'),
                               tween: Tween(begin: 0, end: 1),
                               duration: Duration(milliseconds: 240 + ((i > 8 ? 8 : i) * 45)),
                               curve: Curves.easeOutCubic,
