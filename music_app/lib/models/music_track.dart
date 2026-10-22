@@ -27,18 +27,34 @@ class MusicTrack {
   bool get canDownload => audiodownloadAllowed && _isHttpsUrl(downloadUrl);
   bool get isLocal => source == 'local' || source == 'device';
 
-  factory MusicTrack.fromJson(Map<String, dynamic> json) => MusicTrack(
-        id: '${json['id'] ?? ''}',
-        title: '${json['title'] ?? 'Unknown title'}',
-        artist: '${json['artist'] ?? 'Unknown artist'}',
-        image: _httpsOrEmpty(json['image']?.toString()),
-        streamUrl: _httpsOrNull(json['streaming_url']?.toString()),
-        downloadUrl: _httpsOrNull(json['audiodownload']?.toString()),
-        audiodownloadAllowed: json['audiodownload_allowed'] == true,
-        license: '${json['license'] ?? ''}',
-        durationSeconds: int.tryParse('${json['duration'] ?? 0}') ?? 0,
-        source: '${json['source'] ?? 'jamendo'}'.toLowerCase(),
-      );
+  // Compatibility alias for UI code from earlier SokoVibe Music iterations.
+  bool get downloadAllowed => canDownload;
+
+  factory MusicTrack.fromJson(Map<String, dynamic> json) {
+    final rawAllowed = json['audiodownload_allowed'];
+    final allowed = rawAllowed == true ||
+        rawAllowed == 1 ||
+        rawAllowed?.toString().toLowerCase() == 'true' ||
+        rawAllowed?.toString() == '1';
+    return MusicTrack(
+      id: '${json['id'] ?? ''}',
+      title: '${json['title'] ?? json['song'] ?? 'Unknown title'}',
+      artist: '${json['artist'] ?? 'Unknown artist'}',
+      image: _httpsOrEmpty(
+        (json['image'] ?? json['cover'])?.toString(),
+      ),
+      streamUrl: _httpsOrNull(
+        (json['streaming_url'] ?? json['audio'])?.toString(),
+      ),
+      downloadUrl: _httpsOrNull(
+        (json['audiodownload'] ?? json['download'])?.toString(),
+      ),
+      audiodownloadAllowed: allowed,
+      license: '${json['license'] ?? ''}',
+      durationSeconds: int.tryParse('${json['duration'] ?? 0}') ?? 0,
+      source: '${json['source'] ?? 'jamendo'}'.toLowerCase(),
+    );
+  }
 
   factory MusicTrack.fromLocalJson(Map<String, dynamic> json) => MusicTrack(
         id: '${json['id'] ?? ''}',
@@ -49,7 +65,8 @@ class MusicTrack {
         downloadUrl: null,
         audiodownloadAllowed: false,
         license: '${json['license'] ?? ''}',
-        durationSeconds: int.tryParse('${json['durationSeconds'] ?? 0}') ?? 0,
+        durationSeconds:
+            int.tryParse('${json['durationSeconds'] ?? 0}') ?? 0,
         source: '${json['source'] ?? 'local'}'.toLowerCase(),
       );
 
