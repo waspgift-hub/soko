@@ -35,6 +35,8 @@ jobs:
           flutter-version: '3.41.9'
           channel: stable
           cache: true
+      - name: Generate Android v2 project files
+        run: flutter create --platforms=android --overwrite .
       - name: Resolve dependencies
         run: flutter pub get
       - name: Analyze
