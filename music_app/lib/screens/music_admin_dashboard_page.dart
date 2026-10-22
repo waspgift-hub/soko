@@ -199,7 +199,7 @@ class _CheckResult {
   });
 
   factory _CheckResult.running(String label) => _CheckResult(
-    detail: '${label} is running…', success: false, running: true,
+    detail: '$label is running…', success: false, running: true,
   );
 
   factory _CheckResult.success(String detail, Duration duration) => _CheckResult(
