@@ -7,12 +7,14 @@ class AppSettings {
   static const _reminderKey = 'settings_daily_reminder';
   static const _hourKey = 'settings_reminder_hour';
   static const _minuteKey = 'settings_reminder_minute';
+  static const _startupSoundKey = 'settings_startup_sound';
 
   ThemeMode themeMode = ThemeMode.system;
   int colorSeed = 0xFF2E7D32;
   bool dailyReminder = true;
   int reminderHour = 19;
   int reminderMinute = 0;
+  bool startupSound = true;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -26,6 +28,13 @@ class AppSettings {
     dailyReminder = prefs.getBool(_reminderKey) ?? true;
     reminderHour = prefs.getInt(_hourKey) ?? 19;
     reminderMinute = prefs.getInt(_minuteKey) ?? 0;
+    startupSound = prefs.getBool(_startupSoundKey) ?? true;
+  }
+
+  Future<void> saveStartupSound(bool value) async {
+    startupSound = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_startupSoundKey, value);
   }
 
   Future<void> saveTheme(ThemeMode value) async {
