@@ -241,28 +241,8 @@ class _EmptyMusicStateState extends State<_EmptyMusicState>
             ),
           ),
           const SizedBox(height: 22),
-          Text('Find your next vibe',
+          Text('Discover',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text('Search songs, artists or albums and build your own soundtrack.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
-          const SizedBox(height: 18),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.secondaryContainer.withValues(alpha: .65),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.search_rounded, size: 18, color: scheme.onSecondaryContainer),
-                const SizedBox(width: 7),
-                Text('Type above to get started',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onSecondaryContainer)),
-              ]),
-            ),
-          ),
         ]),
       ),
     );
@@ -301,10 +281,7 @@ class _SearchLoadingStateState extends State<_SearchLoadingState>
           );
         })),
       ),
-      const SizedBox(height: 18),
-      Text('Finding your sound…', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 6),
-      Text('Searching music for you', style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 8),
     ]));
   }
 }
@@ -682,26 +659,22 @@ class _MusicHomePageState extends State<MusicHomePage> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: SearchBar(
               controller: searchController,
-              hintText: 'Search songs, artists or albums',
+              hintText: 'Search music',
               leading: const Icon(Icons.search),
               trailing: [IconButton(onPressed: search, icon: const Icon(Icons.arrow_forward))],
               onSubmitted: (_) => search(),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12, bottom: 4),
+              child: IconButton.filledTonal(
+                tooltip: 'On-device music',
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   builder: (_) => OfflineLibraryPage(player: player),
                 )),
                 icon: const Icon(Icons.phone_android_rounded),
-                label: const Text('Play music on this device'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
-                  alignment: Alignment.centerLeft,
-                ),
               ),
             ),
           ),
