@@ -968,11 +968,10 @@ class _DownloadsPageState extends State<DownloadsPage> {
                                     try {
                                       await widget.onPlay(item);
                                     } catch (_) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('This saved file could not be played. Try downloading it again.')),
-                                        );
-                                      }
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('This saved file could not be played. Try downloading it again.')),
+                                      );
                                     }
                                   },
                                   icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
