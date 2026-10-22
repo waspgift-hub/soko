@@ -609,7 +609,9 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           contentPadding: const EdgeInsets.all(8),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: CachedNetworkImage(
+                            child: track.image.isEmpty
+                                ? const _CoverPlaceholder()
+                                : CachedNetworkImage(
                               imageUrl: track.image,
                               width: 56,
                               height: 56,
@@ -822,18 +824,18 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('App version'),
-              subtitle: const Text('0.1.0'),
+              subtitle: const Text('0.2.0'),
               onTap: () => showAboutDialog(
                 context: context,
                 applicationName: 'Soko Vibe Music',
-                applicationVersion: '0.1.0',
+                applicationVersion: '0.2.0',
                 applicationLegalese: 'Made for music discovery.',
               ),
             ),
           ])),
           const SizedBox(height: 12),
           Text(
-            'Settings are saved on this device. Music search and lyrics need an internet connection; downloaded/offline features depend on the relevant feature being implemented.',
+            'Settings are saved on this device. Music search and lyrics need an internet connection; imported or permitted downloaded tracks can be played offline.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -1147,7 +1149,7 @@ class _PlayerBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(children: [
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: track.image, width: 48, height: 48, fit: BoxFit.cover, errorWidget: (_, __, ___) => const Icon(Icons.music_note))),
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: track.image.isEmpty ? const Icon(Icons.music_note, size: 32) : CachedNetworkImage(imageUrl: track.image, width: 48, height: 48, fit: BoxFit.cover, errorWidget: (_, __, ___) => const Icon(Icons.music_note))),
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
