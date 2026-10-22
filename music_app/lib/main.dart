@@ -343,8 +343,8 @@ class _MusicHomePageState extends State<MusicHomePage> {
               const SizedBox(height: 10),
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment<String>(value: 'licensed', label: Text('Audio-only music'), icon: Icon(Icons.headphones_rounded)),
-                  ButtonSegment<String>(value: 'youtube', label: Text('YouTube videos'), icon: Icon(Icons.smart_display_rounded)),
+                  ButtonSegment<String>(value: 'licensed', label: Text('Licensed audio'), icon: Icon(Icons.headphones_rounded)),
+                  ButtonSegment<String>(value: 'youtube', label: Text('YouTube'), icon: Icon(Icons.smart_display_rounded)),
                 ],
                 selected: {_searchSource},
                 onSelectionChanged: (selection) {
