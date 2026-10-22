@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soko_vibe_music/models/music_track.dart';
 import 'package:soko_vibe_music/services/app_settings.dart';
@@ -33,6 +37,43 @@ void main() {
   test('music API returns empty results for a blank query without networking', () async {
     final api = MusicApi(baseUrl: 'https://example.invalid');
     expect(await api.search('  '), isEmpty);
+  });
+
+  test('playback parses the deployed Worker nested track response', () async {
+    final client = MockClient((request) async => http.Response(
+      jsonEncode({'track': {'id': '42', 'streaming_url': 'https://cdn.example.test/audio.mp3'}}),
+      200,
+    ));
+    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+
+    expect(await api.playUrl('42'), 'https://cdn.example.test/audio.mp3');
+    client.close();
+  });
+
+  test('download URL is returned only when Jamendo allows downloading', () async {
+    final client = MockClient((request) async => http.Response(
+      jsonEncode({'track': {
+        'id': '42',
+        'audiodownload': 'https://cdn.example.test/download.mp3',
+        'audiodownload_allowed': true,
+      }}),
+      200,
+    ));
+    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+
+    expect(await api.downloadUrl('42'), 'https://cdn.example.test/download.mp3');
+    client.close();
+  });
+
+  test('download refuses a track whose license disallows downloads', () async {
+    final client = MockClient((request) async => http.Response(
+      jsonEncode({'track': {'id': '42', 'audiodownload_allowed': false}}),
+      200,
+    ));
+    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+
+    await expectLater(api.downloadUrl('42'), throwsException);
+    client.close();
   });
 
   test('download metadata survives JSON serialization', () {
