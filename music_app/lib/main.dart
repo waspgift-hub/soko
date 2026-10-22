@@ -384,7 +384,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                   builder: (_) => OfflineLibraryPage(player: player),
                 )),
                 icon: const Icon(Icons.phone_android_rounded),
-                label: const Text('Cheza nyimbo za kwenye simu'),
+                label: const Text('Play music on this device'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
                   alignment: Alignment.centerLeft,
