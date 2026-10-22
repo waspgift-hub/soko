@@ -41,6 +41,8 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
     if (!ready) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('en')],
         theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
         home: const _SokoLoadingScreen(message: 'Preparing your music'),
       );
@@ -48,6 +50,8 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
     final seed = Color(settings.colorSeed);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      locale: const Locale('en'),
+      supportedLocales: const [Locale('en')],
       title: 'Soko Vibe Music',
       themeMode: settings.themeMode,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: seed, brightness: Brightness.light),
