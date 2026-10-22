@@ -69,6 +69,8 @@ jobs:
         run: flutter test
       - name: Build release APK
         run: flutter build apk --release --dart-define=MUSIC_API_URL=$MUSIC_API_URL
+      - name: Verify release APK exists and is non-empty
+        run: test -s build/app/outputs/flutter-apk/app-release.apk
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
@@ -90,7 +92,7 @@ jobs:
         run: echo "CLOUDFLARE_API_TOKEN is not configured; production deployment is skipped."
 
       - name: Smoke test live Cloudflare Worker and Jamendo
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/feat/music-sound-google-auth')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/feat/music-sound-google-auth' || github.ref == 'refs/heads/feat/youtube-discovery-no-api-key'))
         run: |
           set -euo pipefail
           echo "Checking Worker health and Jamendo connectivity at $MUSIC_API_URL"
