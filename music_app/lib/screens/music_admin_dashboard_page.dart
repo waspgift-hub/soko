@@ -24,12 +24,12 @@ class _MusicAdminDashboardPageState extends State<MusicAdminDashboardPage> {
       final detail = await action();
       if (!mounted) return;
       setState(() => _checks[key] = _CheckResult.success(
-        label, detail, DateTime.now().difference(started),
+        detail, DateTime.now().difference(started),
       ));
     } catch (error) {
       if (!mounted) return;
       setState(() => _checks[key] = _CheckResult.failure(
-        label, error.toString(), DateTime.now().difference(started),
+        error.toString(), DateTime.now().difference(started),
       ));
     }
   }
@@ -199,14 +199,14 @@ class _CheckResult {
   });
 
   factory _CheckResult.running(String label) => _CheckResult(
-    detail: 'Running…', success: false, running: true,
+    detail: '${label} is running…', success: false, running: true,
   );
 
-  factory _CheckResult.success(String label, String detail, Duration duration) => _CheckResult(
+  factory _CheckResult.success(String detail, Duration duration) => _CheckResult(
     detail: detail, success: true, running: false, duration: duration,
   );
 
-  factory _CheckResult.failure(String label, String detail, Duration duration) => _CheckResult(
+  factory _CheckResult.failure(String detail, Duration duration) => _CheckResult(
     detail: detail, success: false, running: false, duration: duration,
   );
 
