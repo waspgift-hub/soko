@@ -56,6 +56,18 @@ jobs:
         run: flutter analyze
       - name: Run tests
         run: flutter test
+      - name: Smoke test live Jamendo Worker
+        env:
+          MUSIC_API_URL: https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 15 "$MUSIC_API_URL/health" -o /tmp/music-health.json
+          node -e 'const h=require("/tmp/music-health.json"); if(h.status!=="ok" || h.provider!=="Jamendo") throw new Error("Unexpected health response: "+JSON.stringify(h)); console.log("Health OK:", h.service, h.provider);'
+          curl --fail --silent --show-error --max-time 20 --get --data-urlencode "q=afrobeat" "$MUSIC_API_URL/search" -o /tmp/music-search.json
+          node -e 'const j=require("/tmp/music-search.json"); if(!Array.isArray(j.results) || j.results.length<1 || !j.results[0].id) throw new Error("Search returned no playable track: "+JSON.stringify(j)); console.log("Search OK: returned", j.results.length, "tracks");'
+          track_id=$(node -e 'process.stdout.write(String(require("/tmp/music-search.json").results[0].id))')
+          curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/play/$track_id" -o /tmp/music-play.json
+          node -e 'const p=require("/tmp/music-play.json"); const u=new URL(p.streaming_url); if(!p.id || u.protocol!=="https:") throw new Error("Play endpoint returned invalid URL: "+JSON.stringify(p)); console.log("Play URL OK for track", p.id);'
       - name: Build debug APK
         run: flutter build apk --debug
       - name: Upload debug APK
