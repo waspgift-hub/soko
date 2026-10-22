@@ -39,6 +39,52 @@ jobs:
         run: flutter create --platforms=android .
       - name: Resolve dependencies
         run: flutter pub get
+      - name: Replace generated placeholder test
+        run: |
+          rm -f test/widget_test.dart
+          cat > test/music_track_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:soko_vibe_music/models/music_track.dart';
+
+          void main() {
+            group('MusicTrack.fromJson', () {
+              test('parses normalized fields', () {
+                final track = MusicTrack.fromJson({
+                  'id': 42,
+                  'title': 'Test song',
+                  'artist': 'Test artist',
+                  'image': 'https://example.com/cover.jpg',
+                  'streaming_url': 'https://example.com/audio.mp3',
+                });
+                expect(track.id, '42');
+                expect(track.title, 'Test song');
+                expect(track.artist, 'Test artist');
+                expect(track.image, 'https://example.com/cover.jpg');
+                expect(track.streamUrl, 'https://example.com/audio.mp3');
+              });
+
+              test('supports API aliases and empty values', () {
+                final track = MusicTrack.fromJson({
+                  'track_id': 7,
+                  'name': 'Alias song',
+                  'artist_name': 'Alias artist',
+                  'album_image': 'https://example.com/alias.jpg',
+                  'audio': 'https://example.com/alias.mp3',
+                });
+                expect(track.id, '7');
+                expect(track.title, 'Alias song');
+                expect(track.artist, 'Alias artist');
+                expect(track.image, 'https://example.com/alias.jpg');
+                expect(track.streamUrl, 'https://example.com/alias.mp3');
+
+                final empty = MusicTrack.fromJson({});
+                expect(empty.title, 'Unknown title');
+                expect(empty.artist, 'Unknown artist');
+                expect(empty.streamUrl, isNull);
+              });
+            });
+          }
+          EOF
       - name: Analyze
         run: flutter analyze --no-pub
       - name: Run tests
