@@ -289,7 +289,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                 const SizedBox(width: 10),
                 Expanded(child: Text(error!, style: TextStyle(color: scheme.onErrorContainer))),
                 IconButton(onPressed: search, tooltip: 'Try again / Jaribu tena', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
-              ]))),
+              ])))),
           Expanded(
             child: tracks.isEmpty
                 ? ListView(
