@@ -396,8 +396,10 @@ class _MusicHomePageState extends State<MusicHomePage> {
                 IconButton(onPressed: search, tooltip: 'Try again', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
               ])))),
           Expanded(
-            child: tracks.isEmpty && _hasSearched && !loading && error == null
-                ? Center(child: Padding(
+            child: tracks.isEmpty && _hasSearched
+                ? loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Center(child: Padding(
                     padding: const EdgeInsets.all(28),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.search_off_rounded, size: 56, color: scheme.onSurfaceVariant),
