@@ -43,32 +43,37 @@ jobs:
           import re
 
           app_dir = Path("android/app")
-          gradle_file = next(
-              (app_dir / name for name in ("build.gradle.kts", "build.gradle") if (app_dir / name).exists()),
-              None,
-          )
+          candidates = [app_dir / "build.gradle.kts", app_dir / "build.gradle"]
+          gradle_file = next((p for p in candidates if p.exists()), None)
           if gradle_file is None:
               raise SystemExit("Android app Gradle file was not generated")
 
           content = gradle_file.read_text()
-          if gradle_file.name.endswith(".kts"):
-              enabled_line = "        isCoreLibraryDesugaringEnabled = true"
-              dependency_line = '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
-          else:
-              enabled_line = "        coreLibraryDesugaringEnabled true"
-              dependency_line = "    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          is_kotlin = gradle_file.suffix == ".kts"
+          enabled = "isCoreLibraryDesugaringEnabled = true" if is_kotlin else "coreLibraryDesugaringEnabled true"
+          dependency = (
+              'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+              if is_kotlin else
+              "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          )
 
-          if "isCoreLibraryDesugaringEnabled" not in content and "coreLibraryDesugaringEnabled" not in content:
-              content, count = re.subn(r"(compileOptions\s*\{)", r"\1\n" + enabled_line, content, count=1)
+          if not re.search(r"\\bisCoreLibraryDesugaringEnabled\\s*=\\s*true\\b|\\bcoreLibraryDesugaringEnabled\\s+true\\b", content):
+              pattern = r"(compileOptions\\s*\\{)"
+              content, count = re.subn(pattern, lambda m: m.group(1) + "\\n        " + enabled, content, count=1)
               if count != 1:
-                  raise SystemExit("Could not enable core library desugaring in compileOptions")
+                  raise SystemExit("Could not locate compileOptions block to enable core library desugaring")
+
           if "desugar_jdk_libs" not in content:
-              content, count = re.subn(r"(dependencies\s*\{)", r"\1\n" + dependency_line, content, count=1)
+              pattern = r"(dependencies\\s*\\{)"
+              content, count = re.subn(pattern, lambda m: m.group(1) + "\\n    " + dependency, content, count=1)
               if count == 0:
-                  # Some recent Flutter templates omit an app-level dependencies block.
-                  content = content.rstrip() + "\n\ndependencies {\n" + dependency_line + "\n}\n"
+                  content = content.rstrip() + "\\n\\ndependencies {\\n    " + dependency + "\\n}\\n"
+
           gradle_file.write_text(content)
-          print(f"Enabled core library desugaring in {gradle_file}")
+          verify = gradle_file.read_text()
+          if "desugar_jdk_libs" not in verify or not re.search(r"\\bisCoreLibraryDesugaringEnabled\\s*=\\s*true\\b|\\bcoreLibraryDesugaringEnabled\\s+true\\b", verify):
+              raise SystemExit("Desugaring configuration verification failed")
+          print(f"Verified core library desugaring in {gradle_file}")
           PY
       - name: Remove generated placeholder widget test
         run: rm -f test/widget_test.dart
