@@ -19,11 +19,25 @@ class MusicApi {
     return results.map((e) => MusicTrack.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
+  Future<String> downloadUrl(String id) async {
+    final response = await http.get(Uri.parse('$baseUrl/play/$id')).timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) throw Exception('Unable to retrieve download permissions');
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final track = decoded['track'] is Map ? Map<String, dynamic>.from(decoded['track'] as Map) : decoded;
+    final allowed = track['audiodownload_allowed'] == true || track['audiodownload_allowed'] == 1;
+    final url = track['audiodownload']?.toString();
+    if (!allowed || url == null || url.isEmpty) {
+      throw Exception('This track is streaming-only under its current license.');
+    }
+    return url;
+  }
+
   Future<String> playUrl(String id) async {
     final response = await http.get(Uri.parse('$baseUrl/play/$id')).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) throw Exception('Unable to start playback');
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final url = decoded['streaming_url']?.toString();
+    final track = decoded['track'] is Map ? Map<String, dynamic>.from(decoded['track'] as Map) : decoded;
+    final url = track['streaming_url']?.toString();
     if (url == null || url.isEmpty) throw Exception('No playable source returned');
     return url;
   }
