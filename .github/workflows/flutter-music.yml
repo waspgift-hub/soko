@@ -34,6 +34,39 @@ jobs:
           cache: true
       - name: Generate missing Android platform files
         run: flutter create --platforms=android --org=co.tz.sokovibe --project-name=soko_vibe_music .
+      - name: Enable Android core library desugaring for notifications
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_dir = Path("android/app")
+          gradle_file = next(
+              (app_dir / name for name in ("build.gradle.kts", "build.gradle") if (app_dir / name).exists()),
+              None,
+          )
+          if gradle_file is None:
+              raise SystemExit("Android app Gradle file was not generated")
+
+          content = gradle_file.read_text()
+          if gradle_file.name.endswith(".kts"):
+              enabled_line = "        isCoreLibraryDesugaringEnabled = true"
+              dependency_line = '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          else:
+              enabled_line = "        coreLibraryDesugaringEnabled true"
+              dependency_line = "    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+
+          if "isCoreLibraryDesugaringEnabled" not in content and "coreLibraryDesugaringEnabled" not in content:
+              content, count = re.subn(r"(compileOptions\\s*\\{)", r"\\1\\n" + enabled_line, content, count=1)
+              if count != 1:
+                  raise SystemExit("Could not enable core library desugaring in compileOptions")
+          if "desugar_jdk_libs" not in content:
+              content, count = re.subn(r"(dependencies\\s*\\{)", r"\\1\\n" + dependency_line, content, count=1)
+              if count != 1:
+                  raise SystemExit("Could not add desugar_jdk_libs dependency")
+          gradle_file.write_text(content)
+          print(f"Enabled core library desugaring in {gradle_file}")
+          PY
       - name: Remove generated placeholder widget test
         run: rm -f test/widget_test.dart
       - name: Install dependencies
