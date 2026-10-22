@@ -42,7 +42,7 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
-        home: const Scaffold(body: Center(child: CircularProgressIndicator())),
+        home: const _SokoLoadingScreen(message: 'Preparing your music'),
       );
     }
     final seed = Color(settings.colorSeed);
@@ -55,6 +55,135 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
       home: MusicHomePage(settings: settings, onSettingsChanged: refreshSettings),
     );
   }
+}
+
+
+class _SokoLoadingScreen extends StatefulWidget {
+  const _SokoLoadingScreen({required this.message});
+  final String message;
+
+  @override
+  State<_SokoLoadingScreen> createState() => _SokoLoadingScreenState();
+}
+
+class _SokoLoadingScreenState extends State<_SokoLoadingScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 1250),
+  )..repeat();
+
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (_, __) => Transform.rotate(
+            angle: _controller.value * 6.28318,
+            child: Container(
+              width: 84, height: 84,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(colors: [scheme.primary, const Color(0xFF00D985)]),
+                boxShadow: [BoxShadow(color: scheme.primary.withValues(alpha: .25), blurRadius: 24)],
+              ),
+              child: const Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 48),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text('SokoVibe Music', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text(widget.message, style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 20),
+        SizedBox(width: 130, child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: const LinearProgressIndicator(minHeight: 4),
+        )),
+      ])),
+    );
+  }
+}
+
+class _MusicLoadingStrip extends StatefulWidget {
+  const _MusicLoadingStrip();
+  @override
+  State<_MusicLoadingStrip> createState() => _MusicLoadingStripState();
+}
+
+class _MusicLoadingStripState extends State<_MusicLoadingStrip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 900),
+  )..repeat();
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (_, __) => LinearProgressIndicator(
+      minHeight: 3,
+      value: null,
+      color: Color.lerp(Theme.of(context).colorScheme.primary, const Color(0xFF00D985), _controller.value),
+    ),
+  );
+}
+
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder();
+  @override
+  Widget build(BuildContext context) => Container(
+    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+    alignment: Alignment.center,
+    child: Icon(Icons.graphic_eq_rounded, color: Theme.of(context).colorScheme.primary, size: 30),
+  );
+}
+
+class _DownloadProgressDialog extends StatefulWidget {
+  const _DownloadProgressDialog({required this.track});
+  final MusicTrack track;
+  @override
+  State<_DownloadProgressDialog> createState() => _DownloadProgressDialogState();
+}
+
+class _DownloadProgressDialogState extends State<_DownloadProgressDialog>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 1000),
+  )..repeat();
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    content: Column(mainAxisSize: MainAxisSize.min, children: [
+      AnimatedBuilder(
+        animation: _controller,
+        builder: (_, __) => Transform.rotate(
+          angle: _controller.value * 6.28318,
+          child: Container(
+            width: 68, height: 68,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Theme.of(context).colorScheme.primary, width: 5),
+            ),
+            child: Icon(Icons.download_rounded, color: Theme.of(context).colorScheme.primary, size: 34),
+          ),
+        ),
+      ),
+      const SizedBox(height: 18),
+      Text('Downloading music…', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 6),
+      Text(widget.track.title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+      const SizedBox(height: 16),
+      const LinearProgressIndicator(),
+      const SizedBox(height: 8),
+      Text('Keeping this track ready for offline listening', style: Theme.of(context).textTheme.bodySmall, textAlign: TextAlign.center),
+    ]),
+  );
 }
 
 class MusicHomePage extends StatefulWidget {
@@ -157,11 +286,25 @@ class _MusicHomePageState extends State<MusicHomePage> {
       ),
     );
     if (accepted != true || !mounted) return;
+    var progressDialogShown = false;
     try {
+      progressDialogShown = true;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DownloadProgressDialog(track: track),
+      );
       await OfflineMusicService().download(track);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved “${track.title}” for offline listening.')),
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Row(children: [
+            const Icon(Icons.check_circle, color: Colors.greenAccent),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Saved “${track.title}” for offline listening.')),
+          ]),
+        ),
       );
       await NotificationService.instance.notifyDownloadComplete(track.title);
     } catch (error) {
@@ -169,6 +312,10 @@ class _MusicHomePageState extends State<MusicHomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Download failed: $error')),
       );
+    } finally {
+      if (progressDialogShown && mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
@@ -224,7 +371,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
               onSubmitted: (_) => search(),
             ),
           ),
-          if (loading) const LinearProgressIndicator(minHeight: 2),
+          if (loading) const _MusicLoadingStrip(),
           if (error != null) Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
           Expanded(
             child: tracks.isEmpty
@@ -244,7 +391,8 @@ class _MusicHomePageState extends State<MusicHomePage> {
                               width: 56,
                               height: 56,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) => const Icon(Icons.music_note),
+                              placeholder: (_, __) => const _CoverPlaceholder(),
+                              errorWidget: (_, __, ___) => const _CoverPlaceholder(),
                             ),
                           ),
                           title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
