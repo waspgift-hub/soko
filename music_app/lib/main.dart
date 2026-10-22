@@ -48,7 +48,7 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
       debugShowCheckedModeBanner: false,
       title: 'Soko Vibe Music',
       themeMode: settings.themeMode,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF74B94A), brightness: Brightness.light, visualDensity: VisualDensity.standard),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: seed, brightness: Brightness.light, visualDensity: VisualDensity.standard),
       darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFFB8F36B), brightness: Brightness.dark, visualDensity: VisualDensity.standard, scaffoldBackgroundColor: const Color(0xFF0B1110), cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero)),
       home: MusicHomePage(settings: settings, onSettingsChanged: refreshSettings),
     );
