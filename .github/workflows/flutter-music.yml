@@ -78,11 +78,15 @@ jobs:
         run: flutter analyze --no-pub
       - name: Run tests
         run: flutter test --no-pub
-      - name: Build debug APK
-        run: flutter build apk --debug --no-pub
-      - name: Upload debug APK
+      - name: Build release APK
+        run: flutter build apk --release --no-pub
+      - name: Verify release APK exists and is non-empty
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: soko-vibe-music-debug-apk
-          path: music_app/build/app/outputs/flutter-apk/app-debug.apk
+          name: soko-vibe-music-release-apk
+          path: music_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
