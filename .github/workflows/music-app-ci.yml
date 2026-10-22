@@ -67,7 +67,7 @@ jobs:
           node -e 'const j=require("/tmp/music-search.json"); if(!Array.isArray(j.results) || j.results.length<1 || !j.results[0].id) throw new Error("Search returned no playable track: "+JSON.stringify(j)); console.log("Search OK: returned", j.results.length, "tracks");'
           track_id=$(node -e 'process.stdout.write(String(require("/tmp/music-search.json").results[0].id))')
           curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/play/$track_id" -o /tmp/music-play.json
-          node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(!t.id || u.protocol!=="https:") throw new Error("Play endpoint returned invalid URL: "+JSON.stringify(p)); console.log("Play URL OK for track", t.id);'
+          node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(!t.id || u.protocol!=="https:") throw new Error("Play endpoint returned invalid URL: "+JSON.stringify(p)); if(typeof t.audiodownload_allowed!=="boolean" || (t.audiodownload_allowed && !t.audiodownload)) throw new Error("Download permission metadata is invalid: "+JSON.stringify(t)); console.log("Play URL and download license metadata OK for track", t.id, "download allowed:", t.audiodownload_allowed);'
       - name: Build debug APK
         run: flutter build apk --debug
       - name: Upload debug APK
