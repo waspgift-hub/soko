@@ -79,8 +79,9 @@ class _MusicHomePageState extends State<MusicHomePage> {
   }
 
   Future<void> _setupNotifications() async {
+    if (!widget.settings.dailyReminder) return;
     final granted = await NotificationService.instance.requestPermission();
-    if (granted && widget.settings.dailyReminder) {
+    if (granted) {
       await NotificationService.instance.scheduleDailyReminder(
         hour: widget.settings.reminderHour,
         minute: widget.settings.reminderMinute,
@@ -244,8 +245,6 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
     0xFF2E7D32, 0xFF00897B, 0xFF1565C0, 0xFF6A1B9A,
     0xFFEF6C00, 0xFFC62828, 0xFF37474F,
   ];
-  bool _busy = false;
-
   Future<void> _changeReminder(bool enabled) async {
     if (enabled) {
       final granted = await NotificationService.instance.requestPermission();
