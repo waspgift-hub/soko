@@ -53,6 +53,37 @@ jobs:
             cp "$saved_manifest" "$manifest"
             rm -f "$saved_manifest"
           fi
+      - name: Set Android compile SDK to 36 for current plugins
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_dir = Path("android/app")
+          candidates = [app_dir / "build.gradle.kts", app_dir / "build.gradle"]
+          gradle_file = next((p for p in candidates if p.exists()), None)
+          if gradle_file is None:
+              raise SystemExit("Android app Gradle file was not generated")
+
+          content = gradle_file.read_text()
+          original = content
+          patterns = [
+              (r"(?m)^(\\s*compileSdk\\s*=\\s*)[^\\n]+", r"\\g<1>36"),
+              (r"(?m)^(\\s*compileSdkVersion\\s+)[^\\n]+", r"\\g<1>36"),
+              (r"(?m)^(\\s*compileSdk\\s+)\\(?[^\\n]+\\)?\\s*$", r"\\g<1>36"),
+          ]
+          for pattern, replacement in patterns:
+              content, count = re.subn(pattern, replacement, content, count=1)
+              if count:
+                  break
+          if content == original:
+              raise SystemExit("Could not find compileSdk declaration in " + str(gradle_file))
+          gradle_file.write_text(content)
+          verify = gradle_file.read_text()
+          if not re.search(r"(?m)^\\s*compileSdk(?:Version)?(?:\\s*=|\\s+)\\s*36\\b", verify):
+              raise SystemExit("compileSdk 36 verification failed in " + str(gradle_file))
+          print(f"Verified compileSdk 36 in {gradle_file}")
+          PY
       - name: Enable Android core library desugaring for notifications
         run: |
           python3 - <<'PY'
