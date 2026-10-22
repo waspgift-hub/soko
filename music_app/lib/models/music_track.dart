@@ -6,6 +6,7 @@ class MusicTrack {
   final String? streamUrl;
   final String? downloadUrl;
   final bool downloadAllowed;
+  final String source;
 
   const MusicTrack({
     required this.id,
@@ -15,6 +16,7 @@ class MusicTrack {
     this.streamUrl,
     this.downloadUrl,
     this.downloadAllowed = false,
+    this.source = 'licensed',
   });
 
   factory MusicTrack.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,7 @@ class MusicTrack {
       streamUrl: (json['streaming_url'] ?? json['audio'])?.toString(),
       downloadUrl: (json['audiodownload'] ?? json['download'])?.toString(),
       downloadAllowed: downloadAllowed,
+      source: '${json['source'] ?? 'licensed'}',
     );
   }
 }
