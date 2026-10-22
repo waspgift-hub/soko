@@ -30,6 +30,8 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Generate missing Android platform files
+        run: flutter create --platforms=android --org=co.tz.sokovibe --project-name=soko_vibe_music --overwrite .
       - name: Install dependencies
         run: flutter pub get
       - name: Analyze Dart code
