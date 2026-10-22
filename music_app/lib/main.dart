@@ -48,8 +48,8 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
       debugShowCheckedModeBanner: false,
       title: 'Soko Vibe Music',
       themeMode: settings.themeMode,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: seed, brightness: Brightness.light),
-      darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: seed, brightness: Brightness.dark),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF74B94A), brightness: Brightness.light, visualDensity: VisualDensity.standard, cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero)),
+      darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFFB8F36B), brightness: Brightness.dark, visualDensity: VisualDensity.standard, scaffoldBackgroundColor: const Color(0xFF0B1110), cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero)),
       home: MusicHomePage(settings: settings, onSettingsChanged: refreshSettings),
     );
   }
@@ -94,6 +94,11 @@ class _MusicHomePageState extends State<MusicHomePage> {
     searchController.dispose();
     player.dispose();
     super.dispose();
+  }
+
+  Future<void> _searchMood(String mood) async {
+    searchController.text = mood;
+    await search();
   }
 
   Future<void> search() async {
@@ -147,78 +152,135 @@ class _MusicHomePageState extends State<MusicHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Soko Vibe Music'),
-        centerTitle: false,
+        titleSpacing: 20,
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(color: scheme.primary, borderRadius: BorderRadius.circular(13)),
+            child: Icon(Icons.graphic_eq_rounded, color: scheme.onPrimary, size: 25),
+          ),
+          const SizedBox(width: 10),
+          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('SokoVibe', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            Text('M U S I C', style: TextStyle(fontSize: 10, letterSpacing: 2.2, fontWeight: FontWeight.w700)),
+          ]),
+        ]),
         actions: [
           IconButton(
-            tooltip: 'App settings',
+            tooltip: 'Settings / Mipangilio',
             onPressed: () async {
               await Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => AppSettingsPage(
-                  settings: widget.settings,
-                  onChanged: widget.onSettingsChanged,
-                ),
+                builder: (_) => AppSettingsPage(settings: widget.settings, onChanged: widget.onSettingsChanged),
               ));
               if (mounted) setState(() {});
             },
-            icon: const Icon(Icons.settings_outlined),
+            icon: const Icon(Icons.tune_rounded),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
         child: Column(children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: SearchBar(
-              controller: searchController,
-              hintText: 'Search songs, artists or albums',
-              leading: const Icon(Icons.search),
-              trailing: [IconButton(onPressed: search, icon: const Icon(Icons.arrow_forward))],
-              onSubmitted: (_) => search(),
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('FEEL EVERY VIBE  ·  HISI KILA HISIA', style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.primary, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+              const SizedBox(height: 8),
+              Text('Your sound. Your mood.', style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800, letterSpacing: -1.1, height: 1.08)),
+              const SizedBox(height: 5),
+              Text('Muziki unaoendana na wewe · Music that moves you',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+              const SizedBox(height: 18),
+              SearchBar(
+                controller: searchController,
+                hintText: 'Tafuta nyimbo / Search songs or artists',
+                leading: const Icon(Icons.search_rounded),
+                trailing: [
+                  if (loading) const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                  else IconButton(onPressed: search, tooltip: 'Search / Tafuta', icon: const Icon(Icons.arrow_forward_rounded)),
+                ],
+                onSubmitted: (_) => search(),
+              ),
+            ]),
           ),
           if (loading) const LinearProgressIndicator(minHeight: 2),
-          if (error != null) Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
+          if (error != null)
+            Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 8), child: Material(
+              color: scheme.errorContainer, borderRadius: BorderRadius.circular(16),
+              child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+                Icon(Icons.wifi_off_rounded, color: scheme.onErrorContainer),
+                const SizedBox(width: 10),
+                Expanded(child: Text(error!, style: TextStyle(color: scheme.onErrorContainer))),
+                IconButton(onPressed: search, tooltip: 'Try again / Jaribu tena', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
+              ]))),
           Expanded(
             child: tracks.isEmpty
-                ? const Center(child: Text('Search for music to get started'))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
+                ? ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    children: [
+                      Text('Choose your vibe  ·  Chagua mood yako', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.55,
+                        children: [
+                          _MoodCard(title: 'Happy', subtitle: 'Furaha', icon: Icons.wb_sunny_rounded, color: const Color(0xFFB8F36B), onTap: () => _searchMood('happy afrobeat')),
+                          _MoodCard(title: 'Chill', subtitle: 'Pumzika', icon: Icons.nightlight_round, color: const Color(0xFF9CC8FF), onTap: () => _searchMood('chill acoustic')),
+                          _MoodCard(title: 'Energy', subtitle: 'Nguvu', icon: Icons.bolt_rounded, color: const Color(0xFFFFC36B), onTap: () => _searchMood('energetic dance')),
+                          _MoodCard(title: 'Love', subtitle: 'Mapenzi', icon: Icons.favorite_rounded, color: const Color(0xFFFF9CCB), onTap: () => _searchMood('love romantic')),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                            colors: [scheme.primaryContainer, scheme.surfaceContainerHighest]),
+                        ),
+                        child: Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('Find your next favourite', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 5),
+                            Text('Tafuta wimbo mpya wa kupenda.', style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(onPressed: () { searchController.text = 'afrobeat'; search(); },
+                              icon: const Icon(Icons.explore_rounded), label: const Text('Explore / Gundua')),
+                          ])),
+                          Icon(Icons.graphic_eq_rounded, size: 64, color: scheme.primary),
+                        ]),
+                      ),
+                      const SizedBox(height: 14),
+                      Text('Discover music · Gundua muziki', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                     itemCount: tracks.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
                       final track = tracks[i];
                       return Card(
+                        color: scheme.surfaceContainerLow,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.all(8),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: CachedNetworkImage(
-                              imageUrl: track.image,
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) => const Icon(Icons.music_note),
-                            ),
+                            borderRadius: BorderRadius.circular(13),
+                            child: CachedNetworkImage(imageUrl: track.image, width: 58, height: 58, fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Container(width: 58, height: 58, color: scheme.surfaceContainerHighest, child: const Icon(Icons.music_note_rounded))),
                           ),
-                          title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
                           subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          trailing: Wrap(
-                            spacing: 0,
-                            children: [
-                              IconButton(
-                                tooltip: 'Show lyrics',
-                                onPressed: () => showLyrics(track),
-                                icon: const Icon(Icons.lyrics_outlined),
-                              ),
-                              IconButton(
-                                tooltip: 'Play',
-                                onPressed: () => play(track),
-                                icon: const Icon(Icons.play_circle_fill),
-                              ),
-                            ],
-                          ),
+                          trailing: Wrap(spacing: 0, children: [
+                            IconButton(tooltip: 'Lyrics / Maneno', onPressed: () => showLyrics(track), icon: const Icon(Icons.lyrics_outlined)),
+                            IconButton(tooltip: 'Play / Cheza', onPressed: () => play(track), icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 32)),
+                          ]),
                         ),
                       );
                     },
@@ -226,6 +288,42 @@ class _MusicHomePageState extends State<MusicHomePage> {
           ),
           if (current != null) _PlayerBar(track: current!, player: player),
         ]),
+      ),
+    );
+  }
+}
+
+class _MoodCard extends StatelessWidget {
+  const _MoodCard({required this.title, required this.subtitle, required this.icon, required this.color, required this.onTap});
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: dark ? Theme.of(context).colorScheme.surfaceContainerLow : color.withValues(alpha: 0.28),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(13)),
+              child: Icon(icon, color: const Color(0xFF152016))),
+            Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ])),
+              Icon(Icons.arrow_outward_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+            ]),
+          ]),
+        ),
       ),
     );
   }
