@@ -126,7 +126,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
   Future<void> play(MusicTrack track) async {
     try {
       setState(() => current = track);
-      final url = await api.playUrl(track.id);
+      final url = await api.playUrl(track.id, streamUrl: track.streamUrl);
       await player.setUrl(url);
       await player.play();
     } catch (_) {
