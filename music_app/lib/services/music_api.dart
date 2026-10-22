@@ -17,7 +17,7 @@ class MusicApi {
   Future<List<MusicTrack>> search(String query) async {
     final term = query.trim();
     if (term.isEmpty) return const [];
-    final uri = Uri.parse('$baseUrl/api/search')
+    final uri = Uri.parse('$baseUrl/search')
         .replace(queryParameters: {'q': term});
     final response = await http.get(uri, headers: const {'Accept': 'application/json'})
         .timeout(const Duration(seconds: 15));
@@ -62,7 +62,7 @@ class MusicApi {
           (parsed.scheme == 'https' || parsed.scheme == 'http') &&
           parsed.host.isNotEmpty) return direct;
     }
-    final uri = Uri.parse('$baseUrl/api/play').replace(queryParameters: {'id': id});
+    final uri = Uri.parse('$baseUrl/play/$id');
     final response = await http.get(uri, headers: const {'Accept': 'application/json'})
         .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
