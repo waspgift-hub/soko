@@ -448,7 +448,7 @@ export default {
       return handlePlay(env, playMatch[1]);
     }
 
-    var downloadMatch = url.pathname.match(/^\\/download\\/(\\d+)$/);
+    var downloadMatch = url.pathname.match(/^\/download\/(\d+)$/);
     if (downloadMatch && request.method === "GET") {
       return handleDownload(env, downloadMatch[1]);
     }
