@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -145,6 +146,167 @@ class _CoverPlaceholder extends StatelessWidget {
     alignment: Alignment.center,
     child: Icon(Icons.graphic_eq_rounded, color: Theme.of(context).colorScheme.primary, size: 30),
   );
+}
+
+
+class _PressScale extends StatefulWidget {
+  const _PressScale({required this.child, required this.onTap});
+  final Widget child;
+  final VoidCallback onTap;
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _pressed = false;
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => _setPressed(true),
+    onTapUp: (_) => _setPressed(false),
+    onTapCancel: () => _setPressed(false),
+    onTap: widget.onTap,
+    child: AnimatedScale(
+      scale: _pressed ? .975 : 1,
+      duration: Duration(milliseconds: _pressed ? 80 : 180),
+      curve: Curves.easeOutCubic,
+      child: widget.child,
+    ),
+  );
+}
+
+class _EmptyMusicState extends StatefulWidget {
+  const _EmptyMusicState({super.key});
+  @override
+  State<_EmptyMusicState> createState() => _EmptyMusicStateState();
+}
+
+class _EmptyMusicStateState extends State<_EmptyMusicState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 1900),
+  )..repeat(reverse: true);
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (_, child) => Transform.translate(
+              offset: Offset(0, -7 * _controller.value),
+              child: Transform.rotate(
+                angle: (_controller.value - .5) * .08,
+                child: child,
+              ),
+            ),
+            child: SizedBox(
+              width: 150, height: 150,
+              child: Stack(alignment: Alignment.center, children: [
+                Container(
+                  width: 142, height: 142,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [scheme.primaryContainer, scheme.surfaceContainerHighest],
+                    ),
+                  ),
+                ),
+                Icon(Icons.album_rounded, size: 104,
+                  color: scheme.primary.withValues(alpha: .26)),
+                Container(
+                  width: 62, height: 62,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle, color: scheme.primary,
+                    boxShadow: [BoxShadow(
+                      color: scheme.primary.withValues(alpha: .24),
+                      blurRadius: 18, spreadRadius: 2,
+                    )],
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 42),
+                ),
+                Positioned(top: 10, right: 10,
+                  child: Icon(Icons.auto_awesome_rounded, color: scheme.tertiary, size: 26)),
+                Positioned(bottom: 14, left: 8,
+                  child: Icon(Icons.music_note_rounded, color: scheme.primary, size: 27)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Text('Find your next vibe',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('Search songs, artists or albums and build your own soundtrack.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+          const SizedBox(height: 18),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.secondaryContainer.withValues(alpha: .65),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.search_rounded, size: 18, color: scheme.onSecondaryContainer),
+                const SizedBox(width: 7),
+                Text('Type above to get started',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onSecondaryContainer)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SearchLoadingState extends StatefulWidget {
+  const _SearchLoadingState({super.key});
+  @override
+  State<_SearchLoadingState> createState() => _SearchLoadingStateState();
+}
+
+class _SearchLoadingStateState extends State<_SearchLoadingState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 1100),
+  )..repeat();
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      AnimatedBuilder(
+        animation: _controller,
+        builder: (_, __) => Row(mainAxisSize: MainAxisSize.min, children: List.generate(5, (index) {
+          final phase = (_controller.value * 2 * math.pi) + index * .8;
+          final height = 16 + (22 * ((1 + math.sin(phase)) / 2));
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: 7, height: height,
+            decoration: BoxDecoration(
+              color: Color.lerp(scheme.primary, const Color(0xFF00D985), index / 4),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          );
+        })),
+      ),
+      const SizedBox(height: 18),
+      Text('Finding your sound…', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 6),
+      Text('Searching music for you', style: Theme.of(context).textTheme.bodySmall),
+    ]));
+  }
 }
 
 class _DownloadProgressDialog extends StatefulWidget {
@@ -543,110 +705,95 @@ class _MusicHomePageState extends State<MusicHomePage> {
               ),
             ),
           ),
-          if (loading) const _MusicLoadingStrip(),
+          if (loading && tracks.isNotEmpty) const _MusicLoadingStrip(),
           if (error != null) Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
           Expanded(
-            child: tracks.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 124, height: 124,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Theme.of(context).colorScheme.primaryContainer,
-                                  Theme.of(context).colorScheme.surfaceContainerHighest,
-                                ],
-                              ),
-                            ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(Icons.album_rounded, size: 88,
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .30)),
-                                Icon(Icons.play_circle_fill_rounded, size: 48,
-                                  color: Theme.of(context).colorScheme.primary),
-                                Positioned(right: 14, top: 18,
-                                  child: Icon(Icons.auto_awesome, size: 22,
-                                    color: Theme.of(context).colorScheme.tertiary)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Text('Find your next vibe',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Text('Search songs, artists or albums and build your own soundtrack.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium),
-                          const SizedBox(height: 16),
-                          const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.search_rounded, size: 18),
-                              SizedBox(width: 6),
-                              Text('Type above to get started'),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: tracks.length,
-                    itemBuilder: (_, i) {
-                      final track = tracks[i];
-                      return Card(
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(8),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: track.image.isEmpty
-                                ? const _CoverPlaceholder()
-                                : CachedNetworkImage(
-                              imageUrl: track.image,
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => const _CoverPlaceholder(),
-                              errorWidget: (_, __, ___) => const _CoverPlaceholder(),
-                            ),
-                          ),
-                          title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          trailing: Wrap(
-                            spacing: 0,
-                            children: [
-                              if (track.canDownload)
-                                IconButton(
-                                  tooltip: 'Download for offline',
-                                  onPressed: () => downloadTrack(track),
-                                  icon: const Icon(Icons.download_for_offline_outlined),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 360),
+              reverseDuration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(0, .025), end: Offset.zero).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: loading && tracks.isEmpty
+                  ? const _SearchLoadingState(key: ValueKey('loading'))
+                  : tracks.isEmpty
+                      ? const _EmptyMusicState(key: ValueKey('empty'))
+                      : ListView.builder(
+                          key: const ValueKey('results'),
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                          itemCount: tracks.length,
+                          itemBuilder: (_, i) {
+                            final track = tracks[i];
+                            return TweenAnimationBuilder<double>(
+                              key: ValueKey('${track.id}-${i}'),
+                              tween: Tween(begin: 0, end: 1),
+                              duration: Duration(milliseconds: 240 + (i.clamp(0, 8) * 45)),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, child) => Opacity(
+                                opacity: value,
+                                child: Transform.translate(
+                                  offset: Offset(0, 14 * (1 - value)),
+                                  child: child,
                                 ),
-                              IconButton(
-                                tooltip: 'Show lyrics',
-                                onPressed: () => showLyrics(track),
-                                icon: const Icon(Icons.lyrics_outlined),
                               ),
-                              IconButton(
-                                tooltip: 'Play',
-                                onPressed: () => play(track),
-                                icon: const Icon(Icons.play_circle_fill),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _PressScale(
+                                  onTap: () => play(track),
+                                  child: Card(
+                                    margin: EdgeInsets.zero,
+                                    clipBehavior: Clip.antiAlias,
+                                    child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      leading: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: SizedBox(
+                                          width: 58, height: 58,
+                                          child: track.image.isEmpty
+                                              ? const _CoverPlaceholder()
+                                              : CachedNetworkImage(
+                                                  imageUrl: track.image,
+                                                  width: 58, height: 58,
+                                                  fit: BoxFit.cover,
+                                                  placeholder: (_, __) => const _CoverPlaceholder(),
+                                                  errorWidget: (_, __, ___) => const _CoverPlaceholder(),
+                                                ),
+                                        ),
+                                      ),
+                                      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      trailing: Wrap(spacing: 0, children: [
+                                        if (track.canDownload)
+                                          IconButton(
+                                            tooltip: 'Download for offline',
+                                            onPressed: () => downloadTrack(track),
+                                            icon: const Icon(Icons.download_for_offline_outlined),
+                                          ),
+                                        IconButton(
+                                          tooltip: 'Show lyrics',
+                                          onPressed: () => showLyrics(track),
+                                          icon: const Icon(Icons.lyrics_outlined),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Play',
+                                          onPressed: () => play(track),
+                                          icon: const Icon(Icons.play_circle_fill),
+                                        ),
+                                      ]),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
+            ),
           ),
           if (current != null) _PlayerBar(track: current!, player: player),
         ]),
