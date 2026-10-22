@@ -62,8 +62,9 @@ jobs:
                   raise SystemExit("Could not enable core library desugaring in compileOptions")
           if "desugar_jdk_libs" not in content:
               content, count = re.subn(r"(dependencies\s*\{)", r"\1\n" + dependency_line, content, count=1)
-              if count != 1:
-                  raise SystemExit("Could not add desugar_jdk_libs dependency")
+              if count == 0:
+                  # Some recent Flutter templates omit an app-level dependencies block.
+                  content = content.rstrip() + "\n\ndependencies {\n" + dependency_line + "\n}\n"
           gradle_file.write_text(content)
           print(f"Enabled core library desugaring in {gradle_file}")
           PY
