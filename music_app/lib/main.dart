@@ -560,8 +560,11 @@ class _LyricsSheetState extends State<_LyricsSheet> {
                                     final position = snapshot.data ?? Duration.zero;
                                     var activeIndex = -1;
                                     for (var i = 0; i < timedLines.length; i++) {
-                                      if (timedLines[i].time <= position) activeIndex = i;
-                                      else break;
+                                      if (timedLines[i].time <= position) {
+                                        activeIndex = i;
+                                      } else {
+                                        break;
+                                      }
                                     }
                                     return ListView.builder(
                                       itemCount: timedLines.length,
@@ -646,9 +649,11 @@ class _OfflineLibraryPageState extends State<OfflineLibraryPage> {
       await service.importLocalAudio();
       await _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not import audio: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not import audio: $e')),
+        );
+      }
     }
   }
 
@@ -657,9 +662,11 @@ class _OfflineLibraryPageState extends State<OfflineLibraryPage> {
       await widget.player.setFilePath(track.path);
       await widget.player.play();
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This local audio file could not be played.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This local audio file could not be played.')),
+        );
+      }
     }
   }
 
