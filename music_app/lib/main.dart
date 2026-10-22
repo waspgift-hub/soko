@@ -202,7 +202,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
     if (_downloading.contains(track.id)) return;
     setState(() => _downloading.add(track.id));
     try {
-      final url = await api.playUrl(track.id);
+      final url = await api.downloadUrl(track.id);
       await DownloadService.instance.download(track, url);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -399,8 +399,10 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: Wrap(spacing: 0, children: [
                             IconButton(
-                              tooltip: 'Download for offline / Pakua',
-                              onPressed: _downloading.contains(track.id) ? null : () => _download(track),
+                              tooltip: track.downloadAllowed
+                                  ? 'Download for offline / Pakua'
+                                  : 'Download unavailable for this license',
+                              onPressed: (!track.downloadAllowed || _downloading.contains(track.id)) ? null : () => _download(track),
                               icon: _downloading.contains(track.id)
                                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                                   : const Icon(Icons.download_rounded),
