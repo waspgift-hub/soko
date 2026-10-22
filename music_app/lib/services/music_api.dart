@@ -10,7 +10,7 @@ class MusicApi {
                 const String.fromEnvironment(
                   'MUSIC_API_URL',
                   defaultValue:
-                      'https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev',
+                      'https://music-api.sokovibe-co-tz.workers.dev',
                 ))
             .replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
