@@ -28,6 +28,7 @@ jobs:
         working-directory: music_app
     env:
       MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,6 +76,18 @@ jobs:
           path: music_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Deploy Cloudflare Worker
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: music-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 35d732ca8d46566a3825a5c37b2343d3
+        run: npx --yes wrangler deploy --config wrangler.toml
+
+      - name: Explain skipped Worker deployment when no token is configured
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "CLOUDFLARE_API_TOKEN is not configured; smoke tests will check the currently deployed Worker without deploying source."
 
       - name: Smoke test live Cloudflare Worker and Jamendo
         run: |
