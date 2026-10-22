@@ -1,5 +1,9 @@
 name: SokoVibe Music Flutter checks
 
+concurrency:
+  group: sokovibe-music-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths:
@@ -63,7 +67,14 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --max-time 15 "$MUSIC_API_URL/api/health" -o /tmp/music-health.json
           node -e 'const h=require("/tmp/music-health.json"); if(h.status!=="healthy" || !h.jamendo?.configured || !h.jamendo?.connected) throw new Error("Worker/Jamendo health check failed: "+JSON.stringify(h)); console.log("Health OK:", h.service, "Jamendo connected");'
-          curl --fail --silent --show-error --max-time 20 --get --data-urlencode "q=afrobeat" "$MUSIC_API_URL/search" -o /tmp/music-search.json
+          search_status=000
+          for attempt in 1 2 3; do
+            search_status=$(curl --silent --show-error --max-time 25 --get --data-urlencode "q=afrobeat" "$MUSIC_API_URL/search" -o /tmp/music-search.json -w '%{http_code}' || true)
+            if [ "$search_status" = "200" ]; then break; fi
+            echo "Search attempt $attempt returned HTTP $search_status: $(cat /tmp/music-search.json 2>/dev/null || true)"
+            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 3)); fi
+          done
+          if [ "$search_status" != "200" ]; then echo "Jamendo search failed after retries"; exit 1; fi
           node -e 'const j=require("/tmp/music-search.json"); if(!Array.isArray(j.results) || j.results.length<1 || !j.results[0].id) throw new Error("Search returned no playable track: "+JSON.stringify(j)); console.log("Search OK: returned", j.results.length, "tracks");'
           track_id=$(node -e 'process.stdout.write(String(require("/tmp/music-search.json").results[0].id))')
           curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/play/$track_id" -o /tmp/music-play.json
