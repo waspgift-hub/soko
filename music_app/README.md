@@ -26,6 +26,7 @@ flutter run --dart-define=MUSIC_API_URL=https://your-worker.example.workers.dev
 - Lyrics button for each result.
 - Plain lyrics and timestamped lyrics with playback-position highlighting when synced lyrics are available.
 - Lyrics retry/error states and instrumental-track handling.
+- Persistent app settings: system/light/dark theme, accent colour, daily reminder toggle and configurable reminder time.
 - Daily listening reminder and important local notifications.
 - Material 3 UI and bottom mini-player with play/pause.
 
