@@ -52,6 +52,7 @@ class _MusicAdminDashboardPageState extends State<MusicAdminDashboardPage> {
     final tracks = await widget.api.search('afrobeat', limit: 1);
     if (tracks.isEmpty) throw Exception('Search returned no tracks to test play resolution.');
     final url = await widget.api.playUrl(tracks.first.id);
+    if (!url.startsWith('https://')) throw Exception('Resolved stream URL was not HTTPS.');
     return 'Resolved track ${tracks.first.id} to a secure HTTPS stream URL.';
   }
 
@@ -191,7 +192,6 @@ class _MusicAdminDashboardPageState extends State<MusicAdminDashboardPage> {
 
 class _CheckResult {
   const _CheckResult({
-    required this.label,
     required this.detail,
     required this.success,
     required this.running,
@@ -199,18 +199,17 @@ class _CheckResult {
   });
 
   factory _CheckResult.running(String label) => _CheckResult(
-    label: label, detail: 'Running…', success: false, running: true,
+    detail: 'Running…', success: false, running: true,
   );
 
   factory _CheckResult.success(String label, String detail, Duration duration) => _CheckResult(
-    label: label, detail: detail, success: true, running: false, duration: duration,
+    detail: detail, success: true, running: false, duration: duration,
   );
 
   factory _CheckResult.failure(String label, String detail, Duration duration) => _CheckResult(
-    label: label, detail: detail, success: false, running: false, duration: duration,
+    detail: detail, success: false, running: false, duration: duration,
   );
 
-  final String label;
   final String detail;
   final bool success;
   final bool running;
