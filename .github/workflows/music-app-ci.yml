@@ -78,7 +78,7 @@ jobs:
           retention-days: 30
 
       - name: Deploy Cloudflare Worker
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: env.CLOUDFLARE_API_TOKEN != '' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/feat/music-sound-google-auth'))
         working-directory: music-api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -86,10 +86,11 @@ jobs:
         run: npx --yes wrangler deploy --config wrangler.toml
 
       - name: Explain skipped Worker deployment when no token is configured
-        if: env.CLOUDFLARE_API_TOKEN == ''
-        run: echo "CLOUDFLARE_API_TOKEN is not configured; smoke tests will check the currently deployed Worker without deploying source."
+        if: env.CLOUDFLARE_API_TOKEN == '' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/feat/music-sound-google-auth'))
+        run: echo "CLOUDFLARE_API_TOKEN is not configured; production deployment is skipped."
 
       - name: Smoke test live Cloudflare Worker and Jamendo
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/feat/music-sound-google-auth')
         run: |
           set -euo pipefail
           echo "Checking Worker health and Jamendo connectivity at $MUSIC_API_URL"
