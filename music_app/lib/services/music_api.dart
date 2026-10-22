@@ -10,7 +10,7 @@ class MusicApi {
                 const String.fromEnvironment(
                   'MUSIC_API_URL',
                   defaultValue:
-                      'https://music-api.sokovibe-co-tz.workers.dev',
+                      'https://soko-vibe-music-backend.wapalila.workers.dev',
                 ))
             .replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
@@ -42,13 +42,29 @@ class MusicApi {
         .toList();
   }
 
-  /// The deployed music-api Worker returns HTTP 302 from /play/:id to
-  /// Jamendo's HTTPS stream. Do not JSON-decode the audio response.
+  /// Resolve a track through the Worker and return Jamendo's HTTPS stream URL.
+  /// The Worker returns track metadata as JSON; passing /play/:id directly to
+  /// just_audio would attempt to decode JSON as audio.
   Future<String> playUrl(String id) async {
     if (id.trim().isEmpty) {
       throw const FormatException('This track has no valid ID.');
     }
-    return '$baseUrl/play/${Uri.encodeComponent(id)}';
+    final uri = Uri.parse('$baseUrl/play/${Uri.encodeComponent(id)}');
+    final response =
+        await _client.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw Exception('Could not load this track (HTTP ${response.statusCode}).');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic> || decoded['track'] is! Map) {
+      throw const FormatException('Music API returned invalid playback data.');
+    }
+    final track = Map<String, dynamic>.from(decoded['track'] as Map);
+    final stream = Uri.tryParse((track['streaming_url'] ?? '').toString());
+    if (stream == null || stream.scheme != 'https' || stream.host.isEmpty) {
+      throw const FormatException('This track has no valid audio stream.');
+    }
+    return stream.toString();
   }
 
   /// /download/:id validates Jamendo's audiodownload_allowed flag on the
