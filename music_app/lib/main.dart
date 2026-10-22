@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'models/music_track.dart';
 import 'services/music_api.dart';
+import 'services/notification_service.dart';
 
-void main() => runApp(const SokoVibeMusicApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.instance.initialize();
+  runApp(const SokoVibeMusicApp());
+}
 
 class SokoVibeMusicApp extends StatelessWidget {
   const SokoVibeMusicApp({super.key});
@@ -33,7 +38,25 @@ class _MusicHomePageState extends State<MusicHomePage> {
   List<MusicTrack> tracks = [];
   MusicTrack? current;
   bool loading = false;
+  bool reminderEnabled = true;
   String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupNotifications();
+  }
+
+  Future<void> _setupNotifications() async {
+    // Android 13+ requires permission. The reminder is only scheduled after
+    // permission is granted; users can change this from Settings.
+    final granted = await NotificationService.instance.requestPermission();
+    if (granted) {
+      await NotificationService.instance.scheduleDailyReminder(hour: 19);
+    } else {
+      if (mounted) setState(() => reminderEnabled = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -46,9 +69,15 @@ class _MusicHomePageState extends State<MusicHomePage> {
     setState(() { loading = true; error = null; });
     try {
       final results = await api.search(searchController.text);
-      setState(() => tracks = results);
-    } catch (e) {
-      setState(() => error = 'Search failed. Check your connection or API.');
+      if (mounted) setState(() => tracks = results);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Search failed. Check your connection or API.');
+      await NotificationService.instance.showImportant(
+        id: 2010,
+        title: 'Music search failed',
+        body: 'Check your internet connection and try again.',
+        payload: 'retry_search',
+      );
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -61,14 +90,62 @@ class _MusicHomePageState extends State<MusicHomePage> {
       await player.setUrl(url);
       await player.play();
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This track could not be played.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This track could not be played.')),
+        );
+      }
+      await NotificationService.instance.notifyPlaybackFailed();
     }
+  }
+
+  Future<void> _toggleReminder(bool enabled) async {
+    if (enabled) {
+      final granted = await NotificationService.instance.requestPermission();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
+          );
+        }
+        return;
+      }
+      await NotificationService.instance.scheduleDailyReminder(hour: 19);
+    } else {
+      await NotificationService.instance.cancelDailyReminder();
+    }
+    if (mounted) setState(() => reminderEnabled = enabled);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Soko Vibe Music'), centerTitle: false),
+      appBar: AppBar(
+        title: const Text('Soko Vibe Music'),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            tooltip: 'Notification settings',
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              builder: (context) => SafeArea(
+                child: SwitchListTile(
+                  secondary: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Daily listening reminder'),
+                  subtitle: const Text('Every day at about 7:00 PM'),
+                  value: reminderEnabled,
+                  onChanged: (value) {
+                    Navigator.pop(context);
+                    _toggleReminder(value);
+                  },
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.notifications_outlined),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(children: [
           Padding(
