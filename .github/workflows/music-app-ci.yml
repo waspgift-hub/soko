@@ -15,6 +15,7 @@ on:
       - "feat/music-sound-google-auth"
     paths:
       - "music_app/**"
+      - "music-api/**"
       - ".github/workflows/music-app-ci.yml"
 
 jobs:
