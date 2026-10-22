@@ -110,8 +110,15 @@ class _MusicHomePageState extends State<MusicHomePage> {
     try {
       final results = await api.search(searchController.text.trim());
       if (mounted) setState(() => tracks = results);
-    } catch (_) {
-      if (mounted) setState(() => error = 'Search failed. Check your connection or API.');
+    } catch (exception) {
+      final details = exception.toString();
+      if (mounted) {
+        setState(() {
+          error = details.startsWith('Exception: ')
+              ? details.substring('Exception: '.length)
+              : details;
+        });
+      }
       await NotificationService.instance.showImportant(
         id: 2010,
         title: 'Music search failed',
