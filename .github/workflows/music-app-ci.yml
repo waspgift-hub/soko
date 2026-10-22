@@ -93,7 +93,7 @@ jobs:
           node -e 'const j=require("/tmp/music-search.json"); if(!Array.isArray(j.results) || j.results.length<1 || !j.results[0].id) throw new Error("Search returned no track: "+JSON.stringify(j)); console.log("Search OK: returned", j.results.length, "tracks");'
           track_id=$(node -e 'process.stdout.write(String(require("/tmp/music-search.json").results[0].id))')
           curl --fail --silent --show-error --max-time 20 "$MUSIC_API_URL/play/$track_id" -o /tmp/music-play.json
-          node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(String(t.id)!==String(process.env.TRACK_ID||t.id) || u.protocol!=="https:") throw new Error("Play endpoint returned invalid track/HTTPS URL: "+JSON.stringify(p)); console.log("Play metadata OK for track",t.id,"with HTTPS audio URL");' TRACK_ID="$track_id"
+          TRACK_ID="$track_id" node -e 'const p=require("/tmp/music-play.json"); const t=p.track || p; const u=new URL(t.streaming_url); if(String(t.id)!==String(process.env.TRACK_ID) || u.protocol!=="https:") throw new Error("Play endpoint returned invalid track/HTTPS URL: "+JSON.stringify(p)); console.log("Play metadata OK for track",t.id,"with HTTPS audio URL");'
           download_status=$(curl --silent --show-error --max-time 20 -D /tmp/music-download.headers -o /dev/null -w '%{http_code}' "$MUSIC_API_URL/download/$track_id" || true)
           if [ "$download_status" = "302" ]; then
             grep -Eiq '^location: https://' /tmp/music-download.headers || { echo "Download redirect was not HTTPS"; exit 1; }
