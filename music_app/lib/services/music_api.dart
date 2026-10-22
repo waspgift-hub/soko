@@ -20,12 +20,12 @@ class MusicApi {
 
   Future<List<MusicTrack>> search(String query) async {
     if (query.trim().isEmpty) return <MusicTrack>[];
-    final uri = Uri.parse('$\{baseUrl}/search')
+    final uri = Uri.parse('${baseUrl}/search')
         .replace(queryParameters: {'q': query.trim()});
     final response =
         await _client.get(uri).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
-      throw Exception('Music API error: $\{response.statusCode}');
+      throw Exception('Music API error: ${response.statusCode}');
     }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final results = decoded['results'] as List? ?? const <dynamic>[];
@@ -38,7 +38,7 @@ class MusicApi {
 
   Future<Map<String, dynamic>> _fetchTrack(String id) async {
     final response = await _client
-        .get(Uri.parse('$\{baseUrl}/play/$\{Uri.encodeComponent(id)}'))
+        .get(Uri.parse('${baseUrl}/play/${Uri.encodeComponent(id)}'))
         .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception('Music provider could not retrieve this track.');
@@ -63,7 +63,9 @@ class MusicApi {
     final allowed = track['audiodownload_allowed'] == true ||
         track['audiodownload_allowed'] == 1;
     final url = track['audiodownload']?.toString();
-    if (!allowed || url == null || url.isEmpty ||
+    if (!allowed ||
+        url == null ||
+        url.isEmpty ||
         Uri.tryParse(url)?.scheme != 'https') {
       throw Exception(
         'This track is streaming-only under its current license.',
