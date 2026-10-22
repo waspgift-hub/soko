@@ -375,7 +375,58 @@ class _MusicHomePageState extends State<MusicHomePage> {
           if (error != null) Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
           Expanded(
             child: tracks.isEmpty
-                ? const Center(child: Text('Search for music to get started'))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 124, height: 124,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Theme.of(context).colorScheme.primaryContainer,
+                                  Theme.of(context).colorScheme.surfaceContainerHighest,
+                                ],
+                              ),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Icon(Icons.album_rounded, size: 88,
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .30)),
+                                Icon(Icons.play_circle_fill_rounded, size: 48,
+                                  color: Theme.of(context).colorScheme.primary),
+                                Positioned(right: 14, top: 18,
+                                  child: Icon(Icons.auto_awesome, size: 22,
+                                    color: Theme.of(context).colorScheme.tertiary)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text('Find your next vibe',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text('Search songs, artists or albums and build your own soundtrack.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium),
+                          const SizedBox(height: 16),
+                          const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.search_rounded, size: 18),
+                              SizedBox(width: 6),
+                              Text('Type above to get started'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: tracks.length,
