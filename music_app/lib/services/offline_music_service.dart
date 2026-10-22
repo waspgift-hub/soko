@@ -8,11 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/music_track.dart';
 
-/// Keeps app-managed offline tracks and lets users import audio via Android's
-/// system file picker. Only save provider tracks when their terms explicitly
-/// permit downloading; a stream URL alone is not download permission.
+/// Manages app-private offline files and imports selected local audio.
+/// Provider downloads require explicit Jamendo download permission and an HTTPS URL.
 class OfflineMusicService {
   static const _indexKey = 'offline_music_index_v1';
+
   Future<Directory> _directory() async {
     final root = await getApplicationDocumentsDirectory();
     final dir = Directory('${root.path}/offline_music');
@@ -26,38 +26,58 @@ class OfflineMusicService {
     if (raw == null) return <OfflineTrack>[];
     try {
       final decoded = jsonDecode(raw) as List;
-      final tracks = decoded
+      return decoded
           .whereType<Map>()
           .map((item) => OfflineTrack.fromJson(Map<String, dynamic>.from(item)))
           .where((track) => File(track.path).existsSync())
           .toList();
-      return tracks;
     } catch (_) {
       return <OfflineTrack>[];
     }
   }
 
-  Future<OfflineTrack> download(MusicTrack track, String audioUrl) async {
-    if (track.license.trim().isEmpty) {
+  /// audioUrl is optional for compatibility, but if supplied must exactly match
+  /// the provider's permitted audiodownload URL, never the streaming URL.
+  Future<OfflineTrack> download(MusicTrack track, [String? audioUrl]) async {
+    if (!track.canDownload || track.downloadUrl == null) {
       throw const OfflineMusicException(
-        'This track has no license information. Check the provider terms before downloading.',
+        'Jamendo does not explicitly allow downloading this track.',
       );
     }
-    final uri = Uri.tryParse(audioUrl);
-    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-      throw const OfflineMusicException('The audio source is not a valid HTTPS URL.');
+    final requestedUri = Uri.tryParse(audioUrl ?? track.downloadUrl!);
+    final allowedUri = Uri.tryParse(track.downloadUrl!);
+    if (requestedUri == null ||
+        allowedUri == null ||
+        requestedUri.scheme != 'https' ||
+        requestedUri.host.isEmpty ||
+        requestedUri.toString() != allowedUri.toString()) {
+      throw const OfflineMusicException(
+        'Download URL does not match the permitted HTTPS download URL.',
+      );
     }
-    final response = await http.get(uri).timeout(const Duration(seconds: 60));
+
+    final response = await http
+        .get(requestedUri, headers: const {'Accept': 'audio/*'})
+        .timeout(const Duration(seconds: 60));
     if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
       throw const OfflineMusicException('Download failed. Please try again.');
     }
+    final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+    if (contentType.contains('text/html') || contentType.contains('application/json')) {
+      throw const OfflineMusicException('Provider did not return an audio file.');
+    }
+
     final dir = await _directory();
     final safeId = track.id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
     final file = File('${dir.path}/$safeId.mp3');
     await file.writeAsBytes(response.bodyBytes, flush: true);
     final saved = OfflineTrack(
-      id: track.id, title: track.title, artist: track.artist, path: file.path,
-      source: 'Jamendo', license: track.license,
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      path: file.path,
+      source: 'Jamendo',
+      license: track.license,
     );
     final existing = await list();
     final updated = <OfflineTrack>[
@@ -85,7 +105,10 @@ class OfflineMusicService {
       tracks.insert(0, OfflineTrack(
         id: 'local_${target.uri.pathSegments.last}',
         title: picked.name.replaceFirst(RegExp(r'\.[^.]+$'), ''),
-        artist: 'Local music', path: target.path, source: 'Device', license: '',
+        artist: 'Local music',
+        path: target.path,
+        source: 'Device',
+        license: '',
       ));
     }
     await _saveIndex(tracks);
@@ -104,25 +127,35 @@ class OfflineMusicService {
     await prefs.setString(_indexKey, jsonEncode(tracks.map((e) => e.toJson()).toList()));
   }
 
-  String _safeName(String value) => value.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+  String _safeName(String value) =>
+      value.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
 }
 
 class OfflineTrack {
-  const OfflineTrack({required this.id, required this.title, required this.artist,
-    required this.path, required this.source, required this.license});
+  const OfflineTrack({
+    required this.id, required this.title, required this.artist,
+    required this.path, required this.source, required this.license,
+  });
   final String id, title, artist, path, source, license;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'id': id, 'title': title, 'artist': artist, 'path': path, 'source': source, 'license': license,
-  };
+        'id': id, 'title': title, 'artist': artist, 'path': path,
+        'source': source, 'license': license,
+      };
+
   factory OfflineTrack.fromJson(Map<String, dynamic> json) => OfflineTrack(
-    id: '${json['id'] ?? ''}', title: '${json['title'] ?? 'Unknown track'}',
-    artist: '${json['artist'] ?? 'Unknown artist'}', path: '${json['path'] ?? ''}',
-    source: '${json['source'] ?? 'Device'}', license: '${json['license'] ?? ''}',
-  );
+        id: '${json['id'] ?? ''}',
+        title: '${json['title'] ?? 'Unknown track'}',
+        artist: '${json['artist'] ?? 'Unknown artist'}',
+        path: '${json['path'] ?? ''}',
+        source: '${json['source'] ?? 'Device'}',
+        license: '${json['license'] ?? ''}',
+      );
 }
 
 class OfflineMusicException implements Exception {
   const OfflineMusicException(this.message);
   final String message;
-  @override String toString() => message;
+  @override
+  String toString() => message;
 }
