@@ -133,6 +133,16 @@ class _MusicHomePageState extends State<MusicHomePage> {
   void initState() {
     super.initState();
     _setupNotifications();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final user = await AuthService.instance.restoreSession();
+    if (!mounted || user == null) return;
+    setState(() {
+      _accountEmail = user.email;
+      _guestMode = false;
+    });
   }
 
   Future<void> _setupNotifications() async {
