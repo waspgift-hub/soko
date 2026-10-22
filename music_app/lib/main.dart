@@ -733,7 +733,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                             return TweenAnimationBuilder<double>(
                               key: ValueKey('${track.id}-${i}'),
                               tween: Tween(begin: 0, end: 1),
-                              duration: Duration(milliseconds: 240 + (i.clamp(0, 8) * 45)),
+                              duration: Duration(milliseconds: 240 + ((i > 8 ? 8 : i) * 45)),
                               curve: Curves.easeOutCubic,
                               builder: (context, value, child) => Opacity(
                                 opacity: value,
