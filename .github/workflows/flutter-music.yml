@@ -68,9 +68,9 @@ jobs:
           content = gradle_file.read_text()
           original = content
           patterns = [
-              (r"(?m)^(\\s*compileSdk\\s*=\\s*)[^\\n]+", r"\\g<1>36"),
-              (r"(?m)^(\\s*compileSdkVersion\\s+)[^\\n]+", r"\\g<1>36"),
-              (r"(?m)^(\\s*compileSdk\\s+)\\(?[^\\n]+\\)?\\s*$", r"\\g<1>36"),
+              (r"(?m)^(\s*compileSdk\s*=\s*)[^\n]+", r"\g<1>36"),
+              (r"(?m)^(\s*compileSdkVersion\s+)[^\n]+", r"\g<1>36"),
+              (r"(?m)^(\s*compileSdk\s+)\(?[^\n]+\)?\s*$", r"\g<1>36"),
           ]
           for pattern, replacement in patterns:
               content, count = re.subn(pattern, replacement, content, count=1)
@@ -80,7 +80,7 @@ jobs:
               raise SystemExit("Could not find compileSdk declaration in " + str(gradle_file))
           gradle_file.write_text(content)
           verify = gradle_file.read_text()
-          if not re.search(r"(?m)^\\s*compileSdk(?:Version)?(?:\\s*=|\\s+)\\s*36\\b", verify):
+          if not re.search(r"(?m)^\s*compileSdk(?:Version)?(?:\s*=|\s+)\s*36\b", verify):
               raise SystemExit("compileSdk 36 verification failed in " + str(gradle_file))
           print(f"Verified compileSdk 36 in {gradle_file}")
           PY
