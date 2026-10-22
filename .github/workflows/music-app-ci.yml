@@ -30,6 +30,8 @@ jobs:
         run: flutter create --platforms=android .
       - name: Set Android minimum SDK for Firebase
         run: sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts
+      - name: Remove generated Flutter template test
+        run: rm -f test/widget_test.dart
       - name: Resolve dependencies
         run: flutter pub get
       - name: Analyze Dart code
