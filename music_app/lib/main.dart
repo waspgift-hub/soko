@@ -95,7 +95,9 @@ class _MusicHomePageState extends State<MusicHomePage> {
               await AuthService.instance.signOut();
               if (!mounted) return;
               setState(() { _accountEmail = null; _guestMode = false; });
-              Navigator.pop(dialogContext);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
             }, child: const Text('Sign out')),
           TextButton(onPressed: () {
             setState(() => _guestMode = true);
@@ -110,10 +112,14 @@ class _MusicHomePageState extends State<MusicHomePage> {
                   _accountEmail = credential.user?.email;
                   _guestMode = false;
                 });
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Google sign-in successful.')),
-                );
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Google sign-in successful.')),
+                  );
+                }
               } catch (error) {
                 if (!dialogContext.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -419,9 +425,11 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
     if (enabled) {
       final granted = await NotificationService.instance.requestPermission();
       if (!granted) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
+          );
+        }
         return;
       }
       await widget.settings.saveReminder(true);
@@ -693,8 +701,11 @@ class _LyricsSheetState extends State<_LyricsSheet> {
                                     final position = snapshot.data ?? Duration.zero;
                                     var activeIndex = -1;
                                     for (var i = 0; i < timedLines.length; i++) {
-                                      if (timedLines[i].time <= position) activeIndex = i;
-                                      else break;
+                                      if (timedLines[i].time <= position) {
+                                        activeIndex = i;
+                                      } else {
+                                        break;
+                                      }
                                     }
                                     return ListView.builder(
                                       itemCount: timedLines.length,
