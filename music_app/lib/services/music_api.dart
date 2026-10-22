@@ -136,8 +136,21 @@ class MusicApi {
   }
 
   String _errorMessage(Map<String, dynamic> decoded, String fallback) {
-    final value = decoded['message']?.toString().trim();
-    return value == null || value.isEmpty ? fallback : value;
+    // Support both the current Worker response ({message, error}) and the
+    // deployed v2 Worker response ({error, error_category}).
+    final value = (decoded['message'] ?? decoded['error'])?.toString().trim();
+    final category = (decoded['error_category'] ?? decoded['errorCode'])
+        ?.toString()
+        .trim();
+    if (value == null || value.isEmpty) {
+      return category == null || category.isEmpty
+          ? fallback
+          : '$fallback [$category]';
+    }
+    if (category == null || category.isEmpty || value.contains(category)) {
+      return value;
+    }
+    return '$value [$category]';
   }
 
   void close() => _client.close();
