@@ -48,15 +48,14 @@ jobs:
           s = p.read_text()
           if p.name.endswith('.kts'):
               if 'isCoreLibraryDesugaringEnabled = true' not in s:
-                  s = s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
-              dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")'
-              if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in s:
-                  s = s.replace('dependencies {', 'dependencies {\n    ' + dep, 1)
+                  s = s.replace('compileOptions {', 'compileOptions {\\n        isCoreLibraryDesugaringEnabled = true', 1)
+              if 'coreLibraryDesugaring(' not in s:
+                  s += '\\n\\ndependencies {\\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\\n}\\n'
           else:
               if 'coreLibraryDesugaringEnabled true' not in s:
-                  s = s.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true', 1)
-              if "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:" not in s:
-                  s = s.replace('dependencies {', "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'", 1)
+                  s = s.replace('compileOptions {', 'compileOptions {\\n        coreLibraryDesugaringEnabled true', 1)
+              if 'coreLibraryDesugaring ' not in s and 'coreLibraryDesugaring(' not in s:
+                  s += "\\n\\ndependencies {\\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'\\n}\\n"
           p.write_text(s)
           PY
       - name: Resolve dependencies
