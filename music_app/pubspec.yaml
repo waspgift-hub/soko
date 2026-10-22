@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.2
+  url_launcher: ^6.3.2
   just_audio: ^0.9.40
   cached_network_image: ^3.4.1
   flutter_local_notifications: ^19.4.0
