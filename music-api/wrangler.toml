@@ -1,6 +1,9 @@
-name = "sokovibe-music-api"
+name = "soko-vibe-music-backend"
 main = "src/index.js"
-compatibility_date = "2026-10-22"
+compatibility_date = "2024-09-23"
+
+[ai]
+binding = "AI"
 
 [vars]
-APP_NAME = "SokoVibe Music API"
+APP_NAME = "SokoVibe Music Backend"
