@@ -8,6 +8,7 @@ import 'services/lyrics_service.dart';
 import 'services/app_settings.dart';
 import 'services/auth_service.dart';
 import 'services/sound_identity.dart';
+import 'services/download_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,6 +76,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
   MusicTrack? current;
   bool loading = false;
   String? error;
+  final Set<String> _downloading = <String>{};
   bool _guestMode = false;
   String? _accountEmail;
 
@@ -196,6 +198,29 @@ class _MusicHomePageState extends State<MusicHomePage> {
     }
   }
 
+  Future<void> _download(MusicTrack track) async {
+    if (_downloading.contains(track.id)) return;
+    setState(() => _downloading.add(track.id));
+    try {
+      final url = await api.playUrl(track.id);
+      await DownloadService.instance.download(track, url);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${track.title} saved for offline listening.')),
+        );
+      }
+      await NotificationService.instance.notifyDownloadComplete(track.title);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: ${e.toString().replaceFirst('Exception: ', '')}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _downloading.remove(track.id));
+    }
+  }
+
   Future<void> play(MusicTrack track) async {
     try {
       setState(() => current = track);
@@ -246,6 +271,23 @@ class _MusicHomePageState extends State<MusicHomePage> {
             tooltip: 'Account / Akaunti',
             onPressed: _showAccountOptions,
             icon: Icon(_accountEmail != null ? Icons.account_circle : Icons.login_rounded),
+          ),
+          IconButton(
+            tooltip: 'Downloads / Zilizopakuliwa',
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => DownloadsPage(
+                  player: player,
+                  onPlay: (downloaded) async {
+                    setState(() => current = downloaded.toMusicTrack());
+                    await player.setFilePath(downloaded.filePath);
+                    await player.play();
+                  },
+                ),
+              ));
+              if (mounted) setState(() {});
+            },
+            icon: const Icon(Icons.download_for_offline_outlined),
           ),
           IconButton(
             tooltip: 'Settings / Mipangilio',
@@ -356,6 +398,13 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
                           subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: Wrap(spacing: 0, children: [
+                            IconButton(
+                              tooltip: 'Download for offline / Pakua',
+                              onPressed: _downloading.contains(track.id) ? null : () => _download(track),
+                              icon: _downloading.contains(track.id)
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.download_rounded),
+                            ),
                             IconButton(tooltip: 'Lyrics / Maneno', onPressed: () => showLyrics(track), icon: const Icon(Icons.lyrics_outlined)),
                             IconButton(tooltip: 'Play / Cheza', onPressed: () => play(track), icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 32)),
                           ]),
@@ -783,6 +832,162 @@ class _PlayerBar extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+
+class DownloadsPage extends StatefulWidget {
+  const DownloadsPage({super.key, required this.player, required this.onPlay});
+  final AudioPlayer player;
+  final Future<void> Function(DownloadedTrack track) onPlay;
+
+  @override
+  State<DownloadsPage> createState() => _DownloadsPageState();
+}
+
+class _DownloadsPageState extends State<DownloadsPage> {
+  List<DownloadedTrack> items = <DownloadedTrack>[];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final saved = await DownloadService.instance.list();
+      if (mounted) setState(() => items = saved);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not load downloaded music.');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _delete(DownloadedTrack item) async {
+    try {
+      await DownloadService.instance.delete(item);
+      if (mounted) {
+        setState(() => items.removeWhere((saved) => saved.id == item.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Removed ${item.title} from downloads.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete this download.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Downloads · Zilizopakuliwa'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh downloads',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(error!),
+                      const SizedBox(height: 8),
+                      FilledButton(onPressed: _refresh, child: const Text('Retry')),
+                    ],
+                  ),
+                )
+              : items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.download_for_offline_outlined, size: 64, color: scheme.primary),
+                            const SizedBox(height: 12),
+                            Text('No offline music yet', style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 6),
+                            const Text('Use the download icon on a song while online. Your saved tracks will appear here.'),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Card(
+                          color: scheme.surfaceContainerLow,
+                          child: ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: CachedNetworkImage(
+                                imageUrl: item.image,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Container(
+                                  width: 52,
+                                  height: 52,
+                                  color: scheme.surfaceContainerHighest,
+                                  child: const Icon(Icons.music_note_rounded),
+                                ),
+                              ),
+                            ),
+                            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('${item.artist} · Offline ready'),
+                            trailing: Wrap(
+                              spacing: 0,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Play offline',
+                                  onPressed: () async {
+                                    try {
+                                      await widget.onPlay(item);
+                                    } catch (_) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('This saved file could not be played. Try downloading it again.')),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete download',
+                                  onPressed: () => _delete(item),
+                                  icon: const Icon(Icons.delete_outline_rounded),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
     );
   }
 }
