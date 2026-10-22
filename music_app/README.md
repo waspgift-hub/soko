@@ -23,6 +23,8 @@ flutter run --dart-define=MUSIC_API_URL=https://your-worker.example.workers.dev
 - Search songs, artists and albums through the backend.
 - Cover art, title and artist display.
 - Tap play to request a fresh streaming URL.
+- Download tracks to private app storage and play saved files offline when the provider license permits it.
+- Manage or delete saved tracks from the Downloads screen.
 - Download songs to app-private storage and play saved files offline.
 - Manage and delete downloaded tracks in the Downloads screen.
 - Lyrics button for each result.
