@@ -73,7 +73,7 @@ jobs:
 
       - name: Smoke test live Jamendo Worker
         env:
-          MUSIC_API_URL: https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev
+          MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 15 "$MUSIC_API_URL/api/health" -o /tmp/music-health.json
