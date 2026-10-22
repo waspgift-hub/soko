@@ -26,6 +26,16 @@ class AuthService {
     }
   }
 
+  /// Restores the Firebase session, if configured; returns null when unavailable.
+  Future<User?> restoreSession() async {
+    try {
+      await _ensureInitialized();
+      return FirebaseAuth.instance.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<UserCredential> signInWithGoogle() async {
     await _ensureInitialized();
     try {
