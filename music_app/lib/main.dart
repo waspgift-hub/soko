@@ -6,6 +6,8 @@ import 'services/music_api.dart';
 import 'services/notification_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/app_settings.dart';
+import 'services/auth_service.dart';
+import 'services/sound_identity.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,8 +29,10 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
   @override
   void initState() {
     super.initState();
-    settings.load().then((_) {
-      if (mounted) setState(() => ready = true);
+    settings.load().then((_) async {
+      if (!mounted) return;
+      setState(() => ready = true);
+      await SoundIdentity.instance.playStartupOnce(enabled: settings.startupSound);
     });
   }
 
@@ -71,11 +75,74 @@ class _MusicHomePageState extends State<MusicHomePage> {
   MusicTrack? current;
   bool loading = false;
   String? error;
+  bool _guestMode = false;
+  String? _accountEmail;
+
+  Future<void> _showAccountOptions() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.account_circle_rounded, size: 42),
+        title: const Text('Your SokoVibe account'),
+        content: Text(_accountEmail != null
+            ? 'Signed in as $_accountEmail'
+            : _guestMode
+                ? 'You are using Guest mode. Your local app features remain available.'
+                : 'Sign in to connect your music experience to your Google account, or continue as a guest.'),
+        actions: [
+          if (_accountEmail != null)
+            TextButton(onPressed: () async {
+              await AuthService.instance.signOut();
+              if (!mounted) return;
+              setState(() { _accountEmail = null; _guestMode = false; });
+              Navigator.pop(dialogContext);
+            }, child: const Text('Sign out')),
+          TextButton(onPressed: () {
+            setState(() => _guestMode = true);
+            Navigator.pop(dialogContext);
+          }, child: const Text('Continue as guest')),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                final credential = await AuthService.instance.signInWithGoogle();
+                if (!mounted) return;
+                setState(() {
+                  _accountEmail = credential.user?.email;
+                  _guestMode = false;
+                });
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Google sign-in successful.')),
+                );
+              } catch (error) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                );
+              }
+            },
+            icon: const Icon(Icons.login_rounded),
+            label: const Text('Continue with Google'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _setupNotifications();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final user = await AuthService.instance.restoreSession();
+    if (!mounted || user == null) return;
+    setState(() {
+      _accountEmail = user.email;
+      _guestMode = false;
+    });
   }
 
   Future<void> _setupNotifications() async {
@@ -170,6 +237,11 @@ class _MusicHomePageState extends State<MusicHomePage> {
         ]),
         actions: [
           IconButton(
+            tooltip: 'Account / Akaunti',
+            onPressed: _showAccountOptions,
+            icon: Icon(_accountEmail != null ? Icons.account_circle : Icons.login_rounded),
+          ),
+          IconButton(
             tooltip: 'Settings / Mipangilio',
             onPressed: () async {
               await Navigator.of(context).push(MaterialPageRoute<void>(
@@ -217,7 +289,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                 const SizedBox(width: 10),
                 Expanded(child: Text(error!, style: TextStyle(color: scheme.onErrorContainer))),
                 IconButton(onPressed: search, tooltip: 'Try again / Jaribu tena', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
-              ]))),
+              ])))),
           Expanded(
             child: tracks.isEmpty
                 ? ListView(
@@ -444,6 +516,19 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               ]),
             ),
           ),
+          const SizedBox(height: 20),
+          Text('Sound identity · Sauti ya SokoVibe', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: SwitchListTile(
+            secondary: const Icon(Icons.graphic_eq_rounded),
+            title: const Text('Startup signature sound · Sauti ya mwanzo'),
+            subtitle: const Text('Play the short futuristic SokoVibe sound once when the app starts.'),
+            value: settings.startupSound,
+            onChanged: (enabled) async {
+              await settings.saveStartupSound(enabled);
+              if (mounted) setState(() {});
+            },
+          )),
           const SizedBox(height: 20),
           Text('Notifications · Arifa', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
