@@ -219,7 +219,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                 IconButton(onPressed: search, tooltip: 'Try again / Jaribu tena', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
               ]))),
           Expanded(
-            child: (tracks.isEmpty
+            child: tracks.isEmpty
                 ? ListView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                     children: [
@@ -284,7 +284,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                         ),
                       );
                     },
-                  )),
+                  ),
           ),
           if (current != null) _PlayerBar(track: current!, player: player),
         ]),
