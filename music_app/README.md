@@ -20,7 +20,10 @@ flutter run --dart-define=MUSIC_API_URL=https://your-worker.example.workers.dev
 
 ## Current features
 
-- Search songs, artists and albums through the backend.
+- Search songs, artists and albums through the v2 backend with page/limit parameters.
+- Load mood/genre/language recommendations through the backend.
+- Generate original lyrics with the backend's Workers AI endpoint.
+- Run live health, search, playback-resolution and recommendation checks from the diagnostics screen; AI lyrics can be tested separately to avoid unnecessary AI usage.
 - Cover art, title and artist display.
 - Tap play to request a fresh streaming URL.
 - Lyrics button for each result.
