@@ -20,7 +20,7 @@ class AuthService {
       if (Firebase.apps.isEmpty) await Firebase.initializeApp();
       _initialized = true;
     } on FirebaseException catch (error) {
-      throw AuthSetupException('Google login is not configured yet. Add this app to Firebase, enable Google in Authentication, and add android/app/google-services.json plus SHA fingerprints. (' + error.code + ')');
+      throw AuthSetupException('Google login is not configured yet. Add this app to Firebase, enable Google in Authentication, and add android/app/google-services.json plus SHA fingerprints. (${error.code})');
     } catch (_) {
       throw const AuthSetupException('Google login setup is incomplete. Configure Firebase for this Android app first.');
     }
@@ -47,7 +47,7 @@ class AuthService {
     } on AuthSetupException {
       rethrow;
     } on FirebaseAuthException catch (error) {
-      throw AuthSetupException('Google login failed: ' + (error.message ?? error.code));
+      throw AuthSetupException('Google login failed: ${error.message ?? error.code}');
     } catch (_) {
       throw const AuthSetupException('Could not sign in with Google. Please try again.');
     }
