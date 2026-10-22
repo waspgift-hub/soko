@@ -1,3 +1,6 @@
+// The generated in-memory WAV uses just_audio's experimental stream source API.
+// ignore_for_file: experimental_member_use
+
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:just_audio/just_audio.dart';
