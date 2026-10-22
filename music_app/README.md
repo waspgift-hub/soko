@@ -34,7 +34,7 @@ flutter run --dart-define=MUSIC_API_URL=https://your-worker.example.workers.dev
 
 Lyrics availability depends on LRCLIB's catalogue and metadata matching; not every song will have lyrics. The app sends the song title and artist to LRCLIB for lookup, not the audio stream. The lyrics provider may rate-limit requests, so the app shows a retry message instead of repeatedly retrying automatically.
 
-The app requests `/play/:id` immediately before playback rather than persisting temporary streaming URLs. Tracks can be downloaded to the app's private storage for offline listening; downloads are managed from the Downloads screen.
+The app requests `/play/:id` immediately before playback rather than persisting temporary streaming URLs. Tracks can be downloaded to the app's private storage for offline listening only when Jamendo marks the track downloadable under its license; downloads are managed from the Downloads screen.
 
 Lyrics API documentation: https://lrclib.net/docs
 
