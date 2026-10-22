@@ -1,68 +1,45 @@
-# SokoVibe Music API
+# SokoVibe Music Backend
 
-Cloudflare Worker API for the SokoVibe Music Flutter app. This initial provider adapter uses the official Jamendo API for music search and playable URLs.
+Cloudflare Worker for the SokoVibe Music Flutter app. The deployed backend uses Jamendo for catalog search and playback, and Cloudflare Workers AI for optional recommendations/lyrics generation.
 
-## Endpoints
+## Live service
 
-- `GET /health` — health check; does not verify provider credentials.
-- `GET /search?q=afrobeat` — search tracks.
-- `GET /play/{trackId}` — resolve a track's Jamendo audio URL.
+- Base URL: `https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev`
+- `GET /` — service/version and endpoint list.
+- `GET /api/health` — checks whether the Jamendo credential is configured and the provider can be reached.
+- `GET /search?q=afrobeat` — searches tracks and returns cover art, title, artist, streaming URL and license/download metadata.
+- `GET /play/{trackId}` — resolves a fresh playable URL and returns the track under the `track` property.
+- `POST /api/search` — JSON search alternative.
+- `POST /api/recommend` — mood/genre recommendations.
+- `POST /api/lyrics` — lyrics assistance when the AI binding is configured.
 
-Search response follows the Flutter app's model:
+## Required bindings
 
-```json
-{
-  "results": [
-    {
-      "id": "track-id",
-      "title": "Track title",
-      "artist": "Artist name",
-      "image": "https://...",
-      "streaming_url": "https://...",
-      "duration": 180,
-      "license": "https://creativecommons.org/...",
-      "source": "Jamendo"
-    }
-  ],
-  "count": 1,
-  "source": "Jamendo"
-}
-```
-
-Example play response:
-
-```json
-{
-  "id": "track-id",
-  "streaming_url": "https://...",
-  "source": "Jamendo",
-  "license": "https://creativecommons.org/..."
-}
-```
+- `JAMENDO_CLIENT_ID` — set as a Cloudflare Worker secret. Never commit the value.
+- `AI` — Cloudflare Workers AI binding, used by optional recommendation/lyrics routes.
 
 ## Deploy
 
-1. Create/choose a Cloudflare account and obtain a Jamendo API client ID from the official Jamendo developer portal.
-2. Install Wrangler and authenticate: `npx wrangler login`.
-3. From this directory, set the credential as a Worker secret (do not commit it):
-   `npx wrangler secret put JAMENDO_CLIENT_ID`
-4. Deploy: `npx wrangler deploy`.
-5. Wrangler prints the actual deployed URL, normally `https://sokovibe-music-api.<your-account-subdomain>.workers.dev`.
-6. Test `/health`, then `/search?q=afrobeat`. A healthy endpoint alone does not prove the Jamendo credential works.
+Run from this directory after authenticating Wrangler:
+
+```sh
+npx wrangler login
+npx wrangler secret put JAMENDO_CLIENT_ID
+npx wrangler deploy
+```
+
+The Worker configuration targets `soko-vibe-music-backend`. The deployed secret is managed separately from source. If deploying to a new account, configure the `AI` binding and set the secret in that account before expecting live catalog results.
 
 ## Configure Flutter
 
-Pass the real deployed URL when launching/building Flutter:
+The app defaults to this Worker. For another environment, pass the base URL at build/run time:
 
 ```sh
-flutter run --dart-define=MUSIC_API_URL=https://YOUR-DEPLOYED-WORKER-URL
+flutter run --dart-define=MUSIC_API_URL=https://YOUR-WORKER-URL
 ```
 
-Or update the app's configured default after deployment. Never put a provider secret in Flutter code or in a public repository.
+## Licensing and offline playback
 
-## Notes
+The Worker returns Jamendo's `audiodownload` URL and `audiodownload_allowed` flag. The app enables downloads only when the provider explicitly marks the track as downloadable, and it stores downloaded files in the app's private documents directory. Streaming URLs are resolved when needed and are not treated as permanent download URLs.
 
-- This service only returns catalog entries and provider audio URLs; it does not download or rehost audio.
-- Playback and offline downloads must follow the track's license and Jamendo terms. Do not offer unrestricted downloads unless the provider explicitly permits them.
-- This first version supports Jamendo only. Add other licensed providers through separate adapters.
-- Rate limits, provider outages, and invalid credentials return a generic upstream error without exposing secrets.
+The CI workflow smoke-tests health, live search, and playback URL resolution against the deployed Worker. A successful build does not replace manual playback checks on a physical Android device.
