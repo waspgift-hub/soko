@@ -12,6 +12,7 @@ on:
       - 'fix/sokovibe-music-backend-url'
     paths:
       - 'music_app/**'
+      - 'music_backend/**'
       - '.github/workflows/flutter-music.yml'
 
 permissions:
