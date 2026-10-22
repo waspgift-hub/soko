@@ -59,8 +59,13 @@ class OfflineMusicService {
     final response = await http
         .get(requestedUri, headers: const {'Accept': 'audio/*'})
         .timeout(const Duration(seconds: 60));
-    if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
-      throw const OfflineMusicException('Download failed. Please try again.');
+    final finalUri = response.request?.url;
+    if (response.statusCode != 200 ||
+        response.bodyBytes.isEmpty ||
+        finalUri == null ||
+        finalUri.scheme != 'https' ||
+        finalUri.host.isEmpty) {
+      throw const OfflineMusicException('Download failed or the provider redirected to an invalid URL.');
     }
     final contentType = response.headers['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('text/html') || contentType.contains('application/json')) {
