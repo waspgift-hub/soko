@@ -371,6 +371,23 @@ class _MusicHomePageState extends State<MusicHomePage> {
               onSubmitted: (_) => search(),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => OfflineLibraryPage(player: player),
+                )),
+                icon: const Icon(Icons.phone_android_rounded),
+                label: const Text('Cheza nyimbo za kwenye simu'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+                  alignment: Alignment.centerLeft,
+                ),
+              ),
+            ),
+          ),
           if (loading) const _MusicLoadingStrip(),
           if (error != null) Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
           Expanded(
