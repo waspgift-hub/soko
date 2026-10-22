@@ -7,6 +7,7 @@ import 'services/notification_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/app_settings.dart';
 import 'services/offline_music_service.dart';
+import 'screens/music_admin_dashboard_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -422,6 +423,22 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ]),
           ),
           const SizedBox(height: 20),
+          if (const bool.fromEnvironment('ENABLE_ADMIN_DASHBOARD', defaultValue: false)) ...[
+            Text('Administration', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('Music admin dashboard'),
+                subtitle: const Text('Check backend health and music endpoints'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => MusicAdminDashboardPage(api: MusicApi()),
+                )),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
           Text('About', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(child: Column(children: [
