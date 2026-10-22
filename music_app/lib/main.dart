@@ -1,8 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'models/music_track.dart';
 import 'services/music_api.dart';
+import 'services/youtube_search_service.dart';
 import 'services/notification_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/app_settings.dart';
@@ -70,6 +72,8 @@ class MusicHomePage extends StatefulWidget {
 
 class _MusicHomePageState extends State<MusicHomePage> {
   final api = MusicApi();
+  final youtubeApi = YoutubeSearchService();
+  String _searchSource = 'licensed';
   final player = AudioPlayer();
   final searchController = TextEditingController();
   List<MusicTrack> tracks = [];
@@ -183,7 +187,9 @@ class _MusicHomePageState extends State<MusicHomePage> {
     }
     setState(() { loading = true; error = null; });
     try {
-      final results = await api.search(searchController.text.trim());
+      final results = _searchSource == 'youtube'
+          ? await youtubeApi.search(searchController.text.trim())
+          : await api.search(searchController.text.trim());
       if (mounted) setState(() => tracks = results);
     } catch (_) {
       if (mounted) setState(() => error = 'Search failed. Check your connection or API.');
@@ -224,6 +230,13 @@ class _MusicHomePageState extends State<MusicHomePage> {
   Future<void> play(MusicTrack track) async {
     try {
       setState(() => current = track);
+      if (track.source == 'youtube') {
+        await player.pause();
+        final youtubeUri = Uri.https('www.youtube.com', '/watch', {'v': track.id});
+        final opened = await launchUrl(youtubeUri, mode: LaunchMode.externalApplication);
+        if (!opened) throw Exception('Could not open YouTube.');
+        return;
+      }
       final url = await api.playUrl(track.id);
       await player.setUrl(url);
       await player.play();
@@ -325,6 +338,18 @@ class _MusicHomePageState extends State<MusicHomePage> {
                   else IconButton(onPressed: search, tooltip: 'Search / Tafuta', icon: const Icon(Icons.arrow_forward_rounded)),
                 ],
                 onSubmitted: (_) => search(),
+              ),
+              const SizedBox(height: 10),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment<String>(value: 'licensed', label: Text('Audio-only music'), icon: Icon(Icons.headphones_rounded)),
+                  ButtonSegment<String>(value: 'youtube', label: Text('YouTube videos'), icon: Icon(Icons.smart_display_rounded)),
+                ],
+                selected: {_searchSource},
+                onSelectionChanged: (selection) {
+                  setState(() { _searchSource = selection.first; tracks = []; error = null; });
+                  if (searchController.text.trim().isNotEmpty) search();
+                },
               ),
             ]),
           ),
