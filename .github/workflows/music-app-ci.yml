@@ -36,7 +36,37 @@ jobs:
           channel: stable
           cache: true
       - name: Generate Android v2 project files
-        run: flutter create --platforms=android .
+        run: |
+          flutter create --platforms=android .
+          if [ -f android/app/build.gradle.kts ]; then
+            python3 - <<'PY'
+            from pathlib import Path
+            p = Path('android/app/build.gradle.kts')
+            s = p.read_text()
+            if 'isCoreLibraryDesugaringEnabled = true' not in s:
+                s = s.replace('compileOptions {', 'compileOptions {\\n        isCoreLibraryDesugaringEnabled = true', 1)
+            if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in s:
+                marker = 'dependencies {'
+                if marker not in s:
+                    raise SystemExit('Could not find dependencies block in build.gradle.kts')
+                s = s.replace(marker, marker + '\\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")', 1)
+            p.write_text(s)
+            PY
+          elif [ -f android/app/build.gradle ]; then
+            python3 - <<'PY'
+            from pathlib import Path
+            p = Path('android/app/build.gradle')
+            s = p.read_text()
+            if 'coreLibraryDesugaringEnabled true' not in s:
+                s = s.replace('compileOptions {', 'compileOptions {\\n        coreLibraryDesugaringEnabled true', 1)
+            if 'coreLibraryDesugaring \'com.android.tools:desugar_jdk_libs:' not in s:
+                s = s.replace('dependencies {', "dependencies {\\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'", 1)
+            p.write_text(s)
+            PY
+          else
+            echo 'Android app Gradle file not found' >&2
+            exit 1
+          fi
       - name: Resolve dependencies
         run: flutter pub get
       - name: Replace generated placeholder test
