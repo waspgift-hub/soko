@@ -57,11 +57,11 @@ jobs:
               dependency_line = "    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
 
           if "isCoreLibraryDesugaringEnabled" not in content and "coreLibraryDesugaringEnabled" not in content:
-              content, count = re.subn(r"(compileOptions\\s*\\{)", r"\\1\\n" + enabled_line, content, count=1)
+              content, count = re.subn(r"(compileOptions\s*\{)", r"\1\n" + enabled_line, content, count=1)
               if count != 1:
                   raise SystemExit("Could not enable core library desugaring in compileOptions")
           if "desugar_jdk_libs" not in content:
-              content, count = re.subn(r"(dependencies\\s*\\{)", r"\\1\\n" + dependency_line, content, count=1)
+              content, count = re.subn(r"(dependencies\s*\{)", r"\1\n" + dependency_line, content, count=1)
               if count != 1:
                   raise SystemExit("Could not add desugar_jdk_libs dependency")
           gradle_file.write_text(content)
