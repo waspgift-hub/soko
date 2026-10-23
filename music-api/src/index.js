@@ -235,6 +235,50 @@ async function handlePlay(env, trackId) {
   }
 }
 
+async function handleDownload(env, trackId) {
+  if (!isValidTrackId(trackId)) {
+    return errorResponse("Invalid track ID", 400, "VALIDATION_ERROR");
+  }
+
+  try {
+    var body = await jamendoRequest(env, {
+      id: trackId,
+      limit: 1,
+      audioformat: "mp32",
+      include: "licenses musicinfo",
+    });
+    var tracks = (body.results || []).map(mapTrack).filter(Boolean);
+    if (tracks.length === 0) {
+      return errorResponse("Track not found", 404, "NOT_FOUND");
+    }
+
+    var track = tracks[0];
+    if (track.audiodownload_allowed !== true) {
+      return errorResponse("Downloads are not permitted for this track's license", 403, "LICENSE_RESTRICTED");
+    }
+    if (!track.audiodownload || !track.audiodownload.startsWith("https://")) {
+      return errorResponse("No licensed download URL is available", 404, "NO_DOWNLOAD_URL");
+    }
+
+    return new Response(null, {
+      status: 302,
+      headers: Object.assign({}, corsHeaders(), {
+        "Location": track.audiodownload,
+        "Cache-Control": "no-store",
+      }),
+    });
+  } catch (e) {
+    var status = e.code === "CONFIG_MISSING" ? 503
+      : e.code === "PROVIDER_TIMEOUT" ? 504
+      : 502;
+    return errorResponse(
+      e.code === "CONFIG_MISSING" ? "Music provider is not configured" : "Failed to validate download permission",
+      status,
+      e.code || "PROVIDER_ERROR"
+    );
+  }
+}
+
 async function handleRecommend(env, body) {
   var mood = sanitizeString(body && body.mood, 50);
   var genre = sanitizeString(body && body.genre, 50);
@@ -369,6 +413,7 @@ export default {
           "GET /search?q=...",
           "POST /api/search",
           "GET /play/:trackId",
+          "GET /download/:trackId (licensed downloads only)",
           "POST /api/recommend",
           "POST /api/lyrics",
         ],
@@ -401,6 +446,11 @@ export default {
     var playMatch = url.pathname.match(/^\/play\/(\d+)$/);
     if (playMatch && request.method === "GET") {
       return handlePlay(env, playMatch[1]);
+    }
+
+    var downloadMatch = url.pathname.match(/^\/download\/(\d+)$/);
+    if (downloadMatch && request.method === "GET") {
+      return handleDownload(env, downloadMatch[1]);
     }
 
     if (url.pathname === "/api/recommend" && request.method === "POST") {

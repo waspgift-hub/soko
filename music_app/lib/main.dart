@@ -1,8 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'models/music_track.dart';
 import 'services/music_api.dart';
+import 'services/youtube_search_service.dart';
 import 'services/notification_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/app_settings.dart';
@@ -70,11 +73,16 @@ class MusicHomePage extends StatefulWidget {
 
 class _MusicHomePageState extends State<MusicHomePage> {
   final api = MusicApi();
+  final youtubeApi = YoutubeSearchService();
+  String _searchSource = 'licensed';
   final player = AudioPlayer();
   final searchController = TextEditingController();
   List<MusicTrack> tracks = [];
+  List<PlatformFile> _deviceSongs = [];
   MusicTrack? current;
   bool loading = false;
+  bool _hasSearched = false;
+  int _searchRequestId = 0;
   String? error;
   final Set<String> _downloading = <String>{};
   bool _guestMode = false;
@@ -167,8 +175,25 @@ class _MusicHomePageState extends State<MusicHomePage> {
   @override
   void dispose() {
     searchController.dispose();
+    api.close();
+    youtubeApi.close();
     player.dispose();
     super.dispose();
+  }
+
+  String _tr(String key) {
+    const translations = <String, Map<String, String>>{
+      'sw': {'FEEL EVERY VIBE':'HISI KILA MUDA','Your sound. Your mood.':'Muziki wako. Hisia zako.','Music that moves you':'Muziki unaokuvutia','Search songs or artists':'Tafuta nyimbo au wasanii','Licensed audio':'Muziki wenye leseni','On-device songs':'Nyimbo za simu','Choose songs':'Chagua nyimbo','No songs selected':'Bado hujachagua nyimbo','Choose your vibe':'Chagua hisia zako','Happy':'Furaha','Chill':'Utulivu','Energy':'Nguvu','Love':'Mapenzi','How to use':'Jinsi ya kutumia','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'Tafuta muziki wenye leseni, tazama YouTube ndani ya app, au chagua nyimbo kwenye simu.','Music service is unavailable right now. Your internet may still be working—try again.':'Huduma ya muziki haipatikani sasa. Intaneti yako inaweza kuwa inafanya kazi; jaribu tena.'},
+      'fr': {'FEEL EVERY VIBE':'VIVEZ CHAQUE VIBE','Your sound. Your mood.':'Votre son. Votre humeur.','Music that moves you':'La musique qui vous anime','Search songs or artists':'Rechercher titres ou artistes','Licensed audio':'Audio sous licence','On-device songs':'Musique du téléphone','Choose songs':'Choisir des titres','No songs selected':'Aucun titre sélectionné','Choose your vibe':'Choisissez votre ambiance','Happy':'Heureux','Chill':'Détente','Energy':'Énergie','Love':'Amour','How to use':'Mode d’emploi','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'Recherchez de la musique sous licence, regardez YouTube dans l’app ou choisissez des fichiers du téléphone.','Music service is unavailable right now. Your internet may still be working—try again.':'Le service musical est indisponible. Votre connexion peut fonctionner ; réessayez.'},
+      'zh': {'FEEL EVERY VIBE':'感受每一种节奏','Your sound. Your mood.':'你的音乐，你的心情。','Music that moves you':'让音乐打动你','Search songs or artists':'搜索歌曲或艺人','Licensed audio':'授权音乐','On-device songs':'手机本地歌曲','Choose songs':'选择歌曲','No songs selected':'尚未选择歌曲','Choose your vibe':'选择你的风格','Happy':'快乐','Chill':'放松','Energy':'活力','Love':'爱情','How to use':'使用方法','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'搜索授权音乐、在应用内观看 YouTube，或选择手机中保存的音频文件。','Music service is unavailable right now. Your internet may still be working—try again.':'音乐服务暂时不可用。网络可能正常，请稍后重试。'},
+    };
+    return translations[widget.settings.language]?[key] ?? key;
+  }
+
+  Future<void> _pickDeviceSongs() async {
+    final picked = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
+    if (!mounted || picked == null) return;
+    setState(() => _deviceSongs = picked.files.where((file) => file.path != null).toList());
   }
 
   Future<void> _searchMood(String mood) async {
@@ -177,24 +202,52 @@ class _MusicHomePageState extends State<MusicHomePage> {
   }
 
   Future<void> search() async {
-    if (searchController.text.trim().isEmpty) {
-      setState(() => error = 'Enter a song, artist or album name first.');
+    final query = searchController.text.trim();
+    if (query.isEmpty) {
+      _searchRequestId++;
+      setState(() {
+        loading = false;
+        tracks = [];
+        _hasSearched = false;
+        error = 'Enter a song, artist or album name first.';
+      });
       return;
     }
-    setState(() { loading = true; error = null; });
+
+    final requestId = ++_searchRequestId;
+    final source = _searchSource;
+    setState(() {
+      loading = true;
+      error = null;
+      tracks = [];
+      _hasSearched = true;
+    });
+
     try {
-      final results = await api.search(searchController.text.trim());
-      if (mounted) setState(() => tracks = results);
+      final results = source == 'youtube'
+          ? await youtubeApi.search(query)
+          : await api.search(query);
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        tracks = results;
+        error = results.isEmpty ? 'No results found. Try another search.' : null;
+      });
     } catch (_) {
-      if (mounted) setState(() => error = 'Search failed. Check your connection or API.');
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        tracks = [];
+        error = _tr('Music service is unavailable right now. Your internet may still be working—try again.');
+      });
       await NotificationService.instance.showImportant(
         id: 2010,
         title: 'Music search failed',
-        body: 'Check your internet connection and try again.',
+        body: 'The music service did not respond. Your internet may still be working.',
         payload: 'retry_search',
       );
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && requestId == _searchRequestId) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -223,9 +276,21 @@ class _MusicHomePageState extends State<MusicHomePage> {
 
   Future<void> play(MusicTrack track) async {
     try {
+      if (track.source == 'youtube') {
+        await player.pause();
+        if (!mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => YoutubePlayerPage(track: track)));
+        return;
+      }
       setState(() => current = track);
-      final url = await api.playUrl(track.id);
-      await player.setUrl(url);
+      if (track.source == 'device') {
+        final path = track.streamUrl;
+        if (path == null || path.isEmpty) throw Exception('Audio file path is missing.');
+        await player.setFilePath(path);
+      } else {
+        final url = await api.playUrl(track.id);
+        await player.setUrl(url);
+      }
       await player.play();
     } catch (_) {
       if (mounted) {
@@ -268,12 +333,12 @@ class _MusicHomePageState extends State<MusicHomePage> {
         ]),
         actions: [
           IconButton(
-            tooltip: 'Account / Akaunti',
+            tooltip: 'Account',
             onPressed: _showAccountOptions,
             icon: Icon(_accountEmail != null ? Icons.account_circle : Icons.login_rounded),
           ),
           IconButton(
-            tooltip: 'Downloads / Zilizopakuliwa',
+            tooltip: 'Downloads',
             onPressed: () async {
               await Navigator.of(context).push(MaterialPageRoute<void>(
                 builder: (_) => DownloadsPage(
@@ -289,8 +354,13 @@ class _MusicHomePageState extends State<MusicHomePage> {
             },
             icon: const Icon(Icons.download_for_offline_outlined),
           ),
+          PopupMenuButton<String>(
+            tooltip: 'Language', icon: const Icon(Icons.translate_rounded),
+            onSelected: (language) async { await widget.settings.saveLanguage(language); if (mounted) setState(() {}); },
+            itemBuilder: (_) => const [PopupMenuItem(value: 'en', child: Text('English')), PopupMenuItem(value: 'zh', child: Text('中文')), PopupMenuItem(value: 'fr', child: Text('Français')), PopupMenuItem(value: 'sw', child: Text('Kiswahili'))],
+          ),
           IconButton(
-            tooltip: 'Settings / Mipangilio',
+            tooltip: 'Settings',
             onPressed: () async {
               await Navigator.of(context).push(MaterialPageRoute<void>(
                 builder: (_) => AppSettingsPage(settings: widget.settings, onChanged: widget.onSettingsChanged),
@@ -307,24 +377,37 @@ class _MusicHomePageState extends State<MusicHomePage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('FEEL EVERY VIBE  ·  HISI KILA HISIA', style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              Text(_tr('FEEL EVERY VIBE'), style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: scheme.primary, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
               const SizedBox(height: 8),
-              Text('Your sound. Your mood.', style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              Text(_tr('Your sound. Your mood.'), style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w800, letterSpacing: -1.1, height: 1.08)),
               const SizedBox(height: 5),
-              Text('Muziki unaoendana na wewe · Music that moves you',
+              Text(_tr('Music that moves you'),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
               const SizedBox(height: 18),
               SearchBar(
                 controller: searchController,
-                hintText: 'Tafuta nyimbo / Search songs or artists',
+                hintText: _tr('Search songs or artists'),
                 leading: const Icon(Icons.search_rounded),
                 trailing: [
                   if (loading) const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
-                  else IconButton(onPressed: search, tooltip: 'Search / Tafuta', icon: const Icon(Icons.arrow_forward_rounded)),
+                  else IconButton(onPressed: search, tooltip: 'Search', icon: const Icon(Icons.arrow_forward_rounded)),
                 ],
                 onSubmitted: (_) => search(),
+              ),
+              const SizedBox(height: 10),
+              SegmentedButton<String>(
+                segments: [
+                  ButtonSegment<String>(value: 'licensed', label: Text(_tr('Licensed audio')), icon: Icon(Icons.headphones_rounded)),
+                  ButtonSegment<String>(value: 'youtube', label: Text('YouTube'), icon: Icon(Icons.smart_display_rounded)),
+                ],
+                selected: {_searchSource},
+                onSelectionChanged: (selection) {
+                  _searchRequestId++;
+                  setState(() { _searchSource = selection.first; tracks = []; error = null; loading = false; _hasSearched = false; });
+                  if (searchController.text.trim().isNotEmpty) search();
+                },
               ),
             ]),
           ),
@@ -336,23 +419,48 @@ class _MusicHomePageState extends State<MusicHomePage> {
                 Icon(Icons.wifi_off_rounded, color: scheme.onErrorContainer),
                 const SizedBox(width: 10),
                 Expanded(child: Text(error!, style: TextStyle(color: scheme.onErrorContainer))),
-                IconButton(onPressed: search, tooltip: 'Try again / Jaribu tena', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
+                IconButton(onPressed: search, tooltip: 'Try again', icon: Icon(Icons.refresh_rounded, color: scheme.onErrorContainer)),
               ])))),
           Expanded(
-            child: tracks.isEmpty
+            child: tracks.isEmpty && _hasSearched
+                ? loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Center(child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.search_off_rounded, size: 56, color: scheme.onSurfaceVariant),
+                      const SizedBox(height: 12),
+                      Text('No results found', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 6),
+                      const Text('Try a different song, artist or search source.', textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(onPressed: search, icon: const Icon(Icons.refresh_rounded), label: const Text('Search again')),
+                    ]),
+                  ))
+                : tracks.isEmpty
                 ? ListView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                     children: [
-                      Text('Choose your vibe  ·  Chagua mood yako', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 18), padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: scheme.surfaceContainerLow, borderRadius: BorderRadius.circular(22), border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5))),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [Icon(Icons.phone_android_rounded, color: scheme.primary, size: 25), const SizedBox(width: 9), Expanded(child: Text(_tr('On-device songs'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))), FilledButton.tonalIcon(onPressed: _pickDeviceSongs, icon: const Icon(Icons.library_music_rounded), label: Text(_tr('Choose songs')))]),
+                          const SizedBox(height: 6),
+                          if (_deviceSongs.isEmpty) Text(_tr('No songs selected'), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant))
+                          else ..._deviceSongs.map((file) => ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.music_note_rounded), title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis), trailing: IconButton(tooltip: 'Play', icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30), onPressed: () => play(MusicTrack(id: file.path ?? file.name, title: file.name.replaceFirst(RegExp(r'\.[^.]+$'), ''), artist: 'On this device', image: '', streamUrl: file.path, source: 'device'))))),
+                        ]),
+                      ),
+                      Text(_tr('Choose your vibe'), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 12),
                       GridView.count(
                         crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
                         crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.55,
                         children: [
-                          _MoodCard(title: 'Happy', subtitle: 'Furaha', icon: Icons.wb_sunny_rounded, color: const Color(0xFFB8F36B), onTap: () => _searchMood('happy afrobeat')),
-                          _MoodCard(title: 'Chill', subtitle: 'Pumzika', icon: Icons.nightlight_round, color: const Color(0xFF9CC8FF), onTap: () => _searchMood('chill acoustic')),
-                          _MoodCard(title: 'Energy', subtitle: 'Nguvu', icon: Icons.bolt_rounded, color: const Color(0xFFFFC36B), onTap: () => _searchMood('energetic dance')),
-                          _MoodCard(title: 'Love', subtitle: 'Mapenzi', icon: Icons.favorite_rounded, color: const Color(0xFFFF9CCB), onTap: () => _searchMood('love romantic')),
+                          _MoodCard(title: _tr('Happy'), subtitle: 'Feel-good music', icon: Icons.wb_sunny_rounded, color: const Color(0xFFB8F36B), onTap: () => _searchMood('happy afrobeat')),
+                          _MoodCard(title: _tr('Chill'), subtitle: 'Relaxing sounds', icon: Icons.nightlight_round, color: const Color(0xFF9CC8FF), onTap: () => _searchMood('chill acoustic')),
+                          _MoodCard(title: _tr('Energy'), subtitle: 'High energy', icon: Icons.bolt_rounded, color: const Color(0xFFFFC36B), onTap: () => _searchMood('energetic dance')),
+                          _MoodCard(title: _tr('Love'), subtitle: 'Romantic songs', icon: Icons.favorite_rounded, color: const Color(0xFFFF9CCB), onTap: () => _searchMood('love romantic')),
                         ],
                       ),
                       const SizedBox(height: 22),
@@ -367,16 +475,18 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text('Find your next favourite', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 5),
-                            Text('Tafuta wimbo mpya wa kupenda.', style: Theme.of(context).textTheme.bodySmall),
+                            Text('Discover something new.', style: Theme.of(context).textTheme.bodySmall),
                             const SizedBox(height: 12),
                             FilledButton.icon(onPressed: () { searchController.text = 'afrobeat'; search(); },
-                              icon: const Icon(Icons.explore_rounded), label: const Text('Explore / Gundua')),
+                              icon: const Icon(Icons.explore_rounded), label: const Text('Explore')),
                           ])),
                           Icon(Icons.graphic_eq_rounded, size: 64, color: scheme.primary),
                         ]),
                       ),
                       const SizedBox(height: 14),
-                      Text('Discover music · Gundua muziki', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                      Card(child: ListTile(leading: Icon(Icons.lightbulb_outline_rounded, color: scheme.primary), title: Text(_tr('How to use'), style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text(_tr('Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.')))),
+                      const SizedBox(height: 14),
+                      Text(_tr('Discover music'), style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
                     ],
                   )
                 : ListView.separated(
@@ -400,15 +510,15 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           trailing: Wrap(spacing: 0, children: [
                             IconButton(
                               tooltip: track.downloadAllowed
-                                  ? 'Download for offline / Pakua'
+                                  ? 'Download for offline'
                                   : 'Download unavailable for this license',
                               onPressed: (!track.downloadAllowed || _downloading.contains(track.id)) ? null : () => _download(track),
                               icon: _downloading.contains(track.id)
                                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                                   : const Icon(Icons.download_rounded),
                             ),
-                            IconButton(tooltip: 'Lyrics / Maneno', onPressed: () => showLyrics(track), icon: const Icon(Icons.lyrics_outlined)),
-                            IconButton(tooltip: 'Play / Cheza', onPressed: () => play(track), icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 32)),
+                            IconButton(tooltip: 'Lyrics', onPressed: () => showLyrics(track), icon: const Icon(Icons.lyrics_outlined)),
+                            IconButton(tooltip: 'Play', onPressed: () => play(track), icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 32)),
                           ]),
                         ),
                       );
@@ -456,6 +566,23 @@ class _MoodCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class YoutubePlayerPage extends StatefulWidget {
+  const YoutubePlayerPage({super.key, required this.track});
+  final MusicTrack track;
+  @override State<YoutubePlayerPage> createState() => _YoutubePlayerPageState();
+}
+class _YoutubePlayerPageState extends State<YoutubePlayerPage> {
+  late final WebViewController _controller;
+  @override void initState() {
+    super.initState();
+    _controller = WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..setBackgroundColor(const Color(0xFF080D0B))..loadHtmlString('''
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#080D0B}.player{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}iframe{width:100%;height:100%;border:0}</style></head>
+<body><div class="player"><iframe src="https://www.youtube.com/embed/${widget.track.id}?autoplay=1&playsinline=1&controls=1&rel=0" title="YouTube player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div></body></html>
+''', baseUrl: 'https://www.youtube.com');
+  }
+  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('YouTube'), actions: [IconButton(tooltip: 'Reload', onPressed: () => _controller.reload(), icon: const Icon(Icons.refresh_rounded))]), body: Column(children: [Expanded(child: WebViewWidget(controller: _controller)), ListTile(leading: const Icon(Icons.smart_display_rounded), title: Text(widget.track.title, maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text(widget.track.artist)), const SafeArea(top: false, child: Padding(padding: EdgeInsets.all(12), child: Text('Playback is provided by YouTube. Some videos may block embedded playback.', textAlign: TextAlign.center)))]));
 }
 
 class AppSettingsPage extends StatefulWidget {
@@ -535,25 +662,33 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
-          Text('Appearance · Muonekano', style: Theme.of(context).textTheme.titleMedium),
+          Text('Language', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: DropdownButtonFormField<String>(
+            initialValue: settings.language, decoration: const InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.translate_rounded)),
+            items: const [DropdownMenuItem(value: 'en', child: Text('English')), DropdownMenuItem(value: 'zh', child: Text('中文')), DropdownMenuItem(value: 'fr', child: Text('Français')), DropdownMenuItem(value: 'sw', child: Text('Kiswahili'))],
+            onChanged: (value) async { if (value == null) return; await settings.saveLanguage(value); if (mounted) setState(() {}); widget.onChanged(); },
+          ))),
+          const SizedBox(height: 20),
+          Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Theme · Mandhari'),
+                const Text('Theme'),
                 const SizedBox(height: 8),
                 SegmentedButton<ThemeMode>(
                   segments: const [
-                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System · Mfumo')),
-                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light · Mwanga')),
-                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark · Giza')),
+                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System')),
+                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
+                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
                   ],
                   selected: {settings.themeMode},
                   onSelectionChanged: (selection) => _chooseTheme(selection.first),
                 ),
                 const SizedBox(height: 20),
-                const Text('Accent colour · Rangi kuu'),
+                const Text('Accent colour'),
                 const SizedBox(height: 12),
                 Wrap(spacing: 12, runSpacing: 12, children: [
                   for (final color in colors)
@@ -576,11 +711,11 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('Sound identity · Sauti ya SokoVibe', style: Theme.of(context).textTheme.titleMedium),
+          Text('Sound identity', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(child: SwitchListTile(
             secondary: const Icon(Icons.graphic_eq_rounded),
-            title: const Text('Startup signature sound · Sauti ya mwanzo'),
+            title: const Text('Startup signature sound'),
             subtitle: const Text('Play the short futuristic SokoVibe sound once when the app starts.'),
             value: settings.startupSound,
             onChanged: (enabled) async {
@@ -589,14 +724,14 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             },
           )),
           const SizedBox(height: 20),
-          Text('Notifications · Arifa', style: Theme.of(context).textTheme.titleMedium),
+          Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(
             child: Column(children: [
               SwitchListTile(
                 secondary: const Icon(Icons.notifications_active_outlined),
-                title: const Text('Daily listening reminder · Kikumbusho cha kila siku'),
-                subtitle: const Text('Kumbusho la kusikiliza muziki kila siku'),
+                title: const Text('Daily listening reminder'),
+                subtitle: const Text('A daily reminder to listen to music.'),
                 value: settings.dailyReminder,
                 onChanged: _changeReminder,
               ),
@@ -604,7 +739,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               ListTile(
                 enabled: settings.dailyReminder,
                 leading: const Icon(Icons.schedule),
-                title: const Text('Reminder time · Muda wa kumbusho'),
+                title: const Text('Reminder time'),
                 subtitle: Text(_timeLabel(context)),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: settings.dailyReminder ? _chooseReminderTime : null,
@@ -612,7 +747,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ]),
           ),
           const SizedBox(height: 20),
-          Text('About · Kuhusu app', style: Theme.of(context).textTheme.titleMedium),
+          Text('About', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(child: Column(children: [
             const ListTile(
@@ -623,7 +758,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('App version · Toleo la app'),
+              title: const Text('App version'),
               subtitle: const Text('0.1.0'),
               onTap: () => showAboutDialog(
                 context: context,
@@ -897,7 +1032,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Downloads · Zilizopakuliwa'),
+        title: const Text('Downloads'),
         actions: [
           IconButton(
             tooltip: 'Refresh downloads',

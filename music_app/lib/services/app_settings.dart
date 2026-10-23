@@ -8,6 +8,7 @@ class AppSettings {
   static const _hourKey = 'settings_reminder_hour';
   static const _minuteKey = 'settings_reminder_minute';
   static const _startupSoundKey = 'settings_startup_sound';
+  static const _languageKey = 'settings_language';
 
   ThemeMode themeMode = ThemeMode.system;
   int colorSeed = 0xFF2E7D32;
@@ -15,6 +16,7 @@ class AppSettings {
   int reminderHour = 19;
   int reminderMinute = 0;
   bool startupSound = true;
+  String language = 'en';
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -29,6 +31,13 @@ class AppSettings {
     reminderHour = prefs.getInt(_hourKey) ?? 19;
     reminderMinute = prefs.getInt(_minuteKey) ?? 0;
     startupSound = prefs.getBool(_startupSoundKey) ?? true;
+    language = prefs.getString(_languageKey) ?? 'en';
+  }
+
+  Future<void> saveLanguage(String value) async {
+    language = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languageKey, value);
   }
 
   Future<void> saveStartupSound(bool value) async {

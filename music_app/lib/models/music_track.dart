@@ -6,6 +6,7 @@ class MusicTrack {
   final String? streamUrl;
   final String? downloadUrl;
   final bool downloadAllowed;
+  final String source;
 
   const MusicTrack({
     required this.id,
@@ -15,6 +16,7 @@ class MusicTrack {
     this.streamUrl,
     this.downloadUrl,
     this.downloadAllowed = false,
+    this.source = 'licensed',
   });
 
   factory MusicTrack.fromJson(Map<String, dynamic> json) {
@@ -28,11 +30,12 @@ class MusicTrack {
       title: '${json['title'] ?? json['song'] ?? 'Unknown title'}',
       artist: '${json['artist'] ?? 'Unknown artist'}',
       image: '${json['image'] ?? json['cover'] ?? ''}',
-      // The current Worker returns redirect endpoints in audio/download.
-      // Older backend payloads with direct URLs remain supported as well.
+      // Jamendo Worker payloads expose stream and licensed-download URLs.
+      // Playback resolves /play/:id separately to validate the stream URL.
       streamUrl: (json['streaming_url'] ?? json['audio'])?.toString(),
       downloadUrl: (json['audiodownload'] ?? json['download'])?.toString(),
       downloadAllowed: downloadAllowed,
+      source: '${json['source'] ?? 'licensed'}',
     );
   }
 }
