@@ -1,0 +1,60 @@
+name: SokoVibe Music APK Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'soko_langu/**'
+      - '.github/workflows/music-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: music-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-build:
+    name: Validate Flutter app and build installable APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: soko_langu
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build installable debug APK for device testing
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sokovibe-music-test-apk
+          path: soko_langu/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
