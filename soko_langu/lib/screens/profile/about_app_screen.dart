@@ -2,6 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart' as url;
 import '../../extensions/context_tr.dart';
 
+/// Official Soko Vibe public links, in one place.
+///
+/// These were previously inline string literals scattered through this screen,
+/// which is how the About screen ended up pointing at a YouTube handle that is
+/// not the Soko Vibe channel, and at a personal gmail address that appears in
+/// no other Soko Vibe document. Anything shown to a user as a way to reach us
+/// lives here so the app and the website cannot drift apart again.
+
+/// Support address, as published on the website and in the privacy notice.
+const String supportEmail = 'support@soko-vibe.com';
+
+/// Data Protection Officer, as published in the privacy notice.
+const String dpoEmail = 'dpo@soko-vibe.com';
+
+/// Public website.
+const String websiteUrl = 'https://www.sokovibe.co.tz';
+
+/// Terms of Service.
+const String termsUrl = '$websiteUrl/terms.html';
+
+/// Privacy Policy.
+const String privacyPolicyUrl = '$websiteUrl/privacy.html';
+
+/// YouTube channel, referenced by channel id rather than @handle: handles get
+/// changed and reused, a channel id never points somewhere else.
+const String youTubeChannelId = 'UC8ALYEifcm4hEsl9MGoCD4Q';
+const String youTubeChannelUrl =
+    'https://www.youtube.com/channel/$youTubeChannelId';
+
+/// What to show under the YouTube row.
+///
+/// Not a URL: the channel's canonical form is the /channel/UC... URL and it
+/// exposes no @handle, so any handle-shaped string here would be a guess that
+/// could point somewhere else one day. The channel name is the honest label.
+const String youTubeChannelLabel = 'Soko Vibe — YouTube';
+
 class AboutAppScreen extends StatelessWidget {
   const AboutAppScreen({super.key});
 
@@ -117,10 +153,14 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Contact Email
+              // Contact Email.
+              // support@soko-vibe.com is the address the website, the privacy
+              // notice and the data-protection notice all publish. It used to be
+              // a personal gmail here, which meant a user who read the policy on
+              // the site and emailed the app was talking to two different places.
               GestureDetector(
                 onTap: () async {
-                  final uri = Uri.parse('mailto:langusoko@gmail.com');
+                  final uri = Uri.parse('mailto:$supportEmail');
                   if (await url.canLaunchUrl(uri)) {
                     await url.launchUrl(uri);
                   }
@@ -129,17 +169,19 @@ class AboutAppScreen extends StatelessWidget {
                   context,
                   icon: Icons.email,
                   title: context.tr('contact_label'),
-                  value: "langusoko@gmail.com",
+                  value: supportEmail,
                   isLink: true,
                 ),
               ),
 
               const SizedBox(height: 12),
 
-              // YouTube Tutorials
+              // YouTube channel.
+              // The channel id is the stable identifier: the @handle has been
+              // changed before and would silently send users to a dead page.
               GestureDetector(
                 onTap: () async {
-                  final uri = Uri.parse('https://www.youtube.com/@badtz-xb');
+                  final uri = Uri.parse(youTubeChannelUrl);
                   if (await url.canLaunchUrl(uri)) {
                     await url.launchUrl(
                       uri,
@@ -189,7 +231,7 @@ class AboutAppScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'youtube.com/@badtz-xb',
+                              youTubeChannelLabel,
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.red.shade600,
