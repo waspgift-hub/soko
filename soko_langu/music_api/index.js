@@ -14,12 +14,19 @@ const JAMENDO_API = 'https://api.jamendo.com/v3.0';
 const http = axios.create({ timeout: 12000, headers: { 'User-Agent': 'SokoVibeMusic/1.0 (open-media catalog)' } });
 
 function isOpenLicense(value) {
-  const s = String(value || '').trim().toLowerCase().replace(/\\/g, '/');
+  const s = String(value || '').trim().toLowerCase();
   if (!s) return false;
-  if (/by-nc|by-nd|sampling|developing|all rights reserved|copyright/.test(s)) return false;
-  return s.includes('creativecommons.org/publicdomain/zero') ||
-    s.includes('creativecommons.org/publicdomain/mark') ||
-    /creativecommons.org/licenses/by(-sa)?\/(3\.0|4\.0)(\/|$)/.test(s);
+  const forbidden = ['/by-nc', '/by-nd', '/sampling', '/developing', 'all rights reserved', 'copyright'];
+  if (forbidden.some((part) => s.includes(part))) return false;
+  const allowed = [
+    'creativecommons.org/publicdomain/zero',
+    'creativecommons.org/publicdomain/mark',
+    'creativecommons.org/licenses/by/3.0',
+    'creativecommons.org/licenses/by/4.0',
+    'creativecommons.org/licenses/by-sa/3.0',
+    'creativecommons.org/licenses/by-sa/4.0',
+  ];
+  return allowed.some((part) => s.includes(part));
 }
 
 function archiveItem(doc, kind) {
