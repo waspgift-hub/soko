@@ -41,6 +41,8 @@ jobs:
         run: flutter create --platforms=android .
       - name: Set Android minimum SDK for Firebase
         run: sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts
+      - name: Set Android compile SDK for current plugins
+        run: sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' android/app/build.gradle.kts
       - name: Enable Java core library desugaring for notifications
         run: |
           python3 - <<'PY'
