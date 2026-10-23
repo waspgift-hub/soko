@@ -196,24 +196,28 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
-          const hosts = ['https://inv.nadeko.net', 'https://invidious.nerdvpn.de', 'https://invidious.privacyredirect.com'];
-          let working = 0;
-          for (const host of hosts) {
-            try {
-              const u = new URL('/api/v1/search', host);
-              u.searchParams.set('q', 'music');
-              u.searchParams.set('type', 'video');
-              const res = await fetch(u, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } });
-              if (!res.ok) { console.log('UNAVAILABLE:', host, 'HTTP', res.status); continue; }
-              const body = await res.json();
-              if (!Array.isArray(body)) { console.log('INVALID:', host, 'unexpected response'); continue; }
-              console.log('PASS:', host, 'returned', body.length, 'video results');
-              working++;
-            } catch (e) { console.log('UNAVAILABLE:', host, e.message); }
+          async function main() {
+            const hosts = ['https://inv.nadeko.net', 'https://invidious.nerdvpn.de', 'https://invidious.privacyredirect.com'];
+            let working = 0;
+            for (const host of hosts) {
+              try {
+                const u = new URL('/api/v1/search', host);
+                u.searchParams.set('q', 'music');
+                u.searchParams.set('type', 'video');
+                const res = await fetch(u, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } });
+                if (!res.ok) { console.log('UNAVAILABLE:', host, 'HTTP', res.status); continue; }
+                const body = await res.json();
+                if (!Array.isArray(body)) { console.log('INVALID:', host, 'unexpected response'); continue; }
+                console.log('PASS:', host, 'returned', body.length, 'video results');
+                working++;
+              } catch (e) { console.log('UNAVAILABLE:', host, e.message); }
+            }
+            if (working === 0) {
+              console.error('FAIL: All configured YouTube metadata instances are unavailable.');
+              process.exitCode = 1;
+            } else {
+              console.log('PASS: At least one YouTube discovery source is responding.');
+            }
           }
-          if (working === 0) {
-            console.error('FAIL: All configured YouTube metadata instances are unavailable.');
-            process.exit(1);
-          }
-          console.log('PASS: At least one YouTube discovery source is responding.');
+          main().catch(e => { console.error(e); process.exitCode = 1; });
           NODE
