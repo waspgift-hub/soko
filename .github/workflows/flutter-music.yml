@@ -244,18 +244,21 @@ jobs:
         run: |
           test -s build/app/outputs/bundle/release/app-release.aab
           ls -lh build/app/outputs/bundle/release/app-release.aab
-      - name: Check deployed Worker health and real Jamendo search
+      - name: Diagnose deployed Worker health and real Jamendo search
+        continue-on-error: true
         env:
           MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
         run: |
           set -eu
-          health="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 "$MUSIC_API_URL/api/health")"
-          printf '%s' "$health" | jq .
-          printf '%s' "$health" | jq -e '.status == "healthy" and .jamendo.connected == true' >/dev/null
-          search="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --get --data-urlencode 'q=afrobeat' --data 'limit=1' "$MUSIC_API_URL/search")"
-          printf '%s' "$search" | jq .
-          printf '%s' "$search" | jq -e '.results | length > 0' >/dev/null
-          printf '%s' "$search" | jq -e '.results[0].streaming_url | startswith("https://")' >/dev/null
+          health_status="$(curl --silent --show-error --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/music-health.json" -w '%{http_code}' "$MUSIC_API_URL/api/health")"
+          cat "$RUNNER_TEMP/music-health.json" | jq .
+          test "$health_status" = "200"
+          jq -e '.status == "healthy" and .jamendo.connected == true' "$RUNNER_TEMP/music-health.json" >/dev/null
+          search_status="$(curl --silent --show-error --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/music-search.json" -w '%{http_code}' --get --data-urlencode 'q=afrobeat' --data 'limit=1' "$MUSIC_API_URL/search")"
+          cat "$RUNNER_TEMP/music-search.json" | jq .
+          test "$search_status" = "200"
+          jq -e '.results | length > 0' "$RUNNER_TEMP/music-search.json" >/dev/null
+          jq -e '.results[0].streaming_url | startswith("https://")' "$RUNNER_TEMP/music-search.json" >/dev/null
       - name: Upload release APK candidate for device testing
         if: always()
         uses: actions/upload-artifact@v4
@@ -270,3 +273,45 @@ jobs:
           name: soko-vibe-music-play-store-aab
           path: music_app/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: ignore
+
+
+  deploy-worker:
+    name: Deploy Cloudflare Worker and verify production
+    if: ${{ github.ref == 'refs/heads/soko-vibe-music' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    needs: validate-android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require write-enabled Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Configure CLOUDFLARE_API_TOKEN (Workers Scripts: Edit) and CLOUDFLARE_ACCOUNT_ID in GitHub Actions secrets before production deployment."
+            exit 1
+          fi
+      - name: Deploy current Worker source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy --config music_backend/wrangler.toml
+      - name: Verify deployed Worker and real Jamendo stream metadata
+        env:
+          MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+        run: |
+          set -eu
+          health_status="$(curl --silent --show-error --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/music-health.json" -w '%{http_code}' "$MUSIC_API_URL/api/health")"
+          cat "$RUNNER_TEMP/music-health.json" | jq .
+          test "$health_status" = "200"
+          jq -e '.status == "healthy" and .jamendo.connected == true' "$RUNNER_TEMP/music-health.json" >/dev/null
+          search_status="$(curl --silent --show-error --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/music-search.json" -w '%{http_code}' --get --data-urlencode 'q=afrobeat' --data 'limit=1' "$MUSIC_API_URL/search")"
+          cat "$RUNNER_TEMP/music-search.json" | jq .
+          test "$search_status" = "200"
+          jq -e '.results | length > 0' "$RUNNER_TEMP/music-search.json" >/dev/null
+          jq -e '.results[0].streaming_url | startswith("https://")' "$RUNNER_TEMP/music-search.json" >/dev/null
