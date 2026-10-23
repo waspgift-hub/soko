@@ -16,6 +16,7 @@ on:
       - 'music_app/**'
       - 'music_backend/**'
       - '.github/workflows/flutter-music.yml'
+      - 'music_app/README.md'
 
 permissions:
   contents: read
