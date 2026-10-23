@@ -1,0 +1,270 @@
+name: Flutter validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'music_app/**'
+      - 'music_backend/**'
+      - '.github/workflows/flutter-music.yml'
+      - 'music_app/README.md'
+  push:
+    branches:
+      - 'soko-vibe-music'
+      - 'fix/sokovibe-music-backend-url'
+    paths:
+      - 'music_app/**'
+      - 'music_backend/**'
+      - '.github/workflows/flutter-music.yml'
+      - 'music_app/README.md'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: music_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Check Cloudflare Worker JavaScript syntax
+        run: node --input-type=module --check < ../music_backend/worker.js
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate missing Android platform files without replacing app manifest
+        run: |
+          manifest="android/app/src/main/AndroidManifest.xml"
+          saved_manifest=""
+          if [ -f "$manifest" ]; then
+            saved_manifest="$(mktemp)"
+            cp "$manifest" "$saved_manifest"
+          fi
+          flutter create --platforms=android --org=co.tz.sokovibe --project-name=soko_vibe_music .
+          if [ -n "$saved_manifest" ]; then
+            cp "$saved_manifest" "$manifest"
+            rm -f "$saved_manifest"
+          fi
+      - name: Set Android compile SDK to 36 for current plugins
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_dir = Path("android/app")
+          candidates = [app_dir / "build.gradle.kts", app_dir / "build.gradle"]
+          gradle_file = next((p for p in candidates if p.exists()), None)
+          if gradle_file is None:
+              raise SystemExit("Android app Gradle file was not generated")
+
+          content = gradle_file.read_text()
+          original = content
+          patterns = [
+              (r"(?m)^(\s*compileSdk\s*=\s*)[^\n]+", r"\g<1>36"),
+              (r"(?m)^(\s*compileSdkVersion\s+)[^\n]+", r"\g<1>36"),
+              (r"(?m)^(\s*compileSdk\s+)\(?[^\n]+\)?\s*$", r"\g<1>36"),
+          ]
+          for pattern, replacement in patterns:
+              content, count = re.subn(pattern, replacement, content, count=1)
+              if count:
+                  break
+          if content == original:
+              raise SystemExit("Could not find compileSdk declaration in " + str(gradle_file))
+          gradle_file.write_text(content)
+          verify = gradle_file.read_text()
+          if not re.search(r"(?m)^\s*compileSdk(?:Version)?(?:\s*=|\s+)\s*36\b", verify):
+              raise SystemExit("compileSdk 36 verification failed in " + str(gradle_file))
+          print(f"Verified compileSdk 36 in {gradle_file}")
+          PY
+      - name: Set Android target SDK to 36 for Google Play submissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_dir = Path("android/app")
+          gradle_file = next((p for p in [app_dir / "build.gradle.kts", app_dir / "build.gradle"] if p.exists()), None)
+          if gradle_file is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          content = gradle_file.read_text()
+          patterns = [
+              (r"(?m)^(\s*targetSdk\s*=\s*)[^\n]+", r"\g<1>36"),
+              (r"(?m)^(\s*targetSdkVersion\s+)[^\n]+", r"\g<1>36"),
+              (r"(?m)^(\s*targetSdk\s+)\(?[^\n]+\)?\s*$", r"\g<1>36"),
+          ]
+          for pattern, replacement in patterns:
+              content, count = re.subn(pattern, replacement, content, count=1)
+              if count:
+                  break
+          gradle_file.write_text(content)
+          if not re.search(r"(?m)^\s*targetSdk(?:Version)?(?:\s*=|\s+)\s*36\b", content):
+              raise SystemExit("Google Play target SDK 36 verification failed")
+          print(f"Verified target SDK 36 in {gradle_file}")
+          PY
+      - name: Enable Android core library desugaring for notifications
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_dir = Path("android/app")
+          candidates = [app_dir / "build.gradle.kts", app_dir / "build.gradle"]
+          gradle_file = next((p for p in candidates if p.exists()), None)
+          if gradle_file is None:
+              raise SystemExit("Android app Gradle file was not generated")
+
+          content = gradle_file.read_text()
+          is_kotlin = gradle_file.suffix == ".kts"
+          enabled = "isCoreLibraryDesugaringEnabled = true" if is_kotlin else "coreLibraryDesugaringEnabled true"
+          dependency = (
+              'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+              if is_kotlin else
+              "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          )
+
+          enabled_pattern = r"\bisCoreLibraryDesugaringEnabled\s*=\s*true\b|\bcoreLibraryDesugaringEnabled\s+true\b"
+          if not re.search(enabled_pattern, content):
+              content, count = re.subn(r"(compileOptions\s*\{)", lambda m: m.group(1) + "\n        " + enabled, content, count=1)
+              if count != 1:
+                  raise SystemExit("Could not locate compileOptions block to enable core library desugaring")
+
+          if "desugar_jdk_libs" not in content:
+              content, count = re.subn(r"(dependencies\s*\{)", lambda m: m.group(1) + "\n    " + dependency, content, count=1)
+              if count == 0:
+                  content = content.rstrip() + "\n\ndependencies {\n    " + dependency + "\n}\n"
+
+          gradle_file.write_text(content)
+          verify = gradle_file.read_text()
+          if "desugar_jdk_libs" not in verify or not re.search(enabled_pattern, verify):
+              raise SystemExit("Desugaring configuration verification failed")
+          print(f"Verified core library desugaring in {gradle_file}")
+          PY
+      - name: Configure Play upload signing when repository secrets are present
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -eu
+          present=0
+          for value in "$ANDROID_KEYSTORE_BASE64" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD"; do
+            if [ -n "$value" ]; then present=$((present + 1)); fi
+          done
+          if [ "$present" -eq 0 ]; then
+            echo "PLAY_SIGNING_CONFIGURED=false" >> "$GITHUB_ENV"
+            echo "Play upload signing is not configured; only an installable candidate APK will be produced."
+            exit 0
+          fi
+          if [ "$present" -ne 4 ]; then
+            echo "Incomplete Android signing secrets. Configure all four ANDROID_KEYSTORE_* / ANDROID_KEY_* secrets." >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          if not p.exists():
+              raise SystemExit("Expected generated Kotlin Gradle file was not found")
+          s = p.read_text()
+          imports = "import java.io.FileInputStream\nimport java.util.Properties\n\n"
+          if "val keystoreProperties = Properties()" not in s:
+              s = imports + s
+              declarations = """val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          """
+              if "android {" not in s:
+                  raise SystemExit("Could not locate android block for signing properties")
+              s = s.replace("android {", declarations + "android {", 1)
+          signing = """    signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file(keystoreProperties["storeFile"] as String)
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+
+          """
+          if 'create("release")' not in s:
+              s = s.replace("    buildTypes {", signing + "    buildTypes {", 1)
+          s = s.replace('signingConfig = signingConfigs.getByName("debug")',
+                        'signingConfig = signingConfigs.getByName("release")')
+          if 'signingConfig = signingConfigs.getByName("release")' not in s:
+              raise SystemExit("Could not attach the Play upload signing config to release build")
+          p.write_text(s)
+          print("Play upload signing configured; keystore values are not printed.")
+          PY
+          echo "PLAY_SIGNING_CONFIGURED=true" >> "$GITHUB_ENV"
+      - name: Remove generated placeholder widget test
+        run: rm -f test/widget_test.dart
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze Dart code
+        run: flutter analyze --no-pub
+      - name: Run tests
+        run: flutter test --no-pub
+      - name: Build release APK candidate
+        env:
+          MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+        run: flutter build apk --release --no-pub --dart-define=MUSIC_API_URL="$MUSIC_API_URL"
+      - name: Build signed Play Store Android App Bundle
+        if: env.PLAY_SIGNING_CONFIGURED == 'true'
+        env:
+          MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+        run: flutter build appbundle --release --no-pub --dart-define=MUSIC_API_URL="$MUSIC_API_URL"
+      - name: Verify release APK candidate exists and is non-empty
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+      - name: Verify signed Play Store AAB exists and is non-empty
+        if: env.PLAY_SIGNING_CONFIGURED == 'true'
+        run: |
+          test -s build/app/outputs/bundle/release/app-release.aab
+          ls -lh build/app/outputs/bundle/release/app-release.aab
+      - name: Check deployed Worker health and real Jamendo search
+        env:
+          MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+        run: |
+          set -eu
+          health="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 "$MUSIC_API_URL/api/health")"
+          printf '%s' "$health" | jq .
+          printf '%s' "$health" | jq -e '.status == "healthy" and .jamendo.connected == true' >/dev/null
+          search="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --get --data-urlencode 'q=afrobeat' --data 'limit=1' "$MUSIC_API_URL/search")"
+          printf '%s' "$search" | jq .
+          printf '%s' "$search" | jq -e '.results | length > 0' >/dev/null
+          printf '%s' "$search" | jq -e '.results[0].streaming_url | startswith("https://")' >/dev/null
+      - name: Upload release APK candidate for device testing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soko-vibe-music-apk-candidate
+          path: music_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: ignore
+      - name: Upload signed Play Store AAB
+        if: always() && env.PLAY_SIGNING_CONFIGURED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: soko-vibe-music-play-store-aab
+          path: music_app/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
