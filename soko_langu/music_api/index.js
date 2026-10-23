@@ -19,7 +19,7 @@ function isOpenLicense(value) {
   if (/by-nc|by-nd|sampling|developing|all rights reserved|copyright/.test(s)) return false;
   return s.includes('creativecommons.org/publicdomain/zero') ||
     s.includes('creativecommons.org/publicdomain/mark') ||
-    /creativecommons.org/licenses/by(-sa)?\/(3\.0|4\.0)(\/|$)/.test(s) ||
+    /creativecommons.org/licenses/by(-sa)?\/(3\.0|4\.0)(\/|$)/.test(s);
 }
 
 function archiveItem(doc, kind) {
