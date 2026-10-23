@@ -2,30 +2,105 @@ class MusicTrack {
   final String id;
   final String title;
   final String artist;
+  final String? album;
   final String image;
   final String? streamUrl;
+  final String? downloadUrl;
+  final bool audiodownloadAllowed;
+  final String license;
+  final int durationSeconds;
+  final String source;
 
   const MusicTrack({
     required this.id,
     required this.title,
     required this.artist,
+    this.album,
     required this.image,
     this.streamUrl,
+    this.downloadUrl,
+    this.audiodownloadAllowed = false,
+    this.license = '',
+    this.durationSeconds = 0,
+    this.source = 'jamendo',
   });
 
+  String get artistAlbumLabel {
+    final albumName = album?.trim();
+    return albumName == null || albumName.isEmpty ? artist : '$artist • $albumName';
+  }
+
+  bool get canStream => _isHttpsUrl(streamUrl);
+  bool get canDownload => audiodownloadAllowed && _isHttpsUrl(downloadUrl);
+  bool get isLocal => source == 'local' || source == 'device';
+
+  // Compatibility alias for UI code from earlier SokoVibe Music iterations.
+  bool get downloadAllowed => canDownload;
+
   factory MusicTrack.fromJson(Map<String, dynamic> json) {
-    // Accept the app's normalized shape as well as Jamendo's public API shape.
-    final id = (json['id'] ?? json['track_id'] ?? '').toString();
-    final stream = json['streaming_url'] ?? json['audio'] ?? json['audio_url'];
-    final image = json['image'] ?? json['album_image'] ?? json['image_url'] ?? json['cover'];
+    final rawAllowed = json['audiodownload_allowed'];
+    final allowed = rawAllowed == true ||
+        rawAllowed == 1 ||
+        rawAllowed?.toString().toLowerCase() == 'true' ||
+        rawAllowed?.toString() == '1';
     return MusicTrack(
-      id: id,
-      title: (json['title'] ?? json['name'] ?? 'Unknown title').toString(),
-      artist: (json['artist'] ?? json['artist_name'] ?? 'Unknown artist').toString(),
-      image: (image ?? '').toString(),
-      streamUrl: stream == null || stream.toString().trim().isEmpty
-          ? null
-          : stream.toString(),
+      id: '${json['id'] ?? ''}',
+      title: '${json['title'] ?? json['song'] ?? 'Unknown title'}',
+      artist: '${json['artist'] ?? 'Unknown artist'}',
+      album: (json['album'] ?? json['album_name'])?.toString(),
+      image: _httpsOrEmpty(
+        (json['image'] ?? json['cover'])?.toString(),
+      ),
+      streamUrl: _httpsOrNull(
+        (json['streaming_url'] ?? json['audio'])?.toString(),
+      ),
+      downloadUrl: _httpsOrNull(
+        (json['audiodownload'] ?? json['download'])?.toString(),
+      ),
+      audiodownloadAllowed: allowed,
+      license: '${json['license'] ?? ''}',
+      durationSeconds: int.tryParse('${json['duration'] ?? 0}') ?? 0,
+      source: '${json['source'] ?? 'jamendo'}'.toLowerCase(),
     );
   }
+
+  factory MusicTrack.fromLocalJson(Map<String, dynamic> json) => MusicTrack(
+        id: '${json['id'] ?? ''}',
+        title: '${json['title'] ?? 'Unknown title'}',
+        artist: '${json['artist'] ?? 'Unknown artist'}',
+        album: json['album']?.toString(),
+        image: '',
+        streamUrl: null,
+        downloadUrl: null,
+        audiodownloadAllowed: false,
+        license: '${json['license'] ?? ''}',
+        durationSeconds:
+            int.tryParse('${json['durationSeconds'] ?? 0}') ?? 0,
+        source: '${json['source'] ?? 'local'}'.toLowerCase(),
+      );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'title': title,
+        'artist': artist,
+        'album': album,
+        'image': image,
+        'streaming_url': streamUrl,
+        'audiodownload': downloadUrl,
+        'audiodownload_allowed': audiodownloadAllowed,
+        'license': license,
+        'duration': durationSeconds,
+        'source': source,
+      };
+
+  static bool _isHttpsUrl(String? value) => _httpsOrNull(value) != null;
+
+  static String? _httpsOrNull(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return null;
+    return uri.toString();
+  }
+
+  static String _httpsOrEmpty(String? value) => _httpsOrNull(value) ?? '';
 }
