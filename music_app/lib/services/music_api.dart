@@ -99,7 +99,17 @@ class MusicApi {
     return track;
   }
 
-  Future<String> playUrl(String id) async {
+  Future<String> playUrl(String id, {String? streamUrl}) async {
+    // Search results already contain the provider stream URL. Reuse it when
+    // valid to avoid a second backend request before playback starts.
+    final direct = streamUrl?.trim();
+    final directUri = direct == null ? null : Uri.tryParse(direct);
+    if (directUri != null &&
+        directUri.scheme == 'https' &&
+        directUri.host.isNotEmpty) {
+      return directUri.toString();
+    }
+
     final track = await getTrack(id);
     if (!track.canStream || track.streamUrl == null) {
       throw const MusicApiException(
