@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'music_account_screen.dart';
+
 const String _musicApiBase = 'https://sokovibe-music-api.onrender.com';
 
 class MusicCatalogScreen extends StatefulWidget {
@@ -134,6 +136,17 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
       appBar: AppBar(
         title: const Text('SokoVibe Music'),
         actions: [
+          IconButton(
+            tooltip: 'Akaunti na mipangilio',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MusicAccountScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
           IconButton(
             tooltip: 'Acha muziki',
             onPressed: () async {
