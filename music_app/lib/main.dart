@@ -184,9 +184,9 @@ class _MusicHomePageState extends State<MusicHomePage> {
 
   String _tr(String key) {
     const translations = <String, Map<String, String>>{
-      'sw': {'FEEL EVERY VIBE':'HISI KILA MUDA','Your sound. Your mood.':'Muziki wako. Hisia zako.','Music that moves you':'Muziki unaokuvutia','Search songs or artists':'Tafuta nyimbo au wasanii','Licensed audio':'Muziki wenye leseni','On-device songs':'Nyimbo za simu','Choose songs':'Chagua nyimbo','No songs selected':'Bado hujachagua nyimbo','Choose your vibe':'Chagua hisia zako','Happy':'Furaha','Chill':'Utulivu','Energy':'Nguvu','Love':'Mapenzi','How to use':'Jinsi ya kutumia','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'Tafuta muziki wenye leseni, tazama YouTube ndani ya app, au chagua nyimbo kwenye simu.','Search failed. Check your connection or try again.':'Huduma ya muziki haipatikani sasa. Jaribu tena.'},
-      'fr': {'FEEL EVERY VIBE':'VIVEZ CHAQUE VIBE','Your sound. Your mood.':'Votre son. Votre humeur.','Music that moves you':'La musique qui vous anime','Search songs or artists':'Rechercher titres ou artistes','Licensed audio':'Audio sous licence','On-device songs':'Musique du téléphone','Choose songs':'Choisir des titres','No songs selected':'Aucun titre sélectionné','Choose your vibe':'Choisissez votre ambiance','Happy':'Heureux','Chill':'Détente','Energy':'Énergie','Love':'Amour','How to use':'Mode d’emploi','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'Recherchez de la musique sous licence, regardez YouTube dans l’app ou choisissez des fichiers du téléphone.','Search failed. Check your connection or try again.':'Le service de recherche est indisponible. Réessayez.'},
-      'zh': {'FEEL EVERY VIBE':'感受每一种节奏','Your sound. Your mood.':'你的音乐，你的心情。','Music that moves you':'让音乐打动你','Search songs or artists':'搜索歌曲或艺人','Licensed audio':'授权音乐','On-device songs':'手机本地歌曲','Choose songs':'选择歌曲','No songs selected':'尚未选择歌曲','Choose your vibe':'选择你的风格','Happy':'快乐','Chill':'放松','Energy':'活力','Love':'爱情','How to use':'使用方法','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'搜索授权音乐、在应用内观看 YouTube，或选择手机中保存的音频文件。','Search failed. Check your connection or try again.':'音乐搜索服务暂时不可用，请稍后重试。'},
+      'sw': {'FEEL EVERY VIBE':'HISI KILA MUDA','Your sound. Your mood.':'Muziki wako. Hisia zako.','Music that moves you':'Muziki unaokuvutia','Search songs or artists':'Tafuta nyimbo au wasanii','Licensed audio':'Muziki wenye leseni','On-device songs':'Nyimbo za simu','Choose songs':'Chagua nyimbo','No songs selected':'Bado hujachagua nyimbo','Choose your vibe':'Chagua hisia zako','Happy':'Furaha','Chill':'Utulivu','Energy':'Nguvu','Love':'Mapenzi','How to use':'Jinsi ya kutumia','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'Tafuta muziki wenye leseni, tazama YouTube ndani ya app, au chagua nyimbo kwenye simu.','Music service is unavailable right now. Your internet may still be working—try again.':'Huduma ya muziki haipatikani sasa. Intaneti yako inaweza kuwa inafanya kazi; jaribu tena.'},
+      'fr': {'FEEL EVERY VIBE':'VIVEZ CHAQUE VIBE','Your sound. Your mood.':'Votre son. Votre humeur.','Music that moves you':'La musique qui vous anime','Search songs or artists':'Rechercher titres ou artistes','Licensed audio':'Audio sous licence','On-device songs':'Musique du téléphone','Choose songs':'Choisir des titres','No songs selected':'Aucun titre sélectionné','Choose your vibe':'Choisissez votre ambiance','Happy':'Heureux','Chill':'Détente','Energy':'Énergie','Love':'Amour','How to use':'Mode d’emploi','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'Recherchez de la musique sous licence, regardez YouTube dans l’app ou choisissez des fichiers du téléphone.','Music service is unavailable right now. Your internet may still be working—try again.':'Le service musical est indisponible. Votre connexion peut fonctionner ; réessayez.'},
+      'zh': {'FEEL EVERY VIBE':'感受每一种节奏','Your sound. Your mood.':'你的音乐，你的心情。','Music that moves you':'让音乐打动你','Search songs or artists':'搜索歌曲或艺人','Licensed audio':'授权音乐','On-device songs':'手机本地歌曲','Choose songs':'选择歌曲','No songs selected':'尚未选择歌曲','Choose your vibe':'选择你的风格','Happy':'快乐','Chill':'放松','Energy':'活力','Love':'爱情','How to use':'使用方法','Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.':'搜索授权音乐、在应用内观看 YouTube，或选择手机中保存的音频文件。','Music service is unavailable right now. Your internet may still be working—try again.':'音乐服务暂时不可用。网络可能正常，请稍后重试。'},
     };
     return translations[widget.settings.language]?[key] ?? key;
   }
@@ -237,7 +237,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
       if (!mounted || requestId != _searchRequestId) return;
       setState(() {
         tracks = [];
-        error = _tr('Search failed. Check your connection or try again.');
+        error = _tr('Music service is unavailable right now. Your internet may still be working—try again.');
       });
       await NotificationService.instance.showImportant(
         id: 2010,
@@ -460,8 +460,26 @@ class _MusicHomePageState extends State<MusicHomePage> {
                             FilledButton.tonalIcon(onPressed: _pickDeviceSongs, icon: const Icon(Icons.library_music_rounded), label: Text(_tr('Choose songs'))),
                           ]),
                           const SizedBox(height: 6),
-                          if (_deviceSongs.isEmpty) Text(_tr('No songs selected'), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant))
-                          else ..._deviceSongs.map((file) => ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.music_note_rounded), title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis), trailing: IconButton(tooltip: 'Play', icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30), onPressed: () => play(MusicTrack(id: file.path ?? file.name, title: file.name.replaceAll(RegExp(r'\.[^.]+ style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                          if (_deviceSongs.isEmpty)
+                            Text(_tr('No songs selected'), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant))
+                          else
+                            ..._deviceSongs.map((file) => ListTile(
+                              dense: true, contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.music_note_rounded),
+                              title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              trailing: IconButton(
+                                tooltip: 'Play',
+                                icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
+                                onPressed: () => play(MusicTrack(
+                                  id: file.path ?? file.name,
+                                  title: file.name.replaceFirst(RegExp(r'\\.[^.]+$'), ''),
+                                  artist: 'On this device', image: '', streamUrl: file.path, source: 'device',
+                                )),
+                              ),
+                            )),
+                        ]),
+                      ),
+                      Text(_tr('Choose your vibe'), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 12),
                       GridView.count(
                         crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
