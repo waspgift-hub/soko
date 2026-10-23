@@ -8,6 +8,11 @@ import '../models/music_track.dart';
 /// Flutter client for the SokoVibe Music v2 Cloudflare Worker.
 /// Provider credentials must remain server-side.
 class MusicApi {
+  static const _renderBaseUrl = String.fromEnvironment(
+    'RENDER_MUSIC_API_URL',
+    defaultValue: 'https://sokovibe-music-api.onrender.com',
+  );
+
   MusicApi({String? baseUrl, http.Client? client})
       : baseUrl = (baseUrl ??
                 const String.fromEnvironment(
@@ -42,13 +47,39 @@ class MusicApi {
         category: 'VALIDATION_ERROR',
       );
     }
+
+    // Prefer the Cloudflare Worker. If Jamendo is temporarily unavailable,
+    // fall back to Render's license-filtered catalog (Internet Archive + Jamendo).
     final uri = Uri.parse('$baseUrl/search').replace(queryParameters: {
       'q': normalized,
       'page': '$page',
       'limit': '$limit',
     });
-    final decoded = await _getJson(uri, 'Music search failed');
-    return _tracksFrom(decoded, const ['results', 'tracks', 'data']);
+    try {
+      final decoded = await _getJson(uri, 'Music search failed');
+      final primaryResults = _tracksFrom(decoded, const ['results', 'tracks', 'data']);
+      if (primaryResults.isNotEmpty) return primaryResults;
+    } on MusicApiException {
+      // Continue to the independent catalog service below.
+    }
+    return _searchRenderCatalog(normalized, page: page, limit: limit);
+  }
+
+  Future<List<MusicTrack>> _searchRenderCatalog(
+    String query, {
+    required int page,
+    required int limit,
+  }) async {
+    final uri = Uri.parse('$_renderBaseUrl/api/v1/catalog/search').replace(
+      queryParameters: {
+        'q': query,
+        'kind': 'music',
+        'page': '${page.clamp(1, 10)}',
+      },
+    );
+    final decoded = await _getJson(uri, 'Music catalog fallback failed');
+    final tracks = _tracksFrom(decoded, const ['results', 'tracks', 'data']);
+    return tracks.take(limit).toList(growable: false);
   }
 
   Future<List<MusicTrack>> searchPost(
@@ -99,7 +130,7 @@ class MusicApi {
     return track;
   }
 
-  Future<String> playUrl(String id, {String? streamUrl}) async {
+  Future<String> playUrl(String id, {String? streamUrl, MusicTrack? track}) async {
     // Search results already contain the provider stream URL. Reuse it when
     // valid to avoid a second backend request before playback starts.
     final direct = streamUrl?.trim();
@@ -110,14 +141,48 @@ class MusicApi {
       return directUri.toString();
     }
 
-    final track = await getTrack(id);
-    if (!track.canStream || track.streamUrl == null) {
+    // Render's open-license catalog resolves Internet Archive identifiers to
+    // a real media URL after verifying the item's license and available files.
+    if (track?.source == 'internet-archive' &&
+        track?.streamLookupUrl != null) {
+      final lookup = Uri.parse(_renderBaseUrl).resolve(track!.streamLookupUrl!);
+      if (lookup.scheme != 'https' ||
+          lookup.host != Uri.parse(_renderBaseUrl).host) {
+        throw const MusicApiException(
+          'Invalid catalog playback lookup URL.',
+          category: 'VALIDATION_ERROR',
+        );
+      }
+      final decoded = await _getJson(lookup, 'Catalog playback lookup failed');
+      final resolved = (decoded['streamUrl'] ?? decoded['streaming_url'])?.toString();
+      final resolvedUri = resolved == null ? null : Uri.tryParse(resolved);
+      if (decoded['success'] == false ||
+          resolvedUri == null ||
+          resolvedUri.scheme != 'https' ||
+          resolvedUri.host.isEmpty) {
+        throw const MusicApiException(
+          'The catalog did not return a valid HTTPS audio stream.',
+          category: 'NO_STREAM',
+        );
+      }
+      return resolvedUri.toString();
+    }
+
+    final resolvedId = id.trim();
+    if (!RegExp(r'^\d+$').hasMatch(resolvedId)) {
+      throw const MusicApiException(
+        'Invalid track ID for the primary music provider.',
+        category: 'VALIDATION_ERROR',
+      );
+    }
+    final resolvedTrack = await getTrack(resolvedId);
+    if (!resolvedTrack.canStream || resolvedTrack.streamUrl == null) {
       throw const MusicApiException(
         'No valid playable HTTPS audio source was returned.',
         category: 'NO_STREAM',
       );
     }
-    return track.streamUrl!;
+    return resolvedTrack.streamUrl!;
   }
 
   /// The v2 Worker does not document a /download/:id route. Resolve the
