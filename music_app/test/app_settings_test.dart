@@ -35,10 +35,12 @@ void main() {
   });
 
   test('music API defaults to the deployed music-api Worker', () {
+    final api = MusicApi();
     expect(
-      MusicApi().baseUrl,
-      'https://music-api.sokovibe-co-tz.workers.dev',
+      api.baseUrl,
+      'https://soko-vibe-music-backend.wapalila.workers.dev',
     );
+    api.close();
   });
 
   test('music API parses the deployed song and cover response fields', () {
@@ -47,8 +49,8 @@ void main() {
       'song': 'Test Song',
       'artist': 'Test Artist',
       'cover': 'https://example.test/cover.jpg',
-      'audio': 'https://music-api.sokovibe-co-tz.workers.dev/play/42',
-      'download': 'https://music-api.sokovibe-co-tz.workers.dev/download/42',
+      'audio': 'https://soko-vibe-music-backend.wapalila.workers.dev/play/42',
+      'download': 'https://soko-vibe-music-backend.wapalila.workers.dev/download/42',
       'audiodownload_allowed': true,
     });
 
@@ -63,6 +65,7 @@ void main() {
   test('music API returns empty results for a blank query without networking', () async {
     final api = MusicApi(baseUrl: 'https://example.invalid');
     expect(await api.search('  '), isEmpty);
+    api.close();
   });
 
   test('search calls the Worker and parses its result envelope', () async {
@@ -110,14 +113,31 @@ void main() {
     api.close();
   });
 
-  test('playback uses the Worker redirect endpoint', () async {
-    final api = MusicApi(baseUrl: 'https://worker.example.test');
-    expect(await api.playUrl('42'), 'https://worker.example.test/play/42');
+  test('playback resolves Worker JSON metadata to the HTTPS stream', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, '/play/42');
+      return http.Response(
+        jsonEncode({
+          'track': {
+            'id': '42',
+            'streaming_url': 'https://audio.example.test/track.mp3',
+          },
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final api = MusicApi(baseUrl: 'https://worker.example.test', client: client);
+
+    expect(await api.playUrl('42'), 'https://audio.example.test/track.mp3');
+    api.close();
   });
 
   test('download uses the Worker permission-checking endpoint', () async {
     final api = MusicApi(baseUrl: 'https://worker.example.test');
     expect(await api.downloadUrl('42'), 'https://worker.example.test/download/42');
+    api.close();
   });
 
   test('track parser marks disallowed downloads as unavailable', () {
