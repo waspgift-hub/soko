@@ -34,8 +34,14 @@ redis: Any = None
 async def startup() -> None:
     global redis
     if REDIS_URL and Redis is not None:
-        redis = Redis.from_url(REDIS_URL, decode_responses=True)
-        await redis.ping()
+        candidate = Redis.from_url(REDIS_URL, decode_responses=True)
+        try:
+            await candidate.ping()
+            redis = candidate
+        except Exception:
+            # Redis is optional: the API must still start with its local cache.
+            await candidate.aclose()
+            redis = None
 
 
 @app.on_event("shutdown")
@@ -125,6 +131,17 @@ def extract_audio(query: str) -> dict[str, Any]:
         "audio_url": audio_url,
         "webpage_url": item.get("webpage_url"),
         "source": "yt-dlp",
+    }
+
+
+@app.get("/")
+async def root() -> dict[str, Any]:
+    return {
+        "service": APP_NAME,
+        "status": "ok",
+        "health": "/health",
+        "docs": "/docs",
+        "stream_endpoint": "/api/stream?query=...",
     }
 
 
