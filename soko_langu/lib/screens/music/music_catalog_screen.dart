@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'music_account_screen.dart';
@@ -111,7 +112,21 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
         return;
       }
       final url = await _resolveStream(item);
-      await _player.setUrl(url);
+      final title = item['title']?.toString() ?? 'Wimbo usio na jina';
+      final artist = item['creator']?.toString() ?? 'Msanii hajatajwa';
+      final image = item['image']?.toString();
+      await _player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(url),
+          tag: MediaItem(
+            id: id,
+            title: title,
+            artist: artist,
+            album: item['album']?.toString() ?? 'SokoVibe Music',
+            artUri: image != null && image.startsWith('https://') ? Uri.tryParse(image) : null,
+          ),
+        ),
+      );
       if (!mounted) return;
       setState(() => _playingId = id);
       await _player.play();
