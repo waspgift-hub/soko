@@ -12,8 +12,14 @@ import 'screens/music_admin_dashboard_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.instance.initialize();
+  // Start Flutter UI first so a notification plugin failure cannot prevent
+  // the app from opening on devices with different Android/plugin behavior.
   runApp(const SokoVibeMusicApp());
+  NotificationService.instance.initialize().catchError(
+    (Object error, StackTrace stack) {
+      debugPrint('SokoVibe notification initialization failed: $error');
+    },
+  );
 }
 
 class SokoVibeMusicApp extends StatefulWidget {
@@ -31,6 +37,10 @@ class _SokoVibeMusicAppState extends State<SokoVibeMusicApp> {
   void initState() {
     super.initState();
     settings.load().then((_) {
+      if (mounted) setState(() => ready = true);
+    }).catchError((Object error, StackTrace stack) {
+      debugPrint('SokoVibe settings load failed: $error');
+      // Settings are optional; keep the app usable with default settings.
       if (mounted) setState(() => ready = true);
     });
   }
