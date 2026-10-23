@@ -29,6 +29,15 @@ Create an upload key locally and store a secure backup before configuring these 
 
 Before the first public release, confirm the generated Android `applicationId` in the Gradle file and reserve that exact package name in Play Console. Do not change it after publishing.
 
+## Deploy the Cloudflare Worker after merge
+
+The workflow deploys the Worker only after changes reach `soko-vibe-music`; it does not deploy production code from a pull-request branch. Configure these GitHub Actions repository secrets before merging if automatic deployment is desired:
+
+- `CLOUDFLARE_API_TOKEN` — a Cloudflare API token with permission to edit Workers Scripts for the SokoVibe account.
+- `CLOUDFLARE_ACCOUNT_ID` — the account ID containing `soko-vibe-music-backend`.
+
+The connected Cloudflare account available during this session is read-only and cannot deploy scripts. The production smoke test observed HTTP 200 from the health endpoint but HTTP 502 from music search. The current source now encodes Jamendo's multi-value `include` parameter as a space-separated list (URL-encoded as `+`), but that fix remains unverified until deployed and the post-deploy search smoke test passes.
+
 ## Play Console items that cannot be completed by a repository build
 
 - [ ] Confirm the developer account is verified and eligible to publish.
