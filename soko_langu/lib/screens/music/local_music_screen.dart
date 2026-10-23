@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 /// On-device music library. Audio stays on the user's device; no upload occurs.
@@ -76,7 +77,17 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
       } else if (_playingId == song.id) {
         await _player.play();
       } else {
-        await _player.setAudioSource(AudioSource.uri(Uri.parse(uri)));
+        await _player.setAudioSource(
+          AudioSource.uri(
+            Uri.parse(uri),
+            tag: MediaItem(
+              id: uri,
+              title: song.title.isEmpty ? 'Wimbo usio na jina' : song.title,
+              artist: (song.artist == null || song.artist!.trim().isEmpty || song.artist == '<unknown>') ? 'Msanii hajatajwa' : song.artist!,
+              album: (song.album == null || song.album!.trim().isEmpty || song.album == '<unknown>') ? 'Nyimbo kwenye simu' : song.album!,
+            ),
+          ),
+        );
         if (!mounted) return;
         setState(() => _playingId = song.id);
         await _player.play();
