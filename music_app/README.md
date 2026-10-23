@@ -61,4 +61,6 @@ The APK candidate is for installation/testing and must not be assumed Play Store
 
 ## Production status
 
-The deployed Worker observed in Cloudflare is older than the current source in this repository. The current Cloudflare connection does not have Workers Scripts write permission, so deployment from this session was blocked. Do not claim the new source is deployed until a write-enabled deployment and successful smoke test are recorded.
+The deployed Worker observed in Cloudflare is older than the current source in this repository. A real CI smoke test returned HTTP 200 from `/api/health` but HTTP 502 from `/search`, so music discovery is **not currently verified as working in production**. The source now uses the space-separated Jamendo `include` parameter format, but this fix has not been deployed or live-verified.
+
+The current Cloudflare connection does not have Workers Scripts write permission. The release workflow therefore includes a production deployment job that runs only after the changes reach `soko-vibe-music`; it requires the GitHub Actions secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts edit permission) and `CLOUDFLARE_ACCOUNT_ID`. Do not claim the new source is deployed until that job deploys it and the post-deployment search smoke test passes.
