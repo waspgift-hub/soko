@@ -51,6 +51,8 @@ class AppRoutes {
   static const String sellerQuote = '/seller-quote';
 
   static const String aiAssistant = '/ai-assistant';
+  static const String aiSettings = '/ai-settings';
+  static const String agent = '/agent';
   static const String receipt = '/receipt';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
@@ -63,6 +65,8 @@ class AppRoutes {
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';
+  static const String otpVerification = '/otp-verification';
+  static const String mfaEnrollment = '/mfa-enrollment';
   static const String music = '/music';
   static const String nowPlaying = '/music/now-playing';
 

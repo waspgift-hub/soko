@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const admin = require('firebase-admin');
+const bcrypt = require('bcryptjs');
 const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
@@ -12,6 +13,7 @@ const { writeAudit, auditFromReq } = require('../../services/audit');
 const { sendMail } = require('../../services/mailer');
 const cache = require('../../../cache');
 const productStore = require('../products/product-store');
+const crypto = require('crypto');
 
 // A write to a product invalidates its detail entry by id and slug plus every
 // filtered list, so a moderator delete never serves a stale catalog entry.
@@ -116,6 +118,18 @@ router.put(
         }
       } catch (e) {
         console.error('Firestore isSuspended sync failed for ' + user.firebaseUid + ':', e?.message || e);
+      }
+    }
+
+    // A suspension/deletion must kill live sessions at once: the 1h ID-token
+    // window plus money-route gates are not enough for an actively abusive
+    // account. requireFreshSession on money/admin routes enforces the stamp.
+    if (user.firebaseUid && ['suspended', 'deleted'].includes(req.body.accountStatus)) {
+      try {
+        const { revokeUserSessions } = require('../../services/session-revocation');
+        await revokeUserSessions(user.firebaseUid);
+      } catch (e) {
+        console.error('Session revocation failed for ' + user.firebaseUid + ':', e?.message || e);
       }
     }
 
@@ -950,6 +964,270 @@ router.put(
     }
     const after = await docRef.get();
     res.json({ success: true, data: fsDoc(after) });
+  }
+);
+
+// ============================================================================
+// STAFF MANAGEMENT (admin.sokovibe.co.tz — Wafanyakazi)
+// Individual staff accounts with email + bcrypt-hashed password, role and
+// permissions. Stored in Firestore `admin_staff` so the browser panel (and any
+// future staff login surface) can read them without the ADMIN_SECRET shared
+// secret being the only way in. Created/edited only through this panel by an
+// authenticated admin (x-admin-secret or Firebase admin role).
+// ============================================================================
+
+const STAFF_COLL = 'admin_staff';
+const SESSION_COLL = 'staff_sessions';
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const STAFF_ROLES = [
+  { id: 'super_admin', label: 'Super Admin', perms: ['*'] },
+  { id: 'admin', label: 'Admin', perms: ['users:*', 'orders:*', 'products:*', 'refunds:*', 'disputes:*', 'kyc:*', 'finance:*', 'settings:*', 'staff:*', 'audit:*'] },
+  { id: 'moderator', label: 'Moderator', perms: ['disputes:*', 'refunds:*', 'products:moderate', 'kyc:*', 'users:read'] },
+  { id: 'support', label: 'Support', perms: ['users:read', 'orders:read', 'broadcasts:send', 'landing:*'] },
+  { id: 'finance', label: 'Finance', perms: ['withdrawals:*', 'finance:*', 'revenue:*', 'reconciliation:*', 'users:read'] },
+];
+
+function permsFor(role) {
+  const r = STAFF_ROLES.find((x) => x.id === role);
+  return r ? r.perms : [];
+}
+function roleLabel(role) {
+  const r = STAFF_ROLES.find((x) => x.id === role);
+  return r ? r.label : role;
+}
+
+function staffDb() {
+  const db = getFirebaseFirestore();
+  if (!db) throw Object.assign(new Error('FIRESTORE_UNAVAILABLE'), { status: 503 });
+  return db;
+}
+
+/** Normalize + validate a staff email. */
+function cleanEmail(v) {
+  const e = String(v == null ? '' : v).trim().toLowerCase();
+  if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
+    throw Object.assign(new Error('INVALID_EMAIL'), { status: 400 });
+  }
+  return e;
+}
+
+/** Serialize a staff doc, never returning the password hash. */
+function serializeStaff(doc) {
+  const d = doc.data() || {};
+  return {
+    id: doc.id,
+    email: d.email || '',
+    name: d.name || '',
+    role: d.role || 'support',
+    permissions: Array.isArray(d.permissions) ? d.permissions : permsFor(d.role),
+    active: d.active !== false,
+    createdAt: d.createdAt && typeof d.createdAt.toDate === 'function' ? d.createdAt.toDate().toISOString() : d.createdAt || null,
+    updatedAt: d.updatedAt && typeof d.updatedAt.toDate === 'function' ? d.updatedAt.toDate().toISOString() : d.updatedAt || null,
+    createdBy: d.createdBy || null,
+    lastLoginAt: d.lastLoginAt && typeof d.lastLoginAt.toDate === 'function' ? d.lastLoginAt.toDate().toISOString() : d.lastLoginAt || null,
+  };
+}
+
+// List staff (with optional email/name search + pagination)
+router.get(
+  '/staff',
+  validate({
+    query: z.object({
+      q: z.string().optional(),
+      role: z.string().optional(),
+      active: z.enum(['true', 'false']).optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }),
+  }),
+  async (req, res) => {
+    const db = staffDb();
+    const { q, role, active, page, limit } = req.query;
+    const p = Number(page);
+    const l = Number(limit);
+    let ref = db.collection(STAFF_COLL).orderBy('createdAt', 'desc');
+    // Firestore: one equality filter + orderBy per query. Email uniqueness is
+    // enforced at write time; search is done client-side over the fetched page
+    // for simplicity (staff tables are small).
+    const snap = await ref.get();
+    let rows = snap.docs.map((d) => serializeStaff(d));
+    if (role) rows = rows.filter((r) => r.role === role);
+    if (active !== undefined) rows = rows.filter((r) => r.active === (active === 'true'));
+    if (q) {
+      const s = String(q).toLowerCase();
+      rows = rows.filter((r) => r.email.includes(s) || r.name.toLowerCase().includes(s));
+    }
+    const total = rows.length;
+    const start = (p - 1) * l;
+    const pageRows = rows.slice(start, start + l);
+    res.json({ success: true, data: { staff: pageRows, pagination: { page: p, limit: l, total, pages: Math.ceil(total / l) } } });
+  }
+);
+
+// Create staff: email, password, name, role (+ optional custom permissions)
+router.post(
+  '/staff',
+  requireActiveAdmin,
+  validate({
+    body: z.object({
+      email: z.string().email(),
+      password: z.string().min(8).max(128),
+      name: z.string().min(1).max(120).optional().default(''),
+      role: z.string().min(1).default('support'),
+      permissions: z.array(z.string()).optional(),
+    }),
+  }),
+  async (req, res) => {
+    const db = staffDb();
+    const email = cleanEmail(req.body.email);
+    const role = STAFF_ROLES.some((r) => r.id === req.body.role) ? req.body.role : 'support';
+
+    // Uniqueness: email must not already exist (any status).
+    const byEmail = await db.collection(STAFF_COLL).where('email', '==', email).limit(1).get();
+    if (!byEmail.empty) {
+      return res.status(409).json({ success: false, error: 'EMAIL_EXISTS' });
+    }
+
+    const passwordHash = await bcrypt.hash(req.body.password, 10);
+    const id = 'staff_' + crypto.randomUUID().replace(/-/g, '').slice(0, 22);
+    const now = new Date().toISOString();
+    const perms = Array.isArray(req.body.permissions) && req.body.permissions.length
+      ? req.body.permissions
+      : permsFor(role);
+
+    const doc = {
+      id, email, name: String(req.body.name || '').trim() || email.split('@')[0], role,
+      permissions: perms, active: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: req.user?.id || 'admin-secret',
+      passwordHash,
+    };
+    await db.collection(STAFF_COLL).doc(id).set(doc);
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'staff.create',
+      entityType: 'staff',
+      entityId: id,
+      newState: { email, role, name: doc.name },
+    });
+    res.status(201).json({ success: true, data: serializeStaff({ data: () => doc, id }) });
+  }
+);
+
+// Update staff: role, permissions, active, name, password (optional)
+router.put(
+  '/staff/:id',
+  requireActiveAdmin,
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({
+      email: z.string().email().optional(),
+      password: z.string().min(8).max(128).optional(),
+      name: z.string().min(1).max(120).optional(),
+      role: z.string().optional(),
+      permissions: z.array(z.string()).optional(),
+      active: z.boolean().optional(),
+    }),
+  }),
+  async (req, res) => {
+    const db = staffDb();
+    const ref = db.collection(STAFF_COLL).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND' });
+    const cur = snap.data() || {};
+
+    const updates = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (req.body.email !== undefined) {
+      const email = cleanEmail(req.body.email);
+      const dup = await db.collection(STAFF_COLL).where('email', '==', email).limit(1).get();
+      const existsElsewhere = !dup.empty && dup.docs[0].id !== req.params.id;
+      if (existsElsewhere) return res.status(409).json({ success: false, error: 'EMAIL_EXISTS' });
+      updates.email = email;
+    }
+    if (req.body.password !== undefined) updates.passwordHash = await bcrypt.hash(req.body.password, 10);
+    if (req.body.name !== undefined) updates.name = String(req.body.name).trim() || cur.name;
+    if (req.body.role !== undefined) {
+      if (!STAFF_ROLES.some((r) => r.id === req.body.role)) return res.status(400).json({ success: false, error: 'INVALID_ROLE' });
+      updates.role = req.body.role;
+      if (req.body.permissions === undefined) updates.permissions = permsFor(req.body.role);
+    }
+    if (req.body.permissions !== undefined) updates.permissions = req.body.permissions;
+    if (req.body.active !== undefined) updates.active = !!req.body.active;
+
+    await ref.set(updates, { merge: true });
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'staff.update',
+      entityType: 'staff',
+      entityId: req.params.id,
+      oldState: { email: cur.email, role: cur.role, active: cur.active },
+      newState: updates,
+    });
+    const after = await ref.get();
+    res.json({ success: true, data: serializeStaff(after) });
+  }
+);
+
+// Delete staff (hard remove — audit record keeps history)
+router.delete(
+  '/staff/:id',
+  requireActiveAdmin,
+  validate({ params: z.object({ id: z.string().min(1) }) }),
+  async (req, res) => {
+    const db = staffDb();
+    const ref = db.collection(STAFF_COLL).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND' });
+    const cur = snap.data() || {};
+    // Never let an admin remove themselves while logged in via this panel.
+    if (req.user && req.user.id === cur.createdBy) {
+      return res.status(400).json({ success: false, error: 'CANNOT_REMOVE_SELF' });
+    }
+    await ref.delete();
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'staff.delete',
+      entityType: 'staff',
+      entityId: req.params.id,
+      oldState: { email: cur.email, role: cur.role },
+    });
+    res.json({ success: true, data: { id: req.params.id } });
+  }
+);
+
+// Staff login: email + password -> short-lived session token
+router.post(
+  '/staff/login',
+  validate({
+    body: z.object({ email: z.string().email(), password: z.string().min(1) }),
+  }),
+  async (req, res) => {
+    const db = staffDb();
+    const email = String(req.body.email).trim().toLowerCase();
+    const byEmail = await db.collection(STAFF_COLL).where('email', '==', email).limit(1).get();
+    if (byEmail.empty) {
+      return res.status(401).json({ success: false, error: 'INVALID_CREDENTIALS' });
+    }
+    const doc = byEmail.docs[0];
+    const d = doc.data() || {};
+    if (d.active === false) {
+      return res.status(403).json({ success: false, error: 'STAFF_INACTIVE' });
+    }
+    const ok = await bcrypt.compare(req.body.password, d.passwordHash || '');
+    if (!ok) {
+      return res.status(401).json({ success: false, error: 'INVALID_CREDENTIALS' });
+    }
+    const token = crypto.randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    await db.collection(SESSION_COLL).doc(token).set({
+      token, staffId: doc.id, email: d.email, role: d.role, name: d.name,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await doc.ref.update({ lastLoginAt: admin.firestore.FieldValue.serverTimestamp() });
+    res.json({ success: true, data: { token, staff: { id: doc.id, email: d.email, name: d.name, role: d.role, permissions: d.permissions || permsFor(d.role) }, expiresAt: expiresAt.toISOString() } });
   }
 );
 

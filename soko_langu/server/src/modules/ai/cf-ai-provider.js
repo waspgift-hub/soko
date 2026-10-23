@@ -40,6 +40,19 @@ class CloudflareAiProvider extends AiProvider {
   }
 
   /**
+   * False, stated explicitly rather than left to the AiProvider default.
+   *
+   * cf-worker-ai sends `stream: false` in its request body to Workers AI, so the
+   * Worker's response is a single JSON object, not an event stream. Being
+   * explicit keeps this greppable: the gateway's non-streaming fallback path
+   * depends on this returning false, and a future edit that flipped the Worker
+   * to streaming would otherwise break loudly here instead of silently.
+   */
+  get supportsStreaming() {
+    return false;
+  }
+
+  /**
    * The model catalogue lives in the Worker (its wrangler.toml vars), not here.
    * One place owns which Workers AI model backs which client-facing id, so
    * retargeting a model is a Worker config change instead of a coordinated

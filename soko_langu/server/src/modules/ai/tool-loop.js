@@ -122,8 +122,19 @@ async function buildContext(firebaseUid) {
  * top-level `sources` array, because the shipped Flutter client parses
  * data['choices'][0]['message']['content'] and must keep working. Unknown keys
  * are ignored by that client, so a new build can read sources without a break.
+ *
+ * `options.onDelta`, when supplied, switches the FINAL prose turn to streaming.
+ * The asymmetry is deliberate and is the only correct one: a tool round is a
+ * structured decision the model must commit to in full before it knows the answer,
+ * so there is genuinely nothing user-visible to stream yet, whereas the closing
+ * prose turn is the answer and is exactly what the user is waiting to read. So tool
+ * rounds stay buffered and the round that finally produces prose streams.
+ *
+ * @param {object} options
+ * @param {(text: string) => void} [options.onDelta] receives each content delta
+ * @param {() => void} [options.onStreamStart] called before the streaming turn
  */
-async function chatWithTools(body, firebaseUid) {
+async function chatWithTools(body, firebaseUid, options = {}) {
   const ctx = await buildContext(firebaseUid);
   const messages = [{ role: 'system', content: TOOL_PRELUDE }, ...(body.messages || [])];
   const sources = [];
@@ -131,6 +142,7 @@ async function chatWithTools(body, firebaseUid) {
 
   let provider = null;
   let failedOver = false;
+  let streamed = false;
 
   const deadline = Date.now() + LOOP_BUDGET_MS;
 
@@ -148,14 +160,48 @@ async function chatWithTools(body, firebaseUid) {
     } catch {
       // Provider returned something that is not the envelope we expect. Hand it
       // back untouched rather than inventing a structure around it.
-      return { text: attempt.text, provider, failedOver, sources: finalizeSources(sources), toolsUsed: executed };
+      return { text: attempt.text, provider, failedOver, sources: finalizeSources(sources), toolsUsed: executed, streamed };
     }
 
     const calls = parsed?.choices?.[0]?.message?.tool_calls || [];
     if (!calls.length) {
       const finalSources = finalizeSources(sources);
+      const content = parsed?.choices?.[0]?.message?.content ?? '';
+
+      // This is the prose turn. Re-issuing it as a stream is what lets the caller
+      // show the answer as it is written instead of after a further round trip.
+      if (options.onDelta) {
+        options.onStreamStart?.();
+        const final = await streamFinalTurn(
+          { ...body, messages },
+          provider,
+          { onDelta: options.onDelta, remainingMs: remainingMs(deadline) }
+        );
+        provider = final.provider;
+        failedOver = final.failedOver;
+        streamed = true;
+        parsed.sources = finalSources;
+        return {
+          text: JSON.stringify(parsed),
+          content: final.content,
+          provider,
+          failedOver,
+          sources: finalSources,
+          toolsUsed: executed,
+          streamed,
+        };
+      }
+
       parsed.sources = finalSources;
-      return { text: JSON.stringify(parsed), provider, failedOver, sources: finalSources, toolsUsed: executed };
+      return {
+        text: JSON.stringify(parsed),
+        content,
+        provider,
+        failedOver,
+        sources: finalSources,
+        toolsUsed: executed,
+        streamed,
+      };
     }
 
     // The assistant turn carrying tool_calls must be replayed verbatim, or the
@@ -203,10 +249,62 @@ async function chatWithTools(body, firebaseUid) {
     const parsed = JSON.parse(final.text);
     const finalSources = finalizeSources(sources);
     parsed.sources = finalSources;
-    return { text: JSON.stringify(parsed), provider, failedOver, sources: finalSources, toolsUsed: executed };
+    return {
+      text: JSON.stringify(parsed),
+      content: parsed?.choices?.[0]?.message?.content ?? '',
+      provider,
+      failedOver,
+      sources: finalSources,
+      toolsUsed: executed,
+      streamed,
+    };
   } catch {
-    return { text: final.text, provider, failedOver, sources: finalizeSources(sources), toolsUsed: executed };
+    return {
+      text: final.text,
+      content: '',
+      provider,
+      failedOver,
+      sources: finalizeSources(sources),
+      toolsUsed: executed,
+      streamed,
+    };
   }
+}
+
+/**
+ * Streams the closing prose turn of a tool round.
+ *
+ * Wrapped rather than inlined because there is one non-obvious requirement: when a
+ * caller has already received deltas, the gateway must NOT fail over, and
+ * `gateway.chatStream` already enforces exactly that. So this just forwards and lets
+ * the gateway's asymmetry do the work.
+ */
+async function streamFinalTurn(body, priorProvider, { onDelta, remainingMs }) {
+  let content = '';
+  let provider = priorProvider;
+  let failedOver = false;
+
+  for await (const event of gateway.chatStream(body, { timeoutMs: remainingMs })) {
+    if (event.type === 'delta') {
+      content += event.text;
+      onDelta(event.text);
+      continue;
+    }
+    if (event.type === 'done') {
+      provider = event.provider;
+      failedOver = event.failedOver;
+      continue;
+    }
+    if (event.type === 'error') {
+      // A mid-answer failure keeps whatever streamed: the caller persists the
+      // partial text and marks the message failed so the user can retry, rather
+      // than losing a mostly-complete answer to one dropped frame.
+      if (!content) throw Object.assign(new Error(event.message), { code: event.code });
+      return { content, provider, failedOver, partial: true };
+    }
+  }
+
+  return { content, provider, failedOver, partial: false };
 }
 
 module.exports = { chatWithTools, MAX_ROUNDS };

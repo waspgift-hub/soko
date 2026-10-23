@@ -40,6 +40,7 @@ import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
+import '../screens/auth/otp_verification_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
@@ -61,11 +62,14 @@ import '../screens/requests/buyer_requests_screen.dart';
 import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
+import '../screens/ai/ai_settings_screen.dart';
+import '../screens/ai/agent_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
 import '../screens/boost/boost_product_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
+import '../models/otp_verification_models.dart';
 import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
@@ -111,6 +115,7 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.buyerRequests,
   AppRoutes.postBuyerRequest,
   AppRoutes.boostProduct,
+  AppRoutes.agent,
 ];
 
 final List<String> _adminOnlyRoutes = [
@@ -149,6 +154,44 @@ Set<String>? _queryBrandSet(GoRouterState state, String key) {
       .where((e) => e.isNotEmpty)
       .toSet();
   return out.isEmpty ? null : out;
+}
+
+/// Builds an [OtpVerificationRequest] from a map extra (used when navigating
+/// with a plain map instead of the typed request object).
+OtpVerificationRequest? _requestFromMap(Map<String, dynamic> extra) {
+  try {
+    final purposeStr = extra['purpose'] as String?;
+    final OtpPurpose purpose = purposeStr != null
+        ? OtpPurpose.values.firstWhere(
+            (e) => e.toString() == 'OtpPurpose.$purposeStr',
+            orElse: () => OtpPurpose.accountVerification,
+          )
+        : OtpPurpose.accountVerification;
+    final channelStr = extra['channel'] as String?;
+    final OtpChannel channel = channelStr != null
+        ? OtpChannel.values.firstWhere(
+            (e) => e.toString() == 'OtpChannel.$channelStr',
+            orElse: () => OtpChannel.phone,
+          )
+        : OtpChannel.phone;
+    return OtpVerificationRequest(
+      purpose: purpose,
+      destination: extra['destination'] as String? ?? '',
+      maskedDestination: extra['maskedDestination'] as String? ?? '',
+      channel: channel,
+      otpLength: (extra['otpLength'] as int?) ?? 6,
+      langCode: extra['langCode'] as String? ?? 'sw',
+      onVerify: extra['onVerify'] as Future<OtpVerificationResult> Function(
+              String)?,
+      onResend: extra['onResend'] as Future<OtpVerificationResult> Function()?,
+      allowDestinationEdit: extra['allowDestinationEdit'] as bool? ?? false,
+      allowResend: extra['allowResend'] as bool? ?? true,
+      headingOverride: extra['headingOverride'] as String?,
+      subtitleOverride: extra['subtitleOverride'] as String?,
+    );
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Resolves a category from a `:name` path segment using only data compiled
@@ -239,6 +282,26 @@ GoRouter buildRouter() {
                   : null;
           return _premiumPage(VerifyEmailScreen(email: email));
         },
+      ),
+      GoRoute(
+        path: AppRoutes.otpVerification,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final request = extra is OtpVerificationRequest
+              ? extra
+              : extra is Map<String, dynamic>
+                  ? _requestFromMap(extra)
+                  : null;
+          if (request == null) {
+            return _premiumPage(const _MissingRouteData());
+          }
+          return _premiumPage(OtpVerificationScreen(request: request));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.mfaEnrollment,
+        pageBuilder: (context, state) =>
+            _premiumPage(const MfaEnrollmentScreen()),
       ),
       GoRoute(
         path: AppRoutes.accountSelection,
@@ -457,7 +520,15 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.aiAssistant,
-        pageBuilder: (context, state) => _premiumPage(const AiAssistantScreen()),
+         pageBuilder: (context, state) => _premiumPage(const AiAssistantScreen()),
+       ),
+       GoRoute(
+          path: AppRoutes.aiSettings,
+          pageBuilder: (context, state) => _premiumPage(const AiSettingsScreen()),
+        ),
+       GoRoute(
+        path: AppRoutes.agent,
+        pageBuilder: (context, state) => _premiumPage(const AgentScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerEarnings,

@@ -195,6 +195,22 @@ const messageLimiter = rateLimit({
   windowMs: 60000,
   keyGenerator: userKeyed,
 });
+// Per-user ceiling on AI chat turns. The provider-level limits (Groq quota,
+// circuit breakers) are the real cost control; this is the outer guard that keeps a
+// buggy client from spending a provider's whole quota in an afternoon, and it is
+// keyed on the authenticated uid where the route can resolve one.
+const aiChatLimiter = rateLimit({
+  max: 40,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
+// ElevenLabs synthesis is metered per character, so it is the most expensive part of
+// the AI surface and gets the tightest ceiling of all.
+const aiVoiceLimiter = rateLimit({
+  max: 20,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
 
 module.exports = {
   rateLimit,
@@ -214,4 +230,6 @@ module.exports = {
   loginLimiter,
   commentLimiter,
   messageLimiter,
+  aiChatLimiter,
+  aiVoiceLimiter,
 };

@@ -26,6 +26,9 @@ const mediaRouter = require('./modules/media/routes');
 const feedRouter = require('./modules/feed/routes');
 const searchRouter = require('./modules/search/routes');
 const aiRouter = require('./modules/ai/routes');
+const aiChatRouter = require('./modules/ai/chat/routes');
+const agentRouter = require('./modules/agent/routes');
+const subscriptionRouter = require('./modules/subscriptions/routes');
 const sharingRouter = require('./modules/sharing/routes');
 const trustRouter = require('./modules/trust/routes');
 const adminRouter = require('./modules/admin/routes');
@@ -341,7 +344,7 @@ app.use('/api/v1', sellerAnalyticsRouter);
 app.use('/api/v1/youtube', youtubeRouter);
 // Rate limited per user because the lyrics AI fallback spends provider tokens.
 app.use('/api/v1/music', lyricsLimiter, musicRouter);
-app.use('/api/v1/reviews', reviewRouter);
+app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
 
@@ -354,6 +357,21 @@ app.use('/api/v1/reviews', reviewRouter);
 // the ORIGINAL /api/ai/* paths (not /api/v1) so the shipped app needs no change.
 app.use('/api/ai', aiLimiter, aiRouter);
 console.log('[AI] providers:', JSON.stringify(aiRouter.gatewayStatus()));
+// Persistent AI chat + memory + voice. Mounted after the legacy proxy so an old
+// app build keeps using /api/ai/chat while a new build uses the persistent
+// surface below; both verify the same Firebase token.
+const { aiChatLimiter, aiVoiceLimiter } = require('./middleware/rateLimiter');
+app.use('/api/ai/chats', aiChatLimiter);
+app.use('/api/ai/messages', aiVoiceLimiter, (req, res, next) => {
+  if (req.method !== 'POST' && req.method !== 'GET') return next();
+  if (!req.path.endsWith('/voice')) return next();
+  next();
+});
+app.use('/api/ai', aiChatRouter);
+console.log('[AI] persistent chat mounted');
+// Agent orchestration endpoints (pending actions, approvals, permissions).
+app.use('/api/agent', aiChatLimiter, agentRouter);
+console.log('[AGENT] agent routes mounted');
 app.use('/api', generalLimiter, legacyShopRouter);
 
 // Legacy-compat: proven old routers under original /api paths (payouts,

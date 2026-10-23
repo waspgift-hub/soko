@@ -110,6 +110,37 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profileViews'])
         && request.resource.data.profileViews == resource.data.profileViews + 1;
+      // Follower / following counts are server-owned (updated by the follow
+      // service in a batch with the relationship docs). Clients may not touch
+      // them — otherwise anyone could inflate their own popularity.
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount'])
+        && request.resource.data.followerCount == resource.data.followerCount + 1;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingCount'])
+        && request.resource.data.followingCount == resource.data.followingCount + 1;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount'])
+        && request.resource.data.followerCount == resource.data.followerCount - 1;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingCount'])
+        && request.resource.data.followingCount == resource.data.followingCount - 1;
+      // Public/private toggle + visibility settings are client-writable (their
+      // own profile), but only the listed boolean keys.
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'visibility'
+        ])
+        && request.resource.data.visibility is map
+        && request.resource.data.visibility.keys().hasOnly([
+          'isPrivate', 'showFollowers', 'showFollowing', 'showProducts',
+          'allowContactDiscovery'
+        ])
+        && request.resource.data.visibility.isPrivate is bool
+        && request.resource.data.visibility.showFollowers is bool
+        && request.resource.data.visibility.showFollowing is bool
+        && request.resource.data.visibility.showProducts is bool
+        && request.resource.data.visibility.allowContactDiscovery is bool;
     }
 
     // ─── USERS ──────────────────────────────────────────────
@@ -137,6 +168,66 @@ service cloud.firestore {
 
       match /cart/{itemId} {
         allow read, write: if isOwner(userId);
+      }
+
+      // ─── FOLLOWING (who this user follows) ───────────────────
+      // Each doc: users/{followerId}/following/{followingId}
+      // The follower writes their own following edge; anyone can read who
+      // someone follows.
+      match /following/{followingId} {
+        allow write: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.followerId == request.auth.uid
+          && request.resource.data.followingId == followingId;
+        allow read: if isSignedIn();
+      }
+
+      // ─── FOLLOWERS (who follows this user) ────────────────────
+      // Each doc: users/{followedId}/followers/{followerId}
+      // Two writers:
+      //   * the follower, when they follow a public target (followerId == caller)
+      //   * the target (userId), when they approve a pending follow request
+      //     (followerId != caller, since the target is adding someone else)
+      allow write: if isSignedIn()
+        && (
+          // Follower writes their own followerId to follow a public target
+          (request.auth.uid == request.resource.data.followerId
+            && get(/databases/$(database)/documents/users/$(userId)).data.visibility.isPrivate == false)
+          // Target approves a pending request (writes a follower edge for another uid)
+          || (request.auth.uid == userId
+            && request.resource.data.followerId != request.auth.uid)
+        );
+        allow read: if isSignedIn();
+      }
+
+      // ─── FOLLOW REQUESTS (pending, private accounts) ────────────
+      // Each doc: users/{targetId}/followRequests/{requesterId}
+      // Only the target can read/write their incoming requests.
+      match /followRequests/{requesterId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.requesterId != request.auth.uid;
+      }
+
+      // ─── FOLLOW REQUESTS SENT (outgoing) ──────────────────────
+      // Each doc: users/{requesterId}/followRequestsSent/{targetId}
+      // Only the sender can read/write their outgoing requests.
+      match /followRequestsSent/{targetId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.targetId != request.auth.uid;
+      }
+
+      // ─── BLOCKED ACCOUNTS ─────────────────────────────────────
+      // Each doc: users/{blockerId}/blocked/{blockedId}
+      // Only the blocker can write their blocked list.
+      match /blocked/{blockedId} {
+        allow write: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.blockerId == request.auth.uid;
+        allow read: if isSignedIn() && request.auth.uid == userId;
       }
     }
 
@@ -848,6 +939,73 @@ service cloud.firestore {
     // others' could log anyone out.
     match /session_revocations/{uid} {
       allow read, write: if isAdmin();
+    }
+
+    // ─── AI CHAT (server-written only) ──────────────────────────────
+    // These collections are written exclusively through the Node server using the
+    // Admin SDK, which bypasses these rules entirely. The rules below exist to
+    // guarantee that a compromised client cannot read or write another user's AI
+    // transcript, memories or preferences, and to stop a client from forging a
+    // memory row that the extractor never produced.
+    match /ai_conversations/{conversationId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_messages/{messageId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_memory/{memoryId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /user_ai_preferences/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow create, update: if isSignedIn() && uid == request.auth.uid
+        && request.resource.data.memoryEnabled is bool
+        && request.resource.data.chatHistoryEnabled is bool
+        && request.resource.data.voiceEnabled is bool;
+      allow delete: if false;
+    }
+
+    // ─── AI CHAT (server-written only) ──────────────────────────────
+    // These collections are written exclusively through the Node server using the
+    // Admin SDK, which bypasses these rules entirely. The rules below exist to
+    // guarantee that a compromised client cannot read or write another user's AI
+    // transcript, memories or preferences, and to stop a client from forging a
+    // memory row that the extractor never produced.
+    match /ai_conversations/{conversationId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_messages/{messageId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_memory/{memoryId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /user_ai_preferences/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow create, update: if isSignedIn() && uid == request.auth.uid
+        && request.resource.data.memoryEnabled is bool
+        && request.resource.data.chatHistoryEnabled is bool
+        && request.resource.data.voiceEnabled is bool;
+      allow delete: if false;
+    }
+    // Subscription data — server-written only, client reads own.
+    match /ai_subscriptions/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow write: if false;
+    }
+    match /ai_entitlements/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow write: if false;
+    }
+    match /ai_usage/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
     }
 
     // ─── SMOKE: deny-all fallback for any undocumented collection ──

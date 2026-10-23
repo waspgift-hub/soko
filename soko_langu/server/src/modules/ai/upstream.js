@@ -64,6 +64,40 @@ async function postBuffer(url, { headers, body, timeoutMs: overrideMs }) {
   }
 }
 
+/**
+ * POSTs a chat-completion request and returns the still-open streaming Response.
+ *
+ * The timeout here guards TIME TO FIRST BYTE and nothing else, then disarms
+ * itself. That split matters: the non-streaming path can treat its whole budget as
+ * a hard ceiling, but a token stream is legitimately open for as long as the
+ * model keeps talking, so leaving a total-time abort armed would truncate every
+ * long answer. The gap a total-time guard would have covered — a stream that
+ * opens and then goes silent forever — is closed by the reader's idle timeout in
+ * provider-stream.js instead, which resets on every chunk and so cannot punish a
+ * legitimately long generation.
+ *
+ * @returns {Promise<Response>} response with an unread body stream
+ */
+async function postSseStream(url, { headers, body, timeoutMs: overrideMs, providerName }) {
+  const budget = overrideMs || timeoutMs();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), budget);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok) await throwOnError(response, providerName || 'ai');
+    clearTimeout(timer);
+    return response;
+  } catch (err) {
+    clearTimeout(timer);
+    throw wrapTransportError(err, budget);
+  }
+}
+
 function wrapTransportError(err, budget) {
   if (err.name === 'AbortError' || err.name === 'TimeoutError') {
     const e = new Error(`Upstream timeout after ${budget}ms`);
@@ -190,6 +224,7 @@ function isFailoverWorthy(err) {
 module.exports = {
   postJson,
   postBuffer,
+  postSseStream,
   throwOnError,
   isFailoverWorthy,
   isModelUnavailable,

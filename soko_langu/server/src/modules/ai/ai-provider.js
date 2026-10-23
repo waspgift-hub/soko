@@ -74,6 +74,42 @@ class AiProvider {
   }
 
   /**
+   * Whether [stream] is implemented.
+   *
+   * Groq and Gemini both stream chat completions over OpenAI-shaped SSE.
+   * Cloudflare Workers AI does not — cf-worker-ai hardcodes `stream: false` in
+   * its request body — so that provider returns false and the gateway routes it
+   * through [chat], emitting its single body as one delta. The user still sees
+   * the answer appear; only the word-by-word feel is lost, which is the correct
+   * trade for a fallback that only runs when both faster providers are down.
+   */
+  get supportsStreaming() {
+    return false;
+  }
+
+  /**
+   * Runs a chat completion as a token stream and yields content deltas.
+   *
+   * Contract for implementations:
+   *   - set `stream: true` on the outgoing body themselves; the gateway does not
+   *     inject it, so a provider that cannot stream never sees the flag.
+   *   - yield only `choices[0].delta.content` strings, never raw frames.
+   *   - throw an Error carrying `.status` when the upstream fails, so the
+   *     gateway's failover decision works exactly as it does for [chat]. A
+   *     failure AFTER the first delta has been yielded cannot be failed over
+   *     (the client has already seen text), so the gateway ends the stream with
+   *     an error event instead of restarting on another provider.
+   *
+   * @param {object} body OpenAI Chat Completions request from the Flutter client
+   * @param {object} [options] forwarded to providers; `timeoutMs` caps the wait
+   *   for first byte
+   * @returns {AsyncGenerator<string>}
+   */
+  async *stream(body, options = {}) {
+    throw new Error('Not implemented');
+  }
+
+  /**
    * Transcribes base64-encoded audio.
    * @returns {Promise<string>} raw JSON response body containing `text`
    */

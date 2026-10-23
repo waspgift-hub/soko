@@ -157,6 +157,131 @@ async function chat(body, options = {}) {
 }
 
 /**
+ * Chat completion as a token stream, with the same provider failover as [chat].
+ *
+ * Yields `{ type: 'delta', text }` per content chunk and finishes with
+ * `{ type: 'done', provider, failedOver, streamed }`.
+ *
+ * The failover rule is deliberately asymmetric, and it is the one place the
+ * streaming path differs from the buffered one:
+ *
+ *   - Failure BEFORE the first delta is invisible to the user, so it fails over
+ *     to the next provider exactly like [chat] would. No text has been shown, so
+ *     there is nothing to retract.
+ *   - Failure AFTER the first delta cannot fail over. The client has already
+ *     rendered half an answer; restarting on another provider would either
+ *     duplicate that text or produce a visibly incoherent answer stitched from
+ *     two models. Instead the partial text is kept, the failure is yielded as
+ *     `{ type: 'error' }`, and the chat store marks the message `failed` — so the
+ *     user has a complete partial answer and a retry button rather than a
+ *     corrupt transcript.
+ *
+ * A provider that cannot stream (Cloudflare Workers AI) is still eligible: its
+ * single buffered body is re-emitted as one delta, so failover works and the
+ * caller cannot tell the difference apart from a very fast model.
+ */
+async function* chatStream(body, options = {}) {
+  const attempted = [];
+  let lastError = null;
+  let hadConfiguredProvider = false;
+
+  for (const name of providerOrder()) {
+    const provider = providerFor(name);
+    if (!provider.isConfigured) {
+      attempted.push(`${name}(unconfigured)`);
+      continue;
+    }
+    if (!provider.supportsModel(body.model)) {
+      attempted.push(`${name}(no ${body.model})`);
+      continue;
+    }
+    hadConfiguredProvider = true;
+
+    let emitted = false;
+    try {
+      if (!provider.supportsStreaming) {
+        // Buffered fallback: one round trip, whole answer at once.
+        const buffered = await callThroughBreaker(name, () => provider.chat(body, options));
+        const text = extractContent(buffered.text);
+        if (text) {
+          emitted = true;
+          yield { type: 'delta', text };
+        }
+        if (attempted.length) {
+          console.warn(`[ai] streamed-by ${name} after failover from: ${attempted.join(', ')}`);
+        }
+        yield {
+          type: 'done',
+          provider: name,
+          failedOver: attempted.length > 0,
+          streamed: false,
+        };
+        return;
+      }
+
+      const stream = provider.stream(body, options);
+      for await (const text of stream) {
+        emitted = true;
+        yield { type: 'delta', text };
+      }
+      if (attempted.length) {
+        console.warn(`[ai] streamed by ${name} after failover from: ${attempted.join(', ')}`);
+      }
+      yield {
+        type: 'done',
+        provider: name,
+        failedOver: attempted.length > 0,
+        streamed: true,
+      };
+      return;
+    } catch (err) {
+      if (!isFailoverWorthy(err)) {
+        // A request-shape or credential bug. Handing this to another provider
+        // would only hide the real error, exactly as in [chat].
+        yield { type: 'error', message: err.message, code: err.code || null };
+        return;
+      }
+
+      if (emitted) {
+        console.warn(`[ai] ${name} stream failed mid-answer: ${err.message}`);
+        yield { type: 'error', message: err.message, code: err.code || null, partial: true };
+        return;
+      }
+
+      console.warn(
+        `[ai] ${name} failed to start a stream (${describeError(err)}): ${err.message}` +
+          (err.retryAfter != null ? ` — retry-after ${err.retryAfter}s` : '')
+      );
+      attempted.push(`${name}(${describeError(err)})`);
+      lastError = err;
+    }
+  }
+
+  if (!hadConfiguredProvider) {
+    yield { type: 'error', code: 'AI_NO_PROVIDER', message: 'No AI provider configured' };
+    return;
+  }
+  yield {
+    type: 'error',
+    code: lastError?.code || 'AI_STREAM_FAILED',
+    message: lastError?.message || 'AI stream failed',
+  };
+}
+
+/** Pulls `choices[0].message.content` out of a buffered provider body. */
+function extractContent(rawText) {
+  try {
+    const parsed = JSON.parse(rawText);
+    const content = parsed?.choices?.[0]?.message?.content;
+    return typeof content === 'string' ? content : '';
+  } catch {
+    // A non-JSON body is passed through verbatim rather than discarded, matching
+    // the buffered [chat] path which also forwards the provider's text as-is.
+    return typeof rawText === 'string' ? rawText : '';
+  }
+}
+
+/**
  * Speech-to-text, with the same failover semantics as [chat].
  *
  * Historically Groq-only, because Gemini's OpenAI-compatible surface exposes no
@@ -215,4 +340,4 @@ function status() {
   }));
 }
 
-module.exports = { chat, transcribe, status, isFailoverWorthy };
+module.exports = { chat, chatStream, transcribe, status, isFailoverWorthy };

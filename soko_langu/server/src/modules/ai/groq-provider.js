@@ -1,5 +1,6 @@
 const AiProvider = require('./ai-provider');
-const { postJson, postBuffer, throwOnError } = require('./upstream');
+const { postJson, postBuffer, postSseStream, throwOnError } = require('./upstream');
+const { readProviderStream } = require('./provider-stream');
 
 const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_TRANSCRIBE_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
@@ -20,6 +21,27 @@ class GroqProvider extends AiProvider {
 
   get supportsTranscription() {
     return true;
+  }
+
+  get supportsStreaming() {
+    return true;
+  }
+
+  async *stream(body, options = {}) {
+    if (!this.isConfigured) throw notConfigured(this.name);
+    const response = await postSseStream(GROQ_CHAT_URL, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        Accept: 'text/event-stream',
+      },
+      body: { ...body, stream: true },
+      timeoutMs: options.timeoutMs,
+      providerName: this.name,
+    });
+    yield* readProviderStream(response, {
+      idleTimeoutMs: options.idleTimeoutMs,
+    });
   }
 
   async chat(body, options = {}) {

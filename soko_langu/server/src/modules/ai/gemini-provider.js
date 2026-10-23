@@ -1,5 +1,6 @@
 const AiProvider = require('./ai-provider');
-const { postJson, throwOnError } = require('./upstream');
+const { postJson, postSseStream, throwOnError } = require('./upstream');
+const { readProviderStream } = require('./provider-stream');
 const { notConfigured } = require('./groq-provider');
 
 // Gemini's OpenAI-compatible surface. Same request/response contract as
@@ -81,6 +82,35 @@ class GeminiProvider extends AiProvider {
 
   get isConfigured() {
     return Boolean(process.env.GEMINI_API_KEY);
+  }
+
+  get supportsStreaming() {
+    return true;
+  }
+
+  async *stream(body, options = {}) {
+    if (!this.isConfigured) throw notConfigured(this.name);
+
+    const response = await postSseStream(
+      process.env.GEMINI_BASE_URL || GEMINI_CHAT_URL,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
+          Accept: 'text/event-stream',
+        },
+        // resolveModel runs here too, not only on the buffered path: streaming a
+        // reasoning model on a small max_tokens budget would spend the whole
+        // budget thinking and emit nothing, which reads to the user as a hang.
+        body: { ...body, model: resolveModel(body.model, body.max_tokens), stream: true },
+        timeoutMs: options.timeoutMs,
+        providerName: this.name,
+      }
+    );
+
+    yield* readProviderStream(response, {
+      idleTimeoutMs: options.idleTimeoutMs,
+    });
   }
 
   async chat(body, options = {}) {
