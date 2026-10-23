@@ -52,6 +52,41 @@ void main() {
       api.close();
     });
 
+    test('reuses an HTTPS stream URL from search without a second request', () async {
+      var requestCount = 0;
+      final client = MockClient((request) async {
+        requestCount++;
+        return http.Response('{}', 500);
+      });
+      final api = MusicApi(baseUrl: 'https://music.example.test', client: client);
+      expect(
+        await api.playUrl('123', streamUrl: 'https://cdn.example.test/track.mp3'),
+        'https://cdn.example.test/track.mp3',
+      );
+      expect(requestCount, 0);
+      api.close();
+    });
+
+    test('does not reuse an insecure HTTP stream URL', () async {
+      final client = MockClient((request) async {
+        expect(request.url.path, '/play/123');
+        return http.Response(jsonEncode({
+          'track': {
+            'id': '123',
+            'title': 'Playable',
+            'artist': 'Artist',
+            'streaming_url': 'https://cdn.example.test/secure-track.mp3',
+          }
+        }), 200);
+      });
+      final api = MusicApi(baseUrl: 'https://music.example.test', client: client);
+      expect(
+        await api.playUrl('123', streamUrl: 'http://cdn.example.test/track.mp3'),
+        'https://cdn.example.test/secure-track.mp3',
+      );
+      api.close();
+    });
+
     test('play resolves JSON metadata to the actual HTTPS stream URL', () async {
       final client = MockClient((request) async {
         expect(request.url.path, '/play/123');
