@@ -52,6 +52,69 @@ void main() {
       api.close();
     });
 
+    test('falls back to Render open-license catalog when Worker search fails', () async {
+      final client = MockClient((request) async {
+        if (request.url.host == 'music.example.test') {
+          return http.Response(jsonEncode({
+            'error': 'PROVIDER_ERROR',
+            'message': 'Music provider request failed.',
+          }), 502);
+        }
+        expect(request.url.host, 'sokovibe-music-api.onrender.com');
+        expect(request.url.path, '/api/v1/catalog/search');
+        expect(request.url.queryParameters['kind'], 'music');
+        return http.Response(jsonEncode({
+          'success': true,
+          'results': [
+            {
+              'id': 'archive-item-1',
+              'provider': 'internet-archive',
+              'kind': 'music',
+              'title': 'Open license track',
+              'creator': 'Archive artist',
+              'image': 'https://archive.org/services/img/archive-item-1',
+              'license': 'https://creativecommons.org/licenses/by/4.0/',
+              'sourceUrl': 'https://archive.org/details/archive-item-1',
+              'streamLookupUrl': '/api/v1/catalog/play/internet-archive/archive-item-1?kind=music',
+              'downloadAllowed': true,
+            }
+          ],
+        }), 200, headers: {'content-type': 'application/json'});
+      });
+      final api = MusicApi(baseUrl: 'https://music.example.test', client: client);
+      final tracks = await api.search('ambient');
+      expect(tracks, hasLength(1));
+      expect(tracks.single.source, 'internet-archive');
+      expect(tracks.single.artist, 'Archive artist');
+      expect(tracks.single.streamLookupUrl, contains('/api/v1/catalog/play/'));
+      expect(tracks.single.canDownload, isFalse);
+      api.close();
+    });
+
+    test('resolves Render Internet Archive lookup to a validated HTTPS stream', () async {
+      final client = MockClient((request) async {
+        expect(request.url.host, 'sokovibe-music-api.onrender.com');
+        expect(request.url.path, '/api/v1/catalog/play/internet-archive/archive-item-1');
+        expect(request.url.queryParameters['kind'], 'music');
+        return http.Response(jsonEncode({
+          'success': true,
+          'streamUrl': 'https://archive.org/download/archive-item-1/audio.mp3',
+        }), 200, headers: {'content-type': 'application/json'});
+      });
+      final api = MusicApi(baseUrl: 'https://music.example.test', client: client);
+      final track = MusicTrack.fromJson({
+        'id': 'archive-item-1',
+        'provider': 'internet-archive',
+        'title': 'Archive track',
+        'streamLookupUrl': '/api/v1/catalog/play/internet-archive/archive-item-1?kind=music',
+      });
+      expect(
+        await api.playUrl(track.id, track: track),
+        'https://archive.org/download/archive-item-1/audio.mp3',
+      );
+      api.close();
+    });
+
     test('reuses an HTTPS stream URL from search without a second request', () async {
       var requestCount = 0;
       final client = MockClient((request) async {
