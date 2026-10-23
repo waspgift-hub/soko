@@ -740,7 +740,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                                         ),
                                       ),
                                       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      subtitle: Text(track.artistAlbumLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
                                       trailing: Wrap(spacing: 0, children: [
                                         if (track.canDownload)
                                           IconButton(
