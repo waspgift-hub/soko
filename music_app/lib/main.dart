@@ -472,7 +472,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                                 icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
                                 onPressed: () => play(MusicTrack(
                                   id: file.path ?? file.name,
-                                  title: file.name.replaceFirst(RegExp(r'\.[^.]+, ''),
+                                  title: file.name.replaceFirst(RegExp(r'\.[^.]+$'), ''),
                                   artist: 'On this device', image: '', streamUrl: file.path, source: 'device',
                                 )),
                               ),
