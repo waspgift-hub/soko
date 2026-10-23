@@ -49,6 +49,15 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/audio_library",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "queryAudio" -> result.success(queryAudio())
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "soko_lang/conversation_notif",
         ).setMethodCallHandler { call, result ->
             if (call.method == "show") {
@@ -259,6 +268,65 @@ class MainActivity : FlutterActivity() {
             channels.forEach { manager.createNotificationChannel(it) }
             // Android 13+ inline replies use the system notification assistant by default
         }
+    }
+
+    private fun queryAudio(): List<Map<String, Any?>> {
+        val tracks = mutableListOf<Map<String, Any?>>()
+        try {
+            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.SIZE,
+                MediaStore.Audio.Media.MIME_TYPE,
+                MediaStore.Audio.Media.RELATIVE_PATH,
+                MediaStore.Audio.Media.DATA,
+            )
+            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+            val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+            contentResolver.query(collection, projection, selection, null, sortOrder)?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+                val pathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+                val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val contentUri = ContentUris.withAppendedId(collection, id).toString()
+                    tracks.add(
+                        mapOf(
+                            "id" to id,
+                            "title" to (cursor.getString(titleCol)?.takeIf { it.isNotBlank() }
+                                ?: cursor.getString(nameCol)?.substringBeforeLast(".") ?: "Unknown title"),
+                            "displayName" to (cursor.getString(nameCol) ?: ""),
+                            "artist" to (cursor.getString(artistCol)?.takeIf { it.isNotBlank() && it != "<unknown>" }
+                                ?: "Unknown artist"),
+                            "album" to (cursor.getString(albumCol)?.takeIf { it.isNotBlank() && it != "<unknown>" }
+                                ?: "Unknown album"),
+                            "duration" to cursor.getLong(durationCol),
+                            "size" to cursor.getLong(sizeCol),
+                            "mimeType" to (cursor.getString(mimeCol) ?: ""),
+                            "relativePath" to (if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""),
+                            "filePath" to (if (dataCol >= 0) cursor.getString(dataCol) ?: "" else ""),
+                            "contentUri" to contentUri,
+                        ),
+                    )
+                }
+            }
+            Log.d("AudioLibrary", "Found ${tracks.size} audio tracks")
+        } catch (e: Exception) {
+            Log.e("AudioLibrary", "Failed to query audio: ${e.message}", e)
+        }
+        return tracks
     }
 
     private fun queryVideos(): List<Map<String, Any?>> {
