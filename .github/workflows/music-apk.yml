@@ -1,6 +1,11 @@
 name: SokoVibe Music APK Validation
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'soko_langu/**'
+      - '.github/workflows/music-apk.yml'
   push:
     branches: [main]
     paths:
