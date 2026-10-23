@@ -12,6 +12,7 @@ on:
     branches:
       - 'soko-vibe-music'
       - 'fix/sokovibe-music-backend-url'
+      - 'fix/sokovibe-music-playstore-ready'
     paths:
       - 'music_app/**'
       - 'music_backend/**'
