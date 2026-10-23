@@ -183,7 +183,7 @@ jobs:
           if not p.exists():
               raise SystemExit("Expected generated Kotlin Gradle file was not found")
           s = p.read_text()
-          imports = "import java.io.FileInputStream\\nimport java.util.Properties\\n\\n"
+          imports = "import java.io.FileInputStream\nimport java.util.Properties\n\n"
           if "val keystoreProperties = Properties()" not in s:
               s = imports + """val keystoreProperties = Properties()
           val keystorePropertiesFile = rootProject.file("key.properties")
