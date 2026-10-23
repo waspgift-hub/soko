@@ -1,5 +1,5 @@
 -- SokoVibe Music user profile and preference tables.
--- Apply after creating the Supabase project r yaqkhoattdaghusbiuz.
+-- Applied to the SokoVibe Music Supabase project.
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -31,21 +31,28 @@ revoke all on public.user_settings from anon, authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.user_settings to authenticated;
 
+drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
   for select to authenticated using ((select auth.uid()) = id);
+drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own" on public.profiles
   for insert to authenticated with check ((select auth.uid()) = id);
+drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
   for update to authenticated using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
 
+drop policy if exists "user_settings_select_own" on public.user_settings;
 create policy "user_settings_select_own" on public.user_settings
   for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists "user_settings_insert_own" on public.user_settings;
 create policy "user_settings_insert_own" on public.user_settings
   for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists "user_settings_update_own" on public.user_settings;
 create policy "user_settings_update_own" on public.user_settings
   for update to authenticated using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+drop policy if exists "user_settings_delete_own" on public.user_settings;
 create policy "user_settings_delete_own" on public.user_settings
   for delete to authenticated using ((select auth.uid()) = user_id);
 
@@ -72,6 +79,7 @@ end;
 $$;
 
 revoke all on function public.handle_new_sokovibe_user() from public, anon, authenticated;
+drop trigger if exists on_auth_user_created_sokovibe on auth.users;
 create trigger on_auth_user_created_sokovibe
   after insert on auth.users
   for each row execute function public.handle_new_sokovibe_user();
