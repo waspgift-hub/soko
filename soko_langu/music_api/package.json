@@ -1,0 +1,18 @@
+{
+  "name": "sokovibe-music-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone open-media catalog API for SokoVibe Music",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "express": "^4.21.2"
+  }
+}
