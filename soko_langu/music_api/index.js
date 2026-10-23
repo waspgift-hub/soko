@@ -54,7 +54,7 @@ app.get('/api/v1/catalog/search', async (req, res) => {
   const warnings = [];
   try {
     // Escape Archive query syntax instead of accepting user-provided operators.
-    const safe = q.replace(/[\\+\-!(){}\[\]^"~*?:\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+    const safe = q.replace(/[^\\p{L}\\p{N}\\s]/gu, ' ').replace(/\\s+/g, ' ').trim();
     const query = 'mediatype:' + (kind === 'movie' ? 'movies' : 'audio') +
       ' AND (title:(' + safe + ') OR creator:(' + safe + ') OR subject:(' + safe + '))';
     const response = await http.get(IA_SEARCH, { params: {
