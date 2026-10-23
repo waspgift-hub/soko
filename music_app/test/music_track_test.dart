@@ -2,53 +2,71 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soko_vibe_music/models/music_track.dart';
 
 void main() {
-  group('MusicTrack.fromJson', () {
-    test('parses normalized Worker response fields', () {
+  group('MusicTrack', () {
+    test('maps Jamendo search fields and download permission', () {
       final track = MusicTrack.fromJson({
-        'id': '123',
-        'title': 'Test Song',
-        'artist': 'Test Artist',
-        'image': 'https://example.com/cover.jpg',
-        'streaming_url': 'https://example.com/audio.mp3',
+        'id': 123,
+        'title': 'Test track',
+        'artist': 'Test artist',
+        'album': 'Test album',
+        'image': 'https://cdn.example.test/cover.jpg',
+        'streaming_url': 'https://cdn.example.test/stream.mp3',
+        'audiodownload': 'https://cdn.example.test/download.mp3',
+        'audiodownload_allowed': true,
+        'license': 'https://creativecommons.org/licenses/by/4.0/',
+        'duration': 123,
+        'source': 'jamendo',
       });
 
       expect(track.id, '123');
-      expect(track.title, 'Test Song');
-      expect(track.artist, 'Test Artist');
-      expect(track.image, 'https://example.com/cover.jpg');
-      expect(track.streamUrl, 'https://example.com/audio.mp3');
+      expect(track.title, 'Test track');
+      expect(track.album, 'Test album');
+      expect(track.artistAlbumLabel, 'Test artist • Test album');
+      expect(track.canStream, isTrue);
+      expect(track.canDownload, isTrue);
+      expect(track.durationSeconds, 123);
     });
 
-    test('parses Jamendo field names', () {
+    test('does not allow download without explicit permission', () {
       final track = MusicTrack.fromJson({
-        'id': 456,
-        'name': 'Jamendo Song',
-        'artist_name': 'Jamendo Artist',
-        'album_image': 'https://example.com/album.jpg',
-        'audio': 'https://example.com/stream.mp3',
+        'id': '123',
+        'title': 'Test track',
+        'artist': 'Test artist',
+        'streaming_url': 'https://cdn.example.test/stream.mp3',
+        'audiodownload': 'https://cdn.example.test/download.mp3',
+        'audiodownload_allowed': false,
       });
 
-      expect(track.id, '456');
-      expect(track.title, 'Jamendo Song');
-      expect(track.artist, 'Jamendo Artist');
-      expect(track.image, 'https://example.com/album.jpg');
-      expect(track.streamUrl, 'https://example.com/stream.mp3');
+      expect(track.canStream, isTrue);
+      expect(track.canDownload, isFalse);
     });
 
-    test('uses safe defaults and null stream when fields are missing', () {
-      final track = MusicTrack.fromJson({'id': 'missing-fields'});
+    test('rejects non-HTTPS streaming and download URLs', () {
+      final track = MusicTrack.fromJson({
+        'id': '123',
+        'streaming_url': 'http://example.test/stream.mp3',
+        'audiodownload': 'javascript:alert(1)',
+        'audiodownload_allowed': true,
+      });
 
-      expect(track.id, 'missing-fields');
-      expect(track.title, 'Unknown title');
-      expect(track.artist, 'Unknown artist');
-      expect(track.image, '');
-      expect(track.streamUrl, isNull);
+      expect(track.canStream, isFalse);
+      expect(track.canDownload, isFalse);
     });
 
-    test('treats a blank stream URL as absent', () {
-      final track = MusicTrack.fromJson({'id': '1', 'audio': '   '});
+    test('round trips local saved metadata without enabling downloads', () {
+      final track = MusicTrack.fromLocalJson({
+        'id': 'local_1',
+        'title': 'My file',
+        'artist': 'Local music',
+        'license': '',
+        'durationSeconds': 10,
+        'source': 'local',
+      });
+      final restored = MusicTrack.fromLocalJson(track.toJson());
 
-      expect(track.streamUrl, isNull);
+      expect(restored.id, 'local_1');
+      expect(restored.isLocal, isTrue);
+      expect(restored.canDownload, isFalse);
     });
   });
 }
