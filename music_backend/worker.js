@@ -154,7 +154,7 @@ export default {
       }
       const data = await jamendo("/tracks/", {
         search: q, limit: l, offset: (p - 1) * l,
-        include: "licenses,musicinfo", order: "relevance"
+        include: "licenses musicinfo", order: "relevance"
       });
       const results = data.results.map(mapTrack).filter(track => track.id && track.streaming_url);
       return { results, count: results.length, page: p, limit: l, query: q, source: "jamendo" };
@@ -212,7 +212,7 @@ export default {
 
       const playMatch = url.pathname.match(/^\/play\/(\d+)$/);
       if (playMatch && request.method === "GET") {
-        const data = await jamendo("/tracks/", { id: playMatch[1], limit: 1, include: "licenses,musicinfo" });
+        const data = await jamendo("/tracks/", { id: playMatch[1], limit: 1, include: "licenses musicinfo" });
         const track = data.results[0];
         if (!track) return errorResponse("NOT_FOUND", "Track was not found.", 404);
         const mapped = mapTrack(track);
@@ -228,7 +228,7 @@ export default {
         const query = [genre, mood, language].filter(Boolean).join(" ");
         const limit = Number(body.limit ?? 10);
         if (!Number.isInteger(limit) || limit < 1 || limit > 50) return errorResponse("VALIDATION_ERROR", "limit must be between 1 and 50.", 400);
-        const data = await jamendo("/tracks/", { search: query, limit, order: "popularity_total", include: "licenses,musicinfo" });
+        const data = await jamendo("/tracks/", { search: query, limit, order: "popularity_total", include: "licenses musicinfo" });
         const recommendations = data.results.map(mapTrack).filter(track => track.id && track.streaming_url);
         return json({ recommendations, count: recommendations.length, source: "jamendo" });
       }
