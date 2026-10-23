@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -73,6 +74,19 @@ typedef CurrencyCallback = void Function(String);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure Android/iOS media-session notifications for music playback.
+  if (!kIsWeb) {
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId: 'co.tz.sokovibe.music.playback',
+        androidNotificationChannelName: 'SokoVibe Music playback',
+        androidNotificationOngoing: true,
+      );
+    } catch (e) {
+      debugPrint('Music background service initialization failed: $e');
+    }
+  }
 
   // Supabase powers the separate SokoVibe Music account/profile/settings area.
   // The publishable key is intended for client apps; table access is protected by RLS.
