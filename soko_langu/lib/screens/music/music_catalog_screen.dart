@@ -103,16 +103,16 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
   List<Map<String, dynamic>> get _visibleSongs {
     final q = _search.text.trim().toLowerCase();
     return _songs.where((s) {
-      if (_favoritesOnly && !_favorites.contains('local:\${s['id']}')) return false;
+      if (_favoritesOnly && !_favorites.contains('local:${s['id']}')) return false;
       if (q.isEmpty) return true;
-      return '\${s['title']} \${s['artist']} \${s['album']} \${s['relativePath']}'.toLowerCase().contains(q);
+      return '${s['title']} ${s['artist']} ${s['album']} ${s['relativePath']}'.toLowerCase().contains(q);
     }).toList();
   }
 
   Future<void> _playLocal(Map<String, dynamic> song) async {
     final uri = song['contentUri']?.toString() ?? '';
     if (!uri.startsWith('content://')) { _toast('URI ya wimbo haipatikani.'); return; }
-    final id = 'local:\${song['id']}';
+    final id = 'local:${song['id']}';
     try {
       if (_playingId == id && _playing) { await _player.pause(); return; }
       if (_playingId == id && !_playing) { await _player.play(); return; }
@@ -130,7 +130,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
     try {
       final uri = Uri.parse('$_api/api/v1/catalog/search').replace(queryParameters: {'q': q, 'kind': _kind});
       final res = await http.get(uri).timeout(const Duration(seconds: 25));
-      if (res.statusCode != 200) throw Exception('HTTP \${res.statusCode}');
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final items = (body['results'] as List? ?? []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
       if (mounted) setState(() { _online = items; if (items.isEmpty) _onlineError = 'Hakuna matokeo yenye leseni wazi yaliyopatikana.'; });
@@ -149,13 +149,13 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
       if (url == null || !url.startsWith('https://')) throw Exception('Hakuna stream iliyoidhinishwa.');
       await _player.setUrl(url);
       if (!mounted) return;
-      setState(() { _playingId = 'online:\${item['provider']}:\${item['id']}'; _playingTitle = item['title']?.toString(); _playingArtist = item['creator']?.toString(); });
+      setState(() { _playingId = 'online:${item['provider']}:${item['id']}'; _playingTitle = item['title']?.toString(); _playingArtist = item['creator']?.toString(); });
       await _player.play();
     } catch (e) { _toast('Playback imeshindikana: $e'); }
   }
 
   void _toast(String text) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text))); }
-  String _duration(dynamic value) { final s = ((value as num?)?.toInt() ?? 0) ~/ 1000; return '\${s ~/ 60}:\${(s % 60).toString().padLeft(2, '0')}'; }
+  String _duration(dynamic value) { final s = ((value as num?)?.toInt() ?? 0) ~/ 1000; return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}'; }
 
   @override
   Widget build(BuildContext context) {
@@ -210,7 +210,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
         const SizedBox(height: 10),
         Text('Your music, all in one place', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: c.onSurface)),
         const SizedBox(height: 6),
-        Text(_songs.isEmpty ? 'Scan your phone and your songs will appear here.' : '\${_songs.length} songs found on this device', style: TextStyle(color: c.onSurfaceVariant)),
+        Text(_songs.isEmpty ? 'Scan your phone and your songs will appear here.' : '${_songs.length} songs found on this device', style: TextStyle(color: c.onSurfaceVariant)),
         const SizedBox(height: 14),
         Wrap(spacing: 8, children: [
           FilledButton.icon(onPressed: _scanBusy ? null : (_songs.isEmpty ? _requestAndScan : _scan), icon: Icon(_scanBusy ? Icons.hourglass_top : Icons.sync), label: Text(_scanBusy ? 'Scanning…' : (_songs.isEmpty ? 'Find my music' : 'Rescan'))),
@@ -222,7 +222,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
         trailing: IconButton(onPressed: openAppSettings, icon: const Icon(Icons.settings_outlined)),
       ))),
       const SizedBox(height: 16),
-      Row(children: [const Expanded(child: Text('On Device Songs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800))), Text('\${list.length} songs', style: TextStyle(color: c.onSurfaceVariant))]),
+      Row(children: [const Expanded(child: Text('On Device Songs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800))), Text('${list.length} songs', style: TextStyle(color: c.onSurfaceVariant))]),
       if (_scanBusy) const Padding(padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator()))
       else if (list.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 28), child: Column(children: [
         Icon(Icons.library_music_outlined, size: 50, color: c.onSurfaceVariant), const SizedBox(height: 10),
@@ -232,16 +232,16 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
       ]))
       else ...list.map((s) => ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        leading: Container(width: 52, height: 52, decoration: BoxDecoration(color: c.primaryContainer, borderRadius: BorderRadius.circular(12)), child: Icon(_playingId == 'local:\${s['id']}' && _playing ? Icons.equalizer : Icons.music_note, color: c.onPrimaryContainer)),
+        leading: Container(width: 52, height: 52, decoration: BoxDecoration(color: c.primaryContainer, borderRadius: BorderRadius.circular(12)), child: Icon(_playingId == 'local:${s['id']}' && _playing ? Icons.equalizer : Icons.music_note, color: c.onPrimaryContainer)),
         title: Text(s['title']?.toString() ?? 'Unknown title', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text('\${s['artist'] ?? 'Unknown artist'} • \${_duration(s['duration'])}\n\${s['relativePath'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: Text('${s['artist'] ?? 'Unknown artist'} • ${_duration(s['duration'])}\n${s['relativePath'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: PopupMenuButton<String>(
-          onSelected: (v) { if (v == 'play') _playLocal(s); if (v == 'fav') _favorite('local:\${s['id']}'); if (v == 'info') showDialog<void>(context: context, builder: (_) => AlertDialog(
+          onSelected: (v) { if (v == 'play') _playLocal(s); if (v == 'fav') _favorite('local:${s['id']}'); if (v == 'info') showDialog<void>(context: context, builder: (_) => AlertDialog(
             title: Text(s['title']?.toString() ?? 'Track details'),
-            content: Text('Artist: \${s['artist']}\nAlbum: \${s['album']}\nFormat: \${s['mimeType']}\nSize: \${(((s['size'] as num?)?.toDouble() ?? 0) / 1048576).toStringAsFixed(1)} MB\nLocation: \${s['filePath'] ?? s['relativePath']}'),
+            content: Text('Artist: ${s['artist']}\nAlbum: ${s['album']}\nFormat: ${s['mimeType']}\nSize: ${(((s['size'] as num?)?.toDouble() ?? 0) / 1048576).toStringAsFixed(1)} MB\nLocation: ${s['filePath'] ?? s['relativePath']}'),
             actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
           )); },
-          itemBuilder: (_) => [const PopupMenuItem(value: 'play', child: Text('Play')), PopupMenuItem(value: 'fav', child: Text(_favorites.contains('local:\${s['id']}') ? 'Remove favorite' : 'Add to favorites')), const PopupMenuItem(value: 'info', child: Text('Track details'))],
+          itemBuilder: (_) => [const PopupMenuItem(value: 'play', child: Text('Play')), PopupMenuItem(value: 'fav', child: Text(_favorites.contains('local:${s['id']}') ? 'Remove favorite' : 'Add to favorites')), const PopupMenuItem(value: 'info', child: Text('Track details'))],
         ),
         onTap: () => _playLocal(s),
       )),
@@ -261,11 +261,11 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> with SingleTick
         const SizedBox(height: 6), const Text('Results depend on provider availability and licensing.', textAlign: TextAlign.center),
         if (_onlineError != null) TextButton(onPressed: _searchOnline, child: const Text('Try again')),
       ]))) : ListView.separated(padding: const EdgeInsets.all(12), itemCount: _online.length, separatorBuilder: (_, __) => const SizedBox(height: 4), itemBuilder: (_, i) {
-        final s = _online[i]; final image = s['image']?.toString(); final id = 'online:\${s['provider']}:\${s['id']}';
+        final s = _online[i]; final image = s['image']?.toString(); final id = 'online:${s['provider']}:${s['id']}';
         return ListTile(
           leading: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox(width: 54, height: 54, child: image != null && image.startsWith('https://') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _onlineCover(c)) : _onlineCover(c))),
           title: Text(s['title']?.toString() ?? 'Untitled', maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text('\${s['creator'] ?? 'Artist not listed'} • \${s['provider'] ?? 'Provider'}\n\${s['license'] ?? 'License not listed'}', maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text('${s['creator'] ?? 'Artist not listed'} • ${s['provider'] ?? 'Provider'}\n${s['license'] ?? 'License not listed'}', maxLines: 2, overflow: TextOverflow.ellipsis),
           trailing: IconButton.filledTonal(onPressed: () => _playOnline(s), icon: Icon(_playingId == id && _playing ? Icons.pause : Icons.play_arrow)),
           onTap: () { final u = Uri.tryParse(s['sourceUrl']?.toString() ?? ''); if (u?.scheme == 'https') launchUrl(u!, mode: LaunchMode.externalApplication); },
         );
