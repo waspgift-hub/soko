@@ -30,8 +30,8 @@ npx wrangler deploy
 After deployment, verify:
 
 ```sh
-curl -i https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev/api/health
-curl -i 'https://soko-vibe-music-backend.sokovibe-co-tz.workers.dev/search?q=afrobeat'
+curl -i https://soko-vibe-music-backend.wapalila.workers.dev/api/health
+curl -i 'https://soko-vibe-music-backend.wapalila.workers.dev/search?q=afrobeat'
 ```
 
-Do not mark the integration connected until the health endpoint reports `jamendo.status=connected` and search returns real track records.
+Do not mark the integration connected until the health endpoint returns HTTP 200 with `status=healthy` and `jamendo.connected=true`, and search returns real track records with an HTTPS `streaming_url`.
