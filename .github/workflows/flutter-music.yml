@@ -185,13 +185,17 @@ jobs:
           s = p.read_text()
           imports = "import java.io.FileInputStream\nimport java.util.Properties\n\n"
           if "val keystoreProperties = Properties()" not in s:
-              s = imports + """val keystoreProperties = Properties()
+              s = imports + s
+              declarations = """val keystoreProperties = Properties()
           val keystorePropertiesFile = rootProject.file("key.properties")
           if (keystorePropertiesFile.exists()) {
               keystoreProperties.load(FileInputStream(keystorePropertiesFile))
           }
 
-          """ + s
+          """
+              if "android {" not in s:
+                  raise SystemExit("Could not locate android block for signing properties")
+              s = s.replace("android {", declarations + "android {", 1)
           signing = """    signingConfigs {
                   create("release") {
                       keyAlias = keystoreProperties["keyAlias"] as String
