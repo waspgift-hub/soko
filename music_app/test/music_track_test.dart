@@ -8,6 +8,7 @@ void main() {
         'id': 123,
         'title': 'Test track',
         'artist': 'Test artist',
+        'album': 'Test album',
         'image': 'https://cdn.example.test/cover.jpg',
         'streaming_url': 'https://cdn.example.test/stream.mp3',
         'audiodownload': 'https://cdn.example.test/download.mp3',
@@ -19,6 +20,8 @@ void main() {
 
       expect(track.id, '123');
       expect(track.title, 'Test track');
+      expect(track.album, 'Test album');
+      expect(track.artistAlbumLabel, 'Test artist • Test album');
       expect(track.canStream, isTrue);
       expect(track.canDownload, isTrue);
       expect(track.durationSeconds, 123);
