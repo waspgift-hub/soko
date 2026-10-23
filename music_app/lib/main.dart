@@ -608,7 +608,14 @@ class _YoutubePlayerPageState extends State<YoutubePlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..setBackgroundColor(const Color(0xFF080D0B))..loadRequest(Uri.https('www.youtube.com', '/embed/${widget.track.id}', {'autoplay':'1','playsinline':'1','controls':'1','rel':'0','origin':'https://www.youtube.com'}));
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF080D0B))
+      ..loadHtmlString('''
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>html,body{margin:0;width:100%;height:100%;background:#080D0B}.player{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}iframe{width:100%;height:100%;border:0}</style></head>
+<body><div class="player"><iframe src="https://www.youtube.com/embed/${widget.track.id}?autoplay=1&playsinline=1&controls=1&rel=0" title="YouTube player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div></body></html>
+''', baseUrl: 'https://www.youtube.com');
   }
   @override
   Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('YouTube'), actions: [IconButton(tooltip: 'Reload', onPressed: () => _controller.reload(), icon: const Icon(Icons.refresh_rounded))]), body: Column(children: [Expanded(child: WebViewWidget(controller: _controller)), ListTile(leading: const Icon(Icons.smart_display_rounded), title: Text(widget.track.title, maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text(widget.track.artist)), const SafeArea(top: false, child: Padding(padding: EdgeInsets.all(12), child: Text('Playback is provided by YouTube. Some videos may block embedded playback.', textAlign: TextAlign.center)))]));
