@@ -2,6 +2,7 @@ class MusicTrack {
   final String id;
   final String title;
   final String artist;
+  final String? album;
   final String image;
   final String? streamUrl;
   final String? downloadUrl;
@@ -14,6 +15,7 @@ class MusicTrack {
     required this.id,
     required this.title,
     required this.artist,
+    this.album,
     required this.image,
     this.streamUrl,
     this.downloadUrl,
@@ -22,6 +24,11 @@ class MusicTrack {
     this.durationSeconds = 0,
     this.source = 'jamendo',
   });
+
+  String get artistAlbumLabel {
+    final albumName = album?.trim();
+    return albumName == null || albumName.isEmpty ? artist : '$artist • $albumName';
+  }
 
   bool get canStream => _isHttpsUrl(streamUrl);
   bool get canDownload => audiodownloadAllowed && _isHttpsUrl(downloadUrl);
@@ -40,6 +47,7 @@ class MusicTrack {
       id: '${json['id'] ?? ''}',
       title: '${json['title'] ?? json['song'] ?? 'Unknown title'}',
       artist: '${json['artist'] ?? 'Unknown artist'}',
+      album: (json['album'] ?? json['album_name'])?.toString(),
       image: _httpsOrEmpty(
         (json['image'] ?? json['cover'])?.toString(),
       ),
@@ -60,6 +68,7 @@ class MusicTrack {
         id: '${json['id'] ?? ''}',
         title: '${json['title'] ?? 'Unknown title'}',
         artist: '${json['artist'] ?? 'Unknown artist'}',
+        album: json['album']?.toString(),
         image: '',
         streamUrl: null,
         downloadUrl: null,
@@ -74,6 +83,7 @@ class MusicTrack {
         'id': id,
         'title': title,
         'artist': artist,
+        'album': album,
         'image': image,
         'streaming_url': streamUrl,
         'audiodownload': downloadUrl,
