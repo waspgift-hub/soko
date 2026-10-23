@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'music_account_screen.dart';
+import 'local_music_screen.dart';
 
 const String _musicApiBase = 'https://sokovibe-music-api.onrender.com';
 
@@ -136,6 +137,17 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
       appBar: AppBar(
         title: const Text('SokoVibe Music'),
         actions: [
+          IconButton(
+            tooltip: 'Nyimbo kwenye simu',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const LocalMusicScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.library_music_outlined),
+          ),
           IconButton(
             tooltip: 'Akaunti na mipangilio',
             onPressed: () {
