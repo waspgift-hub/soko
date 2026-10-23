@@ -123,3 +123,97 @@ jobs:
             cat /tmp/music-download.headers
             exit 1
           fi
+
+  production-e2e:
+    name: Production music source E2E
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    env:
+      MUSIC_API_URL: https://soko-vibe-music-backend.wapalila.workers.dev
+    steps:
+      - name: Check production health and Jamendo connectivity
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 25 "$MUSIC_API_URL/api/health" -o /tmp/health.json
+          node <<'NODE'
+          const h = require('/tmp/health.json');
+          if (h.status !== 'healthy' || h.jamendo?.configured !== true || h.jamendo?.connected !== true) {
+            console.error('FAIL: Worker/Jamendo health:', JSON.stringify(h));
+            process.exit(1);
+          }
+          console.log('PASS: Worker healthy; Jamendo configured and reachable.');
+          NODE
+      - name: Search catalog and validate real track metadata
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --max-time 30 --get --data-urlencode 'q=afrobeat' "$MUSIC_API_URL/search" -o /tmp/search.json -w '%{http_code}')
+          test "$code" = 200 || { echo "FAIL: search HTTP $code"; cat /tmp/search.json; exit 1; }
+          node <<'NODE'
+          const j = require('/tmp/search.json');
+          if (!Array.isArray(j.results) || j.results.length < 1) {
+            console.error('FAIL: Search returned no tracks:', JSON.stringify(j)); process.exit(1);
+          }
+          const t = j.results.find(x => /^\d+$/.test(String(x.id)) && x.title && x.artist);
+          if (!t) { console.error('FAIL: No usable track metadata:', JSON.stringify(j.results[0])); process.exit(1); }
+          require('fs').writeFileSync('/tmp/track-id', String(t.id));
+          console.log('PASS: Search returned', j.results.length, 'tracks; sample:', t.title, '—', t.artist);
+          NODE
+      - name: Resolve play request and verify actual audio bytes
+        run: |
+          set -euo pipefail
+          id=$(cat /tmp/track-id)
+          code=$(curl --silent --show-error --max-time 25 "$MUSIC_API_URL/play/$id" -o /tmp/play.json -w '%{http_code}')
+          test "$code" = 200 || { echo "FAIL: play HTTP $code"; cat /tmp/play.json; exit 1; }
+          node <<'NODE'
+          const p = require('/tmp/play.json');
+          const t = p.track;
+          if (!t || String(t.id) !== require('fs').readFileSync('/tmp/track-id', 'utf8') ||
+              typeof t.streaming_url !== 'string' || !t.streaming_url.startsWith('https://')) {
+            console.error('FAIL: Invalid play metadata:', JSON.stringify(p)); process.exit(1);
+          }
+          require('fs').writeFileSync('/tmp/stream-url', t.streaming_url);
+          console.log('PASS: /play/:id resolved to an HTTPS stream for track', t.id);
+          NODE
+          stream=$(cat /tmp/stream-url)
+          code=$(curl --location --silent --show-error --max-time 35 -H 'Range: bytes=0-4095' "$stream" -o /tmp/audio-sample -w '%{http_code}' -D /tmp/audio-headers)
+          case "$code" in 200|206) ;; *) echo "FAIL: audio stream HTTP $code"; cat /tmp/audio-headers; exit 1;; esac
+          test -s /tmp/audio-sample || { echo "FAIL: audio response body is empty"; exit 1; }
+          grep -Eiq '^content-type:.*(audio|octet-stream)' /tmp/audio-headers || { echo "FAIL: response is not identified as audio"; cat /tmp/audio-headers; exit 1; }
+          echo "PASS: Audio source delivered non-empty bytes (HTTP $code) with audio content type."
+      - name: Verify recommendations endpoint returns usable tracks
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --max-time 30 -H 'Content-Type: application/json' -d '{"mood":"happy","genre":"afrobeat","limit":5}' "$MUSIC_API_URL/api/recommend" -o /tmp/recommend.json -w '%{http_code}')
+          test "$code" = 200 || { echo "FAIL: recommend HTTP $code"; cat /tmp/recommend.json; exit 1; }
+          node <<'NODE'
+          const r = require('/tmp/recommend.json');
+          if (!Array.isArray(r.recommendations) || !r.recommendations.every(t => t.id && t.title && t.artist)) {
+            console.error('FAIL: Invalid recommendations payload:', JSON.stringify(r)); process.exit(1);
+          }
+          console.log('PASS: Recommendations endpoint returned', r.recommendations.length, 'valid tracks.');
+          NODE
+      - name: Check YouTube discovery provider availability
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const hosts = ['https://inv.nadeko.net', 'https://invidious.nerdvpn.de', 'https://invidious.privacyredirect.com'];
+          let working = 0;
+          for (const host of hosts) {
+            try {
+              const u = new URL('/api/v1/search', host);
+              u.searchParams.set('q', 'music');
+              u.searchParams.set('type', 'video');
+              const res = await fetch(u, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } });
+              if (!res.ok) { console.log('UNAVAILABLE:', host, 'HTTP', res.status); continue; }
+              const body = await res.json();
+              if (!Array.isArray(body)) { console.log('INVALID:', host, 'unexpected response'); continue; }
+              console.log('PASS:', host, 'returned', body.length, 'video results');
+              working++;
+            } catch (e) { console.log('UNAVAILABLE:', host, e.message); }
+          }
+          if (working === 0) {
+            console.error('FAIL: All configured YouTube metadata instances are unavailable.');
+            process.exit(1);
+          }
+          console.log('PASS: At least one YouTube discovery source is responding.');
+          NODE
