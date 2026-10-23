@@ -40,7 +40,7 @@ class OnDeviceMusicService {
   Future<List<Map<String, dynamic>>> scan() async {
     if (!Platform.isAndroid) return <Map<String, dynamic>>[];
     if (!await hasPermission) {
-      throw const PlatformException(
+      throw PlatformException(
         code: 'AUDIO_PERMISSION_REQUIRED',
         message: 'Ruhusa ya kusoma muziki wa kwenye kifaa inahitajika.',
       );
