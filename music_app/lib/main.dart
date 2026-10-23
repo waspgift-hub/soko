@@ -952,12 +952,72 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                 applicationLegalese: 'Made for music discovery.',
               ),
             ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy policy'),
+              subtitle: const Text('How music requests, settings and offline files are handled'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const PrivacyPolicyPage(),
+              )),
+            ),
           ])),
           const SizedBox(height: 12),
           Text(
             'Settings are saved on this device. Music search and lyrics need an internet connection; imported or permitted downloaded tracks can be played offline.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class PrivacyPolicyPage extends StatelessWidget {
+  const PrivacyPolicyPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Privacy policy')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        children: [
+          Text('SokoVibe Music Privacy Policy', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 6),
+          Text('Effective date: 23 October 2026', style: theme.textTheme.bodySmall),
+          const SizedBox(height: 20),
+          Text('Information handled', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text('Music searches, recommendation requests and lyrics prompts are sent to the SokoVibe Music backend to provide the requested service. Cloudflare processes network information, including IP address and request metadata, to deliver and secure the service. Music catalogue requests are handled through Jamendo. If you generate lyrics, your theme, genre and language are sent to Cloudflare Workers AI. Do not include sensitive personal information in prompts.'),
+          const SizedBox(height: 16),
+          Text('On-device information', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text('Theme, accent colour and reminder preferences are stored on your device. Imported audio and permitted offline files are kept in app-private storage and are not uploaded by the current version. You can remove local tracks, clear app data or uninstall the app to remove locally stored information.'),
+          const SizedBox(height: 16),
+          Text('Accounts, ads and payments', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text('The current version does not provide account creation, subscriptions, in-app purchases or advertising SDK functionality. If these features are added later, this policy will be updated before their release.'),
+          const SizedBox(height: 16),
+          Text('Service providers and retention', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text('Cloudflare provides backend hosting, security and AI lyrics. Jamendo provides music catalogue metadata and streams. These providers may process technical information under their own terms and privacy policies. Cloudflare service and security logs may be retained according to the SokoVibe account configuration; provider-side retention follows provider policies.'),
+          const SizedBox(height: 16),
+          Text('Security and choices', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text('The app uses HTTPS for backend requests and accepts only HTTPS track URLs. You can disable notifications in the app or Android settings and use local audio without an internet connection. No internet service can guarantee absolute security.'),
+          const SizedBox(height: 16),
+          Text('Children and changes', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Text('The current version does not create user accounts or intentionally request personal information from children. Music content is supplied by third parties; parents and guardians should supervise children’s use. This policy will be updated if app features or data practices change.'),
+          const SizedBox(height: 16),
+          Text('Contact', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const SelectableText('For privacy questions, contact support@sokovibe.co.tz.'),
+          const SizedBox(height: 20),
+          Text('This notice describes the current app implementation. The public privacy policy and Google Play Data safety declaration must remain consistent with actual behaviour and service-provider settings.', style: theme.textTheme.bodySmall),
         ],
       ),
     );
