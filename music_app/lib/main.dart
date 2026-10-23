@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'models/music_track.dart';
 import 'services/music_api.dart';
 import 'services/youtube_search_service.dart';
@@ -399,7 +398,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
               ),
               const SizedBox(height: 10),
               SegmentedButton<String>(
-                segments: const [
+                segments: [
                   ButtonSegment<String>(value: 'licensed', label: Text(_tr('Licensed audio')), icon: Icon(Icons.headphones_rounded)),
                   ButtonSegment<String>(value: 'youtube', label: Text('YouTube'), icon: Icon(Icons.smart_display_rounded)),
                 ],
