@@ -242,7 +242,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
       await NotificationService.instance.showImportant(
         id: 2010,
         title: 'Music search failed',
-        body: 'Check your internet connection and try again.',
+        body: 'The music service did not respond. Your internet may still be working.',
         payload: 'retry_search',
       );
     } finally {
@@ -472,7 +472,1343 @@ class _MusicHomePageState extends State<MusicHomePage> {
                                 icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
                                 onPressed: () => play(MusicTrack(
                                   id: file.path ?? file.name,
-                                  title: file.name.replaceFirst(RegExp(r'\\.[^.]+$'), ''),
+                                  title: file.name.replaceFirst(RegExp(r'\.[^.]+, ''),
+                                  artist: 'On this device', image: '', streamUrl: file.path, source: 'device',
+                                )),
+                              ),
+                            )),
+                        ]),
+                      ),
+                      Text(_tr('Choose your vibe'), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.55,
+                        children: [
+                          _MoodCard(title: _tr('Happy'), subtitle: 'Feel-good music', icon: Icons.wb_sunny_rounded, color: const Color(0xFFB8F36B), onTap: () => _searchMood('happy afrobeat')),
+                          _MoodCard(title: _tr('Chill'), subtitle: 'Relaxing sounds', icon: Icons.nightlight_round, color: const Color(0xFF9CC8FF), onTap: () => _searchMood('chill acoustic')),
+                          _MoodCard(title: _tr('Energy'), subtitle: 'High energy', icon: Icons.bolt_rounded, color: const Color(0xFFFFC36B), onTap: () => _searchMood('energetic dance')),
+                          _MoodCard(title: _tr('Love'), subtitle: 'Romantic songs', icon: Icons.favorite_rounded, color: const Color(0xFFFF9CCB), onTap: () => _searchMood('love romantic')),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                            colors: [scheme.primaryContainer, scheme.surfaceContainerHighest]),
+                        ),
+                        child: Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('Find your next favourite', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 5),
+                            Text('Discover something new.', style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(onPressed: () { searchController.text = 'afrobeat'; search(); },
+                              icon: const Icon(Icons.explore_rounded), label: const Text('Explore')),
+                          ])),
+                          Icon(Icons.graphic_eq_rounded, size: 64, color: scheme.primary),
+                        ]),
+                      ),
+                      const SizedBox(height: 14),
+                      Card(child: ListTile(leading: Icon(Icons.lightbulb_outline_rounded, color: scheme.primary), title: Text(_tr('How to use'), style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text(_tr('Search and play licensed music, watch YouTube in-app, or choose audio files stored on your phone.')))),
+                      const SizedBox(height: 14),
+                      Text(_tr('Discover music'), style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                    itemCount: tracks.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final track = tracks[i];
+                      return Card(
+                        color: scheme.surfaceContainerLow,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(13),
+                            child: CachedNetworkImage(imageUrl: track.image, width: 58, height: 58, fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Container(width: 58, height: 58, color: scheme.surfaceContainerHighest, child: const Icon(Icons.music_note_rounded))),
+                          ),
+                          title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: Wrap(spacing: 0, children: [
+                            IconButton(
+                              tooltip: track.downloadAllowed
+                                  ? 'Download for offline'
+                                  : 'Download unavailable for this license',
+                              onPressed: (!track.downloadAllowed || _downloading.contains(track.id)) ? null : () => _download(track),
+                              icon: _downloading.contains(track.id)
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.download_rounded),
+                            ),
+                            IconButton(tooltip: 'Lyrics', onPressed: () => showLyrics(track), icon: const Icon(Icons.lyrics_outlined)),
+                            IconButton(tooltip: 'Play', onPressed: () => play(track), icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 32)),
+                          ]),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (current != null) _PlayerBar(track: current!, player: player),
+        ]),
+      ),
+    );
+  }
+}
+
+class _MoodCard extends StatelessWidget {
+  const _MoodCard({required this.title, required this.subtitle, required this.icon, required this.color, required this.onTap});
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: dark ? Theme.of(context).colorScheme.surfaceContainerLow : color.withValues(alpha: 0.28),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(13)),
+              child: Icon(icon, color: const Color(0xFF152016))),
+            Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ])),
+              Icon(Icons.arrow_outward_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class YoutubePlayerPage extends StatefulWidget {
+  const YoutubePlayerPage({super.key, required this.track});
+  final MusicTrack track;
+  @override
+  State<YoutubePlayerPage> createState() => _YoutubePlayerPageState();
+}
+
+class _YoutubePlayerPageState extends State<YoutubePlayerPage> {
+  late final WebViewController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..setBackgroundColor(const Color(0xFF080D0B))..loadRequest(Uri.https('www.youtube.com', '/embed/${widget.track.id}', {'autoplay':'1','playsinline':'1','controls':'1','rel':'0','origin':'https://www.youtube.com'}));
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('YouTube'), actions: [IconButton(tooltip: 'Reload', onPressed: () => _controller.reload(), icon: const Icon(Icons.refresh_rounded))]), body: Column(children: [Expanded(child: WebViewWidget(controller: _controller)), ListTile(leading: const Icon(Icons.smart_display_rounded), title: Text(widget.track.title, maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text(widget.track.artist)), const SafeArea(top: false, child: Padding(padding: EdgeInsets.all(12), child: Text('Playback is provided by YouTube. Some videos may block embedded playback.', textAlign: TextAlign.center)))]));
+}
+
+class AppSettingsPage extends StatefulWidget {
+  const AppSettingsPage({super.key, required this.settings, required this.onChanged});
+  final AppSettings settings;
+  final VoidCallback onChanged;
+
+  @override
+  State<AppSettingsPage> createState() => _AppSettingsPageState();
+}
+
+class _AppSettingsPageState extends State<AppSettingsPage> {
+  static const colors = <int>[
+    0xFF2E7D32, 0xFF00897B, 0xFF1565C0, 0xFF6A1B9A,
+    0xFFEF6C00, 0xFFC62828, 0xFF37474F,
+  ];
+  Future<void> _changeReminder(bool enabled) async {
+    if (enabled) {
+      final granted = await NotificationService.instance.requestPermission();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
+          );
+        }
+        return;
+      }
+      await widget.settings.saveReminder(true);
+      await NotificationService.instance.scheduleDailyReminder(
+        hour: widget.settings.reminderHour,
+        minute: widget.settings.reminderMinute,
+      );
+    } else {
+      await widget.settings.saveReminder(false);
+      await NotificationService.instance.cancelDailyReminder();
+    }
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _chooseReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: widget.settings.reminderHour, minute: widget.settings.reminderMinute),
+    );
+    if (picked == null) return;
+    await widget.settings.saveReminderTime(picked.hour, picked.minute);
+    if (widget.settings.dailyReminder) {
+      await NotificationService.instance.scheduleDailyReminder(hour: picked.hour, minute: picked.minute);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _chooseTheme(ThemeMode? mode) async {
+    if (mode == null) return;
+    await widget.settings.saveTheme(mode);
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _chooseColor(int color) async {
+    await widget.settings.saveColor(color);
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  String _timeLabel(BuildContext context) => TimeOfDay(
+    hour: widget.settings.reminderHour,
+    minute: widget.settings.reminderMinute,
+  ).format(context);
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    return Scaffold(
+      appBar: AppBar(title: const Text('App settings')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        children: [
+          Text('Language', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: DropdownButtonFormField<String>(
+            value: settings.language, decoration: const InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.translate_rounded)),
+            items: const [DropdownMenuItem(value: 'en', child: Text('English')), DropdownMenuItem(value: 'zh', child: Text('中文')), DropdownMenuItem(value: 'fr', child: Text('Français')), DropdownMenuItem(value: 'sw', child: Text('Kiswahili'))],
+            onChanged: (value) async { if (value == null) return; await settings.saveLanguage(value); if (mounted) setState(() {}); widget.onChanged(); },
+          ))),
+          const SizedBox(height: 20),
+          Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Theme'),
+                const SizedBox(height: 8),
+                SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System')),
+                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
+                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
+                  ],
+                  selected: {settings.themeMode},
+                  onSelectionChanged: (selection) => _chooseTheme(selection.first),
+                ),
+                const SizedBox(height: 20),
+                const Text('Accent colour'),
+                const SizedBox(height: 12),
+                Wrap(spacing: 12, runSpacing: 12, children: [
+                  for (final color in colors)
+                    InkWell(
+                      onTap: () => _chooseColor(color),
+                      customBorder: const CircleBorder(),
+                      child: Semantics(
+                        label: 'Choose accent colour',
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Color(color),
+                          child: settings.colorSeed == color
+                              ? const Icon(Icons.check, color: Colors.white)
+                              : null,
+                        ),
+                      ),
+                    ),
+                ]),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Sound identity', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: SwitchListTile(
+            secondary: const Icon(Icons.graphic_eq_rounded),
+            title: const Text('Startup signature sound'),
+            subtitle: const Text('Play the short futuristic SokoVibe sound once when the app starts.'),
+            value: settings.startupSound,
+            onChanged: (enabled) async {
+              await settings.saveStartupSound(enabled);
+              if (mounted) setState(() {});
+            },
+          )),
+          const SizedBox(height: 20),
+          Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Daily listening reminder'),
+                subtitle: const Text('A daily reminder to listen to music.'),
+                value: settings.dailyReminder,
+                onChanged: _changeReminder,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                enabled: settings.dailyReminder,
+                leading: const Icon(Icons.schedule),
+                title: const Text('Reminder time'),
+                subtitle: Text(_timeLabel(context)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: settings.dailyReminder ? _chooseReminderTime : null,
+              ),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          Text('About', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: Column(children: [
+            const ListTile(
+              leading: Icon(Icons.music_note),
+              title: Text('Soko Vibe Music'),
+              subtitle: Text('Music discovery, player and lyrics'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('App version'),
+              subtitle: const Text('0.1.0'),
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: 'Soko Vibe Music',
+                applicationVersion: '0.1.0',
+                applicationLegalese: 'Made for music discovery.',
+              ),
+            ),
+          ])),
+          const SizedBox(height: 12),
+          Text(
+            'Settings are saved on this device. Music search and lyrics need an internet connection; downloaded/offline features depend on the relevant feature being implemented.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LyricsSheet extends StatefulWidget {
+  const _LyricsSheet({required this.track, required this.player});
+  final MusicTrack track;
+  final AudioPlayer player;
+
+  @override
+  State<_LyricsSheet> createState() => _LyricsSheetState();
+}
+
+class _LyricsSheetState extends State<_LyricsSheet> {
+  final _service = LyricsService();
+  TrackLyrics? _lyrics;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLyrics();
+  }
+
+  Future<void> _loadLyrics() async {
+    try {
+      final result = await _service.findLyrics(
+        title: widget.track.title,
+        artist: widget.track.artist,
+      );
+      if (!mounted) return;
+      setState(() {
+        _lyrics = result;
+        _loading = false;
+        if (result == null) _error = 'Lyrics are not available for this song yet.';
+      });
+    } on LyricsException catch (e) {
+      if (mounted) setState(() { _error = e.message; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _error = 'Unable to load lyrics right now.'; _loading = false; });
+    }
+  }
+
+  List<_TimedLyricLine> _parseSyncedLyrics(String raw) {
+    final lines = <_TimedLyricLine>[];
+    final pattern = RegExp(r'^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]\s*(.*)$');
+    for (final line in raw.split('\n')) {
+      final match = pattern.firstMatch(line.trim());
+      if (match == null) continue;
+      final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
+      final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
+      final fractionRaw = match.group(3) ?? '0';
+      final millis = int.tryParse(fractionRaw.padRight(3, '0').substring(0, 3)) ?? 0;
+      lines.add(_TimedLyricLine(
+        time: Duration(minutes: minutes, seconds: seconds, milliseconds: millis),
+        text: match.group(4) ?? '',
+      ));
+    }
+    return lines;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lyrics = _lyrics;
+    final synced = lyrics?.syncedLyrics;
+    final timedLines = synced == null ? <_TimedLyricLine>[] : _parseSyncedLyrics(synced);
+    final plain = lyrics?.plainLyrics;
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.82,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Lyrics', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text('${widget.track.title} • ${widget.track.artist}',
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium),
+            const Divider(height: 24),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.lyrics_outlined, size: 42),
+                            const SizedBox(height: 12),
+                            Text(_error!, textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                setState(() { _loading = true; _error = null; });
+                                _loadLyrics();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Try again'),
+                            ),
+                          ],
+                        ))
+                      : lyrics?.instrumental == true
+                          ? const Center(child: Text('This track is marked as instrumental.'))
+                          : timedLines.isNotEmpty
+                              ? StreamBuilder<Duration>(
+                                  stream: widget.player.positionStream,
+                                  initialData: widget.player.position,
+                                  builder: (context, snapshot) {
+                                    final position = snapshot.data ?? Duration.zero;
+                                    var activeIndex = -1;
+                                    for (var i = 0; i < timedLines.length; i++) {
+                                      if (timedLines[i].time <= position) {
+                                        activeIndex = i;
+                                      } else {
+                                        break;
+                                      }
+                                    }
+                                    return ListView.builder(
+                                      itemCount: timedLines.length,
+                                      itemBuilder: (context, index) {
+                                        final active = index == activeIndex;
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 9),
+                                          child: AnimatedDefaultTextStyle(
+                                            duration: const Duration(milliseconds: 160),
+                                            style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                              height: 1.45,
+                                              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                                              color: active
+                                                  ? Theme.of(context).colorScheme.primary
+                                                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
+                                            ),
+                                            child: Text(timedLines[index].text),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                )
+                              : (plain != null && plain.trim().isNotEmpty)
+                                  ? SingleChildScrollView(
+                                      child: SelectableText(plain, style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.7)),
+                                    )
+                                  : const Center(child: Text('Lyrics are not available for this song yet.')),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Lyrics provided by LRCLIB. Availability and timing depend on the source record.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimedLyricLine {
+  const _TimedLyricLine({required this.time, required this.text});
+  final Duration time;
+  final String text;
+}
+
+class _PlayerBar extends StatelessWidget {
+  const _PlayerBar({required this.track, required this.player});
+  final MusicTrack track;
+  final AudioPlayer player;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(children: [
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: track.image, width: 48, height: 48, fit: BoxFit.cover, errorWidget: (_, __, ___) => const Icon(Icons.music_note))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(track.artist, style: Theme.of(context).textTheme.bodySmall),
+            ])),
+            StreamBuilder<PlayerState>(
+              stream: player.playerStateStream,
+              builder: (_, snap) {
+                final playing = snap.data?.playing ?? false;
+                return IconButton(onPressed: () => playing ? player.pause() : player.play(), icon: Icon(playing ? Icons.pause_circle : Icons.play_circle, size: 34));
+              },
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DownloadsPage extends StatefulWidget {
+  const DownloadsPage({super.key, required this.player, required this.onPlay});
+  final AudioPlayer player;
+  final Future<void> Function(DownloadedTrack track) onPlay;
+
+  @override
+  State<DownloadsPage> createState() => _DownloadsPageState();
+}
+
+class _DownloadsPageState extends State<DownloadsPage> {
+  List<DownloadedTrack> items = <DownloadedTrack>[];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final saved = await DownloadService.instance.list();
+      if (mounted) setState(() => items = saved);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not load downloaded music.');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _delete(DownloadedTrack item) async {
+    try {
+      await DownloadService.instance.delete(item);
+      if (mounted) {
+        setState(() => items.removeWhere((saved) => saved.id == item.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Removed ${item.title} from downloads.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete this download.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Downloads'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh downloads',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(error!),
+                      const SizedBox(height: 8),
+                      FilledButton(onPressed: _refresh, child: const Text('Retry')),
+                    ],
+                  ),
+                )
+              : items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.download_for_offline_outlined, size: 64, color: scheme.primary),
+                            const SizedBox(height: 12),
+                            Text('No offline music yet', style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 6),
+                            const Text('Use the download icon on a song while online. Your saved tracks will appear here.'),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Card(
+                          color: scheme.surfaceContainerLow,
+                          child: ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: CachedNetworkImage(
+                                imageUrl: item.image,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Container(
+                                  width: 52,
+                                  height: 52,
+                                  color: scheme.surfaceContainerHighest,
+                                  child: const Icon(Icons.music_note_rounded),
+                                ),
+                              ),
+                            ),
+                            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('${item.artist} · Offline ready'),
+                            trailing: Wrap(
+                              spacing: 0,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Play offline',
+                                  onPressed: () async {
+                                    try {
+                                      await widget.onPlay(item);
+                                    } catch (_) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('This saved file could not be played. Try downloading it again.')),
+                                      );
+                                    }
+                                  },
+                                  icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete download',
+                                  onPressed: () => _delete(item),
+                                  icon: const Icon(Icons.delete_outline_rounded),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+    );
+  }
+}
+), ''), artist: 'On this device', image: '', streamUrl: file.path, source: 'device'))))),
+                        ]),
+                      ),
+                      Text(_tr('Choose your vibe'), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.55,
+                        children: [
+                          _MoodCard(title: 'Happy', subtitle: 'Feel-good music', icon: Icons.wb_sunny_rounded, color: const Color(0xFFB8F36B), onTap: () => _searchMood('happy afrobeat')),
+                          _MoodCard(title: 'Chill', subtitle: 'Relaxing sounds', icon: Icons.nightlight_round, color: const Color(0xFF9CC8FF), onTap: () => _searchMood('chill acoustic')),
+                          _MoodCard(title: 'Energy', subtitle: 'High energy', icon: Icons.bolt_rounded, color: const Color(0xFFFFC36B), onTap: () => _searchMood('energetic dance')),
+                          _MoodCard(title: 'Love', subtitle: 'Romantic songs', icon: Icons.favorite_rounded, color: const Color(0xFFFF9CCB), onTap: () => _searchMood('love romantic')),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                            colors: [scheme.primaryContainer, scheme.surfaceContainerHighest]),
+                        ),
+                        child: Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('Find your next favourite', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 5),
+                            Text('Discover something new.', style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(onPressed: () { searchController.text = 'afrobeat'; search(); },
+                              icon: const Icon(Icons.explore_rounded), label: const Text('Explore')),
+                          ])),
+                          Icon(Icons.graphic_eq_rounded, size: 64, color: scheme.primary),
+                        ]),
+                      ),
+                      const SizedBox(height: 14),
+                      Text('Discover music', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                    itemCount: tracks.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final track = tracks[i];
+                      return Card(
+                        color: scheme.surfaceContainerLow,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(13),
+                            child: CachedNetworkImage(imageUrl: track.image, width: 58, height: 58, fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Container(width: 58, height: 58, color: scheme.surfaceContainerHighest, child: const Icon(Icons.music_note_rounded))),
+                          ),
+                          title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: Wrap(spacing: 0, children: [
+                            IconButton(
+                              tooltip: track.downloadAllowed
+                                  ? 'Download for offline'
+                                  : 'Download unavailable for this license',
+                              onPressed: (!track.downloadAllowed || _downloading.contains(track.id)) ? null : () => _download(track),
+                              icon: _downloading.contains(track.id)
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.download_rounded),
+                            ),
+                            IconButton(tooltip: 'Lyrics', onPressed: () => showLyrics(track), icon: const Icon(Icons.lyrics_outlined)),
+                            IconButton(tooltip: 'Play', onPressed: () => play(track), icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 32)),
+                          ]),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (current != null) _PlayerBar(track: current!, player: player),
+        ]),
+      ),
+    );
+  }
+}
+
+class _MoodCard extends StatelessWidget {
+  const _MoodCard({required this.title, required this.subtitle, required this.icon, required this.color, required this.onTap});
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: dark ? Theme.of(context).colorScheme.surfaceContainerLow : color.withValues(alpha: 0.28),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(13)),
+              child: Icon(icon, color: const Color(0xFF152016))),
+            Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ])),
+              Icon(Icons.arrow_outward_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class AppSettingsPage extends StatefulWidget {
+  const AppSettingsPage({super.key, required this.settings, required this.onChanged});
+  final AppSettings settings;
+  final VoidCallback onChanged;
+
+  @override
+  State<AppSettingsPage> createState() => _AppSettingsPageState();
+}
+
+class _AppSettingsPageState extends State<AppSettingsPage> {
+  static const colors = <int>[
+    0xFF2E7D32, 0xFF00897B, 0xFF1565C0, 0xFF6A1B9A,
+    0xFFEF6C00, 0xFFC62828, 0xFF37474F,
+  ];
+  Future<void> _changeReminder(bool enabled) async {
+    if (enabled) {
+      final granted = await NotificationService.instance.requestPermission();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Allow notifications in Android settings to enable reminders.')),
+          );
+        }
+        return;
+      }
+      await widget.settings.saveReminder(true);
+      await NotificationService.instance.scheduleDailyReminder(
+        hour: widget.settings.reminderHour,
+        minute: widget.settings.reminderMinute,
+      );
+    } else {
+      await widget.settings.saveReminder(false);
+      await NotificationService.instance.cancelDailyReminder();
+    }
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _chooseReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: widget.settings.reminderHour, minute: widget.settings.reminderMinute),
+    );
+    if (picked == null) return;
+    await widget.settings.saveReminderTime(picked.hour, picked.minute);
+    if (widget.settings.dailyReminder) {
+      await NotificationService.instance.scheduleDailyReminder(hour: picked.hour, minute: picked.minute);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _chooseTheme(ThemeMode? mode) async {
+    if (mode == null) return;
+    await widget.settings.saveTheme(mode);
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  Future<void> _chooseColor(int color) async {
+    await widget.settings.saveColor(color);
+    if (mounted) setState(() {});
+    widget.onChanged();
+  }
+
+  String _timeLabel(BuildContext context) => TimeOfDay(
+    hour: widget.settings.reminderHour,
+    minute: widget.settings.reminderMinute,
+  ).format(context);
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    return Scaffold(
+      appBar: AppBar(title: const Text('App settings')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        children: [
+          Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Theme'),
+                const SizedBox(height: 8),
+                SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_outlined), label: Text('System')),
+                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
+                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
+                  ],
+                  selected: {settings.themeMode},
+                  onSelectionChanged: (selection) => _chooseTheme(selection.first),
+                ),
+                const SizedBox(height: 20),
+                const Text('Accent colour'),
+                const SizedBox(height: 12),
+                Wrap(spacing: 12, runSpacing: 12, children: [
+                  for (final color in colors)
+                    InkWell(
+                      onTap: () => _chooseColor(color),
+                      customBorder: const CircleBorder(),
+                      child: Semantics(
+                        label: 'Choose accent colour',
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Color(color),
+                          child: settings.colorSeed == color
+                              ? const Icon(Icons.check, color: Colors.white)
+                              : null,
+                        ),
+                      ),
+                    ),
+                ]),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Sound identity', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: SwitchListTile(
+            secondary: const Icon(Icons.graphic_eq_rounded),
+            title: const Text('Startup signature sound'),
+            subtitle: const Text('Play the short futuristic SokoVibe sound once when the app starts.'),
+            value: settings.startupSound,
+            onChanged: (enabled) async {
+              await settings.saveStartupSound(enabled);
+              if (mounted) setState(() {});
+            },
+          )),
+          const SizedBox(height: 20),
+          Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Daily listening reminder'),
+                subtitle: const Text('A daily reminder to listen to music.'),
+                value: settings.dailyReminder,
+                onChanged: _changeReminder,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                enabled: settings.dailyReminder,
+                leading: const Icon(Icons.schedule),
+                title: const Text('Reminder time'),
+                subtitle: Text(_timeLabel(context)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: settings.dailyReminder ? _chooseReminderTime : null,
+              ),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          Text('About', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(child: Column(children: [
+            const ListTile(
+              leading: Icon(Icons.music_note),
+              title: Text('Soko Vibe Music'),
+              subtitle: Text('Music discovery, player and lyrics'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('App version'),
+              subtitle: const Text('0.1.0'),
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: 'Soko Vibe Music',
+                applicationVersion: '0.1.0',
+                applicationLegalese: 'Made for music discovery.',
+              ),
+            ),
+          ])),
+          const SizedBox(height: 12),
+          Text(
+            'Settings are saved on this device. Music search and lyrics need an internet connection; downloaded/offline features depend on the relevant feature being implemented.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LyricsSheet extends StatefulWidget {
+  const _LyricsSheet({required this.track, required this.player});
+  final MusicTrack track;
+  final AudioPlayer player;
+
+  @override
+  State<_LyricsSheet> createState() => _LyricsSheetState();
+}
+
+class _LyricsSheetState extends State<_LyricsSheet> {
+  final _service = LyricsService();
+  TrackLyrics? _lyrics;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLyrics();
+  }
+
+  Future<void> _loadLyrics() async {
+    try {
+      final result = await _service.findLyrics(
+        title: widget.track.title,
+        artist: widget.track.artist,
+      );
+      if (!mounted) return;
+      setState(() {
+        _lyrics = result;
+        _loading = false;
+        if (result == null) _error = 'Lyrics are not available for this song yet.';
+      });
+    } on LyricsException catch (e) {
+      if (mounted) setState(() { _error = e.message; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _error = 'Unable to load lyrics right now.'; _loading = false; });
+    }
+  }
+
+  List<_TimedLyricLine> _parseSyncedLyrics(String raw) {
+    final lines = <_TimedLyricLine>[];
+    final pattern = RegExp(r'^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]\s*(.*)$');
+    for (final line in raw.split('\n')) {
+      final match = pattern.firstMatch(line.trim());
+      if (match == null) continue;
+      final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
+      final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
+      final fractionRaw = match.group(3) ?? '0';
+      final millis = int.tryParse(fractionRaw.padRight(3, '0').substring(0, 3)) ?? 0;
+      lines.add(_TimedLyricLine(
+        time: Duration(minutes: minutes, seconds: seconds, milliseconds: millis),
+        text: match.group(4) ?? '',
+      ));
+    }
+    return lines;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lyrics = _lyrics;
+    final synced = lyrics?.syncedLyrics;
+    final timedLines = synced == null ? <_TimedLyricLine>[] : _parseSyncedLyrics(synced);
+    final plain = lyrics?.plainLyrics;
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.82,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Lyrics', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text('${widget.track.title} • ${widget.track.artist}',
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium),
+            const Divider(height: 24),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.lyrics_outlined, size: 42),
+                            const SizedBox(height: 12),
+                            Text(_error!, textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                setState(() { _loading = true; _error = null; });
+                                _loadLyrics();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Try again'),
+                            ),
+                          ],
+                        ))
+                      : lyrics?.instrumental == true
+                          ? const Center(child: Text('This track is marked as instrumental.'))
+                          : timedLines.isNotEmpty
+                              ? StreamBuilder<Duration>(
+                                  stream: widget.player.positionStream,
+                                  initialData: widget.player.position,
+                                  builder: (context, snapshot) {
+                                    final position = snapshot.data ?? Duration.zero;
+                                    var activeIndex = -1;
+                                    for (var i = 0; i < timedLines.length; i++) {
+                                      if (timedLines[i].time <= position) {
+                                        activeIndex = i;
+                                      } else {
+                                        break;
+                                      }
+                                    }
+                                    return ListView.builder(
+                                      itemCount: timedLines.length,
+                                      itemBuilder: (context, index) {
+                                        final active = index == activeIndex;
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 9),
+                                          child: AnimatedDefaultTextStyle(
+                                            duration: const Duration(milliseconds: 160),
+                                            style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                              height: 1.45,
+                                              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                                              color: active
+                                                  ? Theme.of(context).colorScheme.primary
+                                                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
+                                            ),
+                                            child: Text(timedLines[index].text),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                )
+                              : (plain != null && plain.trim().isNotEmpty)
+                                  ? SingleChildScrollView(
+                                      child: SelectableText(plain, style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.7)),
+                                    )
+                                  : const Center(child: Text('Lyrics are not available for this song yet.')),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Lyrics provided by LRCLIB. Availability and timing depend on the source record.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimedLyricLine {
+  const _TimedLyricLine({required this.time, required this.text});
+  final Duration time;
+  final String text;
+}
+
+class _PlayerBar extends StatelessWidget {
+  const _PlayerBar({required this.track, required this.player});
+  final MusicTrack track;
+  final AudioPlayer player;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(children: [
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: track.image, width: 48, height: 48, fit: BoxFit.cover, errorWidget: (_, __, ___) => const Icon(Icons.music_note))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(track.artist, style: Theme.of(context).textTheme.bodySmall),
+            ])),
+            StreamBuilder<PlayerState>(
+              stream: player.playerStateStream,
+              builder: (_, snap) {
+                final playing = snap.data?.playing ?? false;
+                return IconButton(onPressed: () => playing ? player.pause() : player.play(), icon: Icon(playing ? Icons.pause_circle : Icons.play_circle, size: 34));
+              },
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DownloadsPage extends StatefulWidget {
+  const DownloadsPage({super.key, required this.player, required this.onPlay});
+  final AudioPlayer player;
+  final Future<void> Function(DownloadedTrack track) onPlay;
+
+  @override
+  State<DownloadsPage> createState() => _DownloadsPageState();
+}
+
+class _DownloadsPageState extends State<DownloadsPage> {
+  List<DownloadedTrack> items = <DownloadedTrack>[];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final saved = await DownloadService.instance.list();
+      if (mounted) setState(() => items = saved);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Could not load downloaded music.');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _delete(DownloadedTrack item) async {
+    try {
+      await DownloadService.instance.delete(item);
+      if (mounted) {
+        setState(() => items.removeWhere((saved) => saved.id == item.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Removed ${item.title} from downloads.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete this download.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Downloads'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh downloads',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(error!),
+                      const SizedBox(height: 8),
+                      FilledButton(onPressed: _refresh, child: const Text('Retry')),
+                    ],
+                  ),
+                )
+              : items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.download_for_offline_outlined, size: 64, color: scheme.primary),
+                            const SizedBox(height: 12),
+                            Text('No offline music yet', style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 6),
+                            const Text('Use the download icon on a song while online. Your saved tracks will appear here.'),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Card(
+                          color: scheme.surfaceContainerLow,
+                          child: ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: CachedNetworkImage(
+                                imageUrl: item.image,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Container(
+                                  width: 52,
+                                  height: 52,
+                                  color: scheme.surfaceContainerHighest,
+                                  child: const Icon(Icons.music_note_rounded),
+                                ),
+                              ),
+                            ),
+                            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('${item.artist} · Offline ready'),
+                            trailing: Wrap(
+                              spacing: 0,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Play offline',
+                                  onPressed: () async {
+                                    try {
+                                      await widget.onPlay(item);
+                                    } catch (_) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('This saved file could not be played. Try downloading it again.')),
+                                      );
+                                    }
+                                  },
+                                  icon: Icon(Icons.play_circle_fill_rounded, color: scheme.primary, size: 30),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete download',
+                                  onPressed: () => _delete(item),
+                                  icon: const Icon(Icons.delete_outline_rounded),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+    );
+  }
+}
+), ''),
                                   artist: 'On this device', image: '', streamUrl: file.path, source: 'device',
                                 )),
                               ),
