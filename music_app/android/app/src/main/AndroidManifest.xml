@@ -5,7 +5,9 @@
     <application
         android:label="Soko Vibe Music"
         android:name="${applicationName}"
-        android:icon="@drawable/sokovibe_launcher">
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false"
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
