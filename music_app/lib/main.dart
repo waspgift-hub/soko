@@ -665,7 +665,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           Text('Language', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: DropdownButtonFormField<String>(
-            value: settings.language, decoration: const InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.translate_rounded)),
+            initialValue: settings.language, decoration: const InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.translate_rounded)),
             items: const [DropdownMenuItem(value: 'en', child: Text('English')), DropdownMenuItem(value: 'zh', child: Text('中文')), DropdownMenuItem(value: 'fr', child: Text('Français')), DropdownMenuItem(value: 'sw', child: Text('Kiswahili'))],
             onChanged: (value) async { if (value == null) return; await settings.saveLanguage(value); if (mounted) setState(() {}); widget.onChanged(); },
           ))),
