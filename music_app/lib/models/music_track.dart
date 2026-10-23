@@ -5,6 +5,8 @@ class MusicTrack {
   final String? album;
   final String image;
   final String? streamUrl;
+  final String? streamLookupUrl;
+  final String? sourceUrl;
   final String? downloadUrl;
   final bool audiodownloadAllowed;
   final String license;
@@ -18,6 +20,8 @@ class MusicTrack {
     this.album,
     required this.image,
     this.streamUrl,
+    this.streamLookupUrl,
+    this.sourceUrl,
     this.downloadUrl,
     this.audiodownloadAllowed = false,
     this.license = '',
@@ -46,21 +50,23 @@ class MusicTrack {
     return MusicTrack(
       id: '${json['id'] ?? ''}',
       title: '${json['title'] ?? json['song'] ?? 'Unknown title'}',
-      artist: '${json['artist'] ?? 'Unknown artist'}',
+      artist: '${json['artist'] ?? json['creator'] ?? 'Unknown artist'}',
       album: (json['album'] ?? json['album_name'])?.toString(),
       image: _httpsOrEmpty(
         (json['image'] ?? json['cover'])?.toString(),
       ),
       streamUrl: _httpsOrNull(
-        (json['streaming_url'] ?? json['audio'])?.toString(),
+        (json['streaming_url'] ?? json['streamUrl'] ?? json['audio'])?.toString(),
       ),
+      streamLookupUrl: _safeLookupPath(json['streamLookupUrl']?.toString()),
+      sourceUrl: _httpsOrNull((json['sourceUrl'] ?? json['share_url'])?.toString()),
       downloadUrl: _httpsOrNull(
         (json['audiodownload'] ?? json['download'])?.toString(),
       ),
       audiodownloadAllowed: allowed,
       license: '${json['license'] ?? ''}',
       durationSeconds: int.tryParse('${json['duration'] ?? 0}') ?? 0,
-      source: '${json['source'] ?? 'jamendo'}'.toLowerCase(),
+      source: '${json['source'] ?? json['provider'] ?? 'jamendo'}'.toLowerCase(),
     );
   }
 
@@ -86,6 +92,8 @@ class MusicTrack {
         'album': album,
         'image': image,
         'streaming_url': streamUrl,
+        'streamLookupUrl': streamLookupUrl,
+        'sourceUrl': sourceUrl,
         'audiodownload': downloadUrl,
         'audiodownload_allowed': audiodownloadAllowed,
         'license': license,
@@ -103,4 +111,16 @@ class MusicTrack {
   }
 
   static String _httpsOrEmpty(String? value) => _httpsOrNull(value) ?? '';
+
+  static String? _safeLookupPath(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return null;
+    if (uri.hasScheme) {
+      return uri.scheme == 'https' && uri.host.isNotEmpty ? uri.toString() : null;
+    }
+    return uri.path.startsWith('/api/v1/catalog/play/internet-archive/')
+        ? uri.toString()
+        : null;
+  }
 }
