@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -80,116 +81,115 @@ class R2MediaService {
 
   /// PUT the bytes directly to the pre-signed R2 URL, reporting real byte counts.
   ///
-  /// [onProgress] receives a count of bytes actually handed to the socket, and
-  /// the total comes from the real file length. That is why this is a
-  /// `StreamedRequest` fed through a counting transformer rather than
-  /// `http.put`: `put` hands the whole body over in one call and reports
-  /// nothing until the server has answered, so the only honest UI it supports
-  /// is an indeterminate spinner.
+  /// [onProgress] receives the count of bytes actually written to the socket
+  /// and the total is the real file length, so every number the UI shows is
+  /// measured rather than estimated.
+  ///
+  /// Uses `dart:io`'s [HttpClient] rather than `package:http`. `package:http`'s
+  /// `StreamedRequest` deadlocks here: awaiting `sink.addStream` before `send`
+  /// never completes, and not awaiting it leaves `send` hanging — verified
+  /// against a local server, so the previous implementation of this method and
+  /// of [_putR2Stream] could not complete an upload at all. With [HttpClient]
+  /// the body must be written *before* `close()`, because closing first flushes
+  /// the headers and the later write is discarded ("No content even though
+  /// contentLength was specified"). That ordering is the whole reason this is
+  /// not a one-liner.
   ///
   /// Retries deliberately stop at one attempt. The presigned URL is minted per
-  /// upload and expires, so a blind retry against the same URL can fail in
-  /// ways that look like network trouble. Callers that want a retry mint a
-  /// fresh session by calling this method again.
+  /// upload and expires, so a blind retry against the same URL can fail in ways
+  /// that look like network trouble. Callers that want a retry mint a fresh
+  /// session by calling this method again.
   static Future<void> _putToR2({
     required String url,
     required File file,
     required String contentType,
     void Function(int sent, int total)? onProgress,
-  }) async {
-    final total = await file.length();
-
-    final request = http.StreamedRequest('PUT', Uri.parse(url))
-      ..headers['Content-Type'] = contentType
-      ..contentLength = total;
-
-    // Throttle: a video can emit thousands of chunks per second and each one
-    // would otherwise rebuild a progress row.
-    var lastReport = 0;
-    var sent = 0;
-    onProgress?.call(0, total);
-
-    await request.sink.addStream(
-      file.openRead().map((chunk) {
-        sent += chunk.length;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (now - lastReport >= _progressThrottleMs || sent >= total) {
-          lastReport = now;
-          onProgress?.call(sent, total);
-        }
-        return chunk;
-      }),
-    );
-    await request.sink.close();
-
-    final client = http.Client();
-    try {
-      final response =
-          await client.send(request).timeout(const Duration(seconds: 120));
-      // Drain so the connection can be returned to the pool rather than left
-      // half-read.
-      await response.stream.drain<void>();
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw NetworkError(
-          message: 'R2 upload failed (HTTP ${response.statusCode})',
-          userMessage: 'Tafadhali jaribu tena',
-        );
-      }
-      // Final authoritative report: the server has confirmed the object, so the
-      // full total is genuinely done regardless of chunk arithmetic.
-      onProgress?.call(total, total);
-    } finally {
-      client.close();
-    }
-  }
+  }) =>
+      _putFileToR2(
+        url: url,
+        file: file,
+        contentType: contentType,
+        timeout: const Duration(seconds: 120),
+        onProgress: onProgress,
+      );
 
   /// PUT a file to R2 without loading it fully into memory, reporting progress.
   ///
-  /// Needed for video: a 300MB clip held as a `List<int>` needs ~300MB of
-  /// heap, which a low-RAM Android device does not have while also decoding
-  /// the picked video thumbnail.
+  /// Needed for video: a 300MB clip held as a `List<int>` needs ~300MB of heap,
+  /// which a low-RAM Android device does not have while also decoding the
+  /// picked video thumbnail.
   static Future<void> _putR2Stream({
     required String url,
     required File file,
     required String contentType,
     void Function(int sent, int total)? onProgress,
+  }) =>
+      _putFileToR2(
+        url: url,
+        file: file,
+        contentType: contentType,
+        // Longer than the image budget: a clip on a slow uplink legitimately
+        // takes minutes, and cutting it off would fail uploads that would have
+        // succeeded.
+        timeout: const Duration(seconds: 600),
+        onProgress: onProgress,
+      );
+
+  /// The one streamed PUT both upload paths share.
+  static Future<void> _putFileToR2({
+    required String url,
+    required File file,
+    required String contentType,
+    required Duration timeout,
+    void Function(int sent, int total)? onProgress,
   }) async {
     final total = await file.length();
-    final request = http.StreamedRequest('PUT', Uri.parse(url))
-      ..headers['Content-Type'] = contentType
-      ..contentLength = total;
-    onProgress?.call(0, total);
+    final client = HttpClient();
 
-    var lastReport = 0;
-    var sent = 0;
-    await request.sink.addStream(
-      file.openRead().map((chunk) {
-        sent += chunk.length;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (now - lastReport >= _progressThrottleMs || sent >= total) {
-          lastReport = now;
-          onProgress?.call(sent, total);
-        }
-        return chunk;
-      }),
-    );
-    await request.sink.close();
-
-    final client = http.Client();
     try {
-      final response =
-          await client.send(request).timeout(const Duration(seconds: 300));
-      await response.stream.drain<void>();
+      final request = await client.putUrl(Uri.parse(url)).timeout(timeout);
+      request.headers.set(HttpHeaders.contentTypeHeader, contentType);
+      // Mandatory for a presigned S3/R2 PUT: the signature covers the length.
+      request.contentLength = total;
+
+      var sent = 0;
+      var lastReport = 0;
+      onProgress?.call(0, total);
+
+      // Throttled: a video emits thousands of chunks per second and each one
+      // would otherwise rebuild a progress row. 120ms is ~8 updates/second,
+      // which still reads as continuous movement.
+      await request
+          .addStream(
+            file.openRead().map((chunk) {
+              sent += chunk.length;
+              final now = DateTime.now().millisecondsSinceEpoch;
+              if (now - lastReport >= _progressThrottleMs || sent >= total) {
+                lastReport = now;
+                onProgress?.call(sent, total);
+              }
+              return chunk;
+            }),
+          )
+          .timeout(timeout);
+
+      // Only now: the body is fully written, so the headers can go out.
+      final response = await request.close().timeout(timeout);
+      await response.drain<void>();
+
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw NetworkError(
           message: 'R2 upload failed (HTTP ${response.statusCode})',
           userMessage: 'Tafadhali jaribu tena',
         );
       }
+
+      // Authoritative final report: the object is confirmed stored, so the full
+      // total is genuinely done regardless of chunk arithmetic.
       onProgress?.call(total, total);
     } finally {
-      client.close();
+      // `force: true` so a half-written request cannot keep a socket alive.
+      client.close(force: true);
     }
   }
 
@@ -334,6 +334,31 @@ class R2MediaService {
     }
     return urls;
   }
+
+  /// Test seam over [_putToR2].
+  ///
+  /// Exists so the byte-accounting can be asserted against a real socket. The
+  /// progress contract in this file is the one thing a unit test must not be
+  /// allowed to mock away — a stubbed uploader would pass even if the real one
+  /// reported nothing.
+  @visibleForTesting
+  static Future<void> putToR2ForTesting({
+    required String url,
+    required File file,
+    required String contentType,
+    void Function(int sent, int total)? onProgress,
+  }) =>
+      _putToR2(
+        url: url,
+        file: file,
+        contentType: contentType,
+        onProgress: onProgress,
+      );
+
+  /// Test seam over [_contentTypeFor].
+  @visibleForTesting
+  static String contentTypeForTesting(String extension) =>
+      _contentTypeFor(extension);
 
   static String _extensionFor(File file) =>
       file.path.contains('.') ? file.path.split('.').last : 'jpg';

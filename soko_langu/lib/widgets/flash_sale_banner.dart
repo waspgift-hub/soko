@@ -5,6 +5,8 @@ import 'product_cached_image.dart';
 import '../models/flash_sale_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
+import '../theme/design_tokens.dart';
+import '../theme/responsive_typography.dart';
 
 class FlashSaleBanner extends StatefulWidget {
   final List<FlashSale> sales;
@@ -19,6 +21,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
   late PageController _pageController;
   int _currentPage = 0;
   Timer? _timer;
+
   @override
   void initState() {
     super.initState();
@@ -77,9 +80,11 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
 
     _startAutoSlide(sales.length);
 
-    return Container(
+    return ResponsiveBanner(
+      minHeight: 180,
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      height: 180,
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => context.push(AppRoutes.flashSale),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
@@ -90,17 +95,13 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push(AppRoutes.flashSale),
-        child: Row(
-          children: [
-            // Product image dominates 75% of the banner (guideline 1.2);
-            // sale info is the remaining 25%.
-            Expanded(flex: 3, child: _buildImagePanel(sales, cs)),
-            Expanded(flex: 1, child: _buildInfoPanel(sales, cs)),
-          ],
-        ),
+      child: Row(
+        children: [
+          // Product image dominates 75% of the banner (guideline 1.2);
+          // sale info is the remaining 25%.
+          Expanded(flex: 3, child: _buildImagePanel(sales, cs)),
+          Expanded(flex: 1, child: _buildInfoPanel(sales, cs)),
+        ],
       ),
     );
   }
@@ -108,7 +109,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
   Widget _buildPlaceholder(ColorScheme cs) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      height: 180,
+      constraints: const BoxConstraints(minHeight: 180),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
@@ -126,19 +127,14 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
             const SizedBox(height: 8),
             Text(
               context.tr('flash_deals'),
-              style: TextStyle(
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                fontSize: 14,
+              style: Ds.bodyMd(cs.onSurfaceVariant.withValues(alpha: 0.6)).copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               context.tr('no_active_deals'),
-              style: TextStyle(
-                color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-                fontSize: 11,
-              ),
+              style: Ds.caption(cs.onSurfaceVariant.withValues(alpha: 0.4)),
             ),
           ],
         ),
@@ -248,52 +244,35 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
               ),
               const SizedBox(width: 4),
               Expanded(
-                child: Text(
+                child: BannerText(
                   context.tr('flash'),
+                  style: Ds.badge(Colors.white).copyWith(fontSize: 9),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                  ),
                 ),
               ),
             ],
           ),
           const Spacer(),
-          Text(
+          BannerText(
             '-${sale.discountPercent.toStringAsFixed(0)}%',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
+            style: Ds.priceLarge(Colors.white).copyWith(height: 1),
+            maxLines: 1,
           ),
           const SizedBox(height: 6),
-          Text(
+          BannerText(
             sale.productName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
+            style: Ds.caption(Colors.white).copyWith(
               fontWeight: FontWeight.w600,
+              fontSize: 10,
               height: 1.3,
             ),
+            maxLines: 2,
           ),
           const SizedBox(height: 6),
-          Text(
+          BannerText(
             context.formatPrice(sale.salePrice),
+            style: Ds.price(Colors.white).copyWith(fontSize: 11),
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
           ),
           const Spacer(),
           Row(
@@ -302,11 +281,11 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
               const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 9),
               const SizedBox(width: 2),
               Flexible(
-                child: Text('${sales.length} ${context.tr('deals')}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 8)),
+                child: BannerText(
+                  '${sales.length} ${context.tr('deals')}',
+                  style: Ds.caption(Colors.white70).copyWith(fontSize: 8),
+                  maxLines: 1,
+                ),
               ),
             ],
           ),

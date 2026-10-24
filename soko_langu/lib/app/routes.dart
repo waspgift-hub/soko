@@ -70,6 +70,14 @@ class AppRoutes {
   static const String music = '/music';
   static const String nowPlaying = '/music/now-playing';
 
+  // Social / verification routes
+  static const String followers = '/followers';
+  static const String following = '/following';
+  static const String followRequests = '/follow-requests';
+  static const String suggestedAccounts = '/suggested-accounts';
+  static const String blockedAccounts = '/blocked-accounts';
+  static const String adminPrivacy = '/admin/privacy';
+
   // Deep-link / share routes (aliases that map to canonical screens)
   static const String userProfileAlias = '/profile';
   static const String order = '/order';

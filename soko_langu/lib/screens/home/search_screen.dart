@@ -21,7 +21,7 @@ import '../../data/marketplace_taxonomy.dart';
 import '../../models/discovery_filters.dart';
 import '../../services/search_intent.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/animations/soko_animated_art.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 import '../../widgets/soko_vibe_loading.dart';
@@ -40,8 +40,7 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen>
-    with SingleTickerProviderStateMixin {
+class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final SearchService _searchService = SearchService();
@@ -212,10 +211,7 @@ class _SearchScreenState extends State<SearchScreen>
     _debounce?.cancel();
     final text = _searchCtrl.text.trim();
     if (text.length >= 2) {
-      _debounce = Timer(
-        const Duration(milliseconds: 350),
-        () => _fetchSuggestions(text),
-      );
+      _debounce = Timer(const Duration(milliseconds: 350), () => _fetchSuggestions(text));
     } else {
       setState(() => _suggestions = []);
     }
@@ -248,11 +244,7 @@ class _SearchScreenState extends State<SearchScreen>
     if (mounted) _loadHistory();
 
     try {
-      final resp = await _searchService.globalSearch(
-        query: q,
-        type: _selectedTab,
-        pageSize: 30,
-      );
+      final resp = await _searchService.globalSearch(query: q, type: _selectedTab, pageSize: 30);
       if (!mounted || seq != _searchSeq) return;
       setState(() {
         _response = resp;
@@ -265,10 +257,7 @@ class _SearchScreenState extends State<SearchScreen>
       // there is no half-finished action to destroy. The AdManager decides
       // whether it may actually fire.
       if (resp.results.isNotEmpty && _selectedTab == 'all') {
-        AdTransitions.showInterstitial(
-          context,
-          AdPlacement.interstitialSearchComplete,
-        );
+        AdTransitions.showInterstitial(context, AdPlacement.interstitialSearchComplete);
       }
     } catch (_) {
       if (mounted && seq == _searchSeq) {
@@ -309,10 +298,7 @@ class _SearchScreenState extends State<SearchScreen>
             total: 0,
             locale: locale,
           )
-          .timeout(
-            const Duration(seconds: 12),
-            onTimeout: () => throw TimeoutException('summary'),
-          );
+          .timeout(const Duration(seconds: 12), onTimeout: () => throw TimeoutException('summary'));
       if (!mounted) return;
       setState(() {
         _aiSummary = fallback;
@@ -348,15 +334,12 @@ class _SearchScreenState extends State<SearchScreen>
     final scope = <String>[
       if (detected['maxPrice'] is num) 'bei<=${detected['maxPrice']}',
       if (detected['minPrice'] is num) 'bei>=${detected['minPrice']}',
-      if (detected['location'] is String &&
-          (detected['location'] as String).isNotEmpty)
+      if (detected['location'] is String && (detected['location'] as String).isNotEmpty)
         'eneo: ${detected['location']}',
     ].join(', ');
 
     final grounded = AiService.buildInAppCatalogContext(
-      scope.isNotEmpty
-          ? 'SCOPE: $scope\n${buffer.toString()}'
-          : buffer.toString(),
+      scope.isNotEmpty ? 'SCOPE: $scope\n${buffer.toString()}' : buffer.toString(),
     );
 
     try {
@@ -367,10 +350,7 @@ class _SearchScreenState extends State<SearchScreen>
             total: resp.total,
             locale: locale,
           )
-          .timeout(
-            const Duration(seconds: 12),
-            onTimeout: () => throw TimeoutException('summary'),
-          );
+          .timeout(const Duration(seconds: 12), onTimeout: () => throw TimeoutException('summary'));
       if (!mounted) return;
       setState(() {
         _aiSummary = reply;
@@ -388,10 +368,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   Future<void> _navigateToProduct(String productId) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('products')
-          .doc(productId)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('products').doc(productId).get();
       if (doc.exists && mounted) {
         final product = Product.fromFirestore(doc);
         context.push('${AppRoutes.productDetail}/$productId', extra: product);
@@ -412,19 +389,14 @@ class _SearchScreenState extends State<SearchScreen>
       image: image,
       subcategories: const [],
     );
-    context.push(
-      '${AppRoutes.categoryProducts}/${Uri.encodeComponent(name)}',
-      extra: cat,
-    );
+    context.push('${AppRoutes.categoryProducts}/${Uri.encodeComponent(name)}', extra: cat);
   }
 
   void _onSuggestionTap(SearchSuggestion s) {
     _focusNode.unfocus();
     if (s.type == 'product' && s.id != null && s.id!.isNotEmpty) {
       _navigateToProduct(s.id!);
-    } else if ((s.type == 'user' || s.type == 'seller') &&
-        s.id != null &&
-        s.id!.isNotEmpty) {
+    } else if ((s.type == 'user' || s.type == 'seller') && s.id != null && s.id!.isNotEmpty) {
       context.push('${AppRoutes.publicProfile}/${s.id}', extra: s.text);
     } else if (s.type == 'category') {
       _openCategory(s.id ?? s.text, s.text, image: s.image);
@@ -453,10 +425,7 @@ class _SearchScreenState extends State<SearchScreen>
           .timeout(const Duration(seconds: 12));
       if (snap.docs.isNotEmpty && mounted) {
         final product = Product.fromFirestore(snap.docs.first);
-        context.push(
-          '${AppRoutes.productDetail}/${snap.docs.first.id}',
-          extra: product,
-        );
+        context.push('${AppRoutes.productDetail}/${snap.docs.first.id}', extra: product);
         setState(() => _loading = false);
         return;
       }
@@ -534,9 +503,7 @@ class _SearchScreenState extends State<SearchScreen>
         titleSpacing: 0,
         // AppBar title must be flexible to avoid overflow on small screens
         // or at large textScale (accessibility). Use LayoutBuilder for width.
-        title: LayoutBuilder(
-          builder: (context, constraints) => _buildSearchField(cs, constraints),
-        ),
+        title: LayoutBuilder(builder: (context, constraints) => _buildSearchField(cs, constraints)),
         bottom: _hasSearched
             ? TabBar(
                 controller: _tabCtrl,
@@ -545,12 +512,8 @@ class _SearchScreenState extends State<SearchScreen>
                 unselectedLabelColor: cs.onSurfaceVariant,
                 indicatorColor: cs.primary,
                 // Allow tab text to scale with user setting without overflow
-                labelStyle: TextStyle(
-                  fontSize: Responsive.scaleFont(context, 13),
-                ),
-                unselectedLabelStyle: TextStyle(
-                  fontSize: Responsive.scaleFont(context, 13),
-                ),
+                labelStyle: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
+                unselectedLabelStyle: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
                 tabs: _tabs.map((t) => Tab(text: context.tr(t))).toList(),
               )
             : _isListening
@@ -561,11 +524,7 @@ class _SearchScreenState extends State<SearchScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SokoVibeThreeDotLoader(
-                        size: 14,
-                        dotSize: 3.5,
-                        color: cs.error,
-                      ),
+                      SokoVibeThreeDotLoader(size: 14, dotSize: 3.5, color: cs.error),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
@@ -618,11 +577,7 @@ class _SearchScreenState extends State<SearchScreen>
             IconButton(
               icon: _isListening
                   ? Icon(Icons.mic, size: iconSize, color: cs.error)
-                  : Icon(
-                      Icons.mic_none,
-                      size: iconSize,
-                      color: cs.onSurfaceVariant,
-                    ),
+                  : Icon(Icons.mic_none, size: iconSize, color: cs.onSurfaceVariant),
               tooltip: _isListening ? context.tr('stop') : context.tr('voice'),
               onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
               visualDensity: VisualDensity.compact,
@@ -633,11 +588,7 @@ class _SearchScreenState extends State<SearchScreen>
               ),
             ),
             IconButton(
-              icon: Icon(
-                Icons.qr_code_scanner,
-                size: iconSize,
-                color: cs.onSurfaceVariant,
-              ),
+              icon: Icon(Icons.qr_code_scanner, size: iconSize, color: cs.onSurfaceVariant),
               tooltip: context.tr('scan_barcode_qr'),
               onPressed: _openBarcodeScanner,
               visualDensity: VisualDensity.compact,
@@ -673,10 +624,7 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     if (_response != null) {
-      return RefreshIndicator(
-        onRefresh: () async => _performSearch(),
-        child: _buildResults(cs),
-      );
+      return RefreshIndicator(onRefresh: () async => _performSearch(), child: _buildResults(cs));
     }
 
     if (_focusNode.hasFocus && _searchCtrl.text.isEmpty) {
@@ -735,14 +683,9 @@ class _SearchScreenState extends State<SearchScreen>
         if (!intent.isEmpty) _IntentStrip(intent: intent, onOpen: _openIntent),
         Expanded(
           child: ListView.separated(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.symmetric(
-              horizontal: Responsive.isSmallPhone ? 4 : 8,
-              vertical: 4,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: Responsive.isSmallPhone ? 4 : 8, vertical: 4),
             itemCount: _suggestions.length,
             separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
             itemBuilder: (_, i) {
@@ -791,11 +734,7 @@ class _SearchScreenState extends State<SearchScreen>
                 subtitle: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Icon(
-                      typeIcon,
-                      size: Responsive.scaleFont(context, 11),
-                      color: typeColor,
-                    ),
+                    Icon(typeIcon, size: Responsive.scaleFont(context, 11), color: typeColor),
                     const SizedBox(width: 3),
                     Text(
                       context.tr(s.type),
@@ -816,11 +755,7 @@ class _SearchScreenState extends State<SearchScreen>
                     ],
                   ],
                 ),
-                trailing: Icon(
-                  Icons.north_west,
-                  size: 16,
-                  color: cs.onSurfaceVariant,
-                ),
+                trailing: Icon(Icons.north_west, size: 16, color: cs.onSurfaceVariant),
                 dense: true,
                 onTap: () => _onSuggestionTap(s),
               );
@@ -889,13 +824,9 @@ class _SearchScreenState extends State<SearchScreen>
     if (summary != null) head.add(summary);
 
     // Universal: adaptive padding, dismiss keyboard on drag, all gestures
-    final horizontalPadding = Responsive.isTablet
-        ? 20.0
-        : (Responsive.isSmallPhone ? 8.0 : 12.0);
+    final horizontalPadding = Responsive.isTablet ? 20.0 : (Responsive.isSmallPhone ? 8.0 : 12.0);
     return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.all(horizontalPadding),
       itemCount: head.length + results.length + 1,
@@ -915,9 +846,8 @@ class _SearchScreenState extends State<SearchScreen>
         final r = results[i - head.length];
         // Support tap, doubleTap (quick preview), longPress (share)
         return GestureDetector(
-          onLongPress: () => _onSuggestionTap(
-            SearchSuggestion(type: r.type, text: r.displayName, id: r.id),
-          ),
+          onLongPress: () =>
+              _onSuggestionTap(SearchSuggestion(type: r.type, text: r.displayName, id: r.id)),
           child: _buildResultCard(cs, r),
         );
       },
@@ -965,32 +895,19 @@ class _SearchScreenState extends State<SearchScreen>
                   SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.primary,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       context.tr('ai_summarizing'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                   ),
                 ],
               )
             else
-              Text(
-                _aiSummary!,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.5,
-                  color: cs.onSurface,
-                ),
-              ),
+              Text(_aiSummary!, style: TextStyle(fontSize: 13, height: 1.5, color: cs.onSurface)),
           ],
         ),
       ),
@@ -1061,16 +978,11 @@ class _SearchScreenState extends State<SearchScreen>
                 children: [
                   for (final c in chips)
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: cs.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: cs.primary.withValues(alpha: 0.2),
-                        ),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
                       ),
                       child: Text(
                         c,
@@ -1100,11 +1012,7 @@ class _SearchScreenState extends State<SearchScreen>
     final sorts = <(String, String, IconData)>[
       ('best', context.tr('sort_best_match'), Icons.recommend_rounded),
       ('price_asc', context.tr('sort_price_low'), Icons.arrow_upward_rounded),
-      (
-        'price_desc',
-        context.tr('sort_price_high'),
-        Icons.arrow_downward_rounded,
-      ),
+      ('price_desc', context.tr('sort_price_high'), Icons.arrow_downward_rounded),
     ];
 
     return Padding(
@@ -1121,16 +1029,11 @@ class _SearchScreenState extends State<SearchScreen>
                 setState(() => _sortKey = s.$1);
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: _sortKey == s.$1 ? cs.primary : cs.surfaceRaised,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _sortKey == s.$1 ? cs.primary : cs.hairline,
-                  ),
+                  border: Border.all(color: _sortKey == s.$1 ? cs.primary : cs.hairline),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1138,9 +1041,7 @@ class _SearchScreenState extends State<SearchScreen>
                     Icon(
                       s.$3,
                       size: 14,
-                      color: _sortKey == s.$1
-                          ? cs.onPrimary
-                          : cs.onSurfaceVariant,
+                      color: _sortKey == s.$1 ? cs.onPrimary : cs.onSurfaceVariant,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -1172,18 +1073,11 @@ class _SearchScreenState extends State<SearchScreen>
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () {
-          _searchService.recordClick(
-            resultId: r.id,
-            resultType: r.type,
-            query: _response?.query,
-          );
+          _searchService.recordClick(resultId: r.id, resultType: r.type, query: _response?.query);
           if (isProduct) {
             _navigateToProduct(r.id);
           } else if (isSeller) {
-            context.push(
-              '${AppRoutes.publicProfile}/${r.id}',
-              extra: r.displayName,
-            );
+            context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName);
           } else if (isCategory) {
             _openCategory(r.id, r.displayName, image: r.image);
           }
@@ -1207,10 +1101,7 @@ class _SearchScreenState extends State<SearchScreen>
                             top: 2,
                             right: 2,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 2,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                               decoration: BoxDecoration(
                                 color: cs.error,
                                 borderRadius: BorderRadius.circular(6),
@@ -1261,20 +1152,14 @@ class _SearchScreenState extends State<SearchScreen>
                         if (r.isBoosted)
                           Container(
                             margin: const EdgeInsets.only(left: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: cs.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               context.tr('boost_product'),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: cs.primary,
-                              ),
+                              style: TextStyle(fontSize: 10, color: cs.primary),
                             ),
                           ),
                       ],
@@ -1283,10 +1168,7 @@ class _SearchScreenState extends State<SearchScreen>
                     if (r.description != null && r.description!.isNotEmpty)
                       Text(
                         r.description!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                        ),
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1322,10 +1204,7 @@ class _SearchScreenState extends State<SearchScreen>
                           r.sellerName,
                           r.location,
                         ].where((x) => x != null && x.isNotEmpty).join(' ? '),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant,
-                        ),
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1336,19 +1215,13 @@ class _SearchScreenState extends State<SearchScreen>
                           const SizedBox(width: 2),
                           Text(
                             r.rating!.toStringAsFixed(1),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant,
-                            ),
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                           ),
                           if (r.reviewCount != null) ...[
                             const SizedBox(width: 4),
                             Text(
                               '(${r.reviewCount})',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: cs.onSurfaceVariant,
-                              ),
+                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                             ),
                           ],
                         ],
@@ -1356,11 +1229,7 @@ class _SearchScreenState extends State<SearchScreen>
                     if (isCategory)
                       Row(
                         children: [
-                          Icon(
-                            Icons.category_outlined,
-                            size: 13,
-                            color: cs.tertiary,
-                          ),
+                          Icon(Icons.category_outlined, size: 13, color: cs.tertiary),
                           const SizedBox(width: 4),
                           Text(
                             context.tr('categories'),
@@ -1385,7 +1254,7 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const EmptySearchArt(),
+            const SokoAnimatedIllustration(SokoIllustration.emptySearch, size: 96),
             const SizedBox(height: 16),
             Text(
               context.tr('no_results'),
@@ -1395,10 +1264,7 @@ class _SearchScreenState extends State<SearchScreen>
             Text(
               context.tr('try_different'),
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-              ),
+              style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
             ),
             if (resp.correction != null) ...[
               const SizedBox(height: 16),
@@ -1437,13 +1303,9 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildHistoryPanel(ColorScheme cs) {
     // Universal: scroll + drag dismiss + responsive padding for any device
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: EdgeInsets.all(
-        Responsive.isTablet ? 20 : (Responsive.isSmallPhone ? 8 : 12),
-      ),
+      padding: EdgeInsets.all(Responsive.isTablet ? 20 : (Responsive.isSmallPhone ? 8 : 12)),
       children: [
         if (_suggestedQueries().isNotEmpty) ...[
           Padding(
@@ -1454,11 +1316,7 @@ class _SearchScreenState extends State<SearchScreen>
                 const SizedBox(width: 6),
                 Text(
                   context.tr('suggested_for_you'),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
                 ),
               ],
             ),
@@ -1468,10 +1326,7 @@ class _SearchScreenState extends State<SearchScreen>
             runSpacing: 6,
             children: _suggestedQueries().map((q) {
               return ActionChip(
-                label: Text(
-                  q,
-                  style: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
-                ),
+                label: Text(q, style: TextStyle(fontSize: Responsive.scaleFont(context, 13))),
                 onPressed: () {
                   _searchCtrl.text = q;
                   _performSearch();
@@ -1507,10 +1362,7 @@ class _SearchScreenState extends State<SearchScreen>
             children: _trending.take(10).map((t) {
               final text = t['text'] as String? ?? '';
               return ActionChip(
-                label: Text(
-                  text,
-                  style: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
-                ),
+                label: Text(text, style: TextStyle(fontSize: Responsive.scaleFont(context, 13))),
                 onPressed: () {
                   _searchCtrl.text = text;
                   _performSearch();
@@ -1559,11 +1411,7 @@ class _SearchScreenState extends State<SearchScreen>
               ),
               onDismissed: (_) => _removeHistoryItem(q),
               child: ListTile(
-                leading: Icon(
-                  Icons.history,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
+                leading: Icon(Icons.history, size: 18, color: cs.onSurfaceVariant),
                 title: Text(
                   q,
                   style: TextStyle(fontSize: Responsive.scaleFont(context, 14)),
@@ -1591,11 +1439,7 @@ class _SearchScreenState extends State<SearchScreen>
               padding: const EdgeInsets.all(32),
               child: Column(
                 children: [
-                  Icon(
-                    Icons.search,
-                    size: 48,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-                  ),
+                  Icon(Icons.search, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
                   const SizedBox(height: 16),
                   Text(
                     context.tr('search_products_users'),
@@ -1618,9 +1462,7 @@ class _SearchScreenState extends State<SearchScreen>
         _discoveryProducts.isNotEmpty;
 
     // Universal: responsive padding and heights adapt to tablet/phone and textScale
-    final pad = Responsive.isTablet
-        ? 20.0
-        : (Responsive.isSmallPhone ? 8.0 : 12.0);
+    final pad = Responsive.isTablet ? 20.0 : (Responsive.isSmallPhone ? 8.0 : 12.0);
     // Scale horizontal card heights with width; ensures no clipping on large-font
     final productCarouselHeight = Responsive.isTablet
         ? 240.0
@@ -1629,18 +1471,12 @@ class _SearchScreenState extends State<SearchScreen>
         ? 170.0
         : (Responsive.isSmallPhone ? 135.0 : 150.0);
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.all(pad),
       children: [
         if (_mostRatedProducts.isNotEmpty) ...[
-          _buildSectionHeader(
-            cs,
-            Icons.star_rounded,
-            context.tr('most_rated_products'),
-          ),
+          _buildSectionHeader(cs, Icons.star_rounded, context.tr('most_rated_products')),
           const SizedBox(height: 8),
           SizedBox(
             height: productCarouselHeight,
@@ -1649,18 +1485,13 @@ class _SearchScreenState extends State<SearchScreen>
               physics: const BouncingScrollPhysics(),
               itemCount: _mostRatedProducts.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) =>
-                  _buildMostRatedProductCard(cs, _mostRatedProducts[i]),
+              itemBuilder: (_, i) => _buildMostRatedProductCard(cs, _mostRatedProducts[i]),
             ),
           ),
           const SizedBox(height: 20),
         ],
         if (_mostRatedSellers.isNotEmpty) ...[
-          _buildSectionHeader(
-            cs,
-            Icons.storefront_rounded,
-            context.tr('most_rated_sellers'),
-          ),
+          _buildSectionHeader(cs, Icons.storefront_rounded, context.tr('most_rated_sellers')),
           const SizedBox(height: 8),
           SizedBox(
             height: sellerCarouselHeight,
@@ -1669,28 +1500,19 @@ class _SearchScreenState extends State<SearchScreen>
               physics: const BouncingScrollPhysics(),
               itemCount: _mostRatedSellers.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) =>
-                  _buildMostRatedSellerCard(cs, _mostRatedSellers[i]),
+              itemBuilder: (_, i) => _buildMostRatedSellerCard(cs, _mostRatedSellers[i]),
             ),
           ),
           const SizedBox(height: 20),
         ],
         if (boosted.isNotEmpty) ...[
-          _buildSectionHeader(
-            cs,
-            Icons.rocket_launch_rounded,
-            context.tr('featured_products'),
-          ),
+          _buildSectionHeader(cs, Icons.rocket_launch_rounded, context.tr('featured_products')),
           const SizedBox(height: 8),
           ...boosted.map((r) => _buildResultCard(cs, r)),
           const SizedBox(height: 12),
         ],
         if (normal.isNotEmpty) ...[
-          _buildSectionHeader(
-            cs,
-            Icons.inventory_2_outlined,
-            context.tr('other_products'),
-          ),
+          _buildSectionHeader(cs, Icons.inventory_2_outlined, context.tr('other_products')),
           const SizedBox(height: 8),
           ...normal.map((r) => _buildResultCard(cs, r)),
         ],
@@ -1706,11 +1528,7 @@ class _SearchScreenState extends State<SearchScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.search,
-                    size: 72,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.2),
-                  ),
+                  Icon(Icons.search, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.2)),
                   const SizedBox(height: 16),
                   Text(
                     context.tr('search_products_users'),
@@ -1731,11 +1549,7 @@ class _SearchScreenState extends State<SearchScreen>
         const SizedBox(width: 6),
         Text(
           title,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: cs.onSurface,
-          ),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface),
         ),
       ],
     );
@@ -1763,10 +1577,7 @@ class _SearchScreenState extends State<SearchScreen>
                         : Container(
                             color: cs.surfaceContainerHighest,
                             child: const Center(
-                              child: Icon(
-                                Icons.image_outlined,
-                                color: Colors.grey,
-                              ),
+                              child: Icon(Icons.image_outlined, color: Colors.grey),
                             ),
                           ),
                     if (r.isBoosted)
@@ -1774,10 +1585,7 @@ class _SearchScreenState extends State<SearchScreen>
                         top: 4,
                         left: 4,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           decoration: BoxDecoration(
                             color: cs.secondary.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(6),
@@ -1797,10 +1605,7 @@ class _SearchScreenState extends State<SearchScreen>
                         top: 4,
                         right: 4,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           decoration: BoxDecoration(
                             color: cs.error,
                             borderRadius: BorderRadius.circular(6),
@@ -1827,10 +1632,7 @@ class _SearchScreenState extends State<SearchScreen>
                       r.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 2),
                     if (flash != null) ...[
@@ -1865,18 +1667,12 @@ class _SearchScreenState extends State<SearchScreen>
                         const SizedBox(width: 2),
                         Text(
                           r.rating?.toStringAsFixed(1) ?? '0.0',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurfaceVariant,
-                          ),
+                          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '(${r.reviewCount ?? 0})',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: cs.onSurfaceVariant,
-                          ),
+                          style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -1900,10 +1696,7 @@ class _SearchScreenState extends State<SearchScreen>
       // denormalised hint only and no longer drives the badge.
       sellerId: r.id,
       kycVerified: r.kycApproved,
-      onTap: () => context.push(
-        '${AppRoutes.publicProfile}/${r.id}',
-        extra: r.displayName,
-      ),
+      onTap: () => context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName),
     );
   }
 }
@@ -1934,18 +1727,14 @@ class _IntentStrip extends StatelessWidget {
     }
 
     final cat = intent.category;
-    if (cat != null)
-      add(Icons.category_outlined, langEn ? cat.name : cat.nameSw);
+    if (cat != null) add(Icons.category_outlined, langEn ? cat.name : cat.nameSw);
     final sub = intent.subcategory;
     if (sub != null) add(Icons.layers_rounded, langEn ? sub.name : sub.nameSw);
     if (intent.brand != null) add(Icons.sell_rounded, intent.brand!);
     intent.attributes.forEach((k, v) => add(Icons.tune_rounded, '$k: $v'));
     for (final f in intent.flags) {
       final def = popularFlagByKey(f);
-      add(
-        Icons.bolt_rounded,
-        def?.label ?? (def?.labelKey != null ? def!.labelKey! : f),
-      );
+      add(Icons.bolt_rounded, def?.label ?? (def?.labelKey != null ? def!.labelKey! : f));
     }
     return SizedBox(
       height: 48,

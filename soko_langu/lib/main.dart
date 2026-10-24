@@ -51,11 +51,12 @@ import 'services/receive_share_service.dart';
 import 'services/security_service.dart';
 import 'services/server_keep_alive.dart';
 import 'services/category_artwork/category_artwork_service.dart';
+import 'services/banner_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
-import 'widgets/maintenance_gate.dart';
+import 'widgets/maintenance_gate.dart'
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
@@ -512,6 +513,9 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       // the marketplace; AdManager gates every load on its own readiness flag.
       unawaited(adManager.initialize());
 
+      // Banner service bootstrap. Fire-and-forget; banners load asynchronously.
+      unawaited(context.read<BannerService>().start());
+
       // Background services (fire-and-forget)
       _initBackgroundServices(prefs);
     } catch (e) {
@@ -784,6 +788,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         // Single owner of every ad in the app. Screens resolve it with
         // context.watch<AdManager>(); nothing else imports google_mobile_ads.
         ChangeNotifierProvider<AdManager>.value(value: adManager),
+        // Centralized banner management service for first-party banners.
+        ChangeNotifierProvider<BannerService>.value(
+          value: BannerService(),
+        ),
       ],
       // M3 Expressive dynamic color: OS schemes (Android 12+ wallpaper,
       // desktop accents) flow into ThemeManager, which falls back to the

@@ -109,8 +109,9 @@ async function getOtp(key) {
         const record = JSON.parse(raw);
         // Redis TTL is the primary expiry, but TTLs are only ever set from
         // expiresAt now — belt and suspenders against a record that outlives
-        // its own deadline after a clock jump or manual persist.
-        if (Date.now() > record.expiresAt) {
+        // its own deadline after a clock jump or manual persist. `>=`: at
+        // the exact expiry instant the record is already dead.
+        if (Date.now() >= record.expiresAt) {
           await withTimeout(redis.del(redisKey(key))).catch(() => null);
           return null;
         }
@@ -122,7 +123,7 @@ async function getOtp(key) {
   }
   const record = memory.get(key);
   if (!record) return null;
-  if (Date.now() > record.expiresAt) {
+  if (Date.now() >= record.expiresAt) {
     memory.delete(key);
     return null;
   }

@@ -14,11 +14,11 @@ import '../../providers/product_feed_provider.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/banner_rotator.dart';
 import '../../widgets/marketplace/category_card.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
 import '../../widgets/recently_viewed_row.dart';
 import '../../widgets/trending_carousel.dart';
-import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/app_colors.dart';
@@ -64,7 +64,16 @@ class _HomeScreenState extends State<HomeScreen>
   String _locationFilter = '';
 
   List<String> _brands = [
-    'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell', 'Others',
+    'Nike',
+    'Adidas',
+    'Samsung',
+    'Apple',
+    'Sony',
+    'LG',
+    'Toyota',
+    'Hp',
+    'Dell',
+    'Others',
   ];
 
   void _showCurrencyPicker(BuildContext context) {
@@ -78,7 +87,9 @@ class _HomeScreenState extends State<HomeScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 40, height: 4, margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 12),
             decoration: BoxDecoration(
               color: Theme.of(ctx).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
@@ -86,8 +97,13 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           Padding(
             padding: const EdgeInsets.all(AppInsets.lg),
-            child: Text(context.tr('select_currency'),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(ctx).colorScheme.onSurface),
+            child: Text(
+              context.tr('select_currency'),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(ctx).colorScheme.onSurface,
+              ),
             ),
           ),
           ...LocalizationService.supportedCurrencies.entries.map(
@@ -169,10 +185,16 @@ class _HomeScreenState extends State<HomeScreen>
   void _subscribeFlashSales() {
     _flashSub?.cancel();
     final now = DateTime.now();
-    _flashSub = _flashSaleService.getActiveFlashSalesMapAtNow(now).listen(
-      (map) { if (mounted) setState(() => _flashSales = map); },
-      onError: (e) { debugPrint('Flash sales stream error: $e'); },
-    );
+    _flashSub = _flashSaleService
+        .getActiveFlashSalesMapAtNow(now)
+        .listen(
+          (map) {
+            if (mounted) setState(() => _flashSales = map);
+          },
+          onError: (e) {
+            debugPrint('Flash sales stream error: $e');
+          },
+        );
   }
 
   void _subscribeNotifications() {
@@ -184,9 +206,14 @@ class _HomeScreenState extends State<HomeScreen>
         .where('userId', isEqualTo: uid)
         .where('isRead', isEqualTo: false)
         .snapshots()
-        .listen((snap) {
-      if (mounted) setState(() => _unreadCount = snap.docs.length);
-    }, onError: (e) { debugPrint('Notification stream error: $e'); });
+        .listen(
+          (snap) {
+            if (mounted) setState(() => _unreadCount = snap.docs.length);
+          },
+          onError: (e) {
+            debugPrint('Notification stream error: $e');
+          },
+        );
   }
 
   @override
@@ -218,8 +245,11 @@ class _HomeScreenState extends State<HomeScreen>
   void _onBrandTap(String? brand) {
     setState(() => _selectedBrand = brand);
     final provider = context.read<ProductFeedProvider>();
-    if (brand == null) { provider.refresh(); }
-    else { provider.loadByBrand(brand); }
+    if (brand == null) {
+      provider.refresh();
+    } else {
+      provider.loadByBrand(brand);
+    }
   }
 
   List<Product> _getFilteredProducts(List<Product> products) {
@@ -234,7 +264,10 @@ class _HomeScreenState extends State<HomeScreen>
     if (_minPrice != null) result = result.where((p) => p.price >= _minPrice!).toList();
     if (_maxPrice != null) result = result.where((p) => p.price <= _maxPrice!).toList();
     if (_condition != 'all') result = result.where((p) => p.condition == _condition).toList();
-    if (_locationFilter.isNotEmpty) result = result.where((p) => p.location.toLowerCase().contains(_locationFilter.toLowerCase())).toList();
+    if (_locationFilter.isNotEmpty)
+      result = result
+          .where((p) => p.location.toLowerCase().contains(_locationFilter.toLowerCase()))
+          .toList();
     switch (_sortBy) {
       case 'price_asc':
         result.sort((a, b) => a.price.compareTo(b.price));
@@ -280,11 +313,11 @@ class _HomeScreenState extends State<HomeScreen>
       _locationFilter.isNotEmpty;
 
   int get _activeFilterCount => [
-        _sortBy != 'newest',
-        _minPrice != null || _maxPrice != null,
-        _condition != 'all',
-        _locationFilter.isNotEmpty,
-      ].where((isActive) => isActive).length;
+    _sortBy != 'newest',
+    _minPrice != null || _maxPrice != null,
+    _condition != 'all',
+    _locationFilter.isNotEmpty,
+  ].where((isActive) => isActive).length;
 
   void _clearFilters() {
     setState(() {
@@ -306,7 +339,9 @@ class _HomeScreenState extends State<HomeScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0.12), cs.primary.withValues(alpha: 0.04)]),
+            gradient: LinearGradient(
+              colors: [cs.primary.withValues(alpha: 0.12), cs.primary.withValues(alpha: 0.04)],
+            ),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
           ),
@@ -350,7 +385,8 @@ class _HomeScreenState extends State<HomeScreen>
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: isSelected ? cs.primary : cs.outlineVariant),
           ),
-          child: Text(label,
+          child: Text(
+            label,
             style: TextStyle(
               color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -392,17 +428,10 @@ class _HomeScreenState extends State<HomeScreen>
                 labels.join('  ·  '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: cs.onSurface, fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
-            TextButton(
-              onPressed: _clearFilters,
-              child: Text(context.tr('clear')),
-            ),
+            TextButton(onPressed: _clearFilters, child: Text(context.tr('clear'))),
           ],
         ),
       ),
@@ -428,22 +457,26 @@ class _HomeScreenState extends State<HomeScreen>
                 height: 40,
                 width: 40,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Icon(
-                  Icons.storefront_rounded,
-                  size: 32,
-                  color: cs.primary,
-                ),
+                errorBuilder: (_, _, _) =>
+                    Icon(Icons.storefront_rounded, size: 32, color: cs.primary),
               ),
             ),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.tr('soko'),
+                Text(
+                  context.tr('soko'),
                   style: AppTypography.brandTitle(cs.primary).copyWith(fontSize: 22),
                 ),
-                Text(context.tr('vibe'),
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant, letterSpacing: 2.5),
+                Text(
+                  context.tr('vibe'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurfaceVariant,
+                    letterSpacing: 2.5,
+                  ),
                 ),
               ],
             ),
@@ -463,20 +496,31 @@ class _HomeScreenState extends State<HomeScreen>
                 onPressed: () {
                   // Don't stack a second notification route on a fast double tap —
                   // the resulting duplicate page entries crash element teardown.
-                  if (GoRouterState.of(context).matchedLocation ==
-                      AppRoutes.notifications) {
+                  if (GoRouterState.of(context).matchedLocation == AppRoutes.notifications) {
                     return;
                   }
                   context.push(AppRoutes.notifications);
                 },
               ),
               if (_unreadCount > 0)
-                Positioned(right: 6, top: 6, child: Container(
-                  padding: EdgeInsets.all(_unreadCount > 9 ? 4 : 6),
-                  decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
-                  constraints: BoxConstraints(minWidth: 18, minHeight: 18),
-                  child: Text('$_unreadCount', style: TextStyle(fontSize: 10, color: cs.surface, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                )),
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding: EdgeInsets.all(_unreadCount > 9 ? 4 : 6),
+                    decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
+                    constraints: BoxConstraints(minWidth: 18, minHeight: 18),
+                    child: Text(
+                      '$_unreadCount',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: cs.surface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -497,224 +541,264 @@ class _HomeScreenState extends State<HomeScreen>
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
-              // Animated gradient line at top
-              const AnimatedGradientLine(height: 3),
-              const SizedBox(height: AppInsets.md),
-              // Premium search bar
-              Padding(
-                padding: const EdgeInsets.fromLTRB(AppInsets.lg, 0, AppInsets.lg, AppInsets.md),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.2 : 0.05),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    readOnly: true,
-                    onTap: () => context.push(AppRoutes.search),
-                    decoration: InputDecoration(
-                        hintText: context.tr('search_products_users_hint'),
-                      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 14),
-                      prefixIcon: Icon(Icons.search_rounded, color: cs.primary, size: 22),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                      suffixIcon: GestureDetector(
-                        onTap: _showFilterSheet,
-                        child: Semantics(
-                          button: true,
-                          label: context.tr('filter'),
-                          onTap: _showFilterSheet,
-                          child: Container(
-                            margin: const EdgeInsets.all(6),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: cs.primary.withValues(alpha: _hasActiveFilters ? 0.18 : 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.tune_rounded, color: cs.primary, size: 16),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _hasActiveFilters
-                                      ? '$_activeFilterCount'
-                                      : context.tr('filter'),
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.primary),
+                      // Animated gradient line at top
+                      const AnimatedGradientLine(height: 3),
+                      const SizedBox(height: AppInsets.md),
+                      // Premium search bar
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppInsets.lg,
+                          0,
+                          AppInsets.lg,
+                          AppInsets.md,
+                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: cs.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: cs.brightness == Brightness.dark ? 0.2 : 0.05,
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Brand chips
-              SizedBox(
-                height: 44,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  itemCount: 1 + _brands.length,
-                  itemBuilder: (context, index) {
-                    if (index == 0) return _brandChip(context.tr('all'), null);
-                    return _brandChip(_brands[index - 1], _brands[index - 1]);
-                  },
-                ),
-              ),
-              if (_hasActiveFilters) _buildActiveFilters(cs),
-              const SizedBox(height: AppInsets.sm),
-              // Buyer requests quick action — browsing lives on the seller dashboard
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                child: _quickActionChip(
-                  cs,
-                  Icons.add_circle_outline_rounded,
-                  context.tr('post_request'),
-                  () => context.push(AppRoutes.postBuyerRequest),
-                ),
-              ),
-              const SizedBox(height: AppInsets.sm),
-              // Banners
-              BannerRotator(flashSales: _flashSales.values.toList()),
-              const SizedBox(height: AppInsets.sm),
-              // Categories
-              SectionHeader(
-                title: context.tr('categories'),
-                actionLabel: context.tr('see_all'),
-                onAction: () => context.push(AppRoutes.category),
-              ),
-              const SizedBox(height: AppInsets.xs),
-              SizedBox(
-                height: 130,
-                child: StreamBuilder<List<Category>>(
-                  stream: _categoryStream,
-                  builder: (context, snapshot) {
-                    final cats = snapshot.data ?? [];
-                    if (snapshot.hasError) {
-                      // Stream timeout (see _initCategoryStream) surfaces here;
-                      // offer a retry instead of an endless skeleton.
-                      return Container(
-                        height: 130,
-                        margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceSubtle,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: cs.brandBorder),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.cloud_off_outlined, color: cs.primary, size: 22),
-                              const SizedBox(height: 6),
-                              Text(
-                                context.tr('something_wrong'),
-                                style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              TextButton(
-                                onPressed: _reloadCategories,
-                                child: Text(context.tr('try_again')),
+                                blurRadius: 14,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            readOnly: true,
+                            onTap: () => context.push(AppRoutes.search),
+                            decoration: InputDecoration(
+                              hintText: context.tr('search_products_users_hint'),
+                              hintStyle: TextStyle(
+                                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(Icons.search_rounded, color: cs.primary, size: 22),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                              suffixIcon: GestureDetector(
+                                onTap: _showFilterSheet,
+                                child: Semantics(
+                                  button: true,
+                                  label: context.tr('filter'),
+                                  onTap: _showFilterSheet,
+                                  child: Container(
+                                    margin: const EdgeInsets.all(6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    decoration: BoxDecoration(
+                                      color: cs.primary.withValues(
+                                        alpha: _hasActiveFilters ? 0.18 : 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.tune_rounded, color: cs.primary, size: 16),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          _hasActiveFilters
+                                              ? '$_activeFilterCount'
+                                              : context.tr('filter'),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: cs.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      );
-                    }
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return SizedBox(
-                        height: 130,
-                        child: ListView.separated(
+                      ),
+                      // Brand chips
+                      SizedBox(
+                        height: 44,
+                        child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                          itemCount: 6,
-                          separatorBuilder: (_, _) => const SizedBox(width: 12),
-                          itemBuilder: (_, _) => Container(
-                            width: 92,
-                            decoration: BoxDecoration(
-                              color: cs.surfaceVariant.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: cs.brandBorder),
-                            ),
-                            child: const DsSkeleton(),
-                          ),
+                          itemCount: 1 + _brands.length,
+                          itemBuilder: (context, index) {
+                            if (index == 0) return _brandChip(context.tr('all'), null);
+                            return _brandChip(_brands[index - 1], _brands[index - 1]);
+                          },
                         ),
-                      );
-                    }
-                    if (cats.isEmpty) {
-                      return Container(
+                      ),
+                      if (_hasActiveFilters) _buildActiveFilters(cs),
+                      const SizedBox(height: AppInsets.sm),
+                      // Buyer requests quick action — browsing lives on the seller dashboard
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                        child: _quickActionChip(
+                          cs,
+                          Icons.add_circle_outline_rounded,
+                          context.tr('post_request'),
+                          () => context.push(AppRoutes.postBuyerRequest),
+                        ),
+                      ),
+                      const SizedBox(height: AppInsets.sm),
+                      // Banners
+                      BannerRotator(flashSales: _flashSales.values.toList()),
+                      const SizedBox(height: AppInsets.sm),
+                      // Categories
+                      SectionHeader(
+                        title: context.tr('categories'),
+                        actionLabel: context.tr('see_all'),
+                        onAction: () => context.push(AppRoutes.category),
+                      ),
+                      const SizedBox(height: AppInsets.xs),
+                      SizedBox(
                         height: 130,
-                        margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceSubtle,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: cs.brandBorder),
+                        child: StreamBuilder<List<Category>>(
+                          stream: _categoryStream,
+                          builder: (context, snapshot) {
+                            final cats = snapshot.data ?? [];
+                            if (snapshot.hasError) {
+                              // Stream timeout (see _initCategoryStream) surfaces here;
+                              // offer a retry instead of an endless skeleton.
+                              return Container(
+                                height: 130,
+                                margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                                decoration: BoxDecoration(
+                                  color: cs.surfaceSubtle,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: cs.brandBorder),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.cloud_off_outlined, color: cs.primary, size: 22),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        context.tr('something_wrong'),
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: _reloadCategories,
+                                        child: Text(context.tr('try_again')),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return SizedBox(
+                                height: 130,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                                  itemCount: 6,
+                                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                                  itemBuilder: (_, _) => Container(
+                                    width: 92,
+                                    decoration: BoxDecoration(
+                                      color: cs.surfaceVariant.withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: cs.brandBorder),
+                                    ),
+                                    child: const DsSkeleton(),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (cats.isEmpty) {
+                              return Container(
+                                height: 130,
+                                margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                                decoration: BoxDecoration(
+                                  color: cs.surfaceSubtle,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: cs.brandBorder),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: cs.primary.withValues(alpha: 0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.category_outlined,
+                                          color: cs.primary,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        context.tr('no_categories'),
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        context.tr('categories_coming_soon'),
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                            return ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                              itemCount: cats.length,
+                              itemBuilder: (context, index) {
+                                final cat = cats[index];
+                                final config = AppConfig.of(context);
+                                return Container(
+                                  width: 80,
+                                  margin: const EdgeInsets.only(right: 14),
+                                  child: CategoryCard(
+                                    name: config.langCode == 'en' ? cat.name : cat.nameSw,
+                                    categoryId: cat.id,
+                                    imageUrl: cat.displayImage,
+                                    icon: categoryIconFor(
+                                      icon: cat.icon,
+                                      slug: cat.id,
+                                      name: cat.name,
+                                    ),
+                                    onTap: () => context.push(
+                                      '${AppRoutes.categoryProducts}'
+                                      '/${Uri.encodeComponent(cat.name)}',
+                                      extra: cat,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
-                                child: Icon(Icons.category_outlined, color: cs.primary, size: 22),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(context.tr('no_categories'), style: TextStyle(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 4),
-                              Text(context.tr('categories_coming_soon'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                      itemCount: cats.length,
-                      itemBuilder: (context, index) {
-                        final cat = cats[index];
-                        final config = AppConfig.of(context);
-                        return Container(
-                          width: 80,
-                          margin: const EdgeInsets.only(right: 14),
-                          child: CategoryCard(
-                            name: config.langCode == 'en' ? cat.name : cat.nameSw,
-                            categoryId: cat.id,
-                            imageUrl: cat.displayImage,
-                            icon: categoryIconFor(
-                              icon: cat.icon,
-                              slug: cat.id,
-                              name: cat.name,
-                            ),
-                            onTap: () => context.push(
-                              '${AppRoutes.categoryProducts}'
-                              '/${Uri.encodeComponent(cat.name)}',
-                              extra: cat,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: AppInsets.sm),
-              const RecentlyViewedRow(),
-              const SizedBox(height: AppInsets.sm),
-              const TrendingCarousel(),
-              const SizedBox(height: AppInsets.md),
-            ],
+                      ),
+                      const SizedBox(height: AppInsets.sm),
+                      const RecentlyViewedRow(),
+                      const SizedBox(height: AppInsets.sm),
+                      const TrendingCarousel(),
+                      const SizedBox(height: AppInsets.md),
+                    ],
                   ),
                 ),
                 ..._buildProductSlivers(),
@@ -793,25 +877,21 @@ class _HomeScreenState extends State<HomeScreen>
       final kind = provider.errorKind;
       final (icon, title, subtitle) = switch (kind) {
         FirestoreErrorKind.permission => (
-            Icons.lock_outline,
-            context.tr('permission_denied'),
-            context.tr('firestore_permission_hint'),
-          ),
+          Icons.lock_outline,
+          context.tr('permission_denied'),
+          context.tr('firestore_permission_hint'),
+        ),
         FirestoreErrorKind.missingIndex => (
-            Icons.hourglass_empty,
-            context.tr('something_wrong'),
-            context.tr('firestore_index_building'),
-          ),
+          Icons.hourglass_empty,
+          context.tr('something_wrong'),
+          context.tr('firestore_index_building'),
+        ),
         FirestoreErrorKind.network => (
-            Icons.cloud_off,
-            context.tr('something_wrong'),
-            context.tr('no_network'),
-          ),
-        _ => (
-            Icons.error_outline,
-            context.tr('something_wrong'),
-            context.tr('please_try_again'),
-          ),
+          Icons.cloud_off,
+          context.tr('something_wrong'),
+          context.tr('no_network'),
+        ),
+        _ => (Icons.error_outline, context.tr('something_wrong'), context.tr('please_try_again')),
       };
       return [
         ...slivers,
@@ -822,6 +902,7 @@ class _HomeScreenState extends State<HomeScreen>
             subtitle: subtitle,
             actionLabel: context.tr('try_again'),
             onAction: provider.refresh,
+            artwork: const SokoAnimatedIllustration(SokoIllustration.errorRetry, size: 96),
           ),
         ),
       ];
@@ -893,20 +974,24 @@ class _HomeScreenState extends State<HomeScreen>
             (context, index) {
               final product = filtered[index];
               return RepaintBoundary(
-                child: StaggeredFadeIn(
-                  index: index % 8,
-                  child: ProductCard(
-                    product: product,
-                    flashSale: _flashSales[product.id],
-                    onTap: () => context.push(
-                      '${AppRoutes.productDetail}/${product.id}',
-                      extra: product,
-                    ),
-                  ),
+                // Staggered entry animation is off in the product grid: it costs
+                // an AnimationController, two CurvedAnimations and a timer per
+                // tile, and dozens mount at once while the user is scrolling.
+                // It also delays the image appearing, which is the opposite of
+                // what a fast marketplace feed should do.
+                child: ProductCard(
+                  product: product,
+                  flashSale: _flashSales[product.id],
+                  onTap: () =>
+                      context.push('${AppRoutes.productDetail}/${product.id}', extra: product),
                 ),
               );
             },
             childCount: filtered.length,
+            // Cards are stateless, so keeping them alive off-screen only grows
+            // the heap as the user scrolls an endless feed.
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: false,
           ),
         ),
       ),
@@ -1028,7 +1113,9 @@ class _FilterSheetState extends State<_FilterSheet> {
       child: Column(
         children: [
           Container(
-            width: 40, height: 4, margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 12),
             decoration: BoxDecoration(
               color: cs.onSurfaceVariant.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
@@ -1039,7 +1126,10 @@ class _FilterSheetState extends State<_FilterSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(context.tr('filter'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                Text(
+                  context.tr('filter'),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface),
+                ),
                 TextButton(
                   onPressed: () {
                     setState(() {
@@ -1060,7 +1150,10 @@ class _FilterSheetState extends State<_FilterSheet> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               children: [
-                Text(context.tr('sort_by'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(
+                  context.tr('sort_by'),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -1073,7 +1166,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text(context.tr('price'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(
+                  context.tr('price'),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1085,8 +1181,14 @@ class _FilterSheetState extends State<_FilterSheet> {
                           hintText: context.tr('min_price'),
                           hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
                         ),
                         style: TextStyle(fontSize: 14, color: cs.onSurface),
                       ),
@@ -1103,8 +1205,14 @@ class _FilterSheetState extends State<_FilterSheet> {
                           hintText: context.tr('max_price'),
                           hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
                         ),
                         style: TextStyle(fontSize: 14, color: cs.onSurface),
                       ),
@@ -1112,7 +1220,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text(context.tr('condition'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(
+                  context.tr('condition'),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -1123,7 +1234,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text(context.tr('area'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(
+                  context.tr('area'),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _locCtrl,
@@ -1132,8 +1246,14 @@ class _FilterSheetState extends State<_FilterSheet> {
                     hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                     prefixIcon: Icon(Icons.location_on_outlined, size: 18, color: cs.primary),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: cs.outlineVariant),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: cs.outlineVariant),
+                    ),
                   ),
                   style: TextStyle(fontSize: 14, color: cs.onSurface),
                 ),
@@ -1156,7 +1276,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                   );
                   Navigator.pop(context);
                 },
-                child: Text(context.tr('apply_filter'), style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  context.tr('apply_filter'),
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           ),
@@ -1175,11 +1298,14 @@ class _FilterSheetState extends State<_FilterSheet> {
           color: selected ? cs.primary : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(label, style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-        )),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }
@@ -1194,11 +1320,14 @@ class _FilterSheetState extends State<_FilterSheet> {
           color: selected ? cs.primary : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(label, style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-        )),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }

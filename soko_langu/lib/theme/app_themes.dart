@@ -239,9 +239,9 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
           fontSize: 15,
           letterSpacing: 0.2,
         ),
-        elevation: 4,
-        shadowColor: Color.lerp(scheme.primary, Colors.black, 0.45)!
-            .withValues(alpha: isDark ? 0.6 : 0.32),
+        elevation: 2,
+        shadowColor: Color.lerp(scheme.primary, Colors.black, 0.25)!
+            .withValues(alpha: isDark ? 0.45 : 0.2),
       ),
     ),
 
@@ -258,9 +258,8 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
           fontWeight: FontWeight.w600,
           fontSize: 15,
         ),
-        elevation: 4,
-        shadowColor: Color.lerp(scheme.primary, Colors.black, 0.45)!
-            .withValues(alpha: isDark ? 0.6 : 0.32),
+        elevation: 0,
+        shadowColor: Colors.transparent,
       ),
     ),
 

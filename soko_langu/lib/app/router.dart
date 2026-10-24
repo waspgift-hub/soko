@@ -25,6 +25,11 @@ import '../screens/chat/group_chat_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/profile/public_profile_screen.dart';
 import '../screens/profile/settings_screen.dart';
+import '../screens/profile/follower_following_screen.dart';
+import '../screens/profile/follow_requests_screen.dart';
+import '../screens/profile/suggested_accounts_screen.dart';
+import '../screens/profile/blocked_accounts_screen.dart';
+import '../screens/profile/admin_privacy_screen.dart';
 import '../screens/onboarding/artwork_pack_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 
@@ -41,6 +46,7 @@ import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
 import '../screens/auth/otp_verification_screen.dart';
+import '../screens/auth/mfa_enrollment_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
@@ -366,6 +372,38 @@ GoRouter buildRouter() {
           final name = state.extra as String? ?? '';
           return _premiumPage(PublicProfileScreen(userId: userId, userName: name));
         },
+      ),
+      GoRoute(
+        path: '${AppRoutes.followers}/:userId',
+        pageBuilder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          final name = state.extra as String? ?? '';
+          return _premiumPage(FollowerFollowingScreen(userId: userId, userName: name, isFollowers: true));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.following}/:userId',
+        pageBuilder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          final name = state.extra as String? ?? '';
+          return _premiumPage(FollowerFollowingScreen(userId: userId, userName: name, isFollowers: false));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.followRequests,
+        pageBuilder: (context, state) => _premiumPage(const FollowRequestsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.suggestedAccounts,
+        pageBuilder: (context, state) => _premiumPage(const SuggestedAccountsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.blockedAccounts,
+        pageBuilder: (context, state) => _premiumPage(const BlockedAccountsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.adminPrivacy,
+        pageBuilder: (context, state) => _premiumPage(const AdminPrivacyScreen()),
       ),
       GoRoute(
         path: AppRoutes.settings,

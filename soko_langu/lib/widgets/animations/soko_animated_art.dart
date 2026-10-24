@@ -24,17 +24,14 @@ class EmptyCartArt extends StatefulWidget {
   State<EmptyCartArt> createState() => _EmptyCartArtState();
 }
 
-class _EmptyCartArtState extends State<EmptyCartArt>
-    with SingleTickerProviderStateMixin {
+class _EmptyCartArtState extends State<EmptyCartArt> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+      ..repeat();
   }
 
   @override
@@ -80,13 +77,7 @@ class _CartPainter extends CustomPainter {
     canvas.save();
     canvas.translate(0, hop);
     // Handle.
-    canvas.drawArc(
-      const Rect.fromLTWH(30, 18, 36, 26),
-      math.pi,
-      math.pi,
-      false,
-      paint,
-    );
+    canvas.drawArc(const Rect.fromLTWH(30, 18, 36, 26), math.pi, math.pi, false, paint);
     // Basket body.
     final body = Path()
       ..moveTo(28, 44)
@@ -129,17 +120,14 @@ class EmptyWishlistArt extends StatefulWidget {
   State<EmptyWishlistArt> createState() => _EmptyWishlistArtState();
 }
 
-class _EmptyWishlistArtState extends State<EmptyWishlistArt>
-    with SingleTickerProviderStateMixin {
+class _EmptyWishlistArtState extends State<EmptyWishlistArt> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
   }
 
   @override
@@ -187,11 +175,8 @@ class _HeartPainter extends CustomPainter {
     final s = size.width / 96;
     canvas.scale(s);
     // Double-beat pulse (pow returns num — normalize to double).
-    final beat =
-        math.pow(math.max(0, math.sin(t * 2 * math.pi)), 3).toDouble();
-    final echo =
-        math.pow(math.max(0, math.sin((t - 0.18) * 2 * math.pi)), 6)
-            .toDouble();
+    final beat = math.pow(math.max(0, math.sin(t * 2 * math.pi)), 3).toDouble();
+    final echo = math.pow(math.max(0, math.sin((t - 0.18) * 2 * math.pi)), 6).toDouble();
     final scale = 1 + 0.1 * beat + 0.06 * echo;
     canvas.save();
     canvas.translate(48, 45);
@@ -227,17 +212,14 @@ class EmptyOrdersArt extends StatefulWidget {
   State<EmptyOrdersArt> createState() => _EmptyOrdersArtState();
 }
 
-class _EmptyOrdersArtState extends State<EmptyOrdersArt>
-    with SingleTickerProviderStateMixin {
+class _EmptyOrdersArtState extends State<EmptyOrdersArt> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))
+      ..repeat();
   }
 
   @override
@@ -280,10 +262,7 @@ class _BoxPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     // Body.
-    canvas.drawRRect(
-      RRect.fromLTRBR(28, 44, 68, 74, const Radius.circular(4)),
-      paint,
-    );
+    canvas.drawRRect(RRect.fromLTRBR(28, 44, 68, 74, const Radius.circular(4)), paint);
     // Tape seam.
     canvas.drawLine(const Offset(48, 44), const Offset(48, 74), paint);
     // Lid floats above the body.
@@ -315,17 +294,14 @@ class EmptyChatArt extends StatefulWidget {
   State<EmptyChatArt> createState() => _EmptyChatArtState();
 }
 
-class _EmptyChatArtState extends State<EmptyChatArt>
-    with SingleTickerProviderStateMixin {
+class _EmptyChatArtState extends State<EmptyChatArt> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat();
   }
 
   @override
@@ -374,10 +350,7 @@ class _ChatPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     // Main bubble.
-    canvas.drawRRect(
-      RRect.fromLTRBR(16, 24, 62, 52, const Radius.circular(10)),
-      paint,
-    );
+    canvas.drawRRect(RRect.fromLTRBR(16, 24, 62, 52, const Radius.circular(10)), paint);
     final tail = Path()
       ..moveTo(28, 52)
       ..lineTo(24, 62)
@@ -385,10 +358,7 @@ class _ChatPainter extends CustomPainter {
       ..close();
     canvas.drawPath(tail, paint);
     // Reply bubble.
-    canvas.drawRRect(
-      RRect.fromLTRBR(36, 56, 80, 76, const Radius.circular(8)),
-      faint,
-    );
+    canvas.drawRRect(RRect.fromLTRBR(36, 56, 80, 76, const Radius.circular(8)), faint);
     // Typing dots cycle inside the main bubble.
     for (var i = 0; i < 3; i++) {
       final phase = (t + i * 0.22) % 1.0;
@@ -419,17 +389,14 @@ class EmptySearchArt extends StatefulWidget {
   State<EmptySearchArt> createState() => _EmptySearchArtState();
 }
 
-class _EmptySearchArtState extends State<EmptySearchArt>
-    with SingleTickerProviderStateMixin {
+class _EmptySearchArtState extends State<EmptySearchArt> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))
+      ..repeat();
   }
 
   @override
@@ -511,17 +478,14 @@ class SuccessCheckArt extends StatefulWidget {
   State<SuccessCheckArt> createState() => _SuccessCheckArtState();
 }
 
-class _SuccessCheckArtState extends State<SuccessCheckArt>
-    with SingleTickerProviderStateMixin {
+class _SuccessCheckArtState extends State<SuccessCheckArt> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    )..forward();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
+      ..forward();
   }
 
   @override
@@ -575,8 +539,7 @@ class _CheckPainter extends CustomPainter {
     // Circle draws first, tick follows.
     final circleT = (t / 0.55).clamp(0.0, 1.0);
     final tickT = ((t - 0.45) / 0.55).clamp(0.0, 1.0);
-    final circle = Path()
-      ..addOval(Rect.fromCircle(center: const Offset(48, 48), radius: 27));
+    final circle = Path()..addOval(Rect.fromCircle(center: const Offset(48, 48), radius: 27));
     canvas.drawPath(_trimPath(circle, circleT), paint);
     final tick = Path()
       ..moveTo(36, 49)

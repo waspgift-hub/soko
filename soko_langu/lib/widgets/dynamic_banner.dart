@@ -6,6 +6,8 @@ import '../services/product_service.dart';
 import '../models/product_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
+import '../theme/design_tokens.dart';
+import '../theme/responsive_typography.dart';
 
 class DynamicBanner extends StatefulWidget {
   const DynamicBanner({super.key});
@@ -101,9 +103,14 @@ class _AdsCarouselState extends State<_AdsCarousel> {
     final cs = Theme.of(context).colorScheme;
     final products = widget.products;
 
-    return Container(
+    return ResponsiveBanner(
+      minHeight: 180,
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      height: 180,
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => context.push(
+        '${AppRoutes.productDetail}/${products[_currentPage].id}',
+        extra: products[_currentPage],
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
@@ -114,18 +121,11 @@ class _AdsCarouselState extends State<_AdsCarousel> {
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push(
-          '${AppRoutes.productDetail}/${products[_currentPage].id}',
-          extra: products[_currentPage],
-        ),
-        child: Row(
-          children: [
-            Expanded(flex: 3, child: _buildImagePanel(cs)),
-            Expanded(flex: 1, child: _buildInfoPanel()),
-          ],
-        ),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: _buildImagePanel(cs)),
+          Expanded(flex: 1, child: _buildInfoPanel()),
+        ],
       ),
     );
   }
@@ -209,43 +209,29 @@ class _AdsCarouselState extends State<_AdsCarousel> {
               ),
               const SizedBox(width: 4),
               Expanded(
-                child: Text(
+                child: BannerText(
                   context.tr('boost_product'),
+                  style: Ds.badge(Colors.white).copyWith(fontSize: 9, letterSpacing: 0.8),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
                 ),
               ),
             ],
           ),
           const Spacer(),
-          Text(
+          BannerText(
             context.formatPrice(p.price),
+            style: Ds.priceLarge(Colors.white).copyWith(height: 1),
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
           ),
           const SizedBox(height: 6),
-          Text(
+          BannerText(
             p.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
+            style: Ds.caption(Colors.white).copyWith(
               fontWeight: FontWeight.w600,
+              fontSize: 10,
               height: 1.3,
             ),
+            maxLines: 2,
           ),
           const SizedBox(height: 6),
           Row(
@@ -253,17 +239,18 @@ class _AdsCarouselState extends State<_AdsCarousel> {
             children: [
               const Icon(Icons.star, color: Colors.white, size: 10),
               const SizedBox(width: 2),
-              Text(
+              BannerText(
                 p.rating.toStringAsFixed(1),
-                style: const TextStyle(color: Colors.white, fontSize: 10),
+                style: Ds.caption(Colors.white).copyWith(fontSize: 10),
+                maxLines: 1,
               ),
               const SizedBox(width: 2),
               Flexible(
-                child: Text(' · ${p.soldCount} ${context.tr('sold')}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 9)),
+                child: BannerText(
+                  ' · ${p.soldCount} ${context.tr('sold')}',
+                  style: Ds.caption(Colors.white70).copyWith(fontSize: 9),
+                  maxLines: 1,
+                ),
               ),
             ],
           ),
@@ -274,11 +261,11 @@ class _AdsCarouselState extends State<_AdsCarousel> {
               const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 9),
               const SizedBox(width: 2),
               Flexible(
-                child: Text('${widget.products.length} ${context.tr('featured_products')}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 8)),
+                child: BannerText(
+                  '${widget.products.length} ${context.tr('featured_products')}',
+                  style: Ds.caption(Colors.white70).copyWith(fontSize: 8),
+                  maxLines: 1,
+                ),
               ),
             ],
           ),
@@ -303,9 +290,10 @@ class EarnMoneyBanner extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => context.push(AppRoutes.addProduct),
-      child: Container(
+      child: ResponsiveBanner(
+        minHeight: 180,
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        height: 180,
+        borderRadius: BorderRadius.circular(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
@@ -343,32 +331,20 @@ class EarnMoneyBanner extends StatelessWidget {
                       ),
                       child: Text(
                         context.tr('earn_money_title'),
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
+                        style: Ds.bannerCta(cs.primary).copyWith(fontSize: 10),
                       ),
                     ),
                     const SizedBox(height: 10),
-                      Text(
-                        context.tr('earn_money_subtitle'),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                        height: 1.15,
-                      ),
+                    BannerText(
+                      context.tr('earn_money_subtitle'),
+                      style: Ds.bannerTitle(cs.onSurface).copyWith(height: 1.15),
+                      maxLines: 2,
                     ),
                     const SizedBox(height: 6),
-                      Text(
-                        context.tr('earn_money_desc'),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 11.5,
-                        height: 1.4,
-                      ),
+                    BannerText(
+                      context.tr('earn_money_desc'),
+                      style: Ds.bannerSubtitle(cs.onSurfaceVariant),
+                      maxLines: 3,
                     ),
                     const SizedBox(height: 10),
                     Container(
@@ -380,11 +356,7 @@ class EarnMoneyBanner extends StatelessWidget {
                       ),
                       child: Text(
                         context.tr('start_selling'),
-                        style: TextStyle(
-                          color: cs.surface,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Ds.bannerCta(cs.surface).copyWith(fontSize: 12),
                       ),
                     ),
                   ],
@@ -411,11 +383,7 @@ class EarnMoneyBanner extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '+${context.currencySymbol()}',
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+                        style: Ds.labelLarge(cs.primary).copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

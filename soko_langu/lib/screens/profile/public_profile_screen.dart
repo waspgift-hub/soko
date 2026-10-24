@@ -221,6 +221,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                               ),
                             ),
                             childCount: products.length,
+                            addAutomaticKeepAlives: false,
                           ),
                         ),
                         // Footer placement: below the seller's catalogue so the

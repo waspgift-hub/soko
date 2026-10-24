@@ -135,3 +135,25 @@ test('verification without a sent OTP is rejected', async () => {
     (e) => e.code === 'KYC_OTP_INVALID',
   );
 });
+
+test('a code sent to number A cannot verify number B (contact binding)', async () => {
+  await kyc.sendContactOtp({ userId: USER, channel: 'phone', value: '255693273244' });
+  const otp = otpFromSms();
+  // Same user, different contact: the record lives under a different key.
+  await assert.rejects(
+    () => kyc.verifyContactOtp({ userId: USER, channel: 'phone', value: '255693273245', otp }),
+    (e) => e.code === 'KYC_OTP_INVALID',
+  );
+  // And the original contact still verifies with the same code.
+  const result = await kyc.verifyContactOtp({ userId: USER, channel: 'phone', value: '255693273244', otp });
+  assert.equal(result.verified, true);
+});
+
+test('a code sent to email A cannot verify email B', async () => {
+  await kyc.sendContactOtp({ userId: USER, channel: 'email', value: 'a-bind@example.com' });
+  const otp = otpFromMail();
+  await assert.rejects(
+    () => kyc.verifyContactOtp({ userId: USER, channel: 'email', value: 'b-bind@example.com', otp }),
+    (e) => e.code === 'KYC_OTP_INVALID',
+  );
+});

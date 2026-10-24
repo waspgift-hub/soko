@@ -40,11 +40,37 @@ void main() {
     test('typography methods return TextStyle', () {
       final c = Colors.blue;
       expect(Ds.displayLg(c), isA<TextStyle>());
-      expect(Ds.headingMd(c), isA<TextStyle>());
+      expect(Ds.displayMd(c), isA<TextStyle>());
+      expect(Ds.screenTitle(c), isA<TextStyle>());
+      expect(Ds.sectionTitle(c), isA<TextStyle>());
+      expect(Ds.cardTitle(c), isA<TextStyle>());
+      expect(Ds.productTitle(c), isA<TextStyle>());
+      expect(Ds.price(c), isA<TextStyle>());
+      expect(Ds.priceLarge(c), isA<TextStyle>());
       expect(Ds.bodyLg(c), isA<TextStyle>());
       expect(Ds.bodyMd(c), isA<TextStyle>());
+      expect(Ds.bodySm(c), isA<TextStyle>());
+      expect(Ds.metadata(c), isA<TextStyle>());
+      expect(Ds.caption(c), isA<TextStyle>());
+      expect(Ds.labelLg(c), isA<TextStyle>());
       expect(Ds.labelMd(c), isA<TextStyle>());
+      expect(Ds.labelSm(c), isA<TextStyle>());
+      expect(Ds.button(c), isA<TextStyle>());
+      expect(Ds.buttonSm(c), isA<TextStyle>());
+      expect(Ds.formLabel(c), isA<TextStyle>());
+      expect(Ds.inputHint(c), isA<TextStyle>());
+      expect(Ds.statusChip(c), isA<TextStyle>());
+      expect(Ds.badge(c), isA<TextStyle>());
       expect(Ds.amount(c), isA<TextStyle>());
+      expect(Ds.amountLarge(c), isA<TextStyle>());
+      expect(Ds.errorText(c), isA<TextStyle>());
+      expect(Ds.bannerTitle(c), isA<TextStyle>());
+      expect(Ds.bannerSubtitle(c), isA<TextStyle>());
+      expect(Ds.bannerCta(c), isA<TextStyle>());
+      expect(Ds.brandTitle(c), isA<TextStyle>());
+      expect(Ds.appBarTitle(c), isA<TextStyle>());
+      expect(Ds.monoLabel(c), isA<TextStyle>());
+      expect(Ds.timeIndicator(c), isA<TextStyle>());
     });
 
     test('brandGradient returns LinearGradient', () {

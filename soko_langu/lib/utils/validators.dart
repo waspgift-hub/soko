@@ -8,8 +8,17 @@ class Validators {
 
   static String? password(String? value) {
     if (value == null || value.isEmpty) return 'Password is required';
-    if (value.length < 8) return 'At least 8 characters';
+    if (!isStrongPassword(value)) return 'Min 8 characters with letters and numbers';
     return null;
+  }
+
+  // Mirrors the server password policy (min length + letter + digit) so weak
+  // passwords are rejected on the device instead of a server round-trip.
+  static bool isStrongPassword(String value) {
+    if (value.length < 8) return false;
+    if (!RegExp(r'[A-Za-z]').hasMatch(value)) return false;
+    if (!RegExp(r'[0-9]').hasMatch(value)) return false;
+    return true;
   }
 
   static String? phone(String? value) {

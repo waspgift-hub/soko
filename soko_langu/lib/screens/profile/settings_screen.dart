@@ -14,6 +14,7 @@ import '../../services/app_lock_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../services/mfa_service.dart';
 import '../../main.dart' show themeManager, AppConfig;
 
 class SettingsScreen extends StatefulWidget {
@@ -190,6 +191,140 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Starts MFA enrollment by navigating to the MFA enrollment screen.
+  Future<void> _startMfaEnrollment() async {
+    final result = await context.push<bool>(AppRoutes.mfaEnrollment);
+    if (result == true && mounted) {
+      setState(() {}); // Refresh to show MFA enabled state
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('mfa_enabled_success'))),
+      );
+    }
+  }
+
+  /// Shows the MFA management dialog with options to view recovery codes or disable MFA.
+  Future<void> _showMfaManagementDialog() async {
+    final auth = context.read<AuthNotifier>();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('mfa_manage_title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('mfa_manage_description'),
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            if (auth.mfaEnrolled) ...[
+              Text(
+                context.tr('mfa_current_status_enabled'),
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(ctx).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('close')),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmDisableMfa();
+            },
+            child: Text(
+              context.tr('mfa_disable'),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Confirms and disables MFA for the current user.
+  Future<void> _confirmDisableMfa() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('mfa_disable_confirm_title')),
+        content: Text(context.tr('mfa_disable_confirm_body')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              context.tr('mfa_disable'),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    final auth = context.read<AuthNotifier>();
+    try {
+      await auth.unenrollMfa();
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('mfa_disabled'))),
+        );
+      }
+    } on MfaError catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.userMessage)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('mfa_disable_failed'))),
+        );
+      }
+    }
+  }
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('logout_all_devices')),
+        content: Text(context.tr('logout_all_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              context.tr('logout'),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    await context.read<AuthNotifier>().logoutAllDevices();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.tr('logout_all_done'))),
+    );
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = AppConfig.of(context);
@@ -292,11 +427,43 @@ trailing: Switch(
                   onTap: _confirmRemovePin,
                 ),
               const Divider(),
+              // MFA (Two-Factor Authentication)
+              Consumer<AuthNotifier>(
+                builder: (context, auth, _) {
+                  return Column(
+                    children: [
+                      _buildTile(
+                        icon: Icons.security_rounded,
+                        title: context.tr('mfa_title'),
+                        subtitle: auth.mfaEnrolled
+                            ? context.tr('mfa_enabled')
+                            : context.tr('mfa_disabled'),
+                        onTap: auth.mfaEnrolled
+                            ? _showMfaManagementDialog
+                            : _startMfaEnrollment,
+                      ),
+                      if (auth.mfaEnrolled)
+                        _buildTile(
+                          icon: Icons.lock_open,
+                          title: context.tr('mfa_disable'),
+                          onTap: _confirmDisableMfa,
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const Divider(),
               _buildSectionTitle(context.tr('account')),
               _buildTile(
                 icon: Icons.person,
                 title: context.tr('edit_profile'),
                 onTap: () => context.push(AppRoutes.editProfile),
+              ),
+              _buildTile(
+                icon: Icons.devices_other,
+                title: context.tr('logout_all_devices'),
+                subtitle: context.tr('logout_all_devices_body'),
+                onTap: _confirmLogoutAll,
               ),
               const Divider(),
               _buildSectionTitle(context.tr('appearance')),

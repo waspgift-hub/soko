@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "C:/Users/user/Desktop/ttr/soko_langu/linux",
+    "cmake.sourceDirectory": "C:/Users/user/Desktop/SOKO VIBE/ttr/soko_langu/.kilo/worktrees/probable-billboard/soko_langu/windows/runner",
     "CodeGPT.apiKey": "Ollama",
     "k6.executable": "C:/Program Files/k6/k6.exe",
     "k6.thresholdsOnRun": true,

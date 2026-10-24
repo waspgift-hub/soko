@@ -17,8 +17,9 @@ import '../../models/transaction_model.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
-import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/google_loading.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -91,9 +92,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Future<void> _updateWidget(List<MarketplaceTransaction> transactions) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final pendingCount = transactions.where(
-      (t) => t.status == TransactionStatus.pending,
-    ).length;
+    final pendingCount = transactions.where((t) => t.status == TransactionStatus.pending).length;
     final nf = NumberFormat('#,###', 'en');
 
     if (ApiConfig.kUseWalletApi) {
@@ -108,16 +107,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       return;
     }
 
-    FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) {
-      final data = doc.data();
-      final balance = (data?['sellerBalance'] as num? ?? 0);
-      final totalSales = (data?['totalSales'] as num? ?? 0);
-      WidgetService.updateWidget(
-        sales: 'TZS ${nf.format(totalSales)}',
-        orders: '$pendingCount',
-        balance: 'TZS ${nf.format(balance)}',
-      );
-    }).catchError((_) {});
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get()
+        .then((doc) {
+          final data = doc.data();
+          final balance = (data?['sellerBalance'] as num? ?? 0);
+          final totalSales = (data?['totalSales'] as num? ?? 0);
+          WidgetService.updateWidget(
+            sales: 'TZS ${nf.format(totalSales)}',
+            orders: '$pendingCount',
+            balance: 'TZS ${nf.format(balance)}',
+          );
+        })
+        .catchError((_) {});
   }
 
   @override
@@ -169,19 +173,26 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   return RefreshIndicator(
                     onRefresh: () async => setState(() {}),
                     child: ListView(
-                      padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        8,
+                        16,
+                        16 + MediaQuery.of(context).padding.bottom,
+                      ),
                       children: [
                         _buildStatsRow(cs, productCount, txCount),
                         const SizedBox(height: 16),
                         _buildEarningsCard(),
                         const SizedBox(height: 20),
                         _buildQuickActions(cs, isDark, productSnap.data ?? []),
-                        if (_isAdmin) ...[
-                          const SizedBox(height: 20),
-                          _buildAdminSection(),
-                        ],
+                        if (_isAdmin) ...[const SizedBox(height: 20), _buildAdminSection()],
                         const SizedBox(height: 20),
-                        _buildSectionTitle(context, cs, Icons.receipt_long_outlined, context.tr('tx_history')),
+                        _buildSectionTitle(
+                          context,
+                          cs,
+                          Icons.receipt_long_outlined,
+                          context.tr('tx_history'),
+                        ),
                         const SizedBox(height: 12),
                         if (completedTx.isNotEmpty)
                           ...completedTx.take(10).map((tx) => _buildTransactionTile(tx))
@@ -190,6 +201,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                             icon: Icons.receipt_long_outlined,
                             title: context.tr('no_transactions'),
                             centered: false,
+                            artwork: const SokoAnimatedIllustration(
+                              SokoIllustration.emptyTransactions,
+                              size: 96,
+                            ),
                           ),
                       ],
                     ),
@@ -226,9 +241,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Widget _buildStatsRow(ColorScheme cs, int productCount, int txCount) {
     return Row(
       children: [
-        Expanded(child: _statCard(cs, Icons.inventory_2_outlined, '$productCount', context.tr('total_products'), cs.secondary)),
+        Expanded(
+          child: _statCard(
+            cs,
+            Icons.inventory_2_outlined,
+            '$productCount',
+            context.tr('total_products'),
+            cs.secondary,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _statCard(cs, Icons.receipt_long_outlined, '$txCount ${context.tr('sold')}', context.tr('total_sales'), cs.tertiary)),
+        Expanded(
+          child: _statCard(
+            cs,
+            Icons.receipt_long_outlined,
+            '$txCount ${context.tr('sold')}',
+            context.tr('total_sales'),
+            cs.tertiary,
+          ),
+        ),
       ],
     );
   }
@@ -250,7 +281,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(height: 12),
-          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.onSurface)),
+          Text(
+            value,
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.onSurface),
+          ),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
         ],
@@ -260,14 +294,49 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Widget _buildQuickActions(ColorScheme cs, bool isDark, List<Product> products) {
     final actions = [
-      _QuickActionData(Icons.add_business_outlined, context.tr('sell_product'), () => context.push(AppRoutes.addProduct), cs.primary),
-      _QuickActionData(Icons.price_check_outlined, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary),
-      _QuickActionData(Icons.local_shipping_outlined, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange),
+      _QuickActionData(
+        Icons.add_business_outlined,
+        context.tr('sell_product'),
+        () => context.push(AppRoutes.addProduct),
+        cs.primary,
+      ),
+      _QuickActionData(
+        Icons.price_check_outlined,
+        context.tr('give_quote'),
+        () => context.push(AppRoutes.sellerQuote),
+        cs.secondary,
+      ),
+      _QuickActionData(
+        Icons.local_shipping_outlined,
+        context.tr('dispatch_product'),
+        () => context.push(AppRoutes.sellerDispatch),
+        cs.trendingOrange,
+      ),
 
-      _QuickActionData(Icons.verified_outlined, context.tr('boost_listing'), () => context.push(AppRoutes.boostProduct), cs.trendingOrange),
-      _QuickActionData(Icons.receipt_long_outlined, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary),
-      _QuickActionData(Icons.flash_on_outlined, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange),
-      _QuickActionData(Icons.manage_search_outlined, context.tr('natufuta_bidhaa'), () => context.push(AppRoutes.buyerRequests), cs.secondary),
+      _QuickActionData(
+        Icons.verified_outlined,
+        context.tr('boost_listing'),
+        () => context.push(AppRoutes.boostProduct),
+        cs.trendingOrange,
+      ),
+      _QuickActionData(
+        Icons.receipt_long_outlined,
+        context.tr('order_history'),
+        () => context.push(AppRoutes.sellerOrders),
+        cs.tertiary,
+      ),
+      _QuickActionData(
+        Icons.flash_on_outlined,
+        context.tr('unda_flash_sale'),
+        () => context.push(AppRoutes.createFlashSale),
+        cs.trendingOrange,
+      ),
+      _QuickActionData(
+        Icons.manage_search_outlined,
+        context.tr('natufuta_bidhaa'),
+        () => context.push(AppRoutes.buyerRequests),
+        cs.secondary,
+      ),
     ];
 
     return Column(
@@ -320,7 +389,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: cs.onSurface, fontWeight: FontWeight.w600, height: 1.2),
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurface,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
             ),
           ),
         ],
@@ -330,9 +404,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Widget _buildTransactionTile(MarketplaceTransaction tx) {
     final cs = Theme.of(context).colorScheme;
-    final delivered = tx.status == TransactionStatus.delivered || tx.status == TransactionStatus.completed;
+    final delivered =
+        tx.status == TransactionStatus.delivered || tx.status == TransactionStatus.completed;
     final escrow = tx.status == TransactionStatus.escrowHold;
-    final statusColor = delivered ? cs.successGreen : escrow ? cs.tertiary : cs.onSurfaceVariant;
+    final statusColor = delivered
+        ? cs.successGreen
+        : escrow
+        ? cs.tertiary
+        : cs.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -369,8 +448,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           delivered
                               ? Icons.check_circle_rounded
                               : escrow
-                                  ? Icons.lock_rounded
-                                  : Icons.pending_outlined,
+                              ? Icons.lock_rounded
+                              : Icons.pending_outlined,
                           color: statusColor,
                           size: 22,
                         ),
@@ -380,15 +459,26 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tx.productName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(
+                              tx.productName,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             const SizedBox(height: 3),
-                            Text('${tx.buyerName} · TZS ${tx.sellerReceives.toStringAsFixed(0)}',
-                                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(
+                              '${tx.buyerName} · TZS ${tx.sellerReceives.toStringAsFixed(0)}',
+                              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             if (tx.buyerPhone.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
-                                child: Text(PhoneUtils.formatForDisplay(tx.buyerPhone),
-                                    style: TextStyle(fontSize: 11, color: cs.primary)),
+                                child: Text(
+                                  PhoneUtils.formatForDisplay(tx.buyerPhone),
+                                  style: TextStyle(fontSize: 11, color: cs.primary),
+                                ),
                               ),
                           ],
                         ),
@@ -397,19 +487,29 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('TZS ${tx.totalAmount.toStringAsFixed(0)}',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: cs.primary)),
+                          Text(
+                            'TZS ${tx.totalAmount.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: cs.primary,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text('${tx.createdAt.day}/${tx.createdAt.month}/${tx.createdAt.year}',
-                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                          Text(
+                            '${tx.createdAt.day}/${tx.createdAt.month}/${tx.createdAt.year}',
+                            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                          ),
                           if (tx.platformFee > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
                               // Shown without a minus and in a neutral tone:
                               // Terms 8.2c means this is not deducted from the
                               // seller, so red-minus read as a lost payout.
-                              child: Text('${context.tr('comm', 'Comm:')} TZS ${tx.platformFee.toStringAsFixed(0)}',
-                                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                              child: Text(
+                                '${context.tr('comm', 'Comm:')} TZS ${tx.platformFee.toStringAsFixed(0)}',
+                                style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                              ),
                             ),
                         ],
                       ),
@@ -436,7 +536,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle(context, cs, Icons.admin_panel_settings_outlined, context.tr('admin_platform_earnings')),
+            _buildSectionTitle(
+              context,
+              cs,
+              Icons.admin_panel_settings_outlined,
+              context.tr('admin_platform_earnings'),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -476,7 +581,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
+          Text(
+            value,
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color),
+          ),
           Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         ],
       ),
@@ -535,7 +643,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
-            BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10)),
+            BoxShadow(
+              color: cs.primary.withValues(alpha: 0.3),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
           ],
         ),
         child: Column(
@@ -553,31 +665,46 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(context.tr('seller_earnings'),
-                    style: TextStyle(color: cs.surface, fontSize: 17, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    context.tr('seller_earnings'),
+                    style: TextStyle(color: cs.surface, fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 Consumer<BalancePrivacyService>(
                   builder: (ctx, privacy, _) => GestureDetector(
                     onTap: privacy.toggle,
                     child: Icon(
                       privacy.hideBalances ? Icons.visibility_off : Icons.visibility,
-                      color: cs.surface.withValues(alpha: 0.7), size: 20,
+                      color: cs.surface.withValues(alpha: 0.7),
+                      size: 20,
                     ),
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(Icons.arrow_forward_ios_rounded, color: cs.surface.withValues(alpha: 0.7), size: 16),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: cs.surface.withValues(alpha: 0.7),
+                  size: 16,
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Consumer<BalancePrivacyService>(
               builder: (ctx, privacy, _) => Text(
                 privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(balance)}',
-                style: TextStyle(color: cs.surface, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                style: TextStyle(
+                  color: cs.surface,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1,
+                ),
+              ),
             ),
             const SizedBox(height: 4),
-            Text(context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
-              style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13)),
+            Text(
+              context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
+              style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13),
+            ),
           ],
         ),
       ),

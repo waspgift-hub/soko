@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
 import '../services/fraud_prevention_service.dart';
+import '../services/mfa_service.dart';
 import '../utils/network_error.dart';
 import '../utils/phone_utils.dart';
 
@@ -215,6 +216,30 @@ class AuthRepository {
     await _auth.signOut();
   }
 
+  /// Revokes every session for this user on the server (logout from all
+  /// devices), then signs out locally. The server call is best-effort: the
+  /// local sign-out always runs so this device never stays logged in.
+  Future<void> logoutAll() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        final token = await user.getIdToken();
+        await http
+            .post(
+              Uri.parse(ApiConfig.v1('/auth/logout-all')),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+            )
+            .timeout(const Duration(seconds: 15));
+      } catch (_) {
+        // Revocation failure must not block the local sign-out below.
+      }
+    }
+    await logout();
+  }
+
   Future<void> sendEmailVerification() async {
     final user = _auth.currentUser;
     if (user != null && !user.emailVerified) {
@@ -287,6 +312,50 @@ class AuthRepository {
     } catch (e) {
       debugPrint('createProfile error: $e');
     }
+  }
+
+  // MFA (TOTP) methods
+
+  /// Checks if the current user has TOTP MFA enrolled.
+  Future<bool> hasMfaEnrolled() async {
+    final mfaService = MfaService();
+    return mfaService.hasMfaEnrolled();
+  }
+
+  /// Starts TOTP enrollment.
+  Future<MfaEnrollmentData> startMfaEnrollment() async {
+    final mfaService = MfaService();
+    return mfaService.startEnrollment();
+  }
+
+  /// Completes TOTP enrollment with a code from the authenticator app and the secret.
+  Future<void> completeMfaEnrollment({
+    required String secret,
+    required String totpCode,
+  }) async {
+    final mfaService = MfaService();
+    return mfaService.completeEnrollmentWithSecret(
+      secret: secret,
+      totpCode: totpCode,
+    );
+  }
+
+  /// Unenrolls the TOTP second factor.
+  Future<void> unenrollMfa() async {
+    final mfaService = MfaService();
+    return mfaService.unenroll();
+  }
+
+  /// Gets the TOTP secret for an enrolled factor.
+  Future<String?> getTotpSecret() async {
+    final mfaService = MfaService();
+    return mfaService.getTotpSecret();
+  }
+
+  /// Verifies a TOTP code for step-up authentication.
+  Future<bool> verifyTotpForStepUp(String totpCode) async {
+    final mfaService = MfaService();
+    return mfaService.verifyTotpForStepUp(totpCode);
   }
 
   String _mapError(String code) {

@@ -15,6 +15,7 @@ import '../../services/consent_recording_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/rate_limiter.dart';
 import '../../utils/phone_utils.dart';
+import '../../utils/validators.dart';
 import '../../widgets/auth/auth_phone_field.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/auth/auth_text_field.dart';
@@ -340,7 +341,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onChanged: (_) => setState(() {}),
                 validator: (v) {
                   if (v == null || v.isEmpty) return context.tr('enter_password');
-                  if (v.length < 8) return context.tr('password_length');
+                  if (!Validators.isStrongPassword(v)) return context.tr('auth_password_weak');
                   return null;
                 },
               ),

@@ -9,7 +9,7 @@ import '../../services/shortcut_service.dart';
 import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/ds/ds.dart';
-import '../../widgets/animations/soko_animated_art.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 
@@ -132,10 +132,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('cancel')),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -184,7 +181,13 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                     PopupMenuItem(value: 'mute', child: Text(context.tr('mute'))),
                     PopupMenuItem(value: 'unmute', child: Text(context.tr('unmute'))),
                     PopupMenuItem(value: 'archive', child: Text(context.tr('archive'))),
-                    PopupMenuItem(value: 'delete', child: Text(context.tr('delete_conversations'), style: TextStyle(color: cs.error))),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        context.tr('delete_conversations'),
+                        style: TextStyle(color: cs.error),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -196,11 +199,25 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(context.tr('messages', 'Messages'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                    Text(
+                      context.tr('messages', 'Messages'),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       context.tr('messages_subtitle', 'Stay connected with buyers and sellers'),
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.8), letterSpacing: 0.1),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                        letterSpacing: 0.1,
+                      ),
                     ),
                   ],
                 ),
@@ -220,7 +237,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   prefixIcon: const Icon(Icons.search, size: 20),
                   isDense: true,
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -275,9 +294,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                       return r.archivedBy.contains(myUid);
                     case 4:
                       return !r.archivedBy.contains(myUid) &&
-                          (r.buyerId == null ||
-                              r.buyerId!.isEmpty ||
-                              r.buyerId == myUid);
+                          (r.buyerId == null || r.buyerId!.isEmpty || r.buyerId == myUid);
                     case 5:
                       return !r.archivedBy.contains(myUid) &&
                           r.sellerId != null &&
@@ -296,8 +313,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   final aPin = a.isPinned(myUid) ? 1 : 0;
                   final bPin = b.isPinned(myUid) ? 1 : 0;
                   if (aPin != bPin) return bPin - aPin;
-                  return (b.lastTimestamp?.millisecondsSinceEpoch ?? 0)
-                      .compareTo(a.lastTimestamp?.millisecondsSinceEpoch ?? 0);
+                  return (b.lastTimestamp?.millisecondsSinceEpoch ?? 0).compareTo(
+                    a.lastTimestamp?.millisecondsSinceEpoch ?? 0,
+                  );
                 });
 
                 if (!snap.hasData) {
@@ -310,14 +328,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                         children: [
                           DsSkeleton(shape: DsSkeletonShape.circle, width: 52, height: 52),
                           SizedBox(width: 14),
-                          Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              DsSkeleton(width: 140, height: 14),
-                              SizedBox(height: 8),
-                              DsSkeleton(width: double.infinity, height: 12),
-                            ],
-                          )),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                DsSkeleton(width: 140, height: 14),
+                                SizedBox(height: 8),
+                                DsSkeleton(width: double.infinity, height: 12),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -326,7 +346,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 if (rooms.isEmpty) {
                   return SokoVibeEmptyState(
                     icon: Icons.chat_bubble_outline,
-                    artwork: const EmptyChatArt(),
+                    artwork: const SokoAnimatedIllustration(SokoIllustration.emptyChat, size: 96),
                     title: context.tr('no_conversations', 'No conversations yet'),
                   );
                 }
@@ -342,8 +362,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                     final photo = _userPhotos[otherId] ?? '';
                     final unreadCount = room.unreadCountFor(myUid);
                     final pinned = room.isPinned(myUid);
-                    final prevPinned = i > 0 &&
-                        rooms[i - 1].isPinned(myUid);
+                    final prevPinned = i > 0 && rooms[i - 1].isPinned(myUid);
                     final tile = _ChatListTile(
                       name: name,
                       photo: photo,
@@ -387,30 +406,24 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                               padding: const EdgeInsets.only(left: 20),
                               color: cs.primary.withValues(alpha: 0.12),
                               child: Icon(
-                                  room.isArchived(myUid)
-                                      ? Icons.unarchive
-                                      : Icons.archive,
-                                  color: cs.primary),
+                                room.isArchived(myUid) ? Icons.unarchive : Icons.archive,
+                                color: cs.primary,
+                              ),
                             ),
                             secondaryBackground: Container(
                               alignment: Alignment.centerRight,
-                              padding:
-                                  const EdgeInsets.only(right: 20),
+                              padding: const EdgeInsets.only(right: 20),
                               color: cs.primary.withValues(alpha: 0.12),
                               child: Icon(
-                                  room.isMuted(myUid)
-                                      ? Icons.volume_up
-                                      : Icons.volume_off,
-                                  color: cs.primary),
+                                room.isMuted(myUid) ? Icons.volume_up : Icons.volume_off,
+                                color: cs.primary,
+                              ),
                             ),
                             confirmDismiss: (dir) async {
-                              if (dir ==
-                                  DismissDirection.startToEnd) {
-                                await _chatService
-                                    .toggleArchive(room.id);
+                              if (dir == DismissDirection.startToEnd) {
+                                await _chatService.toggleArchive(room.id);
                               } else {
-                                await _chatService
-                                    .toggleMute(room.id);
+                                await _chatService.toggleMute(room.id);
                               }
                               return false;
                             },
@@ -421,8 +434,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                                12, 8, 12, 2),
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
                             child: Text(
                               context.tr('pinned', 'Pinned'),
                               style: TextStyle(
@@ -463,9 +475,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             return r.archivedBy.contains(uid);
           case 4:
             return !r.archivedBy.contains(uid) &&
-                (r.buyerId == null ||
-                    r.buyerId!.isEmpty ||
-                    r.buyerId == uid);
+                (r.buyerId == null || r.buyerId!.isEmpty || r.buyerId == uid);
           case 5:
             return !r.archivedBy.contains(uid) &&
                 r.sellerId != null &&
@@ -484,11 +494,14 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   Future<void> _openChat(String otherId, ChatRoom room) async {
     await _chatService.getOrCreateRoom(otherUserId: otherId);
     if (context.mounted) {
-      context.push('/chat/$otherId', extra: {
-        'name': _userNames[otherId] ?? '',
-        'productId': room.productId ?? '',
-        'productTitle': room.productTitle ?? '',
-      });
+      context.push(
+        '/chat/$otherId',
+        extra: {
+          'name': _userNames[otherId] ?? '',
+          'productId': room.productId ?? '',
+          'productTitle': room.productTitle ?? '',
+        },
+      );
     }
   }
 
@@ -560,13 +573,15 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         if (mounted) setState(() {});
         break;
       case 'shortcut':
-        final pinned = await pinChatShortcut(
-          receiverId: otherId,
-          receiverName: name,
+        final pinned = await pinChatShortcut(receiverId: otherId, receiverName: name);
+        _showSnack(
+          pinned
+              ? context.tr('shortcut_added')
+              : context.tr(
+                  'shortcut_not_supported',
+                  'Shortcut haijaungana kwenye skrini ya nyumbani',
+                ),
         );
-        _showSnack(pinned
-            ? context.tr('shortcut_added')
-            : context.tr('shortcut_not_supported', 'Shortcut haijaungana kwenye skrini ya nyumbani'));
         break;
       case 'view_profile':
         if (context.mounted) {
@@ -580,7 +595,11 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         break;
       case 'favourite':
         await _chatService.toggleFavourite(room.id);
-        _showSnack(room.isFavourited(myUid) ? context.tr('removed_from_favourites') : context.tr('added_to_favourites'));
+        _showSnack(
+          room.isFavourited(myUid)
+              ? context.tr('removed_from_favourites')
+              : context.tr('added_to_favourites'),
+        );
         if (mounted) setState(() {});
         break;
     }
@@ -716,9 +735,7 @@ class _ChatListTile extends StatelessWidget {
                       radius: 26,
                       backgroundColor: cs.primary.withValues(alpha: 0.12),
                       backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
-                      child: photo.isEmpty
-                          ? Icon(Icons.person, size: 28, color: cs.primary)
-                          : null,
+                      child: photo.isEmpty ? Icon(Icons.person, size: 28, color: cs.primary) : null,
                     ),
                     if (isPinned)
                       Positioned(
@@ -726,10 +743,7 @@ class _ChatListTile extends StatelessWidget {
                         bottom: 0,
                         child: Container(
                           padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: cs.surface,
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: BoxDecoration(color: cs.surface, shape: BoxShape.circle),
                           child: Icon(Icons.push_pin, size: 12, color: cs.primary),
                         ),
                       ),
@@ -750,7 +764,18 @@ class _ChatListTile extends StatelessWidget {
                                     padding: const EdgeInsets.only(right: 4),
                                     child: Icon(Icons.favorite, size: 14, color: cs.error),
                                   ),
-                                Flexible(child: Text(name, style: TextStyle(fontWeight: unreadCount > 0 ? FontWeight.w700 : FontWeight.w600, fontSize: 16, color: cs.onSurface))),
+                                Flexible(
+                                  child: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontWeight: unreadCount > 0
+                                          ? FontWeight.w700
+                                          : FontWeight.w600,
+                                      fontSize: 16,
+                                      color: cs.onSurface,
+                                    ),
+                                  ),
+                                ),
                                 BlueTickBadge(sellerId: peerId ?? '', size: 14),
                               ],
                             ),
@@ -759,7 +784,11 @@ class _ChatListTile extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (isMuted)
-                                Icon(Icons.volume_off, size: 14, color: cs.primary.withValues(alpha: 0.5)),
+                                Icon(
+                                  Icons.volume_off,
+                                  size: 14,
+                                  color: cs.primary.withValues(alpha: 0.5),
+                                ),
                               if (lastTimestamp != null)
                                 Padding(
                                   padding: const EdgeInsets.only(left: 4),
@@ -785,7 +814,11 @@ class _ChatListTile extends StatelessWidget {
                                   productTitle!,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cs.primary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -808,10 +841,16 @@ class _ChatListTile extends StatelessWidget {
                                 color: cs.primary,
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Text('$unreadCount', style: TextStyle(fontSize: 11, color: cs.surface, fontWeight: FontWeight.w600)),
+                              child: Text(
+                                '$unreadCount',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: cs.surface,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          if (!selectMode)
-                            _buildMenuButton(context),
+                          if (!selectMode) _buildMenuButton(context),
                         ],
                       ),
                     ],
@@ -831,19 +870,118 @@ class _ChatListTile extends StatelessWidget {
       icon: Icon(Icons.more_vert, size: 20, color: cs.primary),
       onSelected: onMenuAction,
       itemBuilder: (ctx) => [
-        PopupMenuItem(value: 'select', child: Row(children: [const Icon(Icons.checklist, size: 20), const SizedBox(width: 10), Text(context.tr('select'))])),
+        PopupMenuItem(
+          value: 'select',
+          child: Row(
+            children: [
+              const Icon(Icons.checklist, size: 20),
+              const SizedBox(width: 10),
+              Text(context.tr('select')),
+            ],
+          ),
+        ),
         const PopupMenuDivider(),
-        PopupMenuItem(value: 'favourite', child: Row(children: [Icon(isFavourited ? Icons.favorite_border : Icons.favorite, size: 20), const SizedBox(width: 10), Text(isFavourited ? context.tr('remove_favourite') : context.tr('add_favourite'))])),
-        PopupMenuItem(value: 'pin', child: Row(children: [Icon(isPinned ? Icons.push_pin_outlined : Icons.push_pin, size: 20), const SizedBox(width: 10), Text(isPinned ? context.tr('unpin') : context.tr('pin'))])),
-        PopupMenuItem(value: isMuted ? 'unmute' : 'mute', child: Row(children: [Icon(isMuted ? Icons.volume_up : Icons.volume_off, size: 20), const SizedBox(width: 10), Text(isMuted ? context.tr('unmute') : context.tr('mute'))])),
-        PopupMenuItem(value: 'archive', child: Row(children: [Icon(isArchived ? Icons.unarchive : Icons.archive, size: 20), const SizedBox(width: 10), Text(isArchived ? context.tr('unarchive') : context.tr('archive'))])),
-        PopupMenuItem(value: 'mark_read', child: Row(children: [const Icon(Icons.mark_email_read_outlined, size: 20), const SizedBox(width: 10), Text(context.tr('mark_as_read'))])),
-        PopupMenuItem(value: 'shortcut', child: Row(children: [const Icon(Icons.shortcut, size: 20), const SizedBox(width: 10), Text(context.tr('add_shortcut'))])),
-        PopupMenuItem(value: 'view_profile', child: Row(children: [const Icon(Icons.person_outline, size: 20), const SizedBox(width: 10), Text(context.tr('view_profile'))])),
+        PopupMenuItem(
+          value: 'favourite',
+          child: Row(
+            children: [
+              Icon(isFavourited ? Icons.favorite_border : Icons.favorite, size: 20),
+              const SizedBox(width: 10),
+              Text(isFavourited ? context.tr('remove_favourite') : context.tr('add_favourite')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'pin',
+          child: Row(
+            children: [
+              Icon(isPinned ? Icons.push_pin_outlined : Icons.push_pin, size: 20),
+              const SizedBox(width: 10),
+              Text(isPinned ? context.tr('unpin') : context.tr('pin')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: isMuted ? 'unmute' : 'mute',
+          child: Row(
+            children: [
+              Icon(isMuted ? Icons.volume_up : Icons.volume_off, size: 20),
+              const SizedBox(width: 10),
+              Text(isMuted ? context.tr('unmute') : context.tr('mute')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'archive',
+          child: Row(
+            children: [
+              Icon(isArchived ? Icons.unarchive : Icons.archive, size: 20),
+              const SizedBox(width: 10),
+              Text(isArchived ? context.tr('unarchive') : context.tr('archive')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'mark_read',
+          child: Row(
+            children: [
+              const Icon(Icons.mark_email_read_outlined, size: 20),
+              const SizedBox(width: 10),
+              Text(context.tr('mark_as_read')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'shortcut',
+          child: Row(
+            children: [
+              const Icon(Icons.shortcut, size: 20),
+              const SizedBox(width: 10),
+              Text(context.tr('add_shortcut')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'view_profile',
+          child: Row(
+            children: [
+              const Icon(Icons.person_outline, size: 20),
+              const SizedBox(width: 10),
+              Text(context.tr('view_profile')),
+            ],
+          ),
+        ),
         const PopupMenuDivider(),
-        PopupMenuItem(value: 'block', child: Row(children: [Icon(Icons.block, size: 20, color: cs.error), const SizedBox(width: 10), Text(context.tr('block_user'), style: TextStyle(color: cs.error))])),
-        PopupMenuItem(value: 'delete_conversation', child: Row(children: [Icon(Icons.delete_outline, size: 20, color: cs.error), const SizedBox(width: 10), Text(context.tr('delete_conversation'), style: TextStyle(color: cs.error))])),
-        PopupMenuItem(value: 'delete_user', child: Row(children: [Icon(Icons.person_remove_outlined, size: 20, color: cs.error), const SizedBox(width: 10), Text(context.tr('delete_user'), style: TextStyle(color: cs.error))])),
+        PopupMenuItem(
+          value: 'block',
+          child: Row(
+            children: [
+              Icon(Icons.block, size: 20, color: cs.error),
+              const SizedBox(width: 10),
+              Text(context.tr('block_user'), style: TextStyle(color: cs.error)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete_conversation',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 20, color: cs.error),
+              const SizedBox(width: 10),
+              Text(context.tr('delete_conversation'), style: TextStyle(color: cs.error)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete_user',
+          child: Row(
+            children: [
+              Icon(Icons.person_remove_outlined, size: 20, color: cs.error),
+              const SizedBox(width: 10),
+              Text(context.tr('delete_user'), style: TextStyle(color: cs.error)),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -851,7 +989,8 @@ class _ChatListTile extends StatelessWidget {
   String _formatTime(BuildContext context, DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inDays == 0) return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (diff.inDays == 0)
+      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     if (diff.inDays == 1) return context.tr('yesterday', 'Yesterday');
     return '${dt.day}/${dt.month}';
   }

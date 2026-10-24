@@ -14,6 +14,7 @@ import '../../services/media_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../extensions/context_tr.dart';
 
 /// The verification document required by product: passport only. The value
@@ -111,10 +112,7 @@ class _KycScreenState extends State<KycScreen> {
       kyc = result?['kyc'] as Map<String, dynamic>?;
     } catch (_) {}
     if (kyc == null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       kyc = doc.data()?['kyc'] as Map<String, dynamic>?;
     }
     final fee = await KycService.getKycFeeStatus();
@@ -174,8 +172,7 @@ class _KycScreenState extends State<KycScreen> {
     _middleNameController.text = kyc?['middleName'] as String? ?? '';
     _lastNameController.text = kyc?['lastName'] as String? ?? '';
     if (_firstNameController.text.isEmpty) {
-      final parts =
-          (kyc?['fullName'] as String? ?? '').trim().split(RegExp(r'\s+'));
+      final parts = (kyc?['fullName'] as String? ?? '').trim().split(RegExp(r'\s+'));
       if (parts.length >= 3) {
         _firstNameController.text = parts[0];
         _middleNameController.text = parts[1];
@@ -189,7 +186,8 @@ class _KycScreenState extends State<KycScreen> {
     }
     _addressController.text = kyc?['address'] as String? ?? '';
     _phoneController.text = PhoneUtils.normalizeToLocal(
-        kyc?['phone'] as String? ?? user.phoneNumber ?? '');
+      kyc?['phone'] as String? ?? user.phoneNumber ?? '',
+    );
     _emailController.text = kyc?['email'] as String? ?? user.email ?? '';
     _feePhoneController.text = _phoneController.text;
   }
@@ -219,9 +217,7 @@ class _KycScreenState extends State<KycScreen> {
       if (user == null) return null;
       final token = await user.getIdToken();
       final res = await http.get(
-        Uri.parse(
-          '${ApiConfig.baseUrl}/api/v1/kyc/documents/$documentId/read-url',
-        ),
+        Uri.parse('${ApiConfig.baseUrl}/api/v1/kyc/documents/$documentId/read-url'),
         headers: {'Authorization': 'Bearer $token'},
       );
       if (res.statusCode != 200) return null;
@@ -262,7 +258,12 @@ class _KycScreenState extends State<KycScreen> {
     final source = await _chooseSource(cameraLabel: context.tr('take_photo'));
     if (source == null) return;
 
-    final file = await _picker.pickImage(source: source, maxWidth: 1600, maxHeight: 1600, imageQuality: 95);
+    final file = await _picker.pickImage(
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 95,
+    );
     if (file != null) {
       setState(() {
         if (isSelfie) {
@@ -358,10 +359,7 @@ class _KycScreenState extends State<KycScreen> {
 
   void _startFeePolling() {
     _feePollTimer?.cancel();
-    _feePollTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _checkFeePaid(),
-    );
+    _feePollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkFeePaid());
   }
 
   Future<void> _checkFeePaid({bool manual = false}) async {
@@ -410,8 +408,7 @@ class _KycScreenState extends State<KycScreen> {
     if (_phoneOtpSent) {
       _showSuccess(context.tr('kyc_otp_sent'));
     } else {
-      _showError(
-          result['error']?.toString() ?? context.tr('kyc_otp_send_failed'));
+      _showError(result['error']?.toString() ?? context.tr('kyc_otp_send_failed'));
     }
   }
 
@@ -422,8 +419,7 @@ class _KycScreenState extends State<KycScreen> {
       return;
     }
     setState(() => _phoneOtpVerifying = true);
-    final result =
-        await KycService.verifyPhoneOtp(_phoneController.text.trim(), otp);
+    final result = await KycService.verifyPhoneOtp(_phoneController.text.trim(), otp);
     if (!mounted) return;
     setState(() {
       _phoneOtpVerifying = false;
@@ -456,8 +452,7 @@ class _KycScreenState extends State<KycScreen> {
     if (_emailOtpSent) {
       _showSuccess(context.tr('kyc_otp_sent'));
     } else {
-      _showError(
-          result['error']?.toString() ?? context.tr('kyc_otp_send_failed'));
+      _showError(result['error']?.toString() ?? context.tr('kyc_otp_send_failed'));
     }
   }
 
@@ -468,8 +463,7 @@ class _KycScreenState extends State<KycScreen> {
       return;
     }
     setState(() => _emailOtpVerifying = true);
-    final result =
-        await KycService.verifyEmailOtp(_emailController.text.trim(), otp);
+    final result = await KycService.verifyEmailOtp(_emailController.text.trim(), otp);
     if (!mounted) return;
     setState(() {
       _emailOtpVerifying = false;
@@ -572,10 +566,7 @@ class _KycScreenState extends State<KycScreen> {
       }
       String? videoUrl;
       try {
-        videoUrl = await MediaService.uploadVideo(
-          _videoFile!,
-          owner: MediaOwner.user,
-        );
+        videoUrl = await MediaService.uploadVideo(_videoFile!, owner: MediaOwner.user);
       } catch (e) {
         debugPrint('KYC video upload error: $e');
       }
@@ -630,9 +621,7 @@ class _KycScreenState extends State<KycScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('kyc_title'))),
-      body: _status == null
-          ? const GoogleLoadingPage()
-          : _buildBody(cs),
+      body: _status == null ? const GoogleLoadingPage() : _buildBody(cs),
     );
   }
 
@@ -644,17 +633,24 @@ class _KycScreenState extends State<KycScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.verified, size: 80, color: cs.primary),
+              const SokoAnimatedIllustration(SokoIllustration.kycVerified, size: 80),
               const SizedBox(height: 16),
-              Text(context.tr('kyc_approved'),
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(
+                context.tr('kyc_approved'),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              Text(context.tr('kyc_approved_desc'),
-                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 15)),
+              Text(
+                context.tr('kyc_approved_desc'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15),
+              ),
               if (_kycIdImageUrl != null) ...[
                 const SizedBox(height: 16),
-                Text(context.tr('identification_label'),
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  context.tr('identification_label'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -674,13 +670,18 @@ class _KycScreenState extends State<KycScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.hourglass_top, size: 80, color: cs.tertiary),
+              const SokoAnimatedIllustration(SokoIllustration.kycPending, size: 80),
               const SizedBox(height: 16),
-              Text(context.tr('kyc_pending'),
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(
+                context.tr('kyc_pending'),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              Text(context.tr('kyc_pending_desc'),
-                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 15)),
+              Text(
+                context.tr('kyc_pending_desc'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15),
+              ),
             ],
           ),
         ),
@@ -777,9 +778,7 @@ class _KycScreenState extends State<KycScreen> {
               prefixIcon: const Icon(Icons.calendar_month),
             ),
             child: Text(
-              _dob == null
-                  ? context.tr('kyc_dob_hint')
-                  : DateFormat('dd/MM/yyyy').format(_dob!),
+              _dob == null ? context.tr('kyc_dob_hint') : DateFormat('dd/MM/yyyy').format(_dob!),
               style: _dob == null
                   ? TextStyle(color: cs.onSurfaceVariant)
                   : TextStyle(color: cs.onSurface),
@@ -813,8 +812,7 @@ class _KycScreenState extends State<KycScreen> {
             counterText: '',
             suffixIcon: _phoneVerified
                 ? Icon(Icons.verified, color: cs.successGreen)
-                : _buildVerifySuffixIcon(
-                    sending: _phoneOtpSending, onVerify: _sendPhoneOtp),
+                : _buildVerifySuffixIcon(sending: _phoneOtpSending, onVerify: _sendPhoneOtp),
           ),
         ),
         _buildOtpField(
@@ -833,8 +831,7 @@ class _KycScreenState extends State<KycScreen> {
             prefixIcon: const Icon(Icons.email_outlined),
             suffixIcon: _emailVerified
                 ? Icon(Icons.verified, color: cs.successGreen)
-                : _buildVerifySuffixIcon(
-                    sending: _emailOtpSending, onVerify: _sendEmailOtp),
+                : _buildVerifySuffixIcon(sending: _emailOtpSending, onVerify: _sendEmailOtp),
           ),
         ),
         _buildOtpField(
@@ -914,18 +911,11 @@ class _KycScreenState extends State<KycScreen> {
     );
   }
 
-  Widget _buildVerifySuffixIcon({
-    required bool sending,
-    required VoidCallback onVerify,
-  }) {
+  Widget _buildVerifySuffixIcon({required bool sending, required VoidCallback onVerify}) {
     if (sending) {
       return const Padding(
         padding: EdgeInsets.all(12),
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
     return TextButton(
@@ -973,8 +963,7 @@ class _KycScreenState extends State<KycScreen> {
               style: FilledButton.styleFrom(
                 foregroundColor: cs.surface,
                 backgroundColor: cs.successGreen,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               ),
               child: verifying
                   ? const SizedBox(
@@ -1002,11 +991,7 @@ class _KycScreenState extends State<KycScreen> {
         ),
         child: Row(
           children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: GoogleLoading(strokeWidth: 2),
-            ),
+            const SizedBox(width: 18, height: 18, child: GoogleLoading(strokeWidth: 2)),
             const SizedBox(width: 12),
             Text(context.tr('kyc_fee_title')),
           ],
@@ -1065,8 +1050,7 @@ class _KycScreenState extends State<KycScreen> {
                 children: [
                   Text(
                     context.tr('kyc_fee_paid'),
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, color: cs.successGreen),
+                    style: TextStyle(fontWeight: FontWeight.w700, color: cs.successGreen),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -1095,11 +1079,15 @@ class _KycScreenState extends State<KycScreen> {
             children: [
               Icon(Icons.payments_outlined, color: cs.primary, size: 24),
               const SizedBox(width: 8),
-              Text(context.tr('kyc_fee_title'),
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                context.tr('kyc_fee_title'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               const Spacer(),
-              Text('TZS $amount',
-                  style: TextStyle(fontWeight: FontWeight.w800, color: cs.primary)),
+              Text(
+                'TZS $amount',
+                style: TextStyle(fontWeight: FontWeight.w800, color: cs.primary),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -1146,25 +1134,20 @@ class _KycScreenState extends State<KycScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: GoogleLoading(strokeWidth: 2),
-                ),
+                const SizedBox(width: 16, height: 16, child: GoogleLoading(strokeWidth: 2)),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    context.tr('kyc_fee_waiting'),
-                    style: const TextStyle(fontSize: 13),
-                  ),
+                  child: Text(context.tr('kyc_fee_waiting'), style: const TextStyle(fontSize: 13)),
                 ),
               ],
             ),
           ],
           if (_billPayNumber != null && _billPayNumber!.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(context.tr('kyc_fee_control_number_label'),
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              context.tr('kyc_fee_control_number_label'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1178,7 +1161,10 @@ class _KycScreenState extends State<KycScreen> {
                     child: SelectableText(
                       _billPayNumber!,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 1.2),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        letterSpacing: 1.2,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -1208,8 +1194,8 @@ class _KycScreenState extends State<KycScreen> {
                   _feeInitiating
                       ? context.tr('submitting')
                       : _feeMethod == 'billpay'
-                          ? context.tr('kyc_fee_get_control')
-                          : context.trParams('kyc_fee_pay_button', {'0': amount}),
+                      ? context.tr('kyc_fee_get_control')
+                      : context.trParams('kyc_fee_pay_button', {'0': amount}),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: cs.primary,
@@ -1238,9 +1224,7 @@ class _KycScreenState extends State<KycScreen> {
       child: Container(
         height: 110,
         decoration: BoxDecoration(
-          color: hasVideo
-              ? cs.primary.withValues(alpha: 0.08)
-              : cs.surfaceContainerLow,
+          color: hasVideo ? cs.primary.withValues(alpha: 0.08) : cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: hasVideo ? cs.primary.withValues(alpha: 0.6) : cs.outline,
@@ -1258,8 +1242,10 @@ class _KycScreenState extends State<KycScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(context.tr('kyc_video_selected'),
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          context.tr('kyc_video_selected'),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           _videoFile!.name,
@@ -1279,12 +1265,12 @@ class _KycScreenState extends State<KycScreen> {
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.videocam_outlined,
-                      size: 32, color: cs.onSurfaceVariant),
+                  Icon(Icons.videocam_outlined, size: 32, color: cs.onSurfaceVariant),
                   const SizedBox(height: 6),
-                  Text(context.tr('kyc_video_record'),
-                      style:
-                          TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                  Text(
+                    context.tr('kyc_video_record'),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
                 ],
               ),
       ),
@@ -1318,20 +1304,26 @@ class _KycScreenState extends State<KycScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: file != null
-                        ? Image.file(File(file.path),
-                            width: double.infinity, height: 140, fit: BoxFit.cover)
-                        : Image.network(imageUrl!,
-                            width: double.infinity, height: 140, fit: BoxFit.cover),
+                        ? Image.file(
+                            File(file.path),
+                            width: double.infinity,
+                            height: 140,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.network(
+                            imageUrl!,
+                            width: double.infinity,
+                            height: 140,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                   if (file != null)
                     Positioned(
-                      top: 4, right: 4,
+                      top: 4,
+                      right: 4,
                       child: Container(
                         padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
                         child: Icon(Icons.check, color: cs.surface, size: 16),
                       ),
                     ),
@@ -1342,10 +1334,11 @@ class _KycScreenState extends State<KycScreen> {
                 children: [
                   Icon(icon, size: 32, color: cs.onSurfaceVariant),
                   const SizedBox(height: 6),
-                  Text(label,
-                      style:
-                          TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-                      textAlign: TextAlign.center),
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
       ),

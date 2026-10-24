@@ -68,12 +68,10 @@ router.post(
 
     // The provider adapter is resolved lazily so the route stays independent of
     // which provider is configured. Falls back to the existing ai-gateway.
-    const provider = await require('./ai-gateway');
+    const provider = require('../ai/ai-gateway');
 
-    const allMessages = [
-      ...(Array.isArray(messages) ? messages : []),
-      { role: 'user', content: text },
-    ];
+    // runTurn appends the current user turn itself, so pass only prior history.
+    const history = Array.isArray(messages) ? messages : [];
 
     let buffer = '';
     let streamed = false;
@@ -109,7 +107,7 @@ router.post(
       const result = await agentService.runTurn({
         firebaseUid,
         userMessage: text,
-        messages: allMessages,
+        messages: history,
         provider,
         onDelta: emitDelta,
         onActionProposal: async (pending) => {

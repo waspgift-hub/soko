@@ -9,6 +9,7 @@ import '../../services/profile_media_session.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 /// Full-screen audio player: artwork or synced lyrics, transport controls,
 /// seek bar, and the queue.
@@ -99,10 +100,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     const sep = ' - ';
     final at = item.title.lastIndexOf(sep);
     if (at > 0 && at + sep.length < item.title.length) {
-      return (
-        item.title.substring(0, at).trim(),
-        item.title.substring(at + sep.length).trim(),
-      );
+      return (item.title.substring(0, at).trim(), item.title.substring(at + sep.length).trim());
     }
     return (item.title, '');
   }
@@ -126,6 +124,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
           icon: Icons.music_off_outlined,
           title: context.tr('no_music'),
           centered: true,
+          artwork: const SokoAnimatedIllustration(SokoIllustration.emptyMusic, size: 96),
         ),
       );
     }
@@ -144,8 +143,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final artworkSize =
-                (constraints.maxHeight * 0.42).clamp(160.0, 420.0);
+            final artworkSize = (constraints.maxHeight * 0.42).clamp(160.0, 420.0);
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.s6,
@@ -158,17 +156,14 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 children: [
                   SizedBox(
                     height: artworkSize,
-                    child: _showLyrics
-                        ? _buildLyrics()
-                        : _buildArtwork(item, artworkSize),
+                    child: _showLyrics ? _buildLyrics() : _buildArtwork(item, artworkSize),
                   ),
                   const SizedBox(height: AppSpacing.s5),
                   if (_showLyrics)
                     Align(
                       alignment: Alignment.center,
                       child: TextButton.icon(
-                        onPressed: () =>
-                            setState(() => _showLyrics = false),
+                        onPressed: () => setState(() => _showLyrics = false),
                         icon: const Icon(Icons.album_outlined, size: 18),
                         label: Text(context.tr('show_artwork')),
                       ),
@@ -218,42 +213,39 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   errorBuilder: (_, _, _) => _artworkFallback(scheme),
                 )
               : thumb != null && thumb.isNotEmpty
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _artworkFallback(scheme),
-                    )
-                  : _artworkFallback(scheme),
+              ? Image.network(
+                  thumb,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => _artworkFallback(scheme),
+                )
+              : _artworkFallback(scheme),
         ),
       ),
     );
   }
 
   Widget _artworkFallback(ColorScheme scheme) => DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              scheme.primary,
-              scheme.tertiary,
-            ],
-          ),
-        ),
-        child: const Icon(Icons.music_note, size: 96, color: Colors.white70),
-      );
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [scheme.primary, scheme.tertiary],
+      ),
+    ),
+    child: const Icon(Icons.music_note, size: 96, color: Colors.white70),
+  );
 
   Widget _buildLyrics() => DsLyricsView(
-        lyrics: _lyrics,
-        loading: _loadingLyrics,
-        position: _media.position,
-        isPlaying: _media.isPlaying,
-        onSeek: _media.seekTo,
-        emptyTitle: context.tr('no_lyrics_title'),
-        emptyBody: context.tr('no_lyrics_body'),
-        instrumentalTitle: context.tr('instrumental_track'),
-        noSyncedHint: context.tr('no_lyrics_body'),
-      );
+    lyrics: _lyrics,
+    loading: _loadingLyrics,
+    position: _media.position,
+    isPlaying: _media.isPlaying,
+    onSeek: _media.seekTo,
+    emptyTitle: context.tr('no_lyrics_title'),
+    emptyBody: context.tr('no_lyrics_body'),
+    instrumentalTitle: context.tr('instrumental_track'),
+    noSyncedHint: context.tr('no_lyrics_body'),
+  );
 
   Widget _buildTitle(ProfileMediaItem item, ColorScheme scheme) {
     final (track, artist) = _splitTitleArtist(item);
@@ -264,9 +256,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
         if (artist.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s1),
@@ -275,10 +265,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: scheme.brandTextSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.brandTextSecondary),
           ),
         ],
       ],
@@ -286,187 +275,157 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
   }
 
   Widget _buildSeekBar() => StreamBuilder<Duration>(
-        stream: _media.positionStream,
+    stream: _media.positionStream,
+    initialData: Duration.zero,
+    builder: (context, posSnap) {
+      return StreamBuilder<Duration>(
+        stream: _media.durationStream,
         initialData: Duration.zero,
-        builder: (context, posSnap) {
-          return StreamBuilder<Duration>(
-            stream: _media.durationStream,
-            initialData: Duration.zero,
-            builder: (context, durSnap) {
-              final total = durSnap.data ?? Duration.zero;
-              final live = posSnap.data ?? Duration.zero;
-              final value = _dragging ? _dragPosition : live;
-              final maxMs = total.inMilliseconds.toDouble();
-              final canSeek = total > Duration.zero;
-              return Column(
-                children: [
-                  Slider(
-                    value: maxMs <= 0
-                        ? 0
-                        : value.inMilliseconds.toDouble().clamp(0.0, maxMs),
-                    max: maxMs <= 0 ? 1 : maxMs,
-                    onChanged: canSeek
-                        ? (v) => setState(() {
-                              _dragging = true;
-                              _dragPosition =
-                                  Duration(milliseconds: v.round());
-                            })
-                        : null,
-                    onChangeEnd: canSeek
-                        ? (v) {
-                            final target =
-                                Duration(milliseconds: v.round());
-                            setState(() => _dragging = false);
-                            _media.seekTo(target);
-                          }
-                        : null,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.s2,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _clock(value),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        Text(
-                          _clock(total),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-
-  Widget _buildTransport() => StreamBuilder<ProfileMediaState>(
-        stream: _media.stateStream,
-        builder: (context, snap) {
-          final playing = _media.isPlaying ||
-              snap.data == ProfileMediaState.playing;
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        builder: (context, durSnap) {
+          final total = durSnap.data ?? Duration.zero;
+          final live = posSnap.data ?? Duration.zero;
+          final value = _dragging ? _dragPosition : live;
+          final maxMs = total.inMilliseconds.toDouble();
+          final canSeek = total > Duration.zero;
+          return Column(
             children: [
-              IconButton(
-                iconSize: 32,
-                tooltip: 'Previous',
-                onPressed:
-                    _media.queue.length > 1 ? _media.previous : null,
-                icon: const Icon(Icons.skip_previous),
+              Slider(
+                value: maxMs <= 0 ? 0 : value.inMilliseconds.toDouble().clamp(0.0, maxMs),
+                max: maxMs <= 0 ? 1 : maxMs,
+                onChanged: canSeek
+                    ? (v) => setState(() {
+                        _dragging = true;
+                        _dragPosition = Duration(milliseconds: v.round());
+                      })
+                    : null,
+                onChangeEnd: canSeek
+                    ? (v) {
+                        final target = Duration(milliseconds: v.round());
+                        setState(() => _dragging = false);
+                        _media.seekTo(target);
+                      }
+                    : null,
               ),
-              IconButton.filled(
-                iconSize: 44,
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(72, 72),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_clock(value), style: Theme.of(context).textTheme.bodySmall),
+                    Text(_clock(total), style: Theme.of(context).textTheme.bodySmall),
+                  ],
                 ),
-                tooltip: playing ? 'Pause' : 'Play',
-                onPressed: _media.toggle,
-                icon: Icon(
-                  playing ? Icons.pause : Icons.play_arrow,
-                  size: 40,
-                ),
-              ),
-              IconButton(
-                iconSize: 32,
-                tooltip: 'Next',
-                onPressed: _media.queue.length > 1 ? _media.next : null,
-                icon: const Icon(Icons.skip_next),
               ),
             ],
           );
         },
       );
+    },
+  );
 
-  Widget _buildExtras(ColorScheme scheme) => Row(
+  Widget _buildTransport() => StreamBuilder<ProfileMediaState>(
+    stream: _media.stateStream,
+    builder: (context, snap) {
+      final playing = _media.isPlaying || snap.data == ProfileMediaState.playing;
+      return Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          StreamBuilder<double>(
-            stream: _media.speedStream,
-            initialData: 1.0,
-            builder: (context, snap) {
-              final speed = snap.data ?? 1.0;
-              final whole = speed == speed.roundToDouble();
-              return TextButton(
-                onPressed: _media.cycleSpeed,
-                child: Text(
-                  whole ? '${speed.toInt()}x' : '${speed}x',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              );
-            },
+          IconButton(
+            iconSize: 32,
+            tooltip: 'Previous',
+            onPressed: _media.queue.length > 1 ? _media.previous : null,
+            icon: const Icon(Icons.skip_previous),
           ),
-          StreamBuilder<QueueRepeatMode>(
-            stream: _media.repeatStream,
-            initialData: QueueRepeatMode.all,
-            builder: (context, snap) {
-              final mode = snap.data ?? QueueRepeatMode.all;
-              final IconData icon;
-              if (mode == QueueRepeatMode.one) {
-                icon = Icons.repeat_one;
-              } else if (mode == QueueRepeatMode.off) {
-                icon = Icons.trending_flat;
-              } else {
-                icon = Icons.repeat;
-              }
-              return IconButton(
-                tooltip: mode.name,
-                onPressed: _media.cycleQueueRepeatMode,
-                icon: Icon(
-                  icon,
-                  color: mode == QueueRepeatMode.off
-                      ? scheme.onSurfaceVariant
-                      : scheme.primary,
-                ),
-              );
-            },
+          IconButton.filled(
+            iconSize: 44,
+            style: IconButton.styleFrom(minimumSize: const Size(72, 72)),
+            tooltip: playing ? 'Pause' : 'Play',
+            onPressed: _media.toggle,
+            icon: Icon(playing ? Icons.pause : Icons.play_arrow, size: 40),
           ),
-          StreamBuilder<bool>(
-            stream: _media.mutedStream,
-            initialData: false,
-            builder: (context, snap) {
-              final muted = snap.data ?? false;
-              return IconButton(
-                tooltip: muted
-                    ? context.tr('unmute')
-                    : context.tr('mute'),
-                onPressed: _media.toggleMute,
-                icon: Icon(
-                  muted ? Icons.volume_off : Icons.volume_up,
-                  color: muted ? scheme.error : scheme.onSurfaceVariant,
-                ),
-              );
-            },
-          ),
-          StreamBuilder<Duration?>(
-            stream: _media.sleepStream,
-            builder: (context, snap) {
-              final remaining = snap.data;
-              return IconButton(
-                tooltip: context.tr('sleep_timer'),
-                onPressed: _pickSleepTimer,
-                icon: Icon(
-                  remaining != null
-                      ? Icons.bedtime
-                      : Icons.bedtime_outlined,
-                  color: remaining != null
-                      ? scheme.primary
-                      : scheme.onSurfaceVariant,
-                ),
-              );
-            },
+          IconButton(
+            iconSize: 32,
+            tooltip: 'Next',
+            onPressed: _media.queue.length > 1 ? _media.next : null,
+            icon: const Icon(Icons.skip_next),
           ),
         ],
       );
+    },
+  );
+
+  Widget _buildExtras(ColorScheme scheme) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [
+      StreamBuilder<double>(
+        stream: _media.speedStream,
+        initialData: 1.0,
+        builder: (context, snap) {
+          final speed = snap.data ?? 1.0;
+          final whole = speed == speed.roundToDouble();
+          return TextButton(
+            onPressed: _media.cycleSpeed,
+            child: Text(
+              whole ? '${speed.toInt()}x' : '${speed}x',
+              style: TextStyle(fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+            ),
+          );
+        },
+      ),
+      StreamBuilder<QueueRepeatMode>(
+        stream: _media.repeatStream,
+        initialData: QueueRepeatMode.all,
+        builder: (context, snap) {
+          final mode = snap.data ?? QueueRepeatMode.all;
+          final IconData icon;
+          if (mode == QueueRepeatMode.one) {
+            icon = Icons.repeat_one;
+          } else if (mode == QueueRepeatMode.off) {
+            icon = Icons.trending_flat;
+          } else {
+            icon = Icons.repeat;
+          }
+          return IconButton(
+            tooltip: mode.name,
+            onPressed: _media.cycleQueueRepeatMode,
+            icon: Icon(
+              icon,
+              color: mode == QueueRepeatMode.off ? scheme.onSurfaceVariant : scheme.primary,
+            ),
+          );
+        },
+      ),
+      StreamBuilder<bool>(
+        stream: _media.mutedStream,
+        initialData: false,
+        builder: (context, snap) {
+          final muted = snap.data ?? false;
+          return IconButton(
+            tooltip: muted ? context.tr('unmute') : context.tr('mute'),
+            onPressed: _media.toggleMute,
+            icon: Icon(
+              muted ? Icons.volume_off : Icons.volume_up,
+              color: muted ? scheme.error : scheme.onSurfaceVariant,
+            ),
+          );
+        },
+      ),
+      StreamBuilder<Duration?>(
+        stream: _media.sleepStream,
+        builder: (context, snap) {
+          final remaining = snap.data;
+          return IconButton(
+            tooltip: context.tr('sleep_timer'),
+            onPressed: _pickSleepTimer,
+            icon: Icon(
+              remaining != null ? Icons.bedtime : Icons.bedtime_outlined,
+              color: remaining != null ? scheme.primary : scheme.onSurfaceVariant,
+            ),
+          );
+        },
+      ),
+    ],
+  );
 
   Future<void> _pickSleepTimer() async {
     final choice = await showModalBottomSheet<int>(
@@ -475,19 +434,10 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              title: Text(context.tr('cancel')),
-              onTap: () => Navigator.pop(context),
-            ),
+            ListTile(title: Text(context.tr('cancel')), onTap: () => Navigator.pop(context)),
             for (final m in const [15, 30, 45, 60])
-              ListTile(
-                title: Text('$m min'),
-                onTap: () => Navigator.pop(context, m),
-              ),
-            ListTile(
-              title: Text(context.tr('sleep_off')),
-              onTap: () => Navigator.pop(context, 0),
-            ),
+              ListTile(title: Text('$m min'), onTap: () => Navigator.pop(context, m)),
+            ListTile(title: Text(context.tr('sleep_off')), onTap: () => Navigator.pop(context, 0)),
           ],
         ),
       ),
@@ -511,14 +461,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
             itemCount: queue.length,
             itemBuilder: (context, i) => ListTile(
               selected: i == _media.index,
-              leading: Icon(i == _media.index
-                  ? Icons.equalizer
-                  : Icons.music_note_outlined),
-              title: Text(
-                queue[i].title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              leading: Icon(i == _media.index ? Icons.equalizer : Icons.music_note_outlined),
+              title: Text(queue[i].title, maxLines: 1, overflow: TextOverflow.ellipsis),
               onTap: () {
                 _media.playAt(i);
                 Navigator.pop(context);

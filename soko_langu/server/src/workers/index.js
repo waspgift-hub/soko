@@ -69,10 +69,19 @@ async function startWorker() {
   await scheduleFinanceJobs();
   await startFinanceWorker();
 
+  // Async notification delivery (security mail, event SMS). Closed with the
+  // other workers in shutdown() below.
+  const { startNotificationWorker } = require('../services/notification-worker');
+  await startNotificationWorker();
+
   const shutdown = async (signal) => {
     console.log(`[WORKER] ${signal}, shutting down...`);
     await mediaWorker.close().catch(() => {});
     await closeFinanceWorker().catch(() => {});
+    try {
+      const { closeNotificationWorker } = require('../services/notification-worker');
+      await closeNotificationWorker().catch(() => {});
+    } catch (_) {}
     await closeMediaQueue();
     try {
       const { disconnectDatabase } = require('../config/database');

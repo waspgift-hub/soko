@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../extensions/context_tr.dart';
-import 'animations/soko_animated_art.dart';
+import 'animations/soko_animated_illustration.dart';
 
 class PaymentResult {
   static Future<void> show({
@@ -53,10 +53,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _scaleAnim = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.3), weight: 40),
       TweenSequenceItem(tween: Tween(begin: 1.3, end: 0.9), weight: 20),
@@ -113,51 +110,31 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
         decoration: BoxDecoration(
           color: cs.surface,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20, offset: const Offset(0, 8))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SuccessCheckArt(size: 72, color: cs.primary),
+            SokoAnimatedIllustration(SokoIllustration.paymentSuccess, size: 72, color: cs.primary),
             const SizedBox(height: 16),
             Text(
               context.tr('payment_successful'),
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: cs.primary,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.primary),
             ),
             const SizedBox(height: 8),
             if (widget.amount != null)
               Text(
                 widget.amount!,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: cs.primary,
-                ),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: cs.primary),
               ),
             if (widget.productName != null) ...[
               const SizedBox(height: 4),
-              Text(
-                widget.productName!,
-                style: TextStyle(color: cs.onSurfaceVariant),
-              ),
+              Text(widget.productName!, style: TextStyle(color: cs.onSurfaceVariant)),
             ],
             if (widget.transactionId != null) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
@@ -177,9 +154,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
                   backgroundColor: cs.primary,
                   foregroundColor: cs.surface,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: Text(context.tr('ok'), style: TextStyle(fontSize: 16)),
               ),
@@ -199,13 +174,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
         decoration: BoxDecoration(
           color: cs.surface,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20, offset: const Offset(0, 8))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -213,10 +182,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
             Container(
               width: 72,
               height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.red.shade50,
-              ),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.red.shade50),
               child: Icon(Icons.cancel, size: 48, color: Colors.red.shade600),
             ),
             const SizedBox(height: 16),
@@ -250,14 +216,9 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
                   backgroundColor: cs.primary,
                   foregroundColor: cs.surface,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: Text(
-                  context.tr('try_again'),
-                  style: TextStyle(fontSize: 16),
-                ),
+                child: Text(context.tr('try_again'), style: TextStyle(fontSize: 16)),
               ),
             ),
           ],

@@ -20,6 +20,7 @@ import '../../utils/responsive.dart';
 import '../../widgets/google_loading.dart';
 import '../../services/ads/ad_config.dart';
 import '../../widgets/ads/ad_slot.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 class CategoryProductsScreen extends StatefulWidget {
   final Category category;
@@ -52,8 +53,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
 
   TaxonomyCategory? get _tax => taxonomyById(widget.category.id);
 
-  Set<String> get _catAliases =>
-      _tax == null ? const {} : _tax!.aliases.toSet();
+  Set<String> get _catAliases => _tax == null ? const {} : _tax!.aliases.toSet();
 
   @override
   void initState() {
@@ -71,11 +71,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
   void _subscribeFlashSales() {
     _flashSub?.cancel();
     final now = DateTime.now();
-    _flashSub = _flashSaleService.getActiveFlashSalesMapAtNow(now).listen(
-      (map) {
-        if (mounted) setState(() => _flashSales = map);
-      },
-    );
+    _flashSub = _flashSaleService.getActiveFlashSalesMapAtNow(now).listen((map) {
+      if (mounted) setState(() => _flashSales = map);
+    });
   }
 
   @override
@@ -104,7 +102,8 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
     if (tax != null) {
       final key = raw.toLowerCase();
       for (final ts in tax.subs) {
-        final hit = ts.name.toLowerCase() == key ||
+        final hit =
+            ts.name.toLowerCase() == key ||
             ts.nameSw.toLowerCase() == key ||
             ts.aliases.any((a) => a.toLowerCase() == key);
         if (!hit) continue;
@@ -125,9 +124,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
     for (final ms in widget.category.subcategories) {
       if (ms.name.toLowerCase() != key) continue;
       for (final ts in tax.subs) {
-        if (ts.id == ms.id ||
-            ts.name.toLowerCase() == key ||
-            ts.nameSw.toLowerCase() == key) {
+        if (ts.id == ms.id || ts.name.toLowerCase() == key || ts.nameSw.toLowerCase() == key) {
           return ts.aliases.toSet();
         }
       }
@@ -140,10 +137,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
   /// may change; the query always uses the stable category ID.
   Stream<List<Product>> _stream() {
     if (_selectedSubcategory == null) {
-      return _productService.getProductsByCategoryId(
-        widget.category.id,
-        aliases: _catAliases,
-      );
+      return _productService.getProductsByCategoryId(widget.category.id, aliases: _catAliases);
     }
     return _productService.getProductsByCategoryAndSubcategoryId(
       widget.category.id,
@@ -163,13 +157,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.category.nameSw, style: const TextStyle(fontSize: 16)),
-            Text(
-              widget.category.name,
-              style: TextStyle(
-                fontSize: 11,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
+            Text(widget.category.name, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ],
         ),
         actions: [
@@ -188,10 +176,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
                     top: 8,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        shape: BoxShape.circle,
-                      ),
+                      decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
                       child: Text(
                         '${_filter.activeCount}',
                         style: TextStyle(
@@ -273,13 +258,8 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
                   ),
                 ),
                 TextButton(
-                  onPressed: () => setState(
-                    () => _filter = const ProductFilter(),
-                  ),
-                  child: Text(
-                    context.tr('clear_all'),
-                    style: TextStyle(color: cs.primary),
-                  ),
+                  onPressed: () => setState(() => _filter = const ProductFilter()),
+                  child: Text(context.tr('clear_all'), style: TextStyle(color: cs.primary)),
                 ),
               ],
             ),
@@ -312,8 +292,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _headerBanner(base, shown),
-        if (widget.category.subcategories.isNotEmpty)
-          _buildSubcategoryRail(),
+        if (widget.category.subcategories.isNotEmpty) _buildSubcategoryRail(),
         if (_tax != null && _tax!.brands.isNotEmpty) _brandsRow(),
         if (!_filter.isEmpty) _activeChips(),
         Expanded(child: _productsGrid(shown)),
@@ -368,9 +347,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.category.nameSw.isNotEmpty
-                      ? widget.category.nameSw
-                      : widget.category.name,
+                  widget.category.nameSw.isNotEmpty ? widget.category.nameSw : widget.category.name,
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -444,14 +421,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
             return Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
-                label: Text(
-                  context.tr('all'),
-                  style: const TextStyle(fontSize: 12),
-                ),
+                label: Text(context.tr('all'), style: const TextStyle(fontSize: 12)),
                 selected: _filter.brands.isEmpty,
-                onSelected: (_) => setState(
-                  () => _filter = _filter.copyWith(brands: {}),
-                ),
+                onSelected: (_) => setState(() => _filter = _filter.copyWith(brands: {})),
               ),
             );
           }
@@ -482,18 +454,14 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        itemCount: chips.length +
-            ((_filter.minPrice != null || _filter.maxPrice != null) ? 1 : 0),
+        itemCount: chips.length + ((_filter.minPrice != null || _filter.maxPrice != null) ? 1 : 0),
         itemBuilder: (context, index) {
           if (index < chips.length) {
             final c = chips[index];
             return Padding(
               padding: const EdgeInsets.only(right: 8),
               child: InputChip(
-                label: Text(
-                  _chipLabel(c),
-                  style: const TextStyle(fontSize: 12),
-                ),
+                label: Text(_chipLabel(c), style: const TextStyle(fontSize: 12)),
                 deleteIcon: const Icon(Icons.close_rounded, size: 16),
                 onDeleted: () => _removeChip(c),
                 backgroundColor: cs.primaryContainer,
@@ -504,15 +472,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: InputChip(
-              label: Text(
-                _priceLabel(),
-                style: const TextStyle(fontSize: 12),
-              ),
+              label: Text(_priceLabel(), style: const TextStyle(fontSize: 12)),
               deleteIcon: const Icon(Icons.close_rounded, size: 16),
-              onDeleted: () => setState(
-                () => _filter =
-                    _filter.copyWith(clearPriceBounds: true),
-              ),
+              onDeleted: () => setState(() => _filter = _filter.copyWith(clearPriceBounds: true)),
               backgroundColor: cs.primaryContainer,
               labelStyle: TextStyle(color: cs.onPrimaryContainer),
             ),
@@ -578,30 +540,20 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
       return Center(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).padding.bottom + 20,
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.shopping_bag_outlined,
-                size: 64,
-                color: cs.onSurface.withValues(alpha: 0.6),
-              ),
+              const SokoAnimatedIllustration(SokoIllustration.emptyCategory, size: 96),
               const SizedBox(height: 16),
               Text(
                 context.tr('no_products_category'),
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.6),
-                ),
+                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
               ),
               if (!_filter.isEmpty) ...[
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: () => setState(
-                    () => _filter = const ProductFilter(),
-                  ),
+                  onPressed: () => setState(() => _filter = const ProductFilter()),
                   child: Text(context.tr('clear_all')),
                 ),
               ],
@@ -669,9 +621,7 @@ class _SubTile extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: selected
-                    ? cs.primary.withValues(alpha: 0.12)
-                    : cs.surfaceContainerHighest,
+                color: selected ? cs.primary.withValues(alpha: 0.12) : cs.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: selected ? cs.primary : cs.outlineVariant,

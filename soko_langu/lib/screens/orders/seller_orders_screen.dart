@@ -12,7 +12,7 @@ import '../../models/order_statuses.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/ds/ds.dart';
-import '../../widgets/animations/soko_animated_art.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 class SellerOrdersScreen extends StatefulWidget {
   const SellerOrdersScreen({super.key});
@@ -189,7 +189,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
               child: Center(
                 child: DsEmptyState(
                   icon: Icons.inbox_outlined,
-                  artwork: const EmptyOrdersArt(),
+                  artwork: const SokoAnimatedIllustration(SokoIllustration.emptyOrders, size: 96),
                   title: context.tr('no_received_orders'),
                   centered: false,
                 ),
@@ -199,14 +199,11 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
               sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) {
-                    final d = visible[i].data() as Map<String, dynamic>;
-                    final txId = visible[i].id;
-                    return _buildOrderCard(context, cs, d, txId);
-                  },
-                  childCount: visible.length,
-                ),
+                delegate: SliverChildBuilderDelegate((_, i) {
+                  final d = visible[i].data() as Map<String, dynamic>;
+                  final txId = visible[i].id;
+                  return _buildOrderCard(context, cs, d, txId);
+                }, childCount: visible.length),
               ),
             ),
         ],
@@ -250,10 +247,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              cs.primary.withValues(alpha: 0.16),
-              cs.tertiary.withValues(alpha: 0.06),
-            ],
+            colors: [cs.primary.withValues(alpha: 0.16), cs.tertiary.withValues(alpha: 0.06)],
           ),
           border: Border.all(color: cs.primary.withValues(alpha: 0.14)),
         ),
@@ -275,7 +269,11 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 const SizedBox(width: 6),
                 Text(
                   context.tr('live_updates'),
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.successGreen),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: cs.successGreen,
+                  ),
                 ),
                 const SizedBox(width: 4),
                 if (_lastAutoRefresh != null)
@@ -293,15 +291,33 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _statCell(cs, Icons.rate_review_outlined, '$awaitingQuote', context.tr('awaiting_quotes'), cs.tertiary),
+                  child: _statCell(
+                    cs,
+                    Icons.rate_review_outlined,
+                    '$awaitingQuote',
+                    context.tr('awaiting_quotes'),
+                    cs.tertiary,
+                  ),
                 ),
                 Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.14)),
                 Expanded(
-                  child: _statCell(cs, Icons.pending_actions_outlined, '$needsAction', context.tr('needs_action'), cs.trendingOrange),
+                  child: _statCell(
+                    cs,
+                    Icons.pending_actions_outlined,
+                    '$needsAction',
+                    context.tr('needs_action'),
+                    cs.trendingOrange,
+                  ),
                 ),
                 Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.14)),
                 Expanded(
-                  child: _statCell(cs, Icons.receipt_long_outlined, '${visible.length}', context.tr('all_orders'), cs.onSurfaceVariant),
+                  child: _statCell(
+                    cs,
+                    Icons.receipt_long_outlined,
+                    '${visible.length}',
+                    context.tr('all_orders'),
+                    cs.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -319,7 +335,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           children: [
             Icon(icon, size: 15, color: color),
             const SizedBox(width: 5),
-            Text(value, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: color)),
+            Text(
+              value,
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: color),
+            ),
           ],
         ),
         const SizedBox(height: 3),
@@ -350,7 +369,9 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
         itemBuilder: (_, i) {
           final key = _filters[i];
           final selected = _filter == key;
-          final count = key == 'all' ? visible.length : visible.where((d) => (d.data() as Map)['status'] == key).length;
+          final count = key == 'all'
+              ? visible.length
+              : visible.where((d) => (d.data() as Map)['status'] == key).length;
           return Center(
             child: DsChip(
               label: '${context.tr(_filterLabels[key]!)} ($count)',
@@ -363,7 +384,12 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     );
   }
 
-  Widget _buildOrderCard(BuildContext context, ColorScheme cs, Map<String, dynamic> d, String txId) {
+  Widget _buildOrderCard(
+    BuildContext context,
+    ColorScheme cs,
+    Map<String, dynamic> d,
+    String txId,
+  ) {
     final status = d['status'] as String? ?? '';
     final productName = d['productName'] as String? ?? context.tr('product');
     final productImage = d['productImage'] as String? ?? '';
@@ -411,10 +437,16 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Container(
-                              width: 48, height: 48,
+                              width: 48,
+                              height: 48,
                               color: cs.surfaceContainerHighest,
                               child: productImage.isNotEmpty
-                                  ? ProductCachedImage(url: productImage, width: 48, height: 48, fit: BoxFit.cover)
+                                  ? ProductCachedImage(
+                                      url: productImage,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                    )
                                   : Icon(Icons.image, size: 20, color: cs.onSurfaceVariant),
                             ),
                           ),
@@ -423,12 +455,21 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(productName,
-                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface),
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Text(
+                                  productName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: cs.onSurface,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 const SizedBox(height: 3),
-                                Text(dateStr,
-                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                                Text(
+                                  dateStr,
+                                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                ),
                               ],
                             ),
                           ),
@@ -445,21 +486,41 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                       if (buyerName.isNotEmpty)
                         _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
                       _infoRow(cs, Icons.receipt_outlined, context.tr('order_id'), txId),
-                      _infoRow(cs, Icons.monetization_on_outlined, context.tr('product_price'),
-                          'TZS ${NumberFormat('#,###').format(productPrice)}'),
+                      _infoRow(
+                        cs,
+                        Icons.monetization_on_outlined,
+                        context.tr('product_price'),
+                        'TZS ${NumberFormat('#,###').format(productPrice)}',
+                      ),
                       if (shippingCost != null && shippingCost > 0)
-                        _infoRow(cs, Icons.local_shipping_outlined, context.tr('shipping_cost'),
-                            'TZS ${NumberFormat('#,###').format(shippingCost)}'),
+                        _infoRow(
+                          cs,
+                          Icons.local_shipping_outlined,
+                          context.tr('shipping_cost'),
+                          'TZS ${NumberFormat('#,###').format(shippingCost)}',
+                        ),
                       if (platformFee > 0)
-                        _infoRow(cs, Icons.percent_outlined, context.tr('soko_vibe_commission'),
-                            'TZS ${NumberFormat('#,###').format(platformFee)}'),
+                        _infoRow(
+                          cs,
+                          Icons.percent_outlined,
+                          context.tr('soko_vibe_commission'),
+                          'TZS ${NumberFormat('#,###').format(platformFee)}',
+                        ),
                       if (processingFee > 0)
-                        _infoRow(cs, Icons.receipt_long_outlined, context.tr('processing_fee'),
-                            'TZS ${NumberFormat('#,###').format(processingFee)}'),
+                        _infoRow(
+                          cs,
+                          Icons.receipt_long_outlined,
+                          context.tr('processing_fee'),
+                          'TZS ${NumberFormat('#,###').format(processingFee)}',
+                        ),
                       if (totalAmount > 0)
-                        _infoRow(cs, Icons.payments_outlined, context.tr('total_payment'),
-                            'TZS ${NumberFormat('#,###').format(totalAmount)}',
-                            bold: true),
+                        _infoRow(
+                          cs,
+                          Icons.payments_outlined,
+                          context.tr('total_payment'),
+                          'TZS ${NumberFormat('#,###').format(totalAmount)}',
+                          bold: true,
+                        ),
                       _buildSellerTimers(cs, d),
                       if (_sellerShippingQuote(d) != null) ...[
                         const SizedBox(height: 6),
@@ -507,8 +568,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                                 icon: Icons.receipt_long_outlined,
                                 variant: DsButtonVariant.secondary,
                                 height: 40,
-                                onPressed: () =>
-                                    context.push('${AppRoutes.receipt}/$txId'),
+                                onPressed: () => context.push('${AppRoutes.receipt}/$txId'),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -572,14 +632,15 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   Widget _buildSellerTimers(ColorScheme cs, Map<String, dynamic> d) {
     final status = d['status'] as String? ?? '';
     final inTransit = const {
-      'dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted',
+      'dispatched',
+      'in_transit',
+      'out_for_delivery',
+      'delivery_attempted',
     }.contains(status);
-    final inspecting = const {
-      'delivered', 'inspection_period', 'otp_pending',
-    }.contains(status);
+    final inspecting = const {'delivered', 'inspection_period', 'otp_pending'}.contains(status);
     final autoDead = inTransit
         ? (_asDate(d['autoReleaseDeadline']) ??
-            (_asDate(d['dispatchedAt'])?.add(const Duration(hours: 48))))
+              (_asDate(d['dispatchedAt'])?.add(const Duration(hours: 48))))
         : null;
     final inspectDead = inspecting ? _asDate(d['inspectionDeadline']) : null;
     if (autoDead == null && inspectDead == null) return const SizedBox.shrink();
@@ -590,11 +651,17 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
         runSpacing: 6,
         children: [
           if (autoDead != null)
-            _timerChip(cs, Icons.timer_outlined,
-                '${context.tr('auto_release_countdown_hint')}  ${_msLeft(autoDead)}'),
+            _timerChip(
+              cs,
+              Icons.timer_outlined,
+              '${context.tr('auto_release_countdown_hint')}  ${_msLeft(autoDead)}',
+            ),
           if (inspectDead != null)
-            _timerChip(cs, Icons.access_time_filled,
-                '${context.tr('inspection_deadline_hint')}  ${_msLeft(inspectDead)}'),
+            _timerChip(
+              cs,
+              Icons.access_time_filled,
+              '${context.tr('inspection_deadline_hint')}  ${_msLeft(inspectDead)}',
+            ),
         ],
       ),
     );
@@ -614,10 +681,12 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           Icon(icon, size: 13, color: cs.primary),
           const SizedBox(width: 6),
           Flexible(
-            child: Text(text,
-                style: TextStyle(fontSize: 11.5, color: cs.onSurface),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 11.5, color: cs.onSurface),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -631,21 +700,13 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     final reason = q['reason']?.toString() ?? '';
     final tier = q['distanceTier']?.toString() ?? '';
     final (icon, color, label) = switch (verdict) {
-      'BLOCKED' => (
-          Icons.block,
-          cs.error,
-          context.tr('verdict_blocked'),
-        ),
+      'BLOCKED' => (Icons.block, cs.error, context.tr('verdict_blocked')),
       'REVIEW_REQUIRED' => (
-          Icons.warning_amber_rounded,
-          cs.brandWarning,
-          context.tr('verdict_review_required'),
-        ),
-      _ => (
-          Icons.check_circle_outline,
-          cs.successGreen,
-          context.tr('verdict_normal'),
-        ),
+        Icons.warning_amber_rounded,
+        cs.brandWarning,
+        context.tr('verdict_review_required'),
+      ),
+      _ => (Icons.check_circle_outline, cs.successGreen, context.tr('verdict_normal')),
     };
     return Align(
       alignment: Alignment.centerLeft,
@@ -667,10 +728,11 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                     ? '$label • $tier • $reason'
                     : label,
                 style: TextStyle(
-                    fontSize: 11.5,
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2),
+                  fontSize: 11.5,
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
               ),
             ),
           ],
@@ -686,15 +748,13 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     final resolved = info['resolved'] == true;
     final resolution = info['resolution']?.toString() ?? 'released_to_seller';
     final reason = info['reason']?.toString() ?? '';
-    final evidenceCount = info['evidenceUrls'] is List
-        ? (info['evidenceUrls'] as List).length
-        : 0;
+    final evidenceCount = info['evidenceUrls'] is List ? (info['evidenceUrls'] as List).length : 0;
     final color = resolved ? cs.successGreen : cs.error;
     final title = resolved
         ? context.tr('dispute_resolution_label') +
-            (resolution == 'refunded_to_buyer'
-                ? context.tr('dispute_refunded')
-                : context.tr('dispute_released'))
+              (resolution == 'refunded_to_buyer'
+                  ? context.tr('dispute_refunded')
+                  : context.tr('dispute_released'))
         : context.tr('dispute_case_title');
 
     return Container(
@@ -713,26 +773,30 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
               Icon(resolved ? Icons.gavel_outlined : Icons.gavel, size: 16, color: color),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(title,
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        color: color)),
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+                ),
               ),
             ],
           ),
           if (reason.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(reason,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.8),
-                    height: 1.3)),
+            Text(
+              reason,
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurface.withValues(alpha: 0.8),
+                height: 1.3,
+              ),
+            ),
           ],
           if (evidenceCount > 0) ...[
             const SizedBox(height: 2),
-            Text('${context.tr('dispute_evidence_label')} • $evidenceCount',
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            Text(
+              '${context.tr('dispute_evidence_label')} • $evidenceCount',
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
           ],
         ],
       ),
@@ -748,8 +812,14 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           const SizedBox(width: 6),
           Text('$label: ', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
           Expanded(
-            child: Text(value,
-                style: TextStyle(fontSize: 13, color: cs.onSurface, fontWeight: bold ? FontWeight.w700 : FontWeight.w500)),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                color: cs.onSurface,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -777,20 +847,19 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     try {
       // Soft-delete (flag) instead of a hard delete — the server owns the
       // transactions doc and needs it intact for the orders flow.
-      await FirebaseFirestore.instance
-          .collection('transactions')
-          .doc(txId)
-          .update({'deletedForSeller': true});
+      await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
+        'deletedForSeller': true,
+      });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('product_deleted'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('product_deleted'))));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('error')}: ${context.trError(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${context.tr('error')}: ${context.trError(e)}')));
       }
     }
   }
@@ -850,8 +919,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 children: [
                   Icon(Icons.rate_review_outlined, size: 16, color: cs.tertiary),
                   const SizedBox(width: 6),
-                  Text(context.tr('orders_needing_quote'),
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.tertiary)),
+                  Text(
+                    context.tr('orders_needing_quote'),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.tertiary),
+                  ),
                 ],
               ),
             ),
@@ -884,27 +955,45 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Container(
-                                  width: 36, height: 36,
+                                  width: 36,
+                                  height: 36,
                                   color: cs.surfaceContainerHighest,
                                   child: productImage.isNotEmpty
-                                      ? ProductCachedImage(url: productImage, width: 36, height: 36, fit: BoxFit.cover)
+                                      ? ProductCachedImage(
+                                          url: productImage,
+                                          width: 36,
+                                          height: 36,
+                                          fit: BoxFit.cover,
+                                        )
                                       : Icon(Icons.image, size: 16, color: cs.onSurfaceVariant),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(productName,
-                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: cs.onSurface),
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                child: Text(
+                                  productName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                    color: cs.onSurface,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 6),
                           if (buyerName.isNotEmpty)
-                            Text('$buyerName', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                            Text(
+                              '$buyerName',
+                              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                            ),
                           if (region.isNotEmpty)
-                            Text('$region, $district${ward.isNotEmpty ? ', $ward' : ''}',
-                                style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                            Text(
+                              '$region, $district${ward.isNotEmpty ? ', $ward' : ''}',
+                              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                            ),
                           const Spacer(),
                           SizedBox(
                             width: double.infinity,

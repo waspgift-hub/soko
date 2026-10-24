@@ -25,6 +25,17 @@ async function requireUser(req, res) {
       return deny(res, 503, 'Auth not configured');
     }
     const decoded = await auth.verifyIdToken(authHeader.slice(7));
+    // Logout-all enforcement for legacy routes: tokens minted before the
+    // user's revocation stamp die here, same as requireActive on v1 money
+    // routes. Fail-open on store outage (token already verified).
+    try {
+      const { isSessionRevoked } = require('../../services/session-revocation');
+      if (await isSessionRevoked(decoded.uid, decoded.auth_time)) {
+        return deny(res, 401, 'SESSION_REVOKED');
+      }
+    } catch (e) {
+      console.error('[AUTH] legacy revocation check failed:', e.message);
+    }
     return { ok: true, uid: decoded.uid };
   } catch (_) {
     return deny(res, 403, 'Invalid token');

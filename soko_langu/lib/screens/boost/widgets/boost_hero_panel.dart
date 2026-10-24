@@ -77,8 +77,13 @@ class BoostHeroPanel extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.s4),
+                  // The headline, subtitle and product preview read as one block
+                  // under the eyebrow row, so they are centred together. Left
+                  // aligning just the headline while its subtitle stayed flush
+                  // left is what made the heading look detached.
                   Text(
                     context.tr('boost_hero_title'),
+                    textAlign: TextAlign.center,
                     style: AppTypography.brandTitle(
                       Colors.white,
                     ).copyWith(fontSize: 28, height: 1.12),
@@ -86,6 +91,7 @@ class BoostHeroPanel extends StatelessWidget {
                   const SizedBox(height: AppSpacing.s2),
                   Text(
                     context.tr('boost_hero_subtitle'),
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.62),
                       fontSize: 13.5,

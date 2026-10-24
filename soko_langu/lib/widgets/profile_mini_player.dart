@@ -35,9 +35,16 @@ class ProfileMiniPlayer extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Material(
-                color: scheme.surfaceContainerHighest,
+                color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(16),
-                elevation: 4,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6),
+                    width: 0.5,
+                  ),
+                ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
                   onTap: session.returnRoute == null

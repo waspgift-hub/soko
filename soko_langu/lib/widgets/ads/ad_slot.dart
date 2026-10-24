@@ -180,8 +180,8 @@ class _AdDisclosure extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: Text(
             'AD',
-            style: AppTypography.monoLabel(cs.contentMuted).copyWith(
-              fontSize: AppFontSize.xs,
+            style: Ds.labelSm(cs.contentMuted).copyWith(
+              fontSize: 10,
               letterSpacing: 1.2,
             ),
           ),

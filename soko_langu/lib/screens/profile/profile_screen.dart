@@ -141,25 +141,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         backgroundColor: cs.surface,
         body: _isLoading
             ? const _ProfileSkeleton()
-            : Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.person_outline_rounded, size: 64, color: cs.primary.withValues(alpha: 0.4)),
-                      const SizedBox(height: 16),
-                      Text(context.tr('profile_not_found'), style: TextStyle(color: cs.onSurfaceVariant)),
-                      const SizedBox(height: 16),
-                      FilledButton.tonalIcon(
-                        onPressed: _loadProfile,
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: Text(context.tr('retry')),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            : _SignedOutProfileView(onRefresh: _loadProfile),
       );
     }
 
@@ -503,6 +485,83 @@ class _ProfileSkeletonState extends State<_ProfileSkeleton>
           ),
         );
       },
+    );
+  }
+}
+
+/// Shown on the profile tab when nobody is signed in — which is exactly the
+/// state a logout lands in.
+///
+/// It used to render "Profile not found" with a Retry button, which read as a
+/// broken screen rather than a signed-out one, and Retry could not fix it
+/// because no amount of re-fetching creates a session. These are the two
+/// honest choices instead: sign in, or keep browsing as a guest.
+class _SignedOutProfileView extends StatelessWidget {
+  const _SignedOutProfileView({required this.onRefresh});
+
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.person_outline_rounded, size: 40, color: cs.primary),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                context.tr('signed_out_profile_title'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('signed_out_profile_body'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.5, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton.icon(
+                  onPressed: () => context.push(AppRoutes.login),
+                  icon: const Icon(Icons.login_rounded, size: 20),
+                  label: Text(context.tr('login_now')),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.explore_outlined, size: 20),
+                  label: Text(context.tr('browse_as_guest')),
+                ),
+              ),
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(context.tr('retry')),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

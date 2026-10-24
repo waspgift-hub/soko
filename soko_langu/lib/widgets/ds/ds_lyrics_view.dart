@@ -7,6 +7,7 @@ import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
 import 'ds_empty_state.dart';
 import 'ds_loading_dots.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 /// Scrolling lyrics panel for the full-screen audio player.
 ///
@@ -107,19 +108,14 @@ class _DsLyricsViewState extends State<DsLyricsView> {
     final index = _activeIndex;
     if (index < 0 || index >= widget.lyrics.synced.length) return;
     final viewport = _controller.position.viewportDimension;
-    final target =
-        (index * _lineExtent) - (viewport / 2) + (_lineExtent / 2);
+    final target = (index * _lineExtent) - (viewport / 2) + (_lineExtent / 2);
     final max = _controller.position.maxScrollExtent;
     final clamped = target.clamp(0.0, max > 0 ? max : 0.0);
     if (jump) {
       _controller.jumpTo(clamped);
       return;
     }
-    _controller.animateTo(
-      clamped,
-      duration: Motion.cardPress,
-      curve: Motion.easeOutCubic,
-    );
+    _controller.animateTo(clamped, duration: Motion.cardPress, curve: Motion.easeOutCubic);
   }
 
   @override
@@ -132,6 +128,7 @@ class _DsLyricsViewState extends State<DsLyricsView> {
         icon: Icons.music_note_outlined,
         title: widget.instrumentalTitle,
         centered: true,
+        artwork: const SokoAnimatedIllustration(SokoIllustration.emptyMusic, size: 96),
       );
     }
     if (widget.lyrics.isEmpty) {
@@ -140,6 +137,7 @@ class _DsLyricsViewState extends State<DsLyricsView> {
         title: widget.emptyTitle,
         body: widget.emptyBody,
         centered: true,
+        artwork: const SokoAnimatedIllustration(SokoIllustration.emptyMusic, size: 96),
       );
     }
     if (!widget.lyrics.hasSynced) {
@@ -150,27 +148,20 @@ class _DsLyricsViewState extends State<DsLyricsView> {
 
   Widget _buildPlain() {
     final theme = Theme.of(context);
-    final inactive =
-        widget.inactiveColor ?? theme.colorScheme.brandTextSecondary;
+    final inactive = widget.inactiveColor ?? theme.colorScheme.brandTextSecondary;
     return NotificationListener<ScrollNotification>(
       onNotification: (n) => n is UserScrollNotification
           ? _userScrolling = n.direction != ScrollDirection.idle
           : false,
       child: ListView.builder(
         controller: _controller,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s6,
-          vertical: AppSpacing.s8,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s6, vertical: AppSpacing.s8),
         itemCount: widget.lyrics.plain.length,
         itemBuilder: (context, i) => Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.s4),
           child: Text(
             widget.lyrics.plain[i],
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: inactive,
-              height: 1.35,
-            ),
+            style: theme.textTheme.titleMedium?.copyWith(color: inactive, height: 1.35),
           ),
         ),
       ),
@@ -180,8 +171,7 @@ class _DsLyricsViewState extends State<DsLyricsView> {
   Widget _buildSynced() {
     final theme = Theme.of(context);
     final activeColor = widget.activeColor ?? theme.colorScheme.primary;
-    final inactiveColor =
-        widget.inactiveColor ?? theme.colorScheme.brandTextSecondary;
+    final inactiveColor = widget.inactiveColor ?? theme.colorScheme.brandTextSecondary;
     final lines = widget.lyrics.synced;
 
     return NotificationListener<ScrollNotification>(
@@ -196,10 +186,7 @@ class _DsLyricsViewState extends State<DsLyricsView> {
         liveRegion: true,
         child: ListView.builder(
           controller: _controller,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.s6,
-            vertical: AppSpacing.s7,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s6, vertical: AppSpacing.s7),
           // The list only reaches this length on the first frame; jump to the
           // active line afterwards so maxScrollExtent settles.
           itemCount: lines.length,
@@ -237,8 +224,7 @@ class _DsLyricsViewState extends State<DsLyricsView> {
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: color,
                       height: 1.2,
-                      fontWeight:
-                          isActive ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                       shadows: widget.activeColor != null
                           ? const [Shadow(blurRadius: 8, color: Colors.black54)]
                           : null,

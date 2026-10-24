@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../app/routes.dart';
 import '../extensions/context_tr.dart';
+import '../theme/design_tokens.dart';
+import '../theme/responsive_typography.dart';
 
 /// Seller-facing promo for Boost: buy a boost package and your listing jumps
 /// to the top of discovery/search for a fixed number of days.
@@ -13,9 +15,10 @@ class AdsPromoBanner extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => context.push(AppRoutes.boostProduct),
-      child: Container(
+      child: ResponsiveBanner(
+        minHeight: 180,
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        height: 180,
+        borderRadius: BorderRadius.circular(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
@@ -53,32 +56,24 @@ class AdsPromoBanner extends StatelessWidget {
                       ),
                       child: Text(
                         context.tr('boost_promo_title'),
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontSize: 10,
+                        style: Ds.bannerCta(cs.primary).copyWith(
                           fontWeight: FontWeight.bold,
+                          fontSize: 10,
                           letterSpacing: 1.2,
                         ),
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text(
+                    BannerText(
                       context.tr('boost_promo_subtitle'),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                        height: 1.2,
-                      ),
+                      style: Ds.bannerTitle(cs.onSurface).copyWith(height: 1.2),
+                      maxLines: 2,
                     ),
                     const SizedBox(height: 6),
-                    Text(
+                    BannerText(
                       context.tr('boost_promo_desc'),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 11.5,
-                        height: 1.4,
-                      ),
+                      style: Ds.bannerSubtitle(cs.onSurfaceVariant),
+                      maxLines: 3,
                     ),
                     const SizedBox(height: 10),
                     Container(
@@ -90,12 +85,9 @@ class AdsPromoBanner extends StatelessWidget {
                       ),
                       child: Text(
                         context.tr('boost_promo_cta'),
-                        style: TextStyle(
-                          // green fills take black text, per the brand rule in
-                          // app_colors.dart — white on #00C853 fails contrast
-                          color: cs.onPrimary,
-                          fontSize: 12,
+                        style: Ds.bannerCta(cs.onPrimary).copyWith(
                           fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                     ),
@@ -123,10 +115,8 @@ class AdsPromoBanner extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         context.tr('boost_product'),
-                        style: TextStyle(
-                          color: cs.primary,
+                        style: Ds.labelLarge(cs.primary).copyWith(
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
                           letterSpacing: 1.1,
                         ),
                       ),

@@ -9,8 +9,9 @@ import '../../services/order_api.dart';
 import '../../utils/api_envelope.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/google_loading.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 /// Seller flow after escrow: hela ikiwekwa escrow, seller anaweka gharama ya
 /// usafirishaji, kisha anaweka taarifa za kutuma mzigo (courier). Hatua zote
@@ -59,11 +60,16 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     super.dispose();
   }
 
-  TextEditingController _shipCtrl(String txId) => _shippingCostCtrls.putIfAbsent(txId, () => TextEditingController());
-  TextEditingController _courierCtrl(String txId) => _courierNameCtrls.putIfAbsent(txId, () => TextEditingController());
-  TextEditingController _trackCtrl(String txId) => _trackingCtrls.putIfAbsent(txId, () => TextEditingController());
-  TextEditingController _phoneCtrl(String txId) => _driverPhoneCtrls.putIfAbsent(txId, () => TextEditingController());
-  TextEditingController _notesCtrl(String txId) => _notesCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _shipCtrl(String txId) =>
+      _shippingCostCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _courierCtrl(String txId) =>
+      _courierNameCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _trackCtrl(String txId) =>
+      _trackingCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _phoneCtrl(String txId) =>
+      _driverPhoneCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _notesCtrl(String txId) =>
+      _notesCtrls.putIfAbsent(txId, () => TextEditingController());
 
   void _toggleFreeDelivery(String txId, bool value) {
     setState(() => _freeDelivery[txId] = value);
@@ -75,9 +81,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     if (user == null) return;
     final free = _freeDelivery[txId] == true;
     // Free delivery submits TZS 0; otherwise a positive cost is required.
-    final cost = free
-        ? 0.0
-        : double.tryParse(_shipCtrl(txId).text.trim().replaceAll(',', ''));
+    final cost = free ? 0.0 : double.tryParse(_shipCtrl(txId).text.trim().replaceAll(',', ''));
     if (cost == null || (!free && cost <= 0)) {
       _showError(context.tr('enter_valid_shipping_cost'));
       return;
@@ -88,11 +92,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
       if (ApiConfig.kUseOrdersApi) {
         // Quote runs the Postgres state machine (→ AWAITING_ESCROW_PAYMENT on
         // NORMAL, mirrored to Firestore); the totals stay server-locked.
-        await OrderApiClient().submitShippingQuote(
-          txId,
-          amount: cost.round(),
-          estimatedDays: 1,
-        );
+        await OrderApiClient().submitShippingQuote(txId, amount: cost.round(), estimatedDays: 1);
         _shipCtrl(txId).clear();
         if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
         return;
@@ -136,11 +136,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         // OTP_PENDING). The server's presentation mirror advances the Firestore
         // doc, so the stream below hides the card on success. driverPhone/notes
         // are not yet v1 fields — they keep working once the flag flips.
-        await OrderApiClient().dispatchOrder(
-          txId,
-          courierName: courier,
-          trackingNumber: tracking,
-        );
+        await OrderApiClient().dispatchOrder(txId, courierName: courier, trackingNumber: tracking);
         _clearDispatchFields(txId);
         if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
         return;
@@ -148,7 +144,10 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
 
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ${await user.getIdToken()}'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
         body: jsonEncode({
           'orderId': txId,
           'userId': user.uid,
@@ -172,7 +171,8 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   }
 
   void _clearDispatchFields(String txId) {
-    for (final c in [_courierCtrl(txId), _trackCtrl(txId), _phoneCtrl(txId), _notesCtrl(txId)]) c.clear();
+    for (final c in [_courierCtrl(txId), _trackCtrl(txId), _phoneCtrl(txId), _notesCtrl(txId)])
+      c.clear();
   }
 
   @override
@@ -180,10 +180,17 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return Scaffold(appBar: AppBar(title: Text(context.tr('dispatch_title'))), body: Center(child: Text(context.tr('login_required'))));
+      return Scaffold(
+        appBar: AppBar(title: Text(context.tr('dispatch_title'))),
+        body: Center(child: Text(context.tr('login_required'))),
+      );
     }
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('dispatch_title')), backgroundColor: Colors.transparent, elevation: 0),
+      appBar: AppBar(
+        title: Text(context.tr('dispatch_title')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _transactionsFor(user.uid),
         builder: (context, snap) {
@@ -192,9 +199,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           final docs = snap.data!.docs
               .where((d) {
                 final s = (d.data() as Map)['status'] as String? ?? '';
-                return s == 'escrow_hold' ||
-                    s == 'paid_escrow_hold' ||
-                    s == 'paid_escrow_held';
+                return s == 'escrow_hold' || s == 'paid_escrow_hold' || s == 'paid_escrow_held';
               })
               .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();
@@ -205,7 +210,13 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
             return 0;
           });
           if (docs.isEmpty) {
-            return DsEmptyState(icon: Icons.check_circle_outline, title: context.tr('no_products_to_dispatch'), body: context.tr('paid_products_only_hint'), tint: cs.successGreen);
+            return DsEmptyState(
+              icon: Icons.check_circle_outline,
+              title: context.tr('no_products_to_dispatch'),
+              body: context.tr('paid_products_only_hint'),
+              tint: cs.successGreen,
+              artwork: const SokoAnimatedIllustration(SokoIllustration.emptyProducts, size: 96),
+            );
           }
           return RefreshIndicator(
             onRefresh: () async => setState(() {}),
@@ -224,14 +235,30 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     );
   }
 
-  Widget _buildDispatchCard(BuildContext context, ColorScheme cs, Map<String, dynamic> d, String txId) {
+  Widget _buildDispatchCard(
+    BuildContext context,
+    ColorScheme cs,
+    Map<String, dynamic> d,
+    String txId,
+  ) {
     final productName = d['productName'] ?? context.tr('product');
     final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
     final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? productPrice + shippingCost;
     final buyerPhone = d['buyerPhone'] ?? '';
     final buyerName = d['buyerName'] ?? '';
-    final addr = d['deliveryAddress'] as Map<String, dynamic>? ?? (d['region'] != null ? {'region': d['region'], 'district': d['district'], 'ward': d['ward'], 'street': d['street'], 'latitude': d['latitude'], 'longitude': d['longitude']} : null);
+    final addr =
+        d['deliveryAddress'] as Map<String, dynamic>? ??
+        (d['region'] != null
+            ? {
+                'region': d['region'],
+                'district': d['district'],
+                'ward': d['ward'],
+                'street': d['street'],
+                'latitude': d['latitude'],
+                'longitude': d['longitude'],
+              }
+            : null);
     final hasShipping = shippingCost > 0;
 
     return Padding(
@@ -244,47 +271,126 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(width: 4, decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [cs.primary, cs.primary.withValues(alpha: 0.35)]))),
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [cs.primary, cs.primary.withValues(alpha: 0.35)],
+                  ),
+                ),
+              ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: [
-                        DsBadge(label: context.tr('paid_label'), color: cs.successGreen, icon: Icons.lock_outline),
-                        const Spacer(),
-                        Text(context.formatPrice(totalAmount), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: cs.primary)),
-                      ]),
+                      Row(
+                        children: [
+                          DsBadge(
+                            label: context.tr('paid_label'),
+                            color: cs.successGreen,
+                            icon: Icons.lock_outline,
+                          ),
+                          const Spacer(),
+                          Text(
+                            context.formatPrice(totalAmount),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 17,
+                              color: cs.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
-                      Text(productName, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                      Text(
+                        productName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
                       const SizedBox(height: 8),
-                      if (buyerName.isNotEmpty) _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
-                      if (buyerPhone.isNotEmpty) _infoRow(cs, Icons.phone_outlined, context.tr('phone'), buyerPhone.toString()),
-                      if (addr != null) _infoRow(cs, Icons.place_outlined, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}${(addr['ward'] as String? ?? '').isNotEmpty ? ', ${addr['ward']}' : ''}, ${addr['street'] ?? ''}'),
+                      if (buyerName.isNotEmpty)
+                        _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
+                      if (buyerPhone.isNotEmpty)
+                        _infoRow(
+                          cs,
+                          Icons.phone_outlined,
+                          context.tr('phone'),
+                          buyerPhone.toString(),
+                        ),
+                      if (addr != null)
+                        _infoRow(
+                          cs,
+                          Icons.place_outlined,
+                          context.tr('address'),
+                          '${addr['region'] ?? ''}, ${addr['district'] ?? ''}${(addr['ward'] as String? ?? '').isNotEmpty ? ', ${addr['ward']}' : ''}, ${addr['street'] ?? ''}',
+                        ),
                       const SizedBox(height: 12),
                       // ── Step 1: Seller sets shipping cost after escrow ──
                       if (!hasShipping) ...[
                         Container(
                           padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(14), border: Border.all(color: cs.primary.withValues(alpha: 0.2))),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(children: [Icon(Icons.payments_outlined, size: 16, color: cs.primary), const SizedBox(width: 6), Text(context.tr('set_cost_note'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.primary))]),
+                              Row(
+                                children: [
+                                  Icon(Icons.payments_outlined, size: 16, color: cs.primary),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    context.tr('set_cost_note'),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: cs.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 4),
-                              Text(context.tr('seller_quote_subtitle'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                              Text(
+                                context.tr('seller_quote_subtitle'),
+                                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                              ),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Icon(Icons.card_giftcard_rounded, size: 18, color: cs.successGreen),
+                                  Icon(
+                                    Icons.card_giftcard_rounded,
+                                    size: 18,
+                                    color: cs.successGreen,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(context.tr('free_delivery'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
-                                        Text(context.tr('free_delivery_note'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                                        Text(
+                                          context.tr('free_delivery'),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                            color: cs.onSurface,
+                                          ),
+                                        ),
+                                        Text(
+                                          context.tr('free_delivery_note'),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -303,41 +409,102 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                                   decoration: BoxDecoration(
                                     color: cs.successGreen.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: cs.successGreen.withValues(alpha: 0.3)),
+                                    border: Border.all(
+                                      color: cs.successGreen.withValues(alpha: 0.3),
+                                    ),
                                   ),
-                                  child: Text(context.tr('free_delivery_confirmed'), style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                                  child: Text(
+                                    context.tr('free_delivery_confirmed'),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurface),
+                                  ),
                                 )
                               else
-                                DsTextField(controller: _shipCtrl(txId), label: context.tr('shipping_cost'), hint: 'TZS 0', prefixIcon: Icons.monetization_on_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))]),
+                                DsTextField(
+                                  controller: _shipCtrl(txId),
+                                  label: context.tr('shipping_cost'),
+                                  hint: 'TZS 0',
+                                  prefixIcon: Icons.monetization_on_outlined,
+                                  keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+                                  ],
+                                ),
                               const SizedBox(height: 12),
                               SizedBox(
                                 width: double.infinity,
                                 height: 44,
                                 child: ElevatedButton.icon(
-                                  onPressed: _settingCostTxId == txId ? null : () => _setShippingCost(txId),
-                                  icon: _settingCostTxId == txId ? const GoogleLoading(size: 18, strokeWidth: 2) : const Icon(Icons.check, size: 18),
-                                  label: Text(_settingCostTxId == txId ? context.tr('sending_label') : context.tr('send_shipping_to_buyer')),
-                                  style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                                  onPressed: _settingCostTxId == txId
+                                      ? null
+                                      : () => _setShippingCost(txId),
+                                  icon: _settingCostTxId == txId
+                                      ? const GoogleLoading(size: 18, strokeWidth: 2)
+                                      : const Icon(Icons.check, size: 18),
+                                  label: Text(
+                                    _settingCostTxId == txId
+                                        ? context.tr('sending_label')
+                                        : context.tr('send_shipping_to_buyer'),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: cs.primary,
+                                    foregroundColor: cs.surface,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ] else ...[
-                        _infoRow(cs, Icons.local_shipping_outlined, context.tr('shipping_cost'), context.formatPrice(shippingCost)),
+                        _infoRow(
+                          cs,
+                          Icons.local_shipping_outlined,
+                          context.tr('shipping_cost'),
+                          context.formatPrice(shippingCost),
+                        ),
                         const SizedBox(height: 12),
                         Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
                         const SizedBox(height: 12),
                         // ── Step 2: Dispatch after cost set ──
-                        DsTextField(controller: _courierCtrl(txId), label: context.tr('courier_company_name'), prefixIcon: Icons.business_outlined),
+                        DsTextField(
+                          controller: _courierCtrl(txId),
+                          label: context.tr('courier_company_name'),
+                          prefixIcon: Icons.business_outlined,
+                        ),
                         const SizedBox(height: 12),
-                        DsTextField(controller: _trackCtrl(txId), label: context.tr('tracking_number'), prefixIcon: Icons.qr_code_2),
+                        DsTextField(
+                          controller: _trackCtrl(txId),
+                          label: context.tr('tracking_number'),
+                          prefixIcon: Icons.qr_code_2,
+                        ),
                         const SizedBox(height: 12),
-                        DsTextField(controller: _phoneCtrl(txId), label: context.tr('driver_phone'), prefixIcon: Icons.phone_outlined, keyboardType: TextInputType.phone),
+                        DsTextField(
+                          controller: _phoneCtrl(txId),
+                          label: context.tr('driver_phone'),
+                          prefixIcon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                        ),
                         const SizedBox(height: 12),
-                        DsTextField(controller: _notesCtrl(txId), label: context.tr('additional_notes'), prefixIcon: Icons.notes, maxLines: 2),
+                        DsTextField(
+                          controller: _notesCtrl(txId),
+                          label: context.tr('additional_notes'),
+                          prefixIcon: Icons.notes,
+                          maxLines: 2,
+                        ),
                         const SizedBox(height: 14),
-                        DsButton(label: _dispatchingTxId == txId ? context.tr('dispatching') : context.tr('confirm_dispatch'), icon: Icons.local_shipping_outlined, loading: _dispatchingTxId == txId, onPressed: _dispatchingTxId == txId ? null : () => _dispatchOrder(txId)),
+                        DsButton(
+                          label: _dispatchingTxId == txId
+                              ? context.tr('dispatching')
+                              : context.tr('confirm_dispatch'),
+                          icon: Icons.local_shipping_outlined,
+                          loading: _dispatchingTxId == txId,
+                          onPressed: _dispatchingTxId == txId ? null : () => _dispatchOrder(txId),
+                        ),
                       ],
                     ],
                   ),
@@ -351,16 +518,35 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   }
 
   Widget _infoRow(ColorScheme cs, IconData icon, String label, String value) {
-    return Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [Icon(icon, size: 14, color: cs.onSurfaceVariant), const SizedBox(width: 6), Text('$label: ', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)), Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: cs.onSurface, fontWeight: FontWeight.w500)))]));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text('$label: ', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 13, color: cs.onSurface, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+    );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary),
+    );
   }
 }

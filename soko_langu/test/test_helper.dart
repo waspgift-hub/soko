@@ -12,27 +12,15 @@ class TestApp extends StatelessWidget {
   final bool authenticated;
   final bool isAdmin;
 
-  const TestApp({
-    super.key,
-    required this.child,
-    this.authenticated = true,
-    this.isAdmin = false,
-  });
+  const TestApp({super.key, required this.child, this.authenticated = true, this.isAdmin = false});
 
   @override
   Widget build(BuildContext context) {
     final tm = ThemeManager()..lightTheme;
     appStateNotifier.setAppInitialized();
-    appStateNotifier.setAuthState(
-      authenticated: authenticated,
-      admin: isAdmin,
-    );
+    appStateNotifier.setAuthState(authenticated: authenticated, admin: isAdmin);
 
-    return MaterialApp(
-      home: child,
-      theme: tm.lightTheme,
-      darkTheme: tm.darkTheme,
-    );
+    return MaterialApp(home: child, theme: tm.lightTheme, darkTheme: tm.darkTheme);
   }
 }
 
@@ -49,7 +37,7 @@ Future<WidgetTester> pumpTestApp(
     TestApp(
       authenticated: authenticated,
       isAdmin: isAdmin,
-      child: child,
+      child: MediaQuery(data: const MediaQueryData(disableAnimations: true), child: child),
     ),
   );
   await tester.pumpAndSettle();
@@ -66,11 +54,7 @@ Future<void> tapText(WidgetTester tester, String text) async {
 }
 
 /// Shorthand for entering text into a TextField/TextFormField.
-Future<void> enterText(
-  WidgetTester tester,
-  Finder finder,
-  String text,
-) async {
+Future<void> enterText(WidgetTester tester, Finder finder, String text) async {
   await tester.enterText(finder, text);
   await tester.pumpAndSettle();
 }

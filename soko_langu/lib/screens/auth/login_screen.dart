@@ -8,9 +8,11 @@ import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
+import '../../models/otp_verification_models.dart';
 import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
+import '../../screens/auth/otp_verification_screen.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/rate_limiter.dart';
 import '../../widgets/auth/auth_scene.dart';
@@ -30,7 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _otpController = TextEditingController();
 
   _LoginMethod _method = _LoginMethod.password;
   bool _isLoading = false;
@@ -45,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _resendTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
@@ -130,7 +130,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _sendingOtp = true;
       _otpSent = false;
-      _otpController.clear();
     });
     try {
       await context.read<AuthNotifier>().sendEmailOtp(email);
@@ -138,43 +137,52 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _otpSent = true);
       _startResendCountdown();
       HapticFeedback.mediumImpact();
+      if (mounted) {
+        context.pushNamed(AppRoutes.otpVerification, extra: OtpVerificationRequest(
+          purpose: OtpPurpose.emailLogin,
+          destination: email,
+          maskedDestination: _maskEmail(email),
+          channel: OtpChannel.email,
+          otpLength: 6,
+          langCode: 'sw',
+          onVerify: (otp) async {
+            try {
+              await context.read<AuthNotifier>().loginWithEmailOtp(email, otp);
+              await _saveAccount('otp');
+              if (mounted) context.go(AppRoutes.home);
+              return const OtpVerificationResult.success();
+            } catch (e) {
+              return OtpVerificationResult.failure(
+                errorCode: 'auth_otp_invalid',
+                userMessage: context.trError(e, feature: 'auth', screen: 'login_otp_verify'),
+              );
+            }
+          },
+          onResend: () async {
+            await context.read<AuthNotifier>().sendEmailOtp(email);
+            return const OtpVerificationResult.success();
+          },
+          allowDestinationEdit: false,
+          allowResend: true,
+          headingOverride: context.tr('login_with_otp'),
+          subtitleOverride: _tParams('enter_code_sent', {'0': _maskEmail(email)}),
+        ));
+      }
     } catch (e) {
       if (mounted) _showError(context.trError(e, feature: 'auth', screen: 'login_otp'));
-    } finally {
-      if (mounted) setState(() => _sendingOtp = false);
-    }
-  }
-
-  Future<void> _onOtpLogin() async {
-    if (_isLoading) return;
-    final email = _emailController.text.trim();
-    final otp = _otpController.text.trim();
-    if (email.isEmpty || otp.length != 6) {
-      _showError(context.tr('enter_otp_email_sent'));
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      await context.read<AuthNotifier>().loginWithEmailOtp(email, otp);
-      await _saveAccount('otp');
-      if (mounted) context.go(AppRoutes.home);
-    } catch (e) {
-      if (mounted) {
-        final notifier = context.read<AuthNotifier>();
-        final key = notifier.error?.toString() ?? '';
-        _showError(
-          key == 'auth_user_not_found' || key == 'auth_message_user_not_found'
-              ? context.tr(
-                  'email_not_registered',
-                  'Akaunti haikupatikana kwa barua pepe hii. Jisajili kwanza.',
-                )
-              : context.trError(e, feature: 'auth', screen: 'login_otp_verify'),
-        );
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  String _maskEmail(String email) {
+    final at = email.indexOf('@');
+    if (at <= 1) return email;
+    return '${email[0]}***@${email.substring(at + 1)}';
+  }
+
+  String _tParams(String key, Map<String, String> params) =>
+      context.trParams(key, params);
 
   @override
   Widget build(BuildContext context) {
@@ -228,14 +236,13 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               _MethodSwitcher(
                 method: _method,
-                onChange: (m) {
-                  setState(() {
-                    _method = m;
-                    _otpSent = false;
-                    _otpController.clear();
-                  });
-                  HapticFeedback.selectionClick();
-                },
+                  onChange: (m) {
+                    setState(() {
+                      _method = m;
+                      _otpSent = false;
+                    });
+                    HapticFeedback.selectionClick();
+                  },
               ),
               const SizedBox(height: 24),
               Form(
@@ -274,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? context.tr('login')
                           : context.tr('verify'),
                       loading: _isLoading,
-                      onPressed: _method == _LoginMethod.password ? _onPasswordLogin : _onOtpLogin,
+                      onPressed: _method == _LoginMethod.password ? _onPasswordLogin : _onSendOtp,
                       height: 58, // match 58dp fields so button row aligns
                     ),
                   ],
@@ -340,47 +347,26 @@ class _LoginScreenState extends State<LoginScreen> {
         height: 58,
       );
     } else {
+      // OTP was sent and we navigated to OtpVerificationScreen. This branch is
+      // only reached if the user returns to the login screen mid-flow; show a
+      // simple prompt to re-initiate.
       return Column(
-        key: const ValueKey('otp_field'),
+        key: const ValueKey('otp_sent'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            context.tr('enter_otp_email_sent'),
+            context.tr('otp_sent_email'),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, fontWeight: FontWeight.w400),
           ),
           const SizedBox(height: 12),
-          AuthTextField(
-            controller: _otpController,
-            label: context.tr('otp_code_hint'),
-            prefixIcon: Icons.verified_outlined,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.oneTimeCode],
-            validator: (v) =>
-                (v == null || v.length != 6) ? context.tr('enter_otp_6_digits') : null,
-            onFieldSubmitted: (_) => _onOtpLogin(),
-            suffix: _resendLeft > 0
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Center(
-                      child: Text(
-                        '${_resendLeft}s',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  )
-                : TextButton(
-                    onPressed: _sendingOtp ? null : _onSendOtp,
-                    child: Text(
-                      context.tr('resend_code'),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                  ),
+          DsButton(
+            key: const ValueKey('send_otp_button'),
+            label: context.tr('send_otp'),
+            icon: Icons.sms_outlined,
+            loading: _sendingOtp,
+            onPressed: _onSendOtp,
+            height: 58,
           ),
         ],
       );

@@ -96,13 +96,26 @@ class TransferProgress {
       : phase = TransferPhase.cancelled,
         failure = null;
 
-  /// 0..1, or `null` when the total is unknown.
+  /// 0..1, or `null` when no meaningful percentage exists.
   ///
   /// A null here is the signal for the UI to go indeterminate. Returning 0
   /// instead would draw a determinate bar sitting at zero, which reads as
-  /// "stuck" and is exactly the kind of dishonest progress this type is
-  /// built to avoid.
+  /// "stuck" and is exactly the kind of dishonest progress this type is built
+  /// to avoid.
+  ///
+  /// The phase gate matters as much as the total. During
+  /// [TransferPhase.preparing] the total *is* known — it is the compressed file
+  /// size — but no bytes have moved yet, so the honest answer for the whole
+  /// compression pass would be a bar frozen at 0%. A percentage is only
+  /// meaningful while bytes are on the wire, or once the transfer is done.
   double? get fraction {
+    const bytePhases = {
+      TransferPhase.uploading,
+      TransferPhase.downloading,
+      TransferPhase.succeeded,
+    };
+    if (!bytePhases.contains(phase)) return null;
+
     final t = total;
     if (t == null || t <= 0) return null;
     if (transferred <= 0) return 0.0;

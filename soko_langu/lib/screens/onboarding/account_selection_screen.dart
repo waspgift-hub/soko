@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 class AccountSelectionScreen extends StatelessWidget {
   const AccountSelectionScreen({super.key});
@@ -27,12 +28,7 @@ class AccountSelectionScreen extends StatelessWidget {
               const Spacer(flex: 2),
               ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                child: Image.asset(
-                  'assets/app_icon.png',
-                  width: 72,
-                  height: 72,
-                  fit: BoxFit.cover,
-                ),
+                child: Image.asset('assets/app_icon.png', width: 72, height: 72, fit: BoxFit.cover),
               ),
               const SizedBox(height: 16),
               Text(
@@ -47,11 +43,10 @@ class AccountSelectionScreen extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 context.tr('account_selection_subtitle', 'Jionee mwenyewe/Look for yourself'),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: cs.onSurface.withValues(alpha: 0.5),
-                ),
+                style: TextStyle(fontSize: 14, color: cs.onSurface.withValues(alpha: 0.5)),
               ),
+              const SizedBox(height: 16),
+              const SokoAnimatedIllustration(SokoIllustration.onboarding, size: 120),
               const Spacer(flex: 1),
               _AccountCard(
                 icon: Icons.shopping_bag_outlined,
@@ -84,19 +79,14 @@ class AccountSelectionScreen extends StatelessWidget {
                     child: Text(
                       context.tr('account_already'),
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.6),
-                      ),
+                      style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
                     ),
                   ),
                   TextButton(
                     onPressed: () => context.replace(AppRoutes.login),
                     child: Text(
                       context.tr('login_prompt'),
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -167,18 +157,12 @@ class _AccountCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       context.tr(descKey),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: cs.onSurface.withValues(alpha: 0.5),
-                      ),
+                      style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5)),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: cs.onSurface.withValues(alpha: 0.3),
-              ),
+              Icon(Icons.chevron_right, color: cs.onSurface.withValues(alpha: 0.3)),
             ],
           ),
         ),

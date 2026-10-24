@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'soko_vibe_loading.dart';
+import 'animations/soko_animated_illustration.dart';
 
 /// Loading spinner (three dots) used across the app.
 ///
@@ -12,12 +13,7 @@ class GoogleLoading extends StatelessWidget {
   final Color? color;
   final double strokeWidth;
 
-  const GoogleLoading({
-    super.key,
-    this.size = 48,
-    this.color,
-    this.strokeWidth = 4,
-  });
+  const GoogleLoading({super.key, this.size = 48, this.color, this.strokeWidth = 4});
 
   @override
   Widget build(BuildContext context) {
@@ -33,19 +29,22 @@ class GoogleLoadingPage extends StatelessWidget {
   final double size;
   final Color? color;
 
-  const GoogleLoadingPage({
-    super.key,
-    this.size = 48,
-    this.color,
-  });
+  const GoogleLoadingPage({super.key, this.size = 48, this.color});
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: SokoVibeThreeDotLoader(
-        size: size * 0.82,
-        dotSize: size * 0.22,
-        color: color,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SokoAnimatedIllustration(
+            SokoIllustration.productLoading,
+            size: size * 1.6,
+            color: color ?? Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 12),
+          SokoVibeThreeDotLoader(size: size * 0.82, dotSize: size * 0.22, color: color),
+        ],
       ),
     );
   }
@@ -55,11 +54,7 @@ class SkeletonLoader extends StatelessWidget {
   final double height;
   final double borderRadius;
 
-  const SkeletonLoader({
-    super.key,
-    this.height = 16,
-    this.borderRadius = 8,
-  });
+  const SkeletonLoader({super.key, this.height = 16, this.borderRadius = 8});
 
   @override
   Widget build(BuildContext context) {
@@ -81,18 +76,15 @@ class _ShimmerEffect extends StatefulWidget {
   State<_ShimmerEffect> createState() => _ShimmerEffectState();
 }
 
-class _ShimmerEffectState extends State<_ShimmerEffect>
-    with SingleTickerProviderStateMixin {
+class _ShimmerEffectState extends State<_ShimmerEffect> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
     _animation = Tween<double>(begin: -2, end: 2).animate(_controller);
   }
 

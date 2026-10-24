@@ -55,12 +55,38 @@ class Ds {
   static Curve get curve => Motion.easeOutCubic;
 
   // ── Typography (context-free) ────────────────────────────────────────────
-  static TextStyle displayLg(Color c) => AppTypography.brandTitle(c);
-  static TextStyle headingMd(Color c) => AppTypography.screenTitle(c);
-  static TextStyle bodyLg(Color c) => AppTypography.appBarTitle(c);
-  static TextStyle bodyMd(Color c) => AppTypography.statusChip(c);
-  static TextStyle labelMd(Color c) => AppTypography.monoLabel(c);
+  static TextStyle displayLg(Color c) => AppTypography.displayLarge(c);
+  static TextStyle displayMd(Color c) => AppTypography.displayMedium(c);
+  static TextStyle screenTitle(Color c) => AppTypography.screenTitle(c);
+  static TextStyle sectionTitle(Color c) => AppTypography.sectionTitle(c);
+  static TextStyle cardTitle(Color c) => AppTypography.cardTitle(c);
+  static TextStyle productTitle(Color c) => AppTypography.productTitle(c);
+  static TextStyle price(Color c) => AppTypography.price(c);
+  static TextStyle priceLarge(Color c) => AppTypography.priceLarge(c);
+  static TextStyle bodyLg(Color c) => AppTypography.bodyLarge(c);
+  static TextStyle bodyMd(Color c) => AppTypography.bodyMedium(c);
+  static TextStyle bodySm(Color c) => AppTypography.bodySmall(c);
+  static TextStyle metadata(Color c) => AppTypography.metadata(c);
+  static TextStyle caption(Color c) => AppTypography.caption(c);
+  static TextStyle labelLg(Color c) => AppTypography.labelLarge(c);
+  static TextStyle labelMd(Color c) => AppTypography.labelMedium(c);
+  static TextStyle labelSm(Color c) => AppTypography.labelSmall(c);
+  static TextStyle button(Color c) => AppTypography.buttonText(c);
+  static TextStyle buttonSm(Color c) => AppTypography.buttonTextSmall(c);
+  static TextStyle formLabel(Color c) => AppTypography.formLabel(c);
+  static TextStyle inputHint(Color c) => AppTypography.inputHint(c);
+  static TextStyle statusChip(Color c) => AppTypography.statusChip(c);
+  static TextStyle badge(Color c) => AppTypography.badge(c);
   static TextStyle amount(Color c) => AppTypography.amount(c);
+  static TextStyle amountLarge(Color c) => AppTypography.amountLarge(c);
+  static TextStyle errorText(Color c) => AppTypography.error(c);
+  static TextStyle bannerTitle(Color c) => AppTypography.bannerTitle(c);
+  static TextStyle bannerSubtitle(Color c) => AppTypography.bannerSubtitle(c);
+  static TextStyle bannerCta(Color c) => AppTypography.bannerCta(c);
+  static TextStyle brandTitle(Color c) => AppTypography.brandTitle(c);
+  static TextStyle appBarTitle(Color c) => AppTypography.appBarTitle(c);
+  static TextStyle monoLabel(Color c) => AppTypography.monoLabel(c);
+  static TextStyle timeIndicator(Color c) => AppTypography.timeIndicator(c);
 
   // ── Haptics ──────────────────────────────────────────────────────────────
   static void tap() => HapticFeedback.selectionClick();

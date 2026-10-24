@@ -46,7 +46,13 @@ const schemas = {
 
   resetPasswordByPhone: withOtp({
     phone: z.string().regex(/^(\+?255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
-    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+    // Mirrors services/password-policy.js (min length + letter + digit). The
+    // handler re-checks with the tunable policy; the schema is the cheap
+    // outer bound with a stable message.
+    newPassword: z.string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Za-z]/, 'auth_password_weak')
+      .regex(/[0-9]/, 'auth_password_weak'),
   }),
 
   // User schemas

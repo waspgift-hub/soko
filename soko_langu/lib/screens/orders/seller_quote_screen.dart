@@ -11,8 +11,9 @@ import '../../services/order_api.dart';
 import '../../utils/api_envelope.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/google_loading.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
 class SellerQuoteScreen extends StatefulWidget {
   const SellerQuoteScreen({super.key});
@@ -76,10 +77,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
       if (ApiConfig.kUseOrdersApi) {
         // Quote runs the Postgres state machine (→ SHIPPING_FEE_SUBMITTED);
         // the server's presentation mirror advances the Firestore doc.
-        await OrderApiClient().submitShippingQuote(
-          txId,
-          amount: cost.round(),
-        );
+        await OrderApiClient().submitShippingQuote(txId, amount: cost.round());
         _showSuccess(context.tr('shipping_cost_submitted'));
         ctrl.clear();
         if (mounted) setState(() => _submitting[txId] = false);
@@ -95,10 +93,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
 
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({
           'orderId': txId,
           'newStatus': 'quoted',
@@ -112,9 +107,11 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         ctrl.clear();
       } else {
         final serverError = env.error ?? '';
-        _showError(serverError.isEmpty
-            ? context.tr('quote_sync_warning')
-            : '${context.tr('quote_sync_warning')}\n$serverError');
+        _showError(
+          serverError.isEmpty
+              ? context.tr('quote_sync_warning')
+              : '${context.tr('quote_sync_warning')}\n$serverError',
+        );
       }
     } on http.ClientException catch (e) {
       _showError('${context.tr('quote_sync_warning')}\n${e.message}');
@@ -137,10 +134,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.tr('shipping_quote')),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text(context.tr('shipping_quote')), centerTitle: true),
       body: StreamBuilder<QuerySnapshot>(
         // Source of truth is the `orders` doc (same query that powers the
         // "Orders Needing Quote" carousel). The mirror in `transactions` is
@@ -172,6 +166,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
             return DsEmptyState(
               icon: Icons.inbox_outlined,
               title: context.tr('no_shipping_requests'),
+              artwork: const SokoAnimatedIllustration(SokoIllustration.emptyShipping, size: 96),
             );
           }
 
@@ -295,10 +290,16 @@ class _OrderQuoteCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          width: 64, height: 64,
+                          width: 64,
+                          height: 64,
                           color: cs.surfaceContainerHighest,
                           child: productImage.isNotEmpty
-                              ? ProductCachedImage(url: productImage, width: 64, height: 64, fit: BoxFit.cover)
+                              ? ProductCachedImage(
+                                  url: productImage,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                )
                               : Icon(Icons.image, size: 28, color: cs.onSurfaceVariant),
                         ),
                       ),
@@ -307,13 +308,24 @@ class _OrderQuoteCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(productName,
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: cs.onSurface),
-                                maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(
+                              productName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                color: cs.onSurface,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             const SizedBox(height: 4),
                             Text(
                               context.formatPrice(productPrice),
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: cs.primary),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                                color: cs.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -326,10 +338,17 @@ class _OrderQuoteCard extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // ── Buyer Info ──
-                  _SectionTitle(icon: Icons.person_outline, title: context.tr('buyer_info', 'Mnunuzi')),
+                  _SectionTitle(
+                    icon: Icons.person_outline,
+                    title: context.tr('buyer_info', 'Mnunuzi'),
+                  ),
                   const SizedBox(height: 10),
                   if (buyerName.isNotEmpty)
-                    _DetailRow(icon: Icons.badge_outlined, label: context.tr('name'), value: buyerName),
+                    _DetailRow(
+                      icon: Icons.badge_outlined,
+                      label: context.tr('name'),
+                      value: buyerName,
+                    ),
                   if (buyerPhone.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -340,8 +359,18 @@ class _OrderQuoteCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(context.tr('phone'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                              Text(buyerPhone, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: cs.onSurface)),
+                              Text(
+                                context.tr('phone'),
+                                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                              ),
+                              Text(
+                                buyerPhone,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: cs.onSurface,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -364,17 +393,28 @@ class _OrderQuoteCard extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // ── Delivery Address ──
-                  _SectionTitle(icon: Icons.location_on_outlined, title: context.tr('delivery_address')),
+                  _SectionTitle(
+                    icon: Icons.location_on_outlined,
+                    title: context.tr('delivery_address'),
+                  ),
                   const SizedBox(height: 10),
                   if (addr.isNotEmpty)
                     _DetailRow(icon: Icons.place_outlined, label: '', value: addr),
                   if (ward.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    _DetailRow(icon: Icons.holiday_village_outlined, label: context.tr('ward'), value: ward),
+                    _DetailRow(
+                      icon: Icons.holiday_village_outlined,
+                      label: context.tr('ward'),
+                      value: ward,
+                    ),
                   ],
                   if (landmarks.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    _DetailRow(icon: Icons.landscape_outlined, label: context.tr('landmarks'), value: landmarks),
+                    _DetailRow(
+                      icon: Icons.landscape_outlined,
+                      label: context.tr('landmarks'),
+                      value: landmarks,
+                    ),
                   ],
                   if (addr.isEmpty && ward.isEmpty && landmarks.isEmpty)
                     Text(
@@ -387,7 +427,10 @@ class _OrderQuoteCard extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // ── Delivery Type ──
-                  _SectionTitle(icon: Icons.local_shipping_outlined, title: context.tr('delivery_type', 'Aina ya Usafirishaji')),
+                  _SectionTitle(
+                    icon: Icons.local_shipping_outlined,
+                    title: context.tr('delivery_type', 'Aina ya Usafirishaji'),
+                  ),
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -405,8 +448,14 @@ class _OrderQuoteCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          deliveryType == 'local' ? context.tr('local_delivery') : context.tr('upcountry_delivery'),
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface),
+                          deliveryType == 'local'
+                              ? context.tr('local_delivery')
+                              : context.tr('upcountry_delivery'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
                         ),
                       ],
                     ),
@@ -435,13 +484,20 @@ class _OrderQuoteCard extends StatelessWidget {
                                     isFreeDelivery
                                         ? context.tr('free_delivery')
                                         : context.tr('enter_shipping_cost'),
-                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: cs.onSurface,
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     isFreeDelivery
                                         ? context.tr('free_delivery_note')
-                                        : context.tr('set_cost_note', 'Weka gharama ya usafirishaji kwa mnunuzi'),
+                                        : context.tr(
+                                            'set_cost_note',
+                                            'Weka gharama ya usafirishaji kwa mnunuzi',
+                                          ),
                                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                                   ),
                                 ],
@@ -488,7 +544,9 @@ class _OrderQuoteCard extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: DsButton(
-                            label: isSubmitting ? context.tr('sending_label') : context.tr('send_shipping_to_buyer'),
+                            label: isSubmitting
+                                ? context.tr('sending_label')
+                                : context.tr('send_shipping_to_buyer'),
                             icon: Icons.send_rounded,
                             loading: isSubmitting,
                             onPressed: isSubmitting ? null : onSubmit,

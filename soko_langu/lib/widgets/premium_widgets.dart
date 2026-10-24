@@ -10,9 +10,20 @@ class PremiumScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget? bottomNavigationBar;
   final Color? backgroundColor;
-  const PremiumScaffold({super.key, required this.child, this.appBar, this.bottomNavigationBar, this.backgroundColor});
+  const PremiumScaffold({
+    super.key,
+    required this.child,
+    this.appBar,
+    this.bottomNavigationBar,
+    this.backgroundColor,
+  });
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: appBar, body: child, bottomNavigationBar: bottomNavigationBar, backgroundColor: backgroundColor);
+  Widget build(BuildContext context) => Scaffold(
+    appBar: appBar,
+    body: child,
+    bottomNavigationBar: bottomNavigationBar,
+    backgroundColor: backgroundColor,
+  );
 }
 
 class PremiumButton extends StatelessWidget {
@@ -35,7 +46,10 @@ class PremiumButton extends StatelessWidget {
         ),
         child: isLoading
             ? const GoogleLoading(size: 20, strokeWidth: 2)
-            : Text(label, style: const TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600)),
+            : Text(
+                label,
+                style: const TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600),
+              ),
       ),
     );
   }
@@ -49,7 +63,16 @@ class GlassCard extends StatelessWidget {
   final double? width;
   final BorderRadius? borderRadius;
   final Color? borderColor;
-  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius, this.borderColor});
+  const GlassCard({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.padding,
+    this.margin,
+    this.width,
+    this.borderRadius,
+    this.borderColor,
+  });
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -64,9 +87,16 @@ class GlassCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow.withValues(alpha: 0.3),
             borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: borderColor?.withValues(alpha: 0.5) ?? cs.primary.withValues(alpha: 0.25), width: 1.2),
+            border: Border.all(
+              color: borderColor?.withValues(alpha: 0.5) ?? cs.primary.withValues(alpha: 0.25),
+              width: 1.2,
+            ),
             boxShadow: [
-              BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
+              BoxShadow(
+                color: cs.primary.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
           child: child,
@@ -85,7 +115,13 @@ class SectionHeader extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final Widget? trailing;
-  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction, this.trailing});
+  const SectionHeader({
+    super.key,
+    required this.title,
+    this.actionLabel,
+    this.onAction,
+    this.trailing,
+  });
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -97,17 +133,22 @@ class SectionHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 5, height: 24, decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [cs.primary, cs.primary.withValues(alpha: 0.4)],
+              Container(
+                width: 5,
+                height: 24,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [cs.primary, cs.primary.withValues(alpha: 0.4)],
+                  ),
+                  borderRadius: BorderRadius.circular(3),
                 ),
-                borderRadius: BorderRadius.circular(3),
-              )),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(title,
+                child: Text(
+                  title,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
@@ -123,7 +164,10 @@ class SectionHeader extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.08)],
+                        colors: [
+                          cs.primary.withValues(alpha: 0.15),
+                          cs.primary.withValues(alpha: 0.08),
+                        ],
                       ),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
@@ -131,7 +175,14 @@ class SectionHeader extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(actionLabel!, style: TextStyle(fontSize: AppFontSize.sm, color: cs.primary, fontWeight: FontWeight.w600)),
+                        Text(
+                          actionLabel!,
+                          style: TextStyle(
+                            fontSize: AppFontSize.sm,
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         Icon(Icons.arrow_forward_ios, size: 10, color: cs.primary),
                       ],
@@ -154,7 +205,16 @@ class EmptyStateWidget extends StatelessWidget {
   final String? subtitle;
   final String? actionLabel;
   final VoidCallback? onAction;
-  const EmptyStateWidget({super.key, required this.icon, required this.title, this.subtitle, this.actionLabel, this.onAction});
+  final Widget? artwork;
+  const EmptyStateWidget({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
+    this.artwork,
+  });
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -162,12 +222,24 @@ class EmptyStateWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+          if (artwork != null)
+            artwork!
+          else
+            Icon(icon, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
           const SizedBox(height: AppInsets.md),
-          Text(title, style: TextStyle(fontSize: AppFontSize.lg, color: cs.onSurfaceVariant)),
+          Text(
+            title,
+            style: TextStyle(fontSize: AppFontSize.lg, color: cs.onSurfaceVariant),
+          ),
           if (subtitle != null) ...[
             const SizedBox(height: AppInsets.xs),
-            Text(subtitle!, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            Text(
+              subtitle!,
+              style: TextStyle(
+                fontSize: AppFontSize.sm,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
           ],
           if (actionLabel != null) ...[
             const SizedBox(height: AppInsets.md),

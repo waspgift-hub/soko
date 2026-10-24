@@ -18,7 +18,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/payment_banner.dart';
-import '../../widgets/animations/soko_animated_art.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/order_status_config.dart';
@@ -82,9 +82,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   }
 
   List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
-    docs = docs
-        .where((d) => (d.data() as Map)['deletedForBuyer'] != true)
-        .toList();
+    docs = docs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
     if (_selectedFilter == 'all') return docs;
     return docs.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
@@ -183,9 +181,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       );
 
       if (result == null || result['order_id'] == null) {
-        final errMsg =
-            result?['error'] as String? ??
-            context.tr('payment_initiation_failed');
+        final errMsg = result?['error'] as String? ?? context.tr('payment_initiation_failed');
         if (mounted) {
           PaymentBanner.show(
             context: context,
@@ -220,15 +216,11 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             }
           },
           onError: (msg) {
-              if (mounted) {
-                PaymentResult.show(
-                  context: context,
-                  success: false,
-                  errorMessage: msg,
-                );
-              }
-            },
-          );
+            if (mounted) {
+              PaymentResult.show(context: context, success: false, errorMessage: msg);
+            }
+          },
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -277,10 +269,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
         _showSuccess(context.tr('delivery_confirmed_msg'));
-        final txDoc = await FirebaseFirestore.instance
-            .collection('transactions')
-            .doc(txId)
-            .get();
+        final txDoc = await FirebaseFirestore.instance.collection('transactions').doc(txId).get();
         if (txDoc.exists) {
           final tx = txDoc.data()!;
           final sellerId = tx['sellerId'] as String? ?? '';
@@ -299,12 +288,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     setState(() => _releasingTxId = null);
   }
 
-  void _showSellerRatingDialog(
-    String txId,
-    String sellerId,
-    String productId,
-    String productName,
-  ) {
+  void _showSellerRatingDialog(String txId, String sellerId, String productId, String productName) {
     double rating = 5;
     final commentCtrl = TextEditingController();
     final user = FirebaseAuth.instance.currentUser;
@@ -318,9 +302,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  context.tr('rate_seller_desc').replaceAll('{0}', productName),
-                ),
+                Text(context.tr('rate_seller_desc').replaceAll('{0}', productName)),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -333,8 +315,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         color: Theme.of(context).colorScheme.primary,
                         size: 36,
                       ),
-                      onPressed: () =>
-                          setDialogState(() => rating = star.toDouble()),
+                      onPressed: () => setDialogState(() => rating = star.toDouble()),
                     );
                   }),
                 ),
@@ -344,19 +325,14 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   maxLines: 3,
                   decoration: InputDecoration(
                     hintText: context.tr('review_hint'),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.tr('skip')),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('skip'))),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
@@ -366,7 +342,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   if (!check.clean) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+                        SnackBar(
+                          content: Text(check.message ?? 'Profanity detected'),
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                        ),
                       );
                     }
                     return;
@@ -376,7 +355,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   productId: productId,
                   sellerId: sellerId,
                   userId: user?.uid ?? '',
-                  userName: user?.displayName ?? user?.email ?? context.tr('anonymous', 'Anonymous'),
+                  userName:
+                      user?.displayName ?? user?.email ?? context.tr('anonymous', 'Anonymous'),
                   userImage: user?.photoURL,
                   rating: rating,
                   comment: commentText,
@@ -396,11 +376,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _disputingTxId = txId);
-    final opened = await showRaiseDisputeDialog(
-      context,
-      txId: txId,
-      userId: user.uid,
-    );
+    final opened = await showRaiseDisputeDialog(context, txId: txId, userId: user.uid);
     if (mounted && opened == true) {
       _showSuccess(context.tr('dispute_opened_msg'));
     }
@@ -414,10 +390,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         title: Text(context.tr('cancel_order_title')),
         content: Text(context.tr('cancel_order_refund_message')),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
@@ -468,10 +441,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         title: Text(context.tr('delete_order_title')),
         content: Text(context.tr('delete_order_confirm')),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
@@ -485,10 +455,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     );
     if (confirmed != true) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('transactions')
-          .doc(txId)
-          .update({'deletedForBuyer': true});
+      await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
+        'deletedForBuyer': true,
+      });
       if (mounted) _showSuccess(context.tr('order_deleted'));
     } catch (e) {
       if (mounted) _showError(context.trError(e));
@@ -502,10 +471,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         title: Text(context.tr('delete_orders_title')),
         content: Text('${context.tr('delete_orders_confirm')} ${_selectedIds.length}'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
@@ -522,10 +488,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     try {
       final batch = FirebaseFirestore.instance.batch();
       for (final id in _selectedIds) {
-        batch.update(
-          FirebaseFirestore.instance.collection('transactions').doc(id),
-          {'deletedForBuyer': true},
-        );
+        batch.update(FirebaseFirestore.instance.collection('transactions').doc(id), {
+          'deletedForBuyer': true,
+        });
       }
       await batch.commit();
       setState(() {
@@ -543,30 +508,19 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Theme.of(context).colorScheme.error,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
     );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary),
     );
   }
 
-  Widget _buildFilterChips(
-    ColorScheme cs,
-    List<QueryDocumentSnapshot> allDocs,
-  ) {
-    final visible = allDocs
-        .where((d) => (d.data() as Map)['deletedForBuyer'] != true)
-        .toList();
+  Widget _buildFilterChips(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
+    final visible = allDocs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       // Horizontal scroll keeps the row from overflowing on narrow screens —
@@ -575,46 +529,37 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: _filters.map((f) {
-          final selected = _selectedFilter == f;
-          final count = f == 'all' ? visible.length : _filterCount(visible, f);
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              selected: selected,
-              label: Text(
-                '${context.tr(f)} ($count)',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            final selected = _selectedFilter == f;
+            final count = f == 'all' ? visible.length : _filterCount(visible, f);
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                selected: selected,
+                label: Text(
+                  '${context.tr(f)} ($count)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
+                onSelected: (_) => setState(() => _selectedFilter = f),
+                visualDensity: VisualDensity.compact,
+                selectedColor: cs.primary.withValues(alpha: 0.15),
+                checkmarkColor: cs.primary,
+                side: BorderSide(
+                  color: selected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.3),
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
-              onSelected: (_) => setState(() => _selectedFilter = f),
-              visualDensity: VisualDensity.compact,
-              selectedColor: cs.primary.withValues(alpha: 0.15),
-              checkmarkColor: cs.primary,
-              side: BorderSide(
-                color: selected
-                    ? cs.primary
-                    : cs.outlineVariant.withValues(alpha: 0.3),
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 
-  Widget _buildStatsHeader(
-    ColorScheme cs,
-    List<QueryDocumentSnapshot> allDocs,
-  ) {
-    final visible = allDocs
-        .where((d) => (d.data() as Map)['deletedForBuyer'] != true)
-        .toList();
+  Widget _buildStatsHeader(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
+    final visible = allDocs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
     final active = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
       return const {
@@ -664,10 +609,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              cs.primary.withValues(alpha: 0.16),
-              cs.tertiary.withValues(alpha: 0.06),
-            ],
+            colors: [cs.primary.withValues(alpha: 0.16), cs.tertiary.withValues(alpha: 0.06)],
           ),
           border: Border.all(color: cs.primary.withValues(alpha: 0.14)),
         ),
@@ -683,10 +625,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                       color: cs.successGreen,
                       shape: BoxShape.circle,
                       boxShadow: [
-                        BoxShadow(
-                          color: cs.successGreen.withValues(alpha: 0.5),
-                          blurRadius: 6,
-                        ),
+                        BoxShadow(color: cs.successGreen.withValues(alpha: 0.5), blurRadius: 6),
                       ],
                     ),
                   ),
@@ -722,11 +661,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     cs.primary,
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: cs.primary.withValues(alpha: 0.14),
-                ),
+                Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.14)),
                 Expanded(
                   child: _statCell(
                     cs,
@@ -736,11 +671,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     cs.successGreen,
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: cs.primary.withValues(alpha: 0.14),
-                ),
+                Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.14)),
                 Expanded(
                   child: _statCell(
                     cs,
@@ -758,13 +689,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     );
   }
 
-  Widget _statCell(
-    ColorScheme cs,
-    IconData icon,
-    String value,
-    String label,
-    Color color,
-  ) {
+  Widget _statCell(ColorScheme cs, IconData icon, String value, String label, Color color) {
     return Column(
       children: [
         Row(
@@ -774,22 +699,14 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             const SizedBox(width: 5),
             Text(
               value,
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w900,
-                color: color,
-              ),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: color),
             ),
           ],
         ),
         const SizedBox(height: 3),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: cs.onSurfaceVariant,
-          ),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
           textAlign: TextAlign.center,
         ),
       ],
@@ -802,13 +719,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     return '${d.inMinutes}m';
   }
 
-  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) {    return docs.where((d) {
+  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) {
+    return docs.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
       switch (filter) {
         case 'pending':
-          return s == 'pending' ||
-              s == 'awaiting_shipping_quote' ||
-              s == 'awaiting_payment';
+          return s == 'pending' || s == 'awaiting_shipping_quote' || s == 'awaiting_payment';
         case 'active':
           return s == 'paid_escrow_held' ||
               s == 'escrow_hold' ||
@@ -837,22 +753,17 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               color: cs.onSurfaceVariant.withValues(alpha: 0.4),
             )
           else
-            const EmptyCartArt(),
+            const SokoAnimatedIllustration(SokoIllustration.emptyCart, size: 96),
           const SizedBox(height: 16),
           Text(
-            hasOrders
-                ? context.tr('no_orders_this_filter')
-                : context.tr('no_purchases_yet'),
+            hasOrders ? context.tr('no_orders_this_filter') : context.tr('no_purchases_yet'),
             style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
           ),
           if (!hasOrders) ...[
             const SizedBox(height: 8),
             Text(
               context.tr('start_shopping_hint'),
-              style: TextStyle(
-                fontSize: 13,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-              ),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
@@ -862,9 +773,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.primary,
                 foregroundColor: cs.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ],
@@ -885,9 +794,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(24),
           ),
-          child: Center(
-            child: SokoVibeThreeDotLoader(size: 36, dotSize: 8),
-          ),
+          child: Center(child: SokoVibeThreeDotLoader(size: 36, dotSize: 8)),
         ),
       ),
     );
@@ -955,11 +862,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 decoration: BoxDecoration(
                   color: cs.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: cs.outlineVariant.withValues(alpha: 0.2),
-                    ),
-                  ),
+                  border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
                 ),
                 child: SizedBox(
                   width: double.infinity,
@@ -967,11 +870,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _isDeletingSelected ? null : _deleteSelectedOrders,
                     icon: _isDeletingSelected
-                        ? SokoVibeThreeDotLoader(
-                            size: 18,
-                            dotSize: 4.5,
-                            color: cs.surface,
-                          )
+                        ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.surface)
                         : const Icon(Icons.delete_outline, size: 20),
                     label: Text(
                       _isDeletingSelected
@@ -981,9 +880,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.error,
                       foregroundColor: cs.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),
@@ -992,14 +889,24 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           : null,
       appBar: AppBar(
         title: Text(
-          _isSelectionMode ? '${_selectedIds.length} ${context.tr('selected')}' : context.tr('my_purchases'),
+          _isSelectionMode
+              ? '${_selectedIds.length} ${context.tr('selected')}'
+              : context.tr('my_purchases'),
           style: const TextStyle(fontWeight: FontWeight.w700),
-          maxLines: 1, overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         centerTitle: true,
         titleSpacing: 0,
         leading: _isSelectionMode
-            ? IconButton(tooltip: context.tr('exit_selection'), icon: const Icon(Icons.close), onPressed: () => setState(() {_isSelectionMode=false; _selectedIds.clear();}))
+            ? IconButton(
+                tooltip: context.tr('exit_selection'),
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() {
+                  _isSelectionMode = false;
+                  _selectedIds.clear();
+                }),
+              )
             : null,
         actions: _isSelectionMode
             ? [
@@ -1009,40 +916,61 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     onPressed: _currentDocs.isEmpty || _selectedIds.length == _currentDocs.length
                         ? () => setState(() => _selectedIds.clear())
                         : () => setState(() => _selectedIds.addAll(_currentDocs.map((d) => d.id))),
-                    child: Text(_currentDocs.isNotEmpty && _selectedIds.length == _currentDocs.length ? context.tr('deselect_all') : context.tr('select_all'), style: const TextStyle(fontSize: 13)),
+                    child: Text(
+                      _currentDocs.isNotEmpty && _selectedIds.length == _currentDocs.length
+                          ? context.tr('deselect_all')
+                          : context.tr('select_all'),
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ),
                 ),
               ]
             : [
                 // Use icon-only on small phones to prevent overlap; label collapses
-                LayoutBuilder(builder: (ctx, c) {
-                  final isNarrow = MediaQuery.of(context).size.width < 380;
-                  return Row(mainAxisSize: MainAxisSize.min, children: [
-                    TextButton.icon(
-                      style: TextButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12), visualDensity: VisualDensity.compact),
-                      onPressed: () => setState(() => _isSelectionMode = true),
-                      icon: const Icon(Icons.checklist, size: 18),
-                      label: isNarrow ? const SizedBox.shrink() : Text(context.tr('select'), style: const TextStyle(fontSize: 13)),
-                    ),
-                    if (isNarrow)
-                      IconButton(tooltip: context.tr('home'), icon: const Icon(Icons.storefront_outlined, size: 20), onPressed: () => context.go(AppRoutes.home))
-                    else
-                      TextButton.icon(
-                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), visualDensity: VisualDensity.compact),
-                        onPressed: () => context.go(AppRoutes.home),
-                        icon: const Icon(Icons.storefront_outlined, size: 18),
-                        label: Text(context.tr('home'), style: const TextStyle(fontSize: 13)),
-                      ),
-                    const SizedBox(width: 4),
-                  ]);
-                }),
+                LayoutBuilder(
+                  builder: (ctx, c) {
+                    final isNarrow = MediaQuery.of(context).size.width < 380;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: () => setState(() => _isSelectionMode = true),
+                          icon: const Icon(Icons.checklist, size: 18),
+                          label: isNarrow
+                              ? const SizedBox.shrink()
+                              : Text(context.tr('select'), style: const TextStyle(fontSize: 13)),
+                        ),
+                        if (isNarrow)
+                          IconButton(
+                            tooltip: context.tr('home'),
+                            icon: const Icon(Icons.storefront_outlined, size: 20),
+                            onPressed: () => context.go(AppRoutes.home),
+                          )
+                        else
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () => context.go(AppRoutes.home),
+                            icon: const Icon(Icons.storefront_outlined, size: 18),
+                            label: Text(context.tr('home'), style: const TextStyle(fontSize: 13)),
+                          ),
+                        const SizedBox(width: 4),
+                      ],
+                    );
+                  },
+                ),
               ],
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _transactionsFor(user.uid),
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting &&
-              _isInitialLoad) {
+          if (snap.connectionState == ConnectionState.waiting && _isInitialLoad) {
             return _buildSkeleton(cs);
           }
           _isInitialLoad = false;
@@ -1054,10 +982,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                 children: [
                   Icon(Icons.error_outline, size: 48, color: cs.error),
                   const SizedBox(height: 12),
-                  Text(
-                    context.tr('loading_error'),
-                    style: TextStyle(color: cs.onSurfaceVariant),
-                  ),
+                  Text(context.tr('loading_error'), style: TextStyle(color: cs.onSurfaceVariant)),
                   const SizedBox(height: 12),
                   TextButton.icon(
                     onPressed: () => setState(() => _isInitialLoad = true),
@@ -1080,7 +1005,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           final docs = _filterDocs(allDocs);
           _currentDocs = docs;
 
-            return RefreshIndicator(
+          return RefreshIndicator(
             onRefresh: () async {
               setState(() => _isInitialLoad = true);
               await Future.delayed(const Duration(milliseconds: 300));
@@ -1133,9 +1058,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: _isSelectionMode && _selectedIds.isNotEmpty ? 80 : 32,
-                  ),
+                  child: SizedBox(height: _isSelectionMode && _selectedIds.isNotEmpty ? 80 : 32),
                 ),
               ],
             ),
@@ -1206,124 +1129,111 @@ class _OrderGlassCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: isSelectionMode ? onToggleSelect : () =>
-            context.push('${AppRoutes.orderDetail}/$docId', extra: data),
+        onTap: isSelectionMode
+            ? onToggleSelect
+            : () => context.push('${AppRoutes.orderDetail}/$docId', extra: data),
         borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             color: cs.surface.withValues(alpha: 0.5),
             border: Border.all(
-              color: isSelected
-                  ? cs.primary
-                  : cs.outlineVariant.withValues(alpha: 0.1),
+              color: isSelected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.1),
               width: isSelected ? 1.5 : 1,
             ),
           ),
           child: Stack(
-                children: [
-                  // Status accent rail (left edge)
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 4,
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.horizontal(
-                          right: Radius.circular(4),
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            orderStatusInfo(status, cs).color,
-                            orderStatusInfo(status, cs).color.withValues(alpha: 0.35),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (isSelectionMode)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Transform.scale(
-                                scale: 1.1,
-                                child: Checkbox(
-                                  value: isSelected,
-                                  onChanged: (_) => onToggleSelect(),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  activeColor: cs.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        _buildTopSection(
-                          context,
-                          cs,
-                          productImage,
-                          productName,
-                          price,
-                          status,
-                          docId,
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 16,
-                          endIndent: 16,
-                          color: cs.outlineVariant.withValues(alpha: 0.1),
-                        ),
-                        _buildMidSection(
-                          context,
-                          cs,
-                          docId,
-                          dateStr,
-                          sellerName,
-                          sellerId,
-                          paymentMethod,
-                          status,
-                          productId,
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 16,
-                          endIndent: 16,
-                          color: cs.outlineVariant.withValues(alpha: 0.1),
-                        ),
-                        _buildActions(
-                          context,
-                          cs,
-                          status,
-                          price,
-                          shippingCost,
-                          totalAmount,
-                          platformFee: platformFee,
-                          processingFee: processingFee,
-                        ),
-                        if (status == 'delivered' ||
-                            status == 'delivery_confirmed' ||
-                            status == 'confirmed' ||
-                            status == 'completed')
-                          _buildReceiptCard(
-                            context,
-                            cs,
-                            status,
-                            Theme.of(context).brightness == Brightness.dark,
-                          ),
+            children: [
+              // Status accent rail (left edge)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(4)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        orderStatusInfo(status, cs).color,
+                        orderStatusInfo(status, cs).color.withValues(alpha: 0.35),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isSelectionMode)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Transform.scale(
+                            scale: 1.1,
+                            child: Checkbox(
+                              value: isSelected,
+                              onChanged: (_) => onToggleSelect(),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              activeColor: cs.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    _buildTopSection(context, cs, productImage, productName, price, status, docId),
+                    Divider(
+                      height: 1,
+                      indent: 16,
+                      endIndent: 16,
+                      color: cs.outlineVariant.withValues(alpha: 0.1),
+                    ),
+                    _buildMidSection(
+                      context,
+                      cs,
+                      docId,
+                      dateStr,
+                      sellerName,
+                      sellerId,
+                      paymentMethod,
+                      status,
+                      productId,
+                    ),
+                    Divider(
+                      height: 1,
+                      indent: 16,
+                      endIndent: 16,
+                      color: cs.outlineVariant.withValues(alpha: 0.1),
+                    ),
+                    _buildActions(
+                      context,
+                      cs,
+                      status,
+                      price,
+                      shippingCost,
+                      totalAmount,
+                      platformFee: platformFee,
+                      processingFee: processingFee,
+                    ),
+                    if (status == 'delivered' ||
+                        status == 'delivery_confirmed' ||
+                        status == 'confirmed' ||
+                        status == 'completed')
+                      _buildReceiptCard(
+                        context,
+                        cs,
+                        status,
+                        Theme.of(context).brightness == Brightness.dark,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1349,19 +1259,12 @@ class _OrderGlassCard extends StatelessWidget {
               height: 68,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: cs.outlineVariant.withValues(alpha: 0.15),
-                ),
+                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(15),
                 child: image.isNotEmpty
-                    ? ProductCachedImage(
-                        url: image,
-                        width: 68,
-                        height: 68,
-                        fit: BoxFit.cover,
-                      )
+                    ? ProductCachedImage(url: image, width: 68, height: 68, fit: BoxFit.cover)
                     : _imgPlaceholder(cs),
               ),
             ),
@@ -1373,11 +1276,7 @@ class _OrderGlassCard extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: cs.onSurface,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1386,7 +1285,9 @@ class _OrderGlassCard extends StatelessWidget {
                   children: [
                     Text(
                       'TZS ${_nf(price.toInt())}',
-                      style: AppTypography.amount(cs.primary).copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: AppTypography.amount(
+                        cs.primary,
+                      ).copyWith(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(width: 10),
                     _statusBadge(context, cs, status),
@@ -1408,10 +1309,7 @@ class _OrderGlassCard extends StatelessWidget {
   Widget _imgPlaceholder(ColorScheme cs) {
     return Container(
       color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-      child: Icon(
-        Icons.image_rounded,
-        color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-      ),
+      child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
     );
   }
 
@@ -1437,19 +1335,9 @@ class _OrderGlassCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _infoChip(
-                cs,
-                Icons.tag_rounded,
-                '#$orderId',
-                cs.onSurfaceVariant,
-              ),
+              _infoChip(cs, Icons.tag_rounded, '#$orderId', cs.onSurfaceVariant),
               const SizedBox(width: 10),
-              _infoChip(
-                cs,
-                Icons.access_time_rounded,
-                date,
-                cs.onSurfaceVariant,
-              ),
+              _infoChip(cs, Icons.access_time_rounded, date, cs.onSurfaceVariant),
             ],
           ),
           const SizedBox(height: 8),
@@ -1457,17 +1345,8 @@ class _OrderGlassCard extends StatelessWidget {
             children: [
               if (sellerId.isNotEmpty)
                 GestureDetector(
-                  onTap: () => ChatNavigation.openSellerChat(
-                    context,
-                    sellerId,
-                    sellerName,
-                  ),
-                  child: _infoChip(
-                    cs,
-                    Icons.chat_outlined,
-                    sellerName,
-                    cs.primary,
-                  ),
+                  onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
+                  child: _infoChip(cs, Icons.chat_outlined, sellerName, cs.primary),
                 ),
               const SizedBox(width: 8),
               _infoChip(cs, Icons.payment_outlined, method, cs.secondary),
@@ -1494,11 +1373,7 @@ class _OrderGlassCard extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
           ),
         ],
       ),
@@ -1523,13 +1398,7 @@ class _OrderGlassCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _summaryRow(
-            context,
-            cs,
-            context.tr('product_price'),
-            _nf(price.toInt()),
-            cs.onSurface,
-          ),
+          _summaryRow(context, cs, context.tr('product_price'), _nf(price.toInt()), cs.onSurface),
           _summaryRow(
             context,
             cs,
@@ -1554,10 +1423,7 @@ class _OrderGlassCard extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Divider(
-              height: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.2),
-            ),
+            child: Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
           ),
           _summaryRow(
             context,
@@ -1719,15 +1585,13 @@ class _OrderGlassCard extends StatelessWidget {
               price,
               shipping,
               total,
-    data['paymentMethod'] as String? ?? 'ClickPesa',
-    platformFee: platformFee,
-    processingFee: processingFee,
+              data['paymentMethod'] as String? ?? 'ClickPesa',
+              platformFee: platformFee,
+              processingFee: processingFee,
             ),
             const SizedBox(height: 12),
           ],
-          ...actions.map(
-            (a) => Padding(padding: const EdgeInsets.only(bottom: 8), child: a),
-          ),
+          ...actions.map((a) => Padding(padding: const EdgeInsets.only(bottom: 8), child: a)),
         ],
       ),
     );
@@ -1752,19 +1616,13 @@ class _OrderGlassCard extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: effectiveOnTap,
           icon: isLoading
-              ? SokoVibeThreeDotLoader(
-                  size: 16,
-                  dotSize: 4,
-                  color: color,
-                )
+              ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: color)
               : Icon(icon, size: 16),
           label: Text(isLoading ? context.tr('processing_label') : label),
           style: OutlinedButton.styleFrom(
             foregroundColor: color,
             side: BorderSide(color: color.withValues(alpha: 0.3)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
       );
@@ -1775,39 +1633,28 @@ class _OrderGlassCard extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: effectiveOnTap,
         icon: isLoading
-            ? SokoVibeThreeDotLoader(
-                size: 16,
-                dotSize: 4,
-                color: Colors.white,
-              )
+            ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: Colors.white)
             : Icon(icon, size: 16),
         label: Text(isLoading ? context.tr('processing_label') : label),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: cs.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 0,
         ),
       ),
     );
   }
 
-  Widget _buildReceiptCard(
-    BuildContext context,
-    ColorScheme cs,
-    String status,
-    bool isDark,
-  ) {
+  Widget _buildReceiptCard(BuildContext context, ColorScheme cs, String status, bool isDark) {
     final paymentMethod = data['paymentMethod'] as String? ?? 'ClickPesa';
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
     final clickpesaFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
-    final platformFee = (data['platformFee'] as num?)?.toDouble()
-        ?? TransactionFeeBreakdown(productPrice: productPrice).platformFee;
-    final totalAmount =
-        (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
+    final platformFee =
+        (data['platformFee'] as num?)?.toDouble() ??
+        TransactionFeeBreakdown(productPrice: productPrice).platformFee;
+    final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
     final buyerName = data['buyerName'] as String? ?? '';
     final buyerPhone = data['buyerPhone'] as String? ?? '';
     final createdAt = data['createdAt'];
@@ -1832,28 +1679,17 @@ class _OrderGlassCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   context.tr('purchase_receipt'),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: cs.onSurface,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
                 ),
                 const Spacer(),
                 Icon(Icons.download_rounded, size: 18, color: cs.primary),
               ],
             ),
             const SizedBox(height: 12),
-            Divider(
-              height: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.15),
-            ),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15)),
             const SizedBox(height: 10),
             _receiptRow(cs, context.tr('receipt_date'), dateStr),
-            _receiptRow(
-              cs,
-              context.tr('product_price'),
-              'TZS ${_nf(productPrice.toInt())}',
-            ),
+            _receiptRow(cs, context.tr('product_price'), 'TZS ${_nf(productPrice.toInt())}'),
             if (shippingCost > 0)
               _receiptRow(
                 cs,
@@ -1873,10 +1709,7 @@ class _OrderGlassCard extends StatelessWidget {
               'TZS ${_nf(clickpesaFee.toInt())}',
               valueColor: cs.tertiary,
             ),
-            Divider(
-              height: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.15),
-            ),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15)),
             const SizedBox(height: 6),
             _receiptRow(
               cs,
@@ -1885,12 +1718,9 @@ class _OrderGlassCard extends StatelessWidget {
               valueColor: cs.primary,
               bold: true,
             ),
-            if (buyerName.isNotEmpty || buyerPhone.isNotEmpty)
-              const SizedBox(height: 8),
-            if (buyerName.isNotEmpty)
-              _receiptRow(cs, context.tr('buyer_label'), buyerName),
-            if (buyerPhone.isNotEmpty)
-              _receiptRow(cs, context.tr('phone'), buyerPhone),
+            if (buyerName.isNotEmpty || buyerPhone.isNotEmpty) const SizedBox(height: 8),
+            if (buyerName.isNotEmpty) _receiptRow(cs, context.tr('buyer_label'), buyerName),
+            if (buyerPhone.isNotEmpty) _receiptRow(cs, context.tr('phone'), buyerPhone),
             _receiptRow(cs, context.tr('payment_method'), paymentMethod),
             _receiptRow(
               cs,
@@ -1920,10 +1750,7 @@ class _OrderGlassCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           Text(
             value,
             style: TextStyle(
@@ -1961,16 +1788,9 @@ class _CompactTimeline extends StatelessWidget {
               height: 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: active
-                    ? steps[i].color
-                    : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                color: active ? steps[i].color : cs.surfaceContainerHighest.withValues(alpha: 0.4),
                 boxShadow: i == current
-                    ? [
-                        BoxShadow(
-                          color: steps[i].color.withValues(alpha: 0.5),
-                          blurRadius: 6,
-                        ),
-                      ]
+                    ? [BoxShadow(color: steps[i].color.withValues(alpha: 0.5), blurRadius: 6)]
                     : [],
               ),
             ),

@@ -14,6 +14,7 @@ import '../../app/routes.dart';
 import '../../main.dart' show AppConfig;
 import '../../widgets/ds/ds.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/soko_widgets.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -36,8 +37,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   // completion triggers setState → rebuild, both were self-sustaining loops that
   // ran until the user navigated away — `_buildV1Body` alone was two HTTP calls
   // per iteration, because fetchUnreadCount is nested inside fetchNotifications.
-  late final Future<({List<NotificationItem> notifications, int unreadCount})>
-      _v1Future;
+  late final Future<({List<NotificationItem> notifications, int unreadCount})> _v1Future;
   StreamSubscription<QuerySnapshot>? _fsSub;
   QuerySnapshot? _fsSnapshot;
   Object? _fsError;
@@ -69,22 +69,22 @@ class _NotificationScreenState extends State<NotificationScreen> {
         .limit(60)
         .snapshots()
         .listen(
-      (snap) {
-        if (!mounted) return;
-        setState(() {
-          _fsSnapshot = snap;
-          _fsLoading = false;
-          _fsError = null;
-        });
-      },
-      onError: (e) {
-        if (!mounted) return;
-        setState(() {
-          _fsError = e;
-          _fsLoading = false;
-        });
-      },
-    );
+          (snap) {
+            if (!mounted) return;
+            setState(() {
+              _fsSnapshot = snap;
+              _fsLoading = false;
+              _fsError = null;
+            });
+          },
+          onError: (e) {
+            if (!mounted) return;
+            setState(() {
+              _fsError = e;
+              _fsLoading = false;
+            });
+          },
+        );
   }
 
   @override
@@ -125,9 +125,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final docs = snap?.docs ?? const <QueryDocumentSnapshot>[];
     // Snapshot `[]` throws for fields absent from a doc; legacy rows predate
     // isRead, so read through the Map which defaults to null.
-    final unreadCount = docs
-        .where((d) => ((d.data() as Map)['isRead'] as bool?) != true)
-        .length;
+    final unreadCount = docs.where((d) => ((d.data() as Map)['isRead'] as bool?) != true).length;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -160,9 +158,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
           ),
         ),
-        child: docs.isEmpty
-            ? _emptyState(context)
-            : _buildNotificationList(cs, docs),
+        child: docs.isEmpty ? _emptyState(context) : _buildNotificationList(cs, docs),
       ),
     );
   }
@@ -171,6 +167,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return SokoVibeEmptyState(
       icon: Icons.notifications_none,
       title: context.tr('no_notifications'),
+      artwork: const SokoAnimatedIllustration(SokoIllustration.emptyNotifications, size: 96),
     );
   }
 
@@ -254,8 +251,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   /// (_InactiveElements), so re-entrant pushes are ignored for a short window.
   void _openFromTile(BuildContext context, String type, Map? rawData) {
     final tappedAt = DateTime.now();
-    if (_lastTileTapAt != null &&
-        tappedAt.difference(_lastTileTapAt!).inMilliseconds < 400) {
+    if (_lastTileTapAt != null && tappedAt.difference(_lastTileTapAt!).inMilliseconds < 400) {
       return;
     }
     _lastTileTapAt = tappedAt;
@@ -290,42 +286,44 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'shipping_quote':
       case 'disputed':
       case 'dispute_resolved':
-      case 'failed_retry': {
-        final orderId =
-            (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
-        if (orderId != null && orderId.isNotEmpty) {
-          // Order notifications carry the OTHER party's id: to-buyer
-          // notifications include sellerId, to-seller ones include buyerId.
-          // A seller who got "set the shipping cost for this new order"
-          // (the only to-seller order notice carrying productId) lands on
-          // the quote screen; other seller notices act on order detail.
-          final isNewOrderForSeller = myUid != null &&
-              rawData?['sellerId'] == null &&
-              rawData?['buyerId'] != null &&
-              rawData?['productId'] != null;
-          if (isNewOrderForSeller) {
-            context.push(AppRoutes.sellerQuote);
+      case 'failed_retry':
+        {
+          final orderId = (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
+          if (orderId != null && orderId.isNotEmpty) {
+            // Order notifications carry the OTHER party's id: to-buyer
+            // notifications include sellerId, to-seller ones include buyerId.
+            // A seller who got "set the shipping cost for this new order"
+            // (the only to-seller order notice carrying productId) lands on
+            // the quote screen; other seller notices act on order detail.
+            final isNewOrderForSeller =
+                myUid != null &&
+                rawData?['sellerId'] == null &&
+                rawData?['buyerId'] != null &&
+                rawData?['productId'] != null;
+            if (isNewOrderForSeller) {
+              context.push(AppRoutes.sellerQuote);
+            } else {
+              context.push('${AppRoutes.orderDetail}/$orderId');
+            }
           } else {
-            context.push('${AppRoutes.orderDetail}/$orderId');
+            // myPurchases lists only the buyer's transactions; a seller
+            // notification must land on the seller's orders screen instead.
+            // Order notifications carry the other party's id: to-buyer
+            // notifications include sellerId, to-seller ones include buyerId.
+            final isBuyerRecipient = myUid != null && rawData?['sellerId'] != null;
+            context.push(isBuyerRecipient ? AppRoutes.myPurchases : AppRoutes.sellerOrders);
           }
-        } else {
-          // myPurchases lists only the buyer's transactions; a seller
-          // notification must land on the seller's orders screen instead.
-          // Order notifications carry the other party's id: to-buyer
-          // notifications include sellerId, to-seller ones include buyerId.
-          final isBuyerRecipient = myUid != null && rawData?['sellerId'] != null;
-          context.push(isBuyerRecipient ? AppRoutes.myPurchases : AppRoutes.sellerOrders);
+          break;
         }
-        break;
-      }
       case 'comment':
-      case 'comment_reply': {
-        final pid = rawData?['productId'] as String?;
-        if (pid != null) {
-          context.push('/product/$pid');
+      case 'comment_reply':
+        {
+          final pid = rawData?['productId'] as String?;
+          if (pid != null) {
+            context.push('/product/$pid');
+          }
+          break;
         }
-        break;
-      }
       case 'flash_sale':
         context.push(AppRoutes.flashSale);
         break;
@@ -420,7 +418,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
       body = localized.body;
     }
 
-    final rawData = {'type': item.type, 'senderId': item.otherUserId, 'senderName': item.otherUserName, 'senderAvatar': item.otherUserImage, 'productId': item.productId, 'image': item.productImage};
+    final rawData = {
+      'type': item.type,
+      'senderId': item.otherUserId,
+      'senderName': item.otherUserName,
+      'senderAvatar': item.otherUserImage,
+      'productId': item.productId,
+      'image': item.productImage,
+    };
 
     return NotificationCard(
       item: item,
@@ -453,14 +458,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
               children: [
                 DsSkeleton(shape: DsSkeletonShape.circle, width: 40, height: 40),
                 SizedBox(width: 14),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DsSkeleton(width: 180, height: 12),
-                    SizedBox(height: 8),
-                    DsSkeleton(width: double.infinity, height: 10),
-                  ],
-                )),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DsSkeleton(width: 180, height: 12),
+                      SizedBox(height: 8),
+                      DsSkeleton(width: double.infinity, height: 10),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -516,9 +523,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
               ),
             ),
-            child: items.isEmpty
-                ? _emptyState(context)
-                : _buildV1NotificationList(cs, items),
+            child: items.isEmpty ? _emptyState(context) : _buildV1NotificationList(cs, items),
           ),
         );
       },
@@ -543,7 +548,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
             children: [
               Icon(Icons.cloud_off, size: 64, color: cs.error),
               const SizedBox(height: 16),
-              Text(context.tr('trouble_connecting'), style: const TextStyle(fontSize: 16), textAlign: TextAlign.center),
+              Text(
+                context.tr('trouble_connecting'),
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () => setState(() {}),

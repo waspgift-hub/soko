@@ -104,7 +104,7 @@ const NAV_SW = {
   'nav-kyc': 'Wathibitisho (KYC)', 'grp-sales': 'Mauzo', 'nav-promos': 'Boost & Flash Sales',
   'grp-finance': 'Fedha', 'nav-revenue': 'Mapato ya Jukwaa', 'nav-finance': 'Fedha & Ledger',
   'nav-referrals': 'Rufaa', 'grp-comm': 'Mawasiliano', 'nav-broadcasts': 'Matangazo ya Broad',
-  'nav-audit': 'Ukaguzi (Audit)', 'nav-settings': 'Mipangilio', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
+  'nav-audit': 'Ukaguzi (Audit)', 'nav-staff': 'Wafanyakazi', 'nav-settings': 'Mipangilio', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
   'nav-landing': 'Landing / Orodha',
 };
 const NAV_EN = {
@@ -114,12 +114,13 @@ const NAV_EN = {
   'nav-kyc': 'Verifications (KYC)', 'grp-sales': 'Sales', 'nav-promos': 'Boost & Flash Sales',
   'grp-finance': 'Finance', 'nav-revenue': 'Platform Revenue', 'nav-finance': 'Finance & Ledger',
   'nav-referrals': 'Referrals', 'grp-comm': 'Communication', 'nav-broadcasts': 'Broadcasts',
-  'nav-audit': 'Audit', 'nav-settings': 'Settings', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
+  'nav-audit': 'Audit', 'nav-staff': 'Staff', 'nav-settings': 'Settings', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
   'nav-landing': 'Landing / Waitlist',
 };
 const TITLES_EN = {
   dashboard: 'Dashboard', users: 'Users', sellers: 'Sellers', products: 'Products', orders: 'Orders',
-  disputes: 'Disputes', refunds: 'Refunds', reports: 'Reports & Safety', kyc: 'Verifications (KYC)',
+  disputes: 'Disputes', refunds: 'Refunds', reports: 'Reports & Safety',   kyc: 'Verifications (KYC)',
+  staff: 'Staff',
   promos: 'Boost & Flash Sales', revenue: 'Platform Revenue', finance: 'Finance & Ledger',
   referrals: 'Referrals', broadcasts: 'Broadcasts', audit: 'Audit', stats: 'Usage Statistics', settings: 'Settings',
   landing: 'Landing / Waitlist',
@@ -271,6 +272,7 @@ const SW2EN = {
   'Mfano: taarifa za kitambulisho zilishukuliwa': 'e.g. the ID details were reported stolen',
   'Sababu ya kukataa KYC ya': 'Reason to reject the KYC for',
   'Hakuna rekodi ya KYC kwa mtumiaji huyu': 'No KYC record for this user',
+  'Wafanyakazi': 'Staff',
   'Hakiki': 'Documents', 'Kubali': 'Approve', 'Kataa': 'Reject',
 };
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
@@ -426,6 +428,7 @@ const TITLES = {
   dashboard: 'Dashibodi', users: 'Watumiaji', sellers: 'Wauzaji', products: 'Bidhaa',
   orders: 'Maagizo', disputes: 'Migogoro', refunds: 'Marejesho', reports: 'Ripoti & Ulinzi',
   kyc: 'Wathibitisho (KYC)',
+  staff: 'Wafanyakazi',
   promos: 'Boost & Flash Sales',
   revenue: 'Mapato ya Jukwaa',
   finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
@@ -501,6 +504,8 @@ const ACTIONS = {
   kycRevoke(args) { kycReview(args.uid, args.name, 'revoke'); },
   kycDocs(args) { kycViewDocuments(args.uid, args.name); },
   kycDetail(args) { kycDetailRow(args.uid, args.name); },
+  staffToggle(args) { staffToggle(args.id, args.active); },
+  staffDelete(args) { staffDelete(args.id, args.email); },
   revenueWithdraw() { revenueWithdraw(); },
   fsUnFlag(args) { fsUnFlagAcc(args.uid, args.name); },
   viewFsProduct(args) { viewFsProduct(args.id, args.name); },
@@ -2008,7 +2013,102 @@ async function loadAudit() {
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// Takwimu za matumizi: watumiaji hai (siku/wiki/mwezi/mwaka), requests kwa
+// Wafanyakazi (Staff) — usimamizi wa akaunti za admin na upangaji wa kazi
+// ---------------------------------------------------------------------------
+function staffToolbar() {
+  return '<div class="toolbar">' +
+    '<input class="field q" id="sfQ" placeholder="Tafuta email au jina…">' +
+    '<select class="select-xs" id="sfRole"><option value="">Jukumu: yote</option><option>super_admin</option><option>admin</option><option>moderator</option><option>support</option><option>finance</option></select>' +
+    '<select class="select-xs" id="sfActive"><option value="">Hali: yote</option><option value="true">active</option><option value="false">inactive</option></select>' +
+    '<button class="btn" id="sfGo">Chuja</button>' +
+    '<button class="btn accent" id="sfNew" style="margin-left:8px">Ongeza Mfanyakazi</button>' +
+    '</div>';
+}
+async function loadStaff() {
+  const el = secEl('staff');
+  const page = pgState('staff', 'page') || 1;
+  const q = pgState('staff', 'q') || '';
+  const role = pgState('staff', 'role') || '';
+  const active = pgState('staff', 'active') || '';
+  el.innerHTML = staffToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Jina</th><th>Barua Pepe</th><th>Jukumu</th><th>Upangaji</th><th>Imeshajiwa</th><th>Ingia mwisho</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="sfRows"><tr><td colspan="8" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="sfPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 50 });
+  if (q) qs.set('q', q); if (role) qs.set('role', role); if (active) qs.set('active', active);
+  try {
+    const j = await getJSON('/api/v1/admin/staff?' + qs.toString());
+    const d = (j.data && j.data.staff) || [];
+    $('sfRows').innerHTML = d.length ? d.map((s) => {
+      const args = JSON.stringify({ id: s.id, email: s.email, active: s.active }).replace(/'/g, '&#39;');
+      const perm = (s.permissions || []).length ? (s.permissions.includes('*') ? 'vuote' : (s.permissions || []).join(', ')) : roleLabel(s.role);
+      return '<tr>' +
+        '<td>' + esc(s.name || '—') + '</td>' +
+        '<td class="mono">' + esc(s.email) + '</td>' +
+        '<td>' + badge(s.role) + '</td>' +
+        '<td class="dim" style="max-width:170px">' + esc(perm) + '</td>' +
+        '<td>' + (s.active ? '<span class="bdg ok"><span class="dot"></span>active</span>' : '<span class="bdg bad"><span class="dot"></span>inactive</span>') + '</td>' +
+        '<td class="dim">' + fmtTime(s.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        '<button class="btn sm ' + (s.active ? 'danger' : 'accent') + '" data-fn="staffToggle" data-args=\'' + args + '\'>' + (s.active ? 'Futa' : 'Amilisha') + '</button> ' +
+        '<button class="btn sm danger" data-fn="staffDelete" data-args=\'' + args + '\'>Futa Kikamilifu</button>' +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="empty">Hakuna wafanyakazi</td></tr>';
+    $('sfPag').innerHTML = pagerHTML('staff', j.data.pagination);
+  } catch (e) { $('sfRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('staff'); touch();
+  $('sfNew').onclick = () => staffCreateModal();
+  $('sfGo').onclick = () => {
+    setPg('staff', 'q', $('sfQ').value.trim());
+    setPg('staff', 'role', $('sfRole').value);
+    setPg('staff', 'active', $('sfActiveSel') ? $('sfActiveSel').value : '');
+    setPg('staff', 'page', 1);
+    loadStaff();
+  };
+}
+async function staffCreateModal() {
+  openModal(
+    '<h3>Ongeza Mfanyakazi Mpya</h3>' +
+    '<label>Jina</label><input class="field" id="scName" placeholder="Jina la Kamili">' +
+    '<label>Barua Pepe</label><input class="field" id="scEmail" type="email" placeholder="jina@sokovibe.co.tz">' +
+    '<label>Nenosiri (min 8 herufi)</label><input class="field" id="scPass" type="password" placeholder="••••••••">' +
+    '<label>Jukumu</label><select class="field" id="scRole">' +
+    STAFF_ROLES.map((r) => '<option value="' + r.id + '">' + r.label + '</option>').join('') +
+    '</select>' +
+    '<div class="warnbox">Nenosiri itahifadhiwa kama hash — usitengenezze akaunti yaliyopatikana tayari.</div>' +
+    '<div class="mfooter"><button class="btn" id="scNo">Futa</button><button class="btn accent" id="scYes">Ongeza</button></div>'
+  );
+  $('scNo').onclick = closeModal;
+  $('scYes').onclick = () => {
+    const name = $('scName').value.trim();
+    const email = $('scEmail').value.trim();
+    const pass = $('scPass').value;
+    const role = $('scRole').value;
+    if (!name || !email || !pass) { toast('Tumia sehemu zote', false); return; }
+    if (pass.length < 8) { toast('Nenosiri lazima iwe herufi 8 zaidi', false); return; }
+    run(async () => {
+      await postJSON('/api/v1/admin/staff', { email, password: pass, name, role });
+      closeModal(); toast('Mfanyakazi ameongezwa', true); loadStaff();
+    });
+  };
+}
+async function staffToggle(id, active) {
+  const lab = active ? 'Amilisha' : 'Futa';
+  if (!(await confirmModal(lab + ' mfanyakazi', lab + ' akaunti hii ya mfanyakazi?', lab, !active))) return;
+  run(async () => {
+    await putJSON('/api/v1/admin/staff/' + encodeURIComponent(id), { active: !active });
+    toast(lab + ' — imefanyika', true); loadStaff();
+  });
+}
+async function staffDelete(id, email) {
+  if (!(await confirmModal('Futa mfanyakazi', 'Futa akaunti ya ' + esc(email) + ' kikamilifu? Hatuwezi kurudisha.', 'Futa', true))) return;
+  run(async () => {
+    await delJSON('/api/v1/admin/staff/' + encodeURIComponent(id));
+    toast('Mfanyakazi amefutwa', true); loadStaff();
+  });
+}
+// ---------------------------------------------------------------------------
+// Takwimu za matumizu: watumiaji hai (siku/wiki/mwezi/mwaka), requests kwa
 // kipindi, na orodha ya watumiaji wanaofanya requests nyingi zaidi.
 // ---------------------------------------------------------------------------
 const RG_LABEL = { min: 'Dakika', hour: 'Saa', day: 'Siku', month: 'Mwezi', year: 'Mwaka' };

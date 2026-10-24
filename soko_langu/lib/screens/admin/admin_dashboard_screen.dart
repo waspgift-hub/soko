@@ -64,7 +64,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
 @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 11, vsync: this);
+    _tabController = TabController(length: 12, vsync: this);
     _checkAdmin();
   }
 
@@ -312,6 +312,10 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
               icon: const Icon(Icons.account_balance),
               text: context.tr('clickpesa_overview'),
             ),
+            Tab(
+              icon: const Icon(Icons.campaign_outlined),
+              text: context.tr('banner_management'),
+            ),
           ],
         ),
       ),
@@ -329,6 +333,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
             _buildTransactionsTab(),
             _buildChatsTab(),
             _buildClickPesaTab(),
+            _buildBannerManagementTab(),
           ],
         ),
       ),
@@ -2530,5 +2535,11 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
         ],
       ),
     );
+  }
+  }
+
+  // ─── BANNER MANAGEMENT TAB ───────────────────────────────────────
+  Widget _buildBannerManagementTab() {
+    return AdminBannerManagementScreen();
   }
 }

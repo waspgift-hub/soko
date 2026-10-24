@@ -8,6 +8,7 @@ import '../services/api_config.dart';
 import '../services/meseji_service.dart';
 import '../services/localization_service.dart';
 import '../services/onboarding_service.dart';
+import '../services/mfa_service.dart';
 import '../utils/network_error.dart';
 import '../app/app_state.dart' as app_state;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -45,6 +46,14 @@ class AuthNotifier extends ChangeNotifier {
 
   bool _needsProfileSetup = false;
   bool get needsProfileSetup => _needsProfileSetup;
+
+  // MFA state
+  bool _mfaEnrolled = false;
+  bool get mfaEnrolled => _mfaEnrolled;
+  bool _mfaEnrollmentInProgress = false;
+  bool get mfaEnrollmentInProgress => _mfaEnrollmentInProgress;
+  MfaEnrollmentData? _pendingMfaEnrollment;
+  MfaEnrollmentData? get pendingMfaEnrollment => _pendingMfaEnrollment;
 
   String? _error;
   String? get error => _error;
@@ -131,6 +140,7 @@ class AuthNotifier extends ChangeNotifier {
         await _safely(_fetchAdminStatus);
         await _safely(_checkSuspended);
         await _safely(_checkProfileCompleteness);
+        await _safely(loadMfaState);
       } else {
         _status = AuthStatus.unauthenticated;
       }
@@ -148,9 +158,11 @@ class AuthNotifier extends ChangeNotifier {
           _status = AuthStatus.authenticated;
           await _safely(_fetchAdminStatus);
           await _safely(_checkSuspended);
+          await _safely(loadMfaState);
         } else {
           _status = AuthStatus.unauthenticated;
           _isAdmin = false;
+          _mfaEnrolled = false;
         }
         _syncAppState();
         notifyListeners();
@@ -177,6 +189,7 @@ class AuthNotifier extends ChangeNotifier {
       await _fetchAdminStatus();
       await _checkSuspended();
       await _checkProfileCompleteness();
+      await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
     } catch (e) {
@@ -204,6 +217,7 @@ class AuthNotifier extends ChangeNotifier {
       await _fetchAdminStatus();
       await _checkSuspended();
       await _checkProfileCompleteness();
+      await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
     } catch (e) {
@@ -223,6 +237,7 @@ class AuthNotifier extends ChangeNotifier {
       await _fetchAdminStatus();
       await _checkSuspended();
       await _checkProfileCompleteness();
+      await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
     } catch (e) {
@@ -324,6 +339,7 @@ class AuthNotifier extends ChangeNotifier {
       await _fetchAdminStatus();
       await _checkSuspended();
       await _checkProfileCompleteness();
+      await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
     } catch (e) {
@@ -343,6 +359,7 @@ class AuthNotifier extends ChangeNotifier {
       await _fetchAdminStatus();
       await _checkSuspended();
       await _checkProfileCompleteness();
+      await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
     } catch (e) {
@@ -370,6 +387,7 @@ class AuthNotifier extends ChangeNotifier {
       await _fetchAdminStatus();
       await _checkSuspended();
       await _checkProfileCompleteness();
+      await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
     } catch (e) {
@@ -465,6 +483,110 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // MFA (TOTP)
+  // ---------------------------------------------------------------------------
+
+  /// Loads MFA enrollment state for the current user.
+  Future<void> loadMfaState() async {
+    try {
+      final enrolled = await _authRepo.hasMfaEnrolled();
+      _mfaEnrolled = enrolled;
+      notifyListeners();
+    } catch (_) {
+      _mfaEnrolled = false;
+      notifyListeners();
+    }
+  }
+
+  /// Starts TOTP MFA enrollment.
+  ///
+  /// Returns the enrollment data (secret, QR code URI, recovery codes) on success.
+  /// Throws [MfaError] on failure.
+  Future<MfaEnrollmentData> startMfaEnrollment() async {
+    _mfaEnrollmentInProgress = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final data = await _authRepo.startMfaEnrollment();
+      _pendingMfaEnrollment = data;
+      _mfaEnrollmentInProgress = false;
+      notifyListeners();
+      return data;
+    } on MfaError catch (e) {
+      _error = e.userMessage;
+      _mfaEnrollmentInProgress = false;
+      _pendingMfaEnrollment = null;
+      notifyListeners();
+      rethrow;
+    } catch (e) {
+      _error = translateError(e);
+      _mfaEnrollmentInProgress = false;
+      _pendingMfaEnrollment = null;
+      notifyListeners();
+      throw MfaError.enrollmentFailed(e.toString());
+    }
+  }
+
+/// Completes TOTP enrollment with a code from the authenticator app.
+  Future<void> completeMfaEnrollment(String totpCode) async {
+    if (_pendingMfaEnrollment == null) {
+      throw MfaError.enrollmentFailed('No pending enrollment');
+    }
+
+    _mfaEnrollmentInProgress = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final secret = _pendingMfaEnrollment!.secret;
+      await _authRepo.completeMfaEnrollment(
+        secret: secret,
+        totpCode: totpCode,
+      );
+      _mfaEnrolled = true;
+_mfaEnrollmentInProgress = false;
+      _pendingMfaEnrollment = null;
+      notifyListeners();
+    } on MfaError catch (e) {
+      _error = e.userMessage;
+      _mfaEnrollmentInProgress = false;
+      notifyListeners();
+      rethrow;
+    } catch (e) {
+      _error = translateError(e);
+      _mfaEnrollmentInProgress = false;
+      notifyListeners();
+      throw MfaError.enrollmentFailed(e.toString());
+    }
+  }
+
+  /// Unenrolls the TOTP second factor.
+  Future<void> unenrollMfa() async {
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authRepo.unenrollMfa();
+      _mfaEnrolled = false;
+      notifyListeners();
+    } on MfaError catch (e) {
+      _error = e.userMessage;
+      notifyListeners();
+      rethrow;
+    } catch (e) {
+      _error = translateError(e);
+      notifyListeners();
+      throw MfaError.unenrollmentFailed(e.toString());
+    }
+  }
+
+  /// Verifies a TOTP code for step-up authentication.
+  Future<bool> verifyTotpForStepUp(String totpCode) async {
+    return _authRepo.verifyTotpForStepUp(totpCode);
+  }
+
+  // ---------------------------------------------------------------------------
   // Shared
   // ---------------------------------------------------------------------------
 
@@ -475,6 +597,22 @@ class AuthNotifier extends ChangeNotifier {
     _isAdmin = false;
     _isSuspended = false;
     _needsProfileSetup = false;
+    _mfaEnrolled = false;
+    _pendingMfaEnrollment = null;
+    _syncAppState();
+    notifyListeners();
+  }
+
+  /// Server-side logout from all devices, then local sign-out.
+  Future<void> logoutAllDevices() async {
+    await _authRepo.logoutAll();
+    _user = null;
+    _status = AuthStatus.unauthenticated;
+    _isAdmin = false;
+    _isSuspended = false;
+    _needsProfileSetup = false;
+    _mfaEnrolled = false;
+    _pendingMfaEnrollment = null;
     _syncAppState();
     notifyListeners();
   }

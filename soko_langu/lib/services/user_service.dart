@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
 import 'media_service.dart';
+import 'username_service.dart';
 
 class UserProfile {
   final String uid;
@@ -649,5 +650,21 @@ class UserService {
     await _db.collection('users').doc(user.uid).delete();
     await user.delete();
     await _auth.signOut();
+  }
+
+  /// Reads the trusted visibility settings from the user's own doc.
+  /// Returns null if the doc or visibility map doesn't exist yet.
+  Future<Map<String, dynamic>?> getPrivateSettings() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final snap = await _db.collection('users').doc(uid).get();
+    if (!snap.exists) return null;
+    return snap.data()?['visibility'] as Map<String, dynamic>?;
+  }
+
+  /// Claims a username for the current user via the username service.
+  /// Throws if the username is already taken or invalid.
+  Future<void> claimUsername(String username) async {
+    return UsernameService().claim(_auth.currentUser!.uid, username);
   }
 }

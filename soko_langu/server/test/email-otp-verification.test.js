@@ -16,7 +16,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
 
-const state = { store: null, auth: null, updateCalls: [] };
+const state = { store: null, auth: null, updateCalls: [], createdUsers: [], createdAuthUsers: [] };
 
 const DB = require('../src/config/database');
 const Firebase = require('../src/config/firebase');
@@ -38,8 +38,17 @@ OtpStore.bumpAttempts = async (key) => {
 };
 OtpStore.clearOtp = async (key) => { delete state.store[key]; };
 Firebase.getFirebaseAuth = () => state.auth;
+// The auto-create path (passwordless signup) writes the seam row and the
+// Firestore profile: stub the seam, and neuter the Firestore mirror.
+DB.getStore = () => ({
+  user: {
+    create: async ({ data }) => { state.createdUsers.push(data); return { id: 'db-1', ...data }; },
+  },
+});
 
 const controller = require('../src/modules/auth/controller');
+const AccountStore = require('../src/services/account-store');
+AccountStore.writeProfile = async () => true;
 
 // Express defaults res.status() to 200 and res.json() writes the body without
 // touching the status, so a 2xx assertion must not expect an explicit status
@@ -57,9 +66,12 @@ const hash = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
 function seedAuth(overrides = {}) {
   state.store = {};
   state.updateCalls = [];
+  state.createdUsers = [];
+  state.createdAuthUsers = [];
   state.auth = {
     getUserByEmail: async () => ({ uid: 'u-1', email: 'user@example.com', emailVerified: false }),
     updateUser: async (uid, props) => { state.updateCalls.push({ uid, props }); },
+    createUser: async (props) => { state.createdAuthUsers.push(props); return { uid: 'u-new' }; },
     createCustomToken: async (uid) => `token-for-${uid}`,
     ...overrides,
   };
@@ -175,7 +187,10 @@ test('a code consumed by verify cannot then be used to log in', async () => {
   assert.equal(login.body.token, undefined);
 });
 
-test('a login for an address with no Firebase account is refused, not tokenized', async () => {
+test('a login for an address with no Firebase account creates it (no oracle)', async () => {
+  // Anti-enumeration: a valid OTP proves mailbox control, so the account is
+  // created (passwordless signup, mirroring phoneLogin) instead of answering
+  // 404 and revealing whether the address is registered.
   const notFound = Object.assign(new Error('no user'), { code: 'auth/user-not-found' });
   seedAuth({ getUserByEmail: async () => { throw notFound; } });
   await OtpStore.saveOtp(`email:${EMAIL}`, hash('123456'), 300);
@@ -183,8 +198,13 @@ test('a login for an address with no Firebase account is refused, not tokenized'
   const res = makeRes();
   await controller.emailOtpLogin({ body: { email: EMAIL, otp: '123456' } }, res);
 
-  assert.equal(res.statusCode, 404);
-  assert.equal(res.body.token, undefined, 'no auto-create on email OTP login');
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.created, true);
+  assert.equal(res.body.token, 'token-for-u-new', 'a session is minted for the new account');
+  assert.equal(state.createdAuthUsers.length, 1);
+  assert.equal(state.createdAuthUsers[0].emailVerified, true, 'mailbox already proven by the OTP');
+  assert.equal(state.createdUsers.length, 1, 'the seam row is seeded');
 });
 
 test('the email key is normalised, so case cannot smuggle a second code', async () => {

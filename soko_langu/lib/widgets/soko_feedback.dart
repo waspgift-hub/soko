@@ -42,7 +42,7 @@ class SokoSnackbar {
             ],
           ),
           backgroundColor: bg,
-          elevation: 6,
+          elevation: 0,
           behavior: SnackBarBehavior.floating,
           duration: duration,
           shape: RoundedRectangleBorder(

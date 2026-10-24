@@ -3,6 +3,7 @@ const { getRedis } = require('../config/redis');
 
 let mediaQueue = null;
 let financeQueue = null;
+let notificationQueue = null;
 
 function getMediaQueue() {
   if (!mediaQueue) {
@@ -10,6 +11,16 @@ function getMediaQueue() {
     mediaQueue = new Queue('media', { connection });
   }
   return mediaQueue;
+}
+
+// Async notification delivery (security mail, event SMS). OTP sends stay
+// synchronous — the user waits on the code and rollback needs an answer now.
+function getNotificationQueue() {
+  if (!notificationQueue) {
+    const connection = getRedis();
+    notificationQueue = new Queue('notifications', { connection });
+  }
+  return notificationQueue;
 }
 
 function getFinanceQueue() {
@@ -50,6 +61,13 @@ async function ensureFinanceSchedule() {
   }
 }
 
+async function closeNotificationQueue() {
+  if (notificationQueue) {
+    await notificationQueue.close();
+    notificationQueue = null;
+  }
+}
+
 async function closeMediaQueue() {
   if (mediaQueue) {
     await mediaQueue.close();
@@ -65,14 +83,16 @@ async function closeFinanceQueue() {
 }
 
 async function closeQueues() {
-  await Promise.all([closeMediaQueue(), closeFinanceQueue()]);
+  await Promise.all([closeMediaQueue(), closeFinanceQueue(), closeNotificationQueue()]);
 }
 
 module.exports = {
   getMediaQueue,
   getFinanceQueue,
+  getNotificationQueue,
   ensureFinanceSchedule,
   closeMediaQueue,
   closeFinanceQueue,
+  closeNotificationQueue,
   closeQueues,
 };

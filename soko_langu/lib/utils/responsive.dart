@@ -42,11 +42,17 @@ class Responsive {
     return 3;
   }
 
-  static double cardAspectRatio(BuildContext context) {
+  /// Aspect ratio for product grids.
+///
+/// Lower means taller. ProductCard now renders four body rows (title, price,
+/// condition + district, rating + stock) instead of two, so the ratio dropped
+/// from 0.72/0.68/0.65 to 0.62/0.60/0.58. Without this the image would be
+/// squeezed by the extra text and the tile would read as cramped.
+static double cardAspectRatio(BuildContext context) {
     final cols = gridColumns(context);
-    if (cols >= 4) return 0.65;
-    if (cols >= 3) return 0.68;
-    return 0.72;
+    if (cols >= 4) return 0.58;
+    if (cols >= 3) return 0.60;
+    return 0.62;
   }
 
   static double scaleFont(BuildContext context, double base) {

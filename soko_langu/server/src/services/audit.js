@@ -40,12 +40,13 @@ async function writeAudit({
 }
 
 function auditFromReq(req, extra = {}) {
+  const headers = (req && req.headers) || {};
   return {
     actorId: req.user?.id || null,
     actorType: req.user ? 'user' : 'system',
-    requestId: req.id || req.headers['x-request-id'] || null,
-    ipAddress: req.ip || null,
-    userAgent: req.headers['user-agent'] || null,
+    requestId: req.id || headers['x-request-id'] || null,
+    ipAddress: (req && req.ip) || null,
+    userAgent: headers['user-agent'] || null,
     ...extra,
   };
 }

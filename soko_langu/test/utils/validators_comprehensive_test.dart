@@ -62,11 +62,11 @@ void main() {
       });
 
       test('accepts 8 chars', () {
-        expect(Validators.password('12345678'), isNull);
+        expect(Validators.password('abcd1234'), isNull);
       });
 
       test('accepts long password', () {
-        expect(Validators.password('a' * 100), isNull);
+        expect(Validators.password('a' * 50 + '1'), isNull);
       });
     });
 
