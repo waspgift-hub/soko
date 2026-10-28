@@ -1,0 +1,691 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show immutable, debugPrint, kDebugMode;
+import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
+
+import '../models/notification_event.dart';
+import '../models/UserPreferences.dart';
+import '../models/notification_category.dart';
+
+@immutable
+class NotificationResult {
+  final bool success;
+  final String? notificationId;
+  final String? providerMessageId;
+  final NotificationChannel channel;
+  final String? title;
+  final String? body;
+  final Map<String, dynamic>? data;
+  final DateTime sentAt;
+  final String? failureReason;
+  final int retryCount;
+  final bool isTransactional;
+
+  NotificationResult({
+    required this.success,
+    this.notificationId,
+    this.providerMessageId,
+    required this.channel,
+    this.title,
+    this.body,
+    this.data,
+    required this.sentAt,
+    this.failureReason,
+    required this.retryCount,
+    required this.isTransactional,
+  });
+
+  factory NotificationResult.success({
+    required NotificationChannel channel,
+    String? title,
+    String? body,
+    Map<String, dynamic>? data,
+    required DateTime sentAt,
+    required bool isTransactional,
+    String? notificationId,
+    String? providerMessageId,
+    int retryCount = 0,
+  }) =>
+      NotificationResult(
+        success: true,
+        notificationId: notificationId,
+        providerMessageId: providerMessageId,
+        channel: channel,
+        title: title,
+        body: body,
+        data: data,
+        sentAt: sentAt,
+        isTransactional: isTransactional,
+        retryCount: retryCount,
+      );
+
+  factory NotificationResult.failure({
+    required NotificationChannel channel,
+    required String failureReason,
+    required DateTime sentAt,
+    required bool isTransactional,
+    int retryCount = 0,
+  }) =>
+      NotificationResult(
+        success: false,
+        channel: channel,
+        failureReason: failureReason,
+        sentAt: sentAt,
+        isTransactional: isTransactional,
+        retryCount: retryCount,
+      );
+
+  bool get isSuccess => success;
+  bool get isFailure => !success;
+}
+
+/// Central notification orchestration engine.
+///
+/// Responsibilities:
+/// - Receive events from any backend service
+/// - Check user preferences and eligibility
+/// - Select appropriate channels
+/// - Render localized messages
+/// - Deduplicate using event IDs
+/// - Send via appropriate provider
+/// - Track delivery and retries
+/// - Update admin dashboards
+class NotificationOrchestrator {
+  static final NotificationOrchestrator _instance = NotificationOrchestrator._internal();
+  factory NotificationOrchestrator() => _instance;
+  NotificationOrchestrator._internal();
+
+  final _db = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
+
+  // Deduplication store: eventId -> { notificationId, sentAt, channel }
+  final Map<String, Map<String, dynamic>> _sentEvents = {};
+  final Map<String, Set<String>> _userJourneys = {}; // userId -> Set of active journey IDs
+
+  // Rate limiting tracking
+  final Map<String, List<DateTime>> _rateLimitCache = {}; // userId -> [timestamps]
+
+  // User preferences cache
+  final Map<String, UserPreferences> _userPrefsCache = {};
+
+  /// Register a notification event type with its template keys
+  void registerEventType(String type, NotificationEvent Function(dynamic) builder) {
+    _instance.registerEventType(type, builder);
+  }
+
+  /// Build a NotificationEvent from a backend event type and data
+  NotificationEvent? buildEvent(String type, dynamic data) {
+    return _instance.buildEvent(type, data);
+  }
+
+  /// Set user preferences from Firestore
+  Future<void> setUserPreferences(String userId, UserPreferences prefs) async {
+    await _db
+        .collection('user_notification_preferences')
+        .doc(userId)
+        .set(prefs.toMap());
+    _userPrefsCache[userId] = prefs;
+  }
+
+  /// Get user preferences, loading from Firestore if not cached
+  Future<UserPreferences> getUserPreferences(String userId) async {
+    if (_userPrefsCache.containsKey(userId)) {
+      return _userPrefsCache[userId]!;
+    }
+
+    final doc = await _db
+        .collection('user_notification_preferences')
+        .doc(userId)
+        .get();
+
+    if (doc.exists) {
+      final prefs = UserPreferences.fromMap(doc.data()!);
+      _userPrefsCache[userId] = prefs;
+      return prefs;
+    }
+
+    // Default preferences
+    final defaultPrefs = UserPreferences(
+      categoryPreferences: {},
+    );
+    await setUserPreferences(userId, defaultPrefs);
+    return defaultPrefs;
+  }
+
+  /// Check if a notification should be sent given deduplication rules
+  bool shouldSend({
+    required String userId,
+    required String eventId,
+    required String category,
+  }) {
+    // Check deduplication
+    final key = '$userId:$eventId';
+    if (_sentEvents.containsKey(key)) {
+      final previous = _sentEvents[key]!;
+      final sentAt = previous['sentAt'] as DateTime?;
+      if (sentAt != null) {
+        // Within 24h deduplication window - don't send again
+        final diff = DateTime.now().difference(sentAt).inHours;
+        if (diff < 24) {
+          return false; // Already sent recently
+        }
+      }
+    }
+
+    return true;
+  }
+
+  /// Record that a notification was sent for deduplication
+  void recordSent({required String userId, required String eventId, required String notificationId}) {
+    final key = '$userId:$eventId';
+    _sentEvents[key] = {
+      'notificationId': notificationId,
+      'sentAt': DateTime.now(),
+    };
+  }
+
+  /// Check rate limits for a user
+  bool checkRateLimit({
+    required String userId,
+    required String category,
+    required Duration window,
+  }) {
+    final now = DateTime.now();
+    final key = userId;
+
+    if (!_rateLimitCache.containsKey(key)) {
+      _rateLimitCache[key] = [];
+    }
+
+    // Remove timestamps outside the window
+    _rateLimitCache[key] = _rateLimitCache[key]!
+        .where((ts) => now.difference(ts).inMinutes < window.inMinutes)
+        .toList();
+
+    // Count notifications in this category window
+    final categoryTimestamps = _rateLimitCache[key]!
+        .where((ts) => _lastCategoryTimestamp(userId, ts) == category)
+        .toList();
+
+    if (categoryTimestamps.length >= _maxPerWindow(category, window)) {
+      return false; // Rate limit exceeded
+    }
+
+    // Add this timestamp
+    _rateLimitCache[key]!.add(now);
+    return true;
+  }
+
+  String? _lastCategoryTimestamp(String userId, DateTime timestamp) {
+    // Simplified - in production, store category per timestamp
+    return null;
+  }
+
+  int _maxPerWindow(String userId, Duration window) {
+    // Default rate limits per category window
+    if (window.inHours >= 24) {
+      return 100; // per day
+    }
+    if (window.inHours >= 1) {
+      return 20; // per hour
+    }
+    if (window.inMinutes >= 60) {
+      return 5; // per 60 min
+    }
+    return 2; // per 15 min
+  }
+
+  /// Intelligent channel selection based on category, preferences, and urgency
+  List<NotificationChannel> selectChannels({
+    required String category,
+    required UserPreferences preferences,
+    required bool isUrgent,
+  }) {
+    final categoryDef = NotificationCategory.getCategory(category);
+    if (categoryDef != null) {
+      // Start with preferred channels for this category
+      var channels = <NotificationChannel>[];
+
+      if (isUrgent || categoryDef.isTransactional) {
+        // For urgent/transactional: use preferred channels
+        channels = List.from(categoryDef.preferredChannels);
+      } else {
+        // For non-urgent/non-transactional: use only allowed channels
+        channels = List.from(categoryDef.allowedChannels);
+      }
+
+      // Filter by user preferences
+      return channels.where((channel) => preferences.isChannelAllowed(channel, category)).toList();
+    }
+
+    // Fallback: push only for unknown categories
+    return preferences.isChannelAllowed(NotificationChannel.push, category)
+        ? [NotificationChannel.push]
+        : [];
+  }
+
+  /// Render a localized message from an event
+  Map<String, String> renderMessage(NotificationEvent event, String language) {
+    final templateDir = _templateForCategory(event.category);
+    final title = _resolveTemplate(
+      '$templateDir/${event.titleKey}',
+      event.variables,
+      language,
+    );
+    final body = _resolveTemplate(
+      '$templateDir/${event.bodyKey}',
+      event.variables,
+      language,
+    );
+
+    return {'title': title, 'body': body};
+  }
+
+  String _templateForCategory(String category) {
+    final categoryMap = {
+      'security': 'security',
+      'account': 'account',
+      'verification': 'verification',
+      'payment': 'payment',
+      'order': 'order',
+      'escrow': 'escrow',
+      'delivery': 'delivery',
+      'kyc': 'kyc',
+      'wallet': 'wallet',
+      'withdrawal': 'withdrawal',
+      'chat': 'chat',
+      'seller': 'seller',
+      'buyer': 'buyer',
+      'customer_service': 'customer_service',
+      'lifecycle': 'lifecycle',
+      're_engagement': 're_engagement',
+      'marketing': 'marketing',
+    };
+    return categoryMap[category] ?? 'general';
+  }
+
+  String _resolveTemplate(String templateKey, Map<String, dynamic> variables, String language) {
+    // In production, this pulls from the localization service
+    // For now, return the key as fallback
+    // The actual templates are managed in the localization system
+    final key = templateKey;
+    if (language.startsWith('sw')) {
+      // Swahili template - would be loaded from localization arbundary
+      return _swahiliFallback(key, variables);
+    }
+    return _englishFallback(key, variables);
+  }
+
+  String _englishFallback(String key, Map<String, dynamic> variables) {
+    final base = {
+      'payment.success': 'Your payment of {{amount}} has been received.',
+      'order.created': 'New order #{{orderId}} created.',
+      'kyc.approved': 'Your verification has been approved.',
+      'chat.new_message': 'New message from {{senderName}}.',
+    };
+    var result = base[key] ?? key;
+    variables.forEach((k, v) {
+      result = result.replaceAll('{{$k}}', v.toString());
+    });
+    return result;
+  }
+
+  String _swahiliFallback(String key, Map<String, dynamic> variables) {
+    final base = {
+      'payment.success': 'Malipo yako ya {{amount}} yamepokelewa.',
+      'order.created': 'Umeandaliwa bidhaa cha #{{orderId}}.',
+      'kyc.approved': 'Uthibitishaji wako umekamilika.',
+      'chat.new_message': 'Ujumbe mpya kutoka kwa {{senderName}}.',
+    };
+    var result = base[key] ?? key;
+    variables.forEach((k, v) {
+      result = result.replaceAll('{{$k}}', v.toString());
+    });
+    return result;
+  }
+
+  /// Send notification through the appropriate channel
+  Future<NotificationResult> send({
+    required String userId,
+    required NotificationEvent event,
+    required UserPreferences preferences,
+    required String language,
+  }) async {
+    // 1. Check deduplication
+    if (!shouldSend(userId: userId, eventId: event.id, category: event.category)) {
+      return NotificationResult.failure(
+        channel: NotificationChannel.push,
+        failureReason: 'duplicate_within_dedup_window',
+        sentAt: DateTime.now(),
+        isTransactional: event.isTransactional,
+        retryCount: 0,
+      );
+    }
+
+    // 2. Check rate limits
+    final isUrgent = event.isTransactional;
+    if (!checkRateLimit(userId: userId, category: event.category, window: _rateWindow(event.category))) {
+      return NotificationResult.failure(
+        channel: NotificationChannel.push,
+        failureReason: 'rate_limit_exceeded',
+        sentAt: DateTime.now(),
+        isTransactional: event.isTransactional,
+        retryCount: 0,
+      );
+    }
+
+    // 3. Select channels
+    final channels = selectChannels(
+      category: event.category,
+      preferences: preferences,
+      isUrgent: isUrgent,
+    );
+
+    if (channels.isEmpty) {
+      return NotificationResult.failure(
+        channel: NotificationChannel.push,
+        failureReason: 'no_allowed_channels',
+        sentAt: DateTime.now(),
+        isTransactional: event.isTransactional,
+        retryCount: 0,
+      );
+    }
+
+    // 4. Render localized message
+    final message = renderMessage(event, language);
+    // renderMessage always returns both keys, so the map lookup cannot be null.
+    final title = message['title'] ?? '';
+    final body = message['body'] ?? '';
+
+    // 5. Send via each channel (priority order)
+    for (final channel in channels) {
+      try {
+        final result = await _sendViaChannel(
+          channel: channel,
+          userId: userId,
+          title: title,
+          body: body,
+          data: event.variables,
+        );
+
+        if (result.success) {
+          // Record success
+          recordSent(
+            userId: userId,
+            eventId: event.id,
+            notificationId: result.notificationId!,
+          );
+          // Update rate limit timestamp
+          _rateLimitCache[userId]?.add(DateTime.now());
+          
+          return NotificationResult.success(
+            channel: channel,
+            title: title,
+            body: body,
+            data: event.variables,
+            sentAt: DateTime.now(),
+            isTransactional: event.isTransactional,
+          );
+        }
+      } catch (e) {
+        debugPrint('[Orchestrator] Channel ${channel} error: $e');
+        continue; // Try next channel
+      }
+    }
+
+    // All channels failed
+    return NotificationResult.failure(
+      channel: channels.isNotEmpty ? channels.first : NotificationChannel.push,
+      failureReason: 'all_channels_failed',
+      sentAt: DateTime.now(),
+      isTransactional: event.isTransactional,
+      retryCount: 0,
+    );
+  }
+
+  Duration _rateWindow(String category) {
+    // Transactional events have wider windows
+    if (['security', 'payment', 'verification', 'kyc'].contains(category)) {
+      return Duration(hours: 1);
+    }
+    return Duration(minutes: 30);
+  }
+
+  /// Send via a specific channel
+  Future<NotificationResult> _sendViaChannel({
+    required NotificationChannel channel,
+    required String userId,
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+  }) async {
+    switch (channel) {
+      case NotificationChannel.push:
+        return await _sendPush(userId, title, body, data);
+      case NotificationChannel.email:
+        return await _sendEmail(userId, title, body, data);
+      case NotificationChannel.sms:
+        return await _sendSms(userId, title, body, data);
+    }
+  }
+
+  Future<NotificationResult> _sendPush(String userId, String title, String body, Map<String, dynamic> data) async {
+    try {
+      // Use the existing OneSignal integration
+      final token = await _auth.currentUser?.getIdToken();
+      if (token == null) {
+        return NotificationResult.failure(
+          channel: NotificationChannel.push,
+          failureReason: 'no_auth_token',
+          sentAt: DateTime.now(),
+          isTransactional: false,
+          retryCount: 0,
+        );
+      }
+
+      // Prepare payload
+      final payload = {
+        'en': body,
+        'sw': body, // Swahili heading
+        'data': {
+          ...data,
+          'type': 'notification',
+          'title': title,
+        },
+      };
+
+      // Send via OneSignal REST API
+      final response = await http.post(
+        Uri.parse('https://onesignal.com/api/v1/notifications'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ${_onesignalRestKey}',
+        },
+        body: jsonEncode({
+          'app_id': _onesignalAppId,
+          'included_segments': ['Subscribed Users'],
+          'headings': {'en': title, 'sw': title},
+          'contents': {'en': body, 'sw': body},
+          'data': payload,
+          'ios_priority': 10,
+          'android_priority': 10,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return NotificationResult.success(
+          channel: NotificationChannel.push,
+          notificationId: data['id']?.toString(),
+          providerMessageId: data['recipients']?.toString(),
+          title: title,
+          body: body,
+          data: data,
+          sentAt: DateTime.now(),
+          isTransactional: false,
+        );
+      } else {
+        return NotificationResult.failure(
+          channel: NotificationChannel.push,
+          failureReason: 'onesignal_error_${response.statusCode}',
+          sentAt: DateTime.now(),
+          isTransactional: false,
+          retryCount: 0,
+        );
+      }
+    } catch (e) {
+      return NotificationResult.failure(
+        channel: NotificationChannel.push,
+        failureReason: 'onesignal_exception_${e.toString()}',
+        sentAt: DateTime.now(),
+        isTransactional: false,
+        retryCount: 0,
+      );
+    }
+  }
+
+  Future<NotificationResult> _sendEmail(String userId, String title, String body, Map<String, dynamic> data) async {
+    // Use the existing mailer service
+    // This would integrate with the server-side mailer
+    // For now, simulate
+    try {
+      // In production, call the server-side /api/send-mail endpoint
+      // or use the mailer service directly
+      final result = await _executeEmailSend(userId, title, body, data);
+      
+      if (result) {
+        return NotificationResult.success(
+          channel: NotificationChannel.email,
+          title: title,
+          body: body,
+          data: data,
+          sentAt: DateTime.now(),
+          isTransactional: false,
+        );
+      }
+      return NotificationResult.failure(
+        channel: NotificationChannel.email,
+        failureReason: 'email_delivery_failed',
+        sentAt: DateTime.now(),
+        isTransactional: false,
+        retryCount: 0,
+      );
+    } catch (e) {
+      return NotificationResult.failure(
+        channel: NotificationChannel.email,
+        failureReason: 'email_exception_${e.toString()}',
+        sentAt: DateTime.now(),
+        isTransactional: false,
+        retryCount: 0,
+      );
+    }
+  }
+
+  Future<bool> _executeEmailSend(String userId, String title, String body, Map<String, dynamic> data) async {
+    // Placeholder - would integrate with server mailer
+    // For now, return true if user has email prefs enabled
+    final prefs = await getUserPreferences(userId);
+    return prefs.emailEnabled;
+  }
+
+  Future<NotificationResult> _sendSms(String userId, String title, String body, Map<String, dynamic> data) async {
+    // Use the existing SMS service
+    // Filter out OTP/content that shouldn't go via SMS
+    final smsBody = _sanitizeSmsBody(body);
+    
+    try {
+      // Call the server-side SMS service
+      final result = await _executeSmsSend(userId, title, smsBody, data);
+      
+      if (result) {
+        return NotificationResult.success(
+          channel: NotificationChannel.sms,
+          title: title,
+          body: smsBody,
+          data: data,
+          sentAt: DateTime.now(),
+          isTransactional: false,
+        );
+      }
+      return NotificationResult.failure(
+        channel: NotificationChannel.sms,
+        failureReason: 'sms_delivery_failed',
+        sentAt: DateTime.now(),
+        isTransactional: false,
+        retryCount: 0,
+      );
+    } catch (e) {
+      return NotificationResult.failure(
+        channel: NotificationChannel.sms,
+        failureReason: 'sms_exception_${e.toString()}',
+        sentAt: DateTime.now(),
+        isTransactional: false,
+        retryCount: 0,
+      );
+    }
+  }
+
+  String _sanitizeSmsBody(String body) {
+    // SMS has character limits, remove non-essential content
+    // Don't include sensitive data
+    return body.length > 160 ? body.substring(0, 157) + '...' : body;
+  }
+
+  Future<bool> _executeSmsSend(String userId, String title, String smsBody, Map<String, dynamic> data) async {
+    // Placeholder - would integrate with server-side sms-service
+    final prefs = await getUserPreferences(userId);
+    return prefs.smsEnabled;
+  }
+
+  // OneSignal config (would come from ApiConfig)
+  String get _onesignalAppId => kDebugMode ? 'onesignal_app_id_from_config' : '';
+  String get _onesignalRestKey => kDebugMode ? 'onesignal_rest_key_from_config' : '';
+
+  /// Delayed send - schedule notification for later
+  Future<void> sendDelayed({
+    required String userId,
+    required NotificationEvent event,
+    required UserPreferences preferences,
+    required String language,
+    required Duration delay,
+  }) async {
+    await Future.delayed(delay);
+    await send(
+      userId: userId,
+      event: event,
+      preferences: preferences,
+      language: language,
+    );
+  }
+
+  /// Cancel a pending delayed notification
+  Future<void> cancelDelayed(String journeyId) async {
+    _userJourneys.remove(journeyId);
+  }
+
+  /// Check if user has already taken the required action for this event type
+  bool hasUserTakenAction(String userId, String actionType) {
+    final journey = _userJourneys[userId];
+    return journey?.contains(actionType) ?? false;
+  }
+
+  /// Mark user action as completed
+  Future<void> markActionCompleted(String userId, String actionType) async {
+    if (_userJourneys[userId] == null) {
+      _userJourneys[userId] = {};
+    }
+    _userJourneys[userId]!.add(actionType);
+    
+    // Persist to Firestore
+    await _db
+        .collection('user_notification_journeys')
+        .doc(userId)
+        .set({
+      'activeJourneys': _userJourneys[userId],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+}

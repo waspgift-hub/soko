@@ -1,0 +1,67 @@
+enum NotificationChannel {
+  push('push'),
+  email('email'),
+  sms('sms');
+
+  final String value;
+  const NotificationChannel(this.value);
+}
+
+class UserPreferences {
+  final bool pushEnabled;
+  final bool emailEnabled;
+  final bool smsEnabled;
+  final Map<String, bool> categoryPreferences; // category -> enabled
+
+  UserPreferences({
+    this.pushEnabled = true,
+    this.emailEnabled = true,
+    this.smsEnabled = true,
+    required this.categoryPreferences,
+  });
+
+  factory UserPreferences.fromMap(Map<String, dynamic> map) {
+    final prefs = map;
+    return UserPreferences(
+      pushEnabled: prefs['pushEnabled'] ?? true,
+      emailEnabled: prefs['emailEnabled'] ?? true,
+      smsEnabled: prefs['smsEnabled'] ?? true,
+      categoryPreferences: _decodeCategoryPrefs(prefs['categoryPreferences'] as Map? ?? {}),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'pushEnabled': pushEnabled,
+    'emailEnabled': emailEnabled,
+    'smsEnabled': smsEnabled,
+    'categoryPreferences': _encodeCategoryPrefs(categoryPreferences),
+  };
+
+  static Map<String, bool> _decodeCategoryPrefs(Map<String, dynamic> map) {
+    final result = <String, bool>{};
+    map.forEach((key, value) {
+      result[key] = value ?? true;
+    });
+    return result;
+  }
+
+  Map<String, dynamic> _encodeCategoryPrefs(Map<String, bool> map) {
+    final result = <dynamic, dynamic>{};
+    map.forEach((key, value) => result[key] = value);
+    return result;
+  }
+
+  bool isChannelAllowed(NotificationChannel channel, String category) {
+    final isAllowed = categoryPreferences[category] ?? true;
+    if (!isAllowed) return false;
+
+    switch (channel) {
+      case NotificationChannel.push:
+        return pushEnabled;
+      case NotificationChannel.email:
+        return emailEnabled;
+      case NotificationChannel.sms:
+        return smsEnabled;
+    }
+  }
+}

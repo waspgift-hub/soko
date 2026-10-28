@@ -1,0 +1,185 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+
+/// Centralized admin configuration service.
+///
+/// Provides real-time snapshots of admin-controlled configuration that all
+/// screens can consume from a single source of truth. Updates propagate
+/// quickly without requiring app restarts.
+class AdminService {
+  AdminService._();
+  static final AdminService _instance = AdminService._();
+  factory AdminService() => _instance;
+
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final _analyticsController = StreamController<AnalyticsData>.broadcast();
+  final _productsController = StreamController<Map<String, int>>.broadcast();
+  final _categoriesController = StreamController<List<CategorySnapshot>>.broadcast();
+  final _systemErrorsController = StreamController<List<SystemErrorSnapshot>>.broadcast();
+
+  // Prevent multiple listeners
+  Set<StreamSubscription?> _subscriptions = {};
+
+  /// Analytics data (sales, orders, etc.)
+  Stream<AnalyticsData> get analyticsStream => _analyticsController.stream;
+
+  /// Product counts by status
+  Stream<Map<String, int>> get productsStatusStream => _productsController.stream;
+
+  /// Category activity status
+  Stream<List<CategorySnapshot>> get categoriesStream => _categoriesController.stream;
+
+  /// System errors (for admin monitoring)
+  Stream<List<SystemErrorSnapshot>> get systemErrorsStream => _systemErrorsController.stream;
+
+  /// Subscribe to all admin configuration streams.
+  /// Call once during admin screen init; dispose when screen disposes.
+  void subscribe() {
+    // Avoid duplicate subscriptions
+    if (_subscriptions.isNotEmpty) return;
+
+    // Analytics
+    _subscriptions.add(FirebaseFirestore.instance
+        .collection('analytics')
+        .doc('summary')
+        .snapshots()
+        .listen((doc) {
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        _analyticsController.sink.add(AnalyticsData.fromMap(data));
+      }
+    }));
+
+    // Product counts
+    _subscriptions.add(FirebaseFirestore.instance
+        .collection('products')
+        .where('isActive', isEqualTo: true)
+        .snapshots()
+        .listen((snapshot) {
+      final counts = <String, int>{};
+      for (final doc in snapshot.docs) {
+        final status = doc['status'] as String? ?? 'active';
+        counts[status] = (counts[status] ?? 0) + 1;
+      }
+      _productsController.sink.add(counts);
+    }));
+
+    // Categories activity
+    _subscriptions.add(FirebaseFirestore.instance
+        .collection('categories')
+        .where('isActive', isEqualTo: true)
+        .snapshots()
+        .listen((snapshot) {
+      final cats = snapshot.docs
+          .map((d) => CategorySnapshot(
+            id: d.id,
+            name: d['name'] as String? ?? '',
+            nameSw: d['nameSw'] as String? ?? '',
+            isActive: d['isActive'] as bool? ?? true,
+          ))
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      _categoriesController.sink.add(cats);
+    }));
+
+    // System errors
+    _subscriptions.add(FirebaseFirestore.instance
+        .collection('system_errors')
+        .orderBy('lastSeen', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      final errors = snapshot.docs
+          .map((d) => SystemErrorSnapshot(
+            id: d.id,
+            feature: d['feature'] as String? ?? 'unknown',
+            severity: d['severity'] as String? ?? 'info',
+            userId: d['userId'] as String?,
+            occurrenceCount: (d['occurrenceCount'] as num?)?.toInt() ?? 1,
+            timestamp: (d['lastSeen'] as Timestamp).toDate(),
+            message: d['message'] as String? ?? '',
+          ))
+          .toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      _systemErrorsController.sink.add(errors);
+    }));
+  }
+
+  /// Unsubscribe from all streams.
+  void dispose() {
+    for (final sub in _subscriptions) {
+      sub?.cancel();
+    }
+    _subscriptions.clear();
+    _analyticsController.close();
+    _productsController.close();
+    _categoriesController.close();
+    _systemErrorsController.close();
+  }
+}
+
+/// Snapshot of a category from Firestore.
+class CategorySnapshot {
+  final String id;
+  final String name;
+  final String nameSw;
+  final bool isActive;
+
+  CategorySnapshot({
+    required this.id,
+    required this.name,
+    required this.nameSw,
+    required this.isActive,
+  });
+}
+
+/// Snapshot of a system error from Firestore.
+class SystemErrorSnapshot {
+  final String id;
+  final String feature;
+  final String severity;
+  final String? userId;
+  final int occurrenceCount;
+  final DateTime timestamp;
+  final String message;
+
+  SystemErrorSnapshot({
+    required this.id,
+    required this.feature,
+    required this.severity,
+    required this.userId,
+    required this.occurrenceCount,
+    required this.timestamp,
+    required this.message,
+  });
+}
+
+/// Analytics data returned from the admin analytics doc.
+class AnalyticsData {
+  final int totalProducts;
+  final int activeProducts;
+  final int totalOrders;
+  final int completedOrders;
+  final double totalRevenue;
+  final double totalRefunded;
+
+  AnalyticsData({
+    required this.totalProducts,
+    required this.activeProducts,
+    required this.totalOrders,
+    required this.completedOrders,
+    required this.totalRevenue,
+    required this.totalRefunded,
+  });
+
+  factory AnalyticsData.fromMap(Map<String, dynamic> map) {
+    return AnalyticsData(
+      totalProducts: map['totalProducts'] as int? ?? 0,
+      activeProducts: map['activeProducts'] as int? ?? 0,
+      totalOrders: map['totalOrders'] as int? ?? 0,
+      completedOrders: map['completedOrders'] as int? ?? 0,
+      totalRevenue: (map['totalRevenue'] as num?)?.toDouble() ?? 0.0,
+      totalRefunded: (map['totalRefunded'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 
 /// Customer support phone number. Change this when the real number is ready.
@@ -33,6 +35,13 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 title: context.tr('getting_started'),
                 subtitle: context.tr('getting_started_sub'),
                 children: [
+                  _contactActionTile(
+                    icon: Icons.school_outlined,
+                    title: 'Mafunzo ya kutumia Soko Vibe',
+                    subtitle: 'Jifunze utafutaji, kuuza, uthibitishaji na msaada.',
+                    onTap: () => context.push(AppRoutes.tutorials),
+                  ),
+                  const SizedBox(height: 12),
                   _helpTile(
                     title: context.tr('register_login'),
                     content: context.tr('help_register_login'),

@@ -31,6 +31,7 @@ class AppRoutes {
   static const String editProfile = '/edit-profile';
   static const String addProduct = '/add-product';
   static const String help = '/help';
+  static const String tutorials = '/tutorials';
   static const String about = '/about';
   static const String createGroup = '/create-group';
   static const String groupChat = '/group-chat';

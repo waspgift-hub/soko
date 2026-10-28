@@ -44,6 +44,7 @@ import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
+import '../screens/onboarding/tutorials_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
 import '../screens/auth/otp_verification_screen.dart';
 import '../screens/auth/mfa_enrollment_screen.dart';
@@ -312,6 +313,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.accountSelection,
         pageBuilder: (context, state) => _premiumPage(const AccountSelectionScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.tutorials,
+        pageBuilder: (context, state) => _premiumPage(const TutorialsScreen()),
       ),
       GoRoute(
         path: AppRoutes.chats,

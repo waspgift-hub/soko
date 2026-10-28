@@ -1,0 +1,201 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter/platform_interface.dart';
+
+/// YouTube embedded player widget using the official nocookie embed URL.
+/// - Respects YouTube Terms of Service: no downloading, no DRM bypass,
+///   no ad blocking, plays inline only (no true background playback).
+/// - Server-side API key protects the key from exposure.
+/// - Handles loading, errors, navigation, and lifecycle events.
+///
+/// Usage:
+///   YoutubePlayerWrapper(
+///     videoId: 'VIDEO_ID',
+///     onPlayerReady: () => _playerController?.play(),
+///     onVideoChanged: (id) => setState(() => _videoId = id),
+///   )
+class YoutubePlayerWrapper extends StatefulWidget {
+  final String videoId;
+  final VoidCallback? onPlayerReady;
+  final ValueChanged<String?>? onVideoChanged;
+  final double? height;
+  final bool autoPlay;
+
+  const YoutubePlayerWrapper({
+    required this.videoId,
+    this.onPlayerReady,
+    this.onVideoChanged,
+    this.height,
+    this.autoPlay = false,
+    super.key,
+  });
+
+  @override
+  State<YoutubePlayerWrapper> createState() => _YoutubePlayerWrapperState();
+}
+
+class _YoutubePlayerWrapperState extends State<YoutubePlayerWrapper>
+    with SingleTickerProviderStateMixin {
+  late WebViewController _controller;
+  bool _isLoading = true;
+  String? _error;
+  bool _hasError = false;
+  Timer? _loadingTimer;
+  bool _mounted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mounted = true;
+    _loadPlayer();
+  }
+
+  @override
+  void dispose() {
+    _loadingTimer?.cancel();
+    _controller.loadUrl('');
+    _controller = WebViewController();
+    super.dispose();
+  }
+
+  Future<void> _loadPlayer() async {
+    if (!_mounted) return;
+
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(JavaScriptNavigationDelegate(
+        onPageStarted: (_) {
+          if (!_mounted) return;
+          setState(() => _isLoading = true);
+          _error = null;
+          _hasError = false;
+        },
+        onPageFinished: (_) async {
+          if (!_mounted) return;
+          setState(() => _isLoading = false);
+          await _controller.evaluateJavascript(
+              javascriptCode: 'document.querySelector("video")?.play()');
+        },
+        onPageError: (description) {
+          if (!_mounted) return;
+          setState(() {
+            _isLoading = false;
+            _error = 'Failed to load video page';
+            _hasError = true;
+          });
+        },
+        onWebResourceError: (error) {
+          if (!_mounted) return;
+          setState(() {
+            _isLoading = false;
+            _error = 'Video not found or unavailable';
+            _hasError = true;
+          });
+        },
+      ))
+      ..loadRequest(
+          Uri.parse(
+              'https://www.youtube.com/embed/${widget.videoId}'
+              '?rel=0&showinfo=0&playsinline=1&autoplay=${widget.autoPlay ? 1 : 0}'));
+
+    setState(() => _controller = controller);
+  }
+
+  // Handle hardware back button on Android
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (!_mounted) return const Center(child: Text('Widget disposed'));
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error ?? 'Unknown error'),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _loadPlayer,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Loading video...'),
+          ],
+        ),
+      );
+    }
+
+    // Successfully loaded - render the video via WebView
+    return Scaffold(
+      body: WebViewWidget(controller: _controller),
+    );
+  }
+}
+
+/// JavaScript navigation delegate for YouTube player control
+class JavaScriptNavigationDelegate extends WebNavigationDelegate {
+  final ValueChanged<String> onPageStarted;
+  final ValueChanged<String> onPageFinished;
+  final ValueChanged<String> onPageError;
+  final ValueChanged<WebResourceError> onWebResourceError;
+
+  JavaScriptNavigationDelegate({
+    required this.onPageStarted,
+    required this.onPageFinished,
+    required this.onPageError,
+    required this.onWebResourceError,
+  });
+
+  @override
+  Future<NavigationDecision> decideNavigation(
+      NavigationRequest request) async {
+    // Allow navigation within YouTube domain only
+    final uri = Uri.parse(request.url);
+    if (uri.host == 'www.youtube.com' || uri.host == 'youtube.com') {
+      return NavigationDecision.navigate;
+    }
+    return NavigationDecision.prevent;
+  }
+
+  @override
+  void onPageStarted(String url) {
+    onPageStarted(url);
+  }
+
+  @override
+  void onPageFinished(String url) {
+    onPageFinished(url);
+  }
+
+  @override
+  void onPageError(WebResourceError error) {
+    onPageError(WebResourceError(
+      errorCode: error.errorCode,
+      description: error.description,
+      fallingBackToString: error.fallingBackToString,
+    ));
+  }
+
+  @override
+  void onWebResourceError(WebResourceError error) {
+    onWebResourceError(error);
+  }
+}

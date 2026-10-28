@@ -1,0 +1,55 @@
+class NotificationEvent {
+  final String id;
+  final String type;
+  final String category;
+  final String titleKey;
+  final String bodyKey;
+  final Map<String, dynamic> variables;
+  final String? userId;
+  final DateTime createdAt;
+  final bool isTransactional;
+
+  NotificationEvent({
+    required this.id,
+    required this.type,
+    required this.category,
+    required this.titleKey,
+    required this.bodyKey,
+    required this.variables,
+    this.userId,
+    DateTime? createdAt,
+    this.isTransactional = true,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'type': type,
+    'category': category,
+    'titleKey': titleKey,
+    'bodyKey': bodyKey,
+    'variables': variables,
+    'userId': userId,
+    'isTransactional': isTransactional,
+    'createdAt': createdAt,
+  };
+
+  factory NotificationEvent.fromMap(Map<String, dynamic> map) {
+    return NotificationEvent(
+      id: map['id']?.toString() ?? '',
+      type: map['type']?.toString() ?? 'general',
+      category: map['category']?.toString() ?? 'general',
+      titleKey: map['titleKey']?.toString() ?? '',
+      bodyKey: map['bodyKey']?.toString() ?? '',
+      variables: map['variables'] != null
+          ? Map<String, dynamic>.from(map['variables'])
+          : {},
+      userId: map['userId']?.toString(),
+      createdAt: map['createdAt'] is Timestamp
+          ? (map['createdAt'] as Timestamp).toDate()
+          : map['createdAt'] != null
+              ? DateTime.parse(map['createdAt'].toString())
+              : null,
+      isTransactional: map['isTransactional'] == true,
+    );
+  }
+}

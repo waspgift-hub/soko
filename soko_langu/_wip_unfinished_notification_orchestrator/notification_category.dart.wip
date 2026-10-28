@@ -1,0 +1,103 @@
+abstract class NotificationCategory {
+  final String name;
+  final String description;
+  final List<NotificationChannel> preferredChannels;
+  final List<NotificationChannel> allowedChannels;
+  final bool isTransactional;
+  final bool canDisable;
+  final int priority; // Higher = more important
+
+  NotificationCategory({
+    required this.name,
+    required this.description,
+    required this.preferredChannels,
+    required this.allowedChannels,
+    this.isTransactional = true,
+    this.canDisable = true,
+    this.priority = 0,
+  });
+
+  factory NotificationCategory.standard(String name, {bool isTransactional = true}) {
+    final standardChannels = [
+      NotificationChannel.push,
+      NotificationChannel.email,
+      NotificationChannel.sms,
+    ];
+    return NotificationCategory._(
+      name: name,
+      description: '',
+      preferredChannels: isTransactional
+          ? [NotificationChannel.push, NotificationChannel.email]
+          : [NotificationChannel.push],
+      allowedChannels: standardChannels,
+      isTransactional: isTransactional,
+      canDisable: true,
+      priority: _defaultPriority(name),
+    );
+  }
+
+  static int _defaultPriority(String name) {
+    final priorityMap = {
+      'security': 10,
+      'account': 8,
+      'verification': 9,
+      'payment': 9,
+      'order': 7,
+      'escrow': 8,
+      'delivery': 6,
+      'kyc': 8,
+      'wallet': 7,
+      'withdrawal': 8,
+      'chat': 5,
+      'seller': 6,
+      'buyer': 6,
+      'customer_service': 7,
+      'lifecycle': 3,
+      're_engagement': 4,
+      'marketing': 1,
+    };
+    return priorityMap[name] ?? 3;
+  }
+
+  NotificationChannel selectChannel(UserPreferences prefs, {required bool isUrgent});
+
+  /// Looks up a registered category by name, or null when [name] was never
+  /// registered. Exposed here because the registry itself is library-private
+  /// and callers outside this file still need to resolve a category.
+  static NotificationCategory? getCategory(String name) =>
+      _NotificationCategoryRegistry.getCategory(name);
+}
+
+class _NotificationCategoryRegistry {
+  final Map<String, NotificationCategory> _categories = {};
+  final Map<String, NotificationEvent Function(dynamic)> _eventBuilders = {};
+
+  void registerCategory(NotificationCategory category) {
+    _categories[category.name] = category;
+  }
+
+  NotificationCategory? getCategory(String name) => _categories[name];
+
+  void registerEventType(String type, NotificationEvent Function(dynamic) builder) {
+    _eventBuilders[type] = builder;
+  }
+
+  NotificationEvent? buildEvent(String type, dynamic data) {
+    final builder = _eventBuilders[type];
+    if (builder == null) return null;
+    return builder(data);
+  }
+
+  static const _instance = _NotificationCategoryRegistry._internal();
+  factory _NotificationCategoryRegistry() => _instance;
+  _NotificationCategoryRegistry._internal();
+
+  static NotificationCategory register(NotificationCategory category) =>
+      _instance.registerCategory(category);
+
+  static NotificationCategory? getCategory(String name) =>
+      _instance.getCategory(name);
+
+  static NotificationEvent? build(String type, dynamic data) =>
+      _instance.buildEvent(type, data);
+}
