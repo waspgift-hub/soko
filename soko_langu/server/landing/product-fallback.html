@@ -46,8 +46,6 @@
   <span class="id" id="product-id">__SOKO_PRODUCT_ID__</span>
 
   <div class="actions">
-    <a class="btn btn-dark" data-store-app="android" id="btn-android" style="display:none" href="__ANDROID_STORE_URL__" rel="noopener">Open in the app</a>
-    <a class="btn btn-dark" data-store-app="ios" id="btn-ios" style="display:none" href="__IOS_STORE_URL__" rel="noopener">Open in the app</a>
     <a class="btn btn-dark" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20to%20get%20the%20Soko%20Vibe%20app.">Get the app on WhatsApp</a>
     <a class="btn btn-light" href="/">Back to sokovibe.co.tz</a>
   </div>
@@ -56,16 +54,14 @@
 
   <script>
     (function () {
+      // Store links are not published yet, so there is no app-store button to
+      // reveal here — only the WhatsApp request above. When the app ships,
+      // render those buttons from the server template instead of a static
+      // placeholder that can leak into the page.
       var idEl = document.getElementById('product-id');
       if (!idEl || idEl.textContent === '__SOKO_PRODUCT_ID__') {
         var seg = window.location.pathname.split('/').filter(Boolean);
         if (idEl && seg.length >= 2) idEl.textContent = seg[seg.length - 1];
-      }
-      if (document.getElementById('btn-android').getAttribute('href') !== '__ANDROID_STORE_URL__') {
-        document.getElementById('btn-android').style.display = 'inline-flex';
-      }
-      if (document.getElementById('btn-ios').getAttribute('href') !== '__IOS_STORE_URL__') {
-        document.getElementById('btn-ios').style.display = 'inline-flex';
       }
     })();
   </script>

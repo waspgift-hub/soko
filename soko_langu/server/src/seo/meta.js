@@ -17,9 +17,9 @@ const SITE = {
     'Soko Vibe is a Tanzania-based multi-vendor online marketplace operated in Dar es Salaam, Tanzania, '
     + 'enabling buyers and sellers to discover, list, buy and sell products and services online with secure '
     + 'transactions, seller verification, communication tools and delivery support.',
-  homeTitle: 'Soko Vibe — Tanzania Online Marketplace | Buy & Sell in Tanzania',
+  homeTitle: 'Soko Vibe — Soko la Mtandaoni Tanzania | Tanzania Online Marketplace',
   homeDescription:
-    'Soko Vibe is a Tanzania online marketplace where buyers and sellers can discover, buy and sell products and services securely across Tanzania.',
+    'Soko Vibe ni soko la mtandaoni la Tanzania. Weka bidhaa bure, nunua kwa malipo ya escrow kupitia ClickPesa, na upokee bidhaa nchi nzima.',
   logo: 'https://www.sokovibe.co.tz/assets/icon-512.png',
   email: 'support@sokovibe.co.tz',
   phone: '+255693273241',

@@ -51,6 +51,7 @@ const musicRouter = require('./modules/music/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
+const engagementRouter = require('./modules/engagement/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
@@ -262,6 +263,18 @@ for (const [route, file] of PUBLIC_HTML_PAGES) {
   });
 }
 
+// Every page above is also reachable as a raw *.html file through the static
+// mount below, which would publish each document at two URLs and split its
+// ranking signals. Fold the file form onto the clean URL permanently. Built
+// from PUBLIC_HTML_PAGES so a new page cannot reintroduce a duplicate.
+const LEGACY_HTML_REDIRECTS = { '/index.html': '/' };
+for (const [route, file] of PUBLIC_HTML_PAGES) {
+  LEGACY_HTML_REDIRECTS[`/${file}`] = route;
+}
+for (const [from, to] of Object.entries(LEGACY_HTML_REDIRECTS)) {
+  app.get(from, (req, res) => res.redirect(301, to));
+}
+
 // /marketing used to host the old landing; the site now owns the root.
 app.use('/marketing', (req, res) => {
   res.redirect(301, '/');
@@ -335,6 +348,7 @@ app.use('/api/v1/admin/kyc', adminKycRouter);
 app.use('/api/v1/admin', adsAdminRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/products', productRouter);
+app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/referrals', referralRouter);
 app.use('/api/v1/moderation', moderationRouter);
 app.use('/api/v1/data-deletion', deletionRequestRouter);
@@ -347,6 +361,7 @@ app.use('/api/v1/music', lyricsLimiter, musicRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
+app.use('/api/v1', engagementRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat; both mount

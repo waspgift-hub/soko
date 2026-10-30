@@ -2,18 +2,20 @@
 
 const express = require('express');
 const { SITE } = require('./meta');
-const { buildSitemapXml } = require('./sitemaps');
+const { buildSitemapXml, buildProductSitemapXml } = require('./sitemaps');
 
 const router = express.Router();
 
 // Public pages are fully crawlable. Everything that is app/private/dynamic is
 // blocked: the API, the admin panel, health endpoints, the fallback page used
 // by native-app deep links, and any future account/checkout surface.
-const ROBOTS_TXT = `User-agent: *
-Allow: /
-
-# Private / non-indexable surfaces
-Disallow: /api/
+//
+// AI answer engines are named explicitly so a future edit to the `*` group
+// cannot silently cut them off: Soko Vibe wants its public pages retrievable
+// and citable in AI search. This makes no claim about model-training crawlers
+// (GPTBot, CCBot, Google-Extended and friends) — they stay covered by `*`, and
+// the owner can add a training opt-out here without touching anything else.
+const PRIVATE_PATHS = `Disallow: /api/
 Disallow: /apiv1/
 Disallow: /admin/
 Disallow: /health
@@ -25,10 +27,37 @@ Disallow: /checkout
 Disallow: /auth/
 Disallow: /signin
 Disallow: /signup
-Disallow: /login
+Disallow: /login`;
 
-Sitemap: ${SITE.canonicalHost}/sitemap.xml
-`;
+const AI_SEARCH_AGENTS = [
+  'OAI-SearchBot',
+  'ChatGPT-User',
+  'PerplexityBot',
+  'Perplexity-User',
+  'Claude-User',
+  'Claude-SearchBot',
+  'DuckDuckBot',
+];
+
+// Consecutive User-agent lines share one rule set, so the named agents get the
+// same policy as `*` in a single compact group rather than eight repeated
+// blocks. Overlapping groups are legal in robots.txt; this is just readable.
+const ROBOTS_TXT = [
+  'User-agent: *',
+  'Allow: /',
+  '',
+  '# Private / non-indexable surfaces',
+  PRIVATE_PATHS,
+  '',
+  '# AI search / retrieval agents: read the same public pages, same exclusions.',
+  ...AI_SEARCH_AGENTS.map((agent) => `User-agent: ${agent}`),
+  'Allow: /',
+  PRIVATE_PATHS,
+  '',
+  `Sitemap: ${SITE.canonicalHost}/sitemap.xml`,
+  `Sitemap: ${SITE.canonicalHost}/sitemap-products.xml`,
+  '',
+].join('\n');
 
 router.get('/robots.txt', (req, res) => {
   res.type('text/plain').setHeader('Cache-Control', 'public, max-age=3600').send(ROBOTS_TXT);
@@ -54,6 +83,24 @@ router.get('/sitemap.xml', (req, res) => {
 
 // Legacy sitemap-file route kept so old crawler caches pointing at
 // /sitemaps/home.xml keep resolving to the static landing sitemap.
+router.get('/sitemap-products.xml', async (req, res) => {
+  let ids = [];
+  try {
+    const { getFirebaseFirestore } = require('../config/firebase');
+    const db = getFirebaseFirestore();
+    if (db) {
+      const snap = await db.collection('products').where('isActive', '==', true).limit(200).get();
+      ids = snap.docs.map((d) => d.id);
+    }
+  } catch (_) {
+    ids = [];
+  }
+  res
+    .type('application/xml')
+    .setHeader('Cache-Control', 'public, max-age=1800')
+    .send(buildProductSitemapXml(ids));
+});
+
 router.get('/sitemaps/:file', (req, res) => {
   if (req.params.file !== 'home.xml') {
     return res.status(404).type('text/plain').send('Not found');

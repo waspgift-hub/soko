@@ -12,7 +12,7 @@
     sw: {
       'tos_title': 'MASHARTI YA UTUMIAJI',
       'tos_last_updated': 'Ilisasishwa Mwisho: 3 October 2026',
-      'tos_intro': 'Sera hii inaeleza jambo moja rahisi: unapofanya kazi Soko Vibe, unakubali masharti haya. Ikiwa jambo lolote hapa halieleweki, wasiliana nasi kwa support@soko-vibe.com kabla ya kuendelea.',
+      'tos_intro': 'Sera hii inaeleza jambo moja rahisi: unapofanya kazi Soko Vibe, unakubali masharti haya. Ikiwa jambo lolote hapa halieleweki, wasiliana nasi kwa support@sokovibe.co.tz kabla ya kuendelea.',
       'tos_section_1_title': '1. KUKUBALI',
       'tos_section_1_body': 'Kwa kufungua akaunti au kutumia Soko Vibe, unakubali masharti haya na Sera yetu ya Faragha. Ukiwa hukubaliani, acha kutumia Jukwaa na ufute akaunti yako.',
       'tos_section_2_title': '2. JIULI YA KUPATAJI',
@@ -36,7 +36,7 @@
       'tos_footer': '© 2026 Soko Vibe. Haki zote zimehifadhiwa.',
       'pp_title': 'SERA YA FARAGHA',
       'pp_last_updated': 'Ilisasishwa Mwisho: 3 October 2026',
-      'pp_intro': 'Hii ni maelezo mafupi ya data tunayokusanya na jinsi tunavyotumia. Maswali yoyote: dpo@soko-vibe.com.',
+      'pp_intro': 'Hii ni maelezo mafupi ya data tunayokusanya na jinsi tunavyotumia. Maswali yoyote: dpo@sokovibe.co.tz.',
       'pp_section_1_title': '1. DATA TUNAYOKUSANYA',
       'pp_section_1_body': 'Jina na namba ya simu. Eneo la GPS unapotumia programu kupeleka bidhaa. Picha za bidhaa unazouza. Nyaraka za KYC ikiwa wewe ni muuzaji. Riwaya ya malipo, matumizi na majibu ya programu. Nyimbo zako za kwenye simu zinasomwa tu ili kuonyesha nyimbo zako - hazihitajwi kwa ajili ya kutuma data yoyote kwa mtu mwingine.',
       'pp_section_2_title': '2. KWA NINI TUNAYAKUSANYA',
@@ -54,7 +54,7 @@
       'pp_section_8_title': '8. KUHAMISHWA DATA NJE YA TANZANIA',
       'pp_section_8_body': 'Data yako huhifadhiwa kwenye vituo vyetu au miamboni ya watu wa tatu ambayo yako nje ya Tanzania. Hii ni kwa sheria ya Ulinzi wa Data ya Tanzania (2022), ambayo inadai kibali cha Mamlaka kabla ya kuhamisha data nje ya nchi. Tunafanya hivyo kwa udhibiti unaoendelea.',
       'pp_section_9_title': '9. HIKI UNACHOKUWA',
-      'pp_section_9_body': 'Unaweza kuona data yako, kuirekebisha au kuifuta kwa kutuma ombi kwa dpo@soko-vibe.com. Tunajibu ndani ya siku 14 za kazi. Unaweza kukataa \' +\n        \'matangazo ya sokofu wakati wowote, lakini arifa za maagizo na usalama \' +\n        \'zitaendelea. Ukichukua matatizo zaidi, unaweza kulalamika kwa Mamlaka ya \' +\n        \'Ulinzi wa Data Tanzania (PDPC).',
+      'pp_section_9_body': 'Unaweza kuona data yako, kuirekebisha au kuifuta kwa kutuma ombi kwa dpo@sokovibe.co.tz. Tunajibu ndani ya siku 14 za kazi. Unaweza kukataa \' +\n        \'matangazo ya sokofu wakati wowote, lakini arifa za maagizo na usalama \' +\n        \'zitaendelea. Ukichukua matatizo zaidi, unaweza kulalamika kwa Mamlaka ya \' +\n        \'Ulinzi wa Data Tanzania (PDPC).',
       'pp_section_10_title': '10. ULINZI NA KUBADILISHA',
       'pp_section_10_body': 'Tunatumia ufikiaji uliofunzwa na ufichuzi wa data ili kulinda taarifa zako na fedha za watumiaji. Tunaweza kurekebisha Sera hii wakati wowote; tutataarifa watumiaji kwa barua pepe au arifa kabla ya mabadiliko.',
       'pp_footer': '© 2026 Soko Vibe. Haki zote zimehifadhiwa.',
@@ -63,7 +63,7 @@
     en: {
       'tos_title': 'TERMS OF SERVICE',
       'tos_last_updated': 'Last updated: 3 October 2026',
-      'tos_intro': 'These terms say one simple thing: by using Soko Vibe you agree to them. If anything here is unclear, email us at support@soko-vibe.com before you continue.',
+      'tos_intro': 'These terms say one simple thing: by using Soko Vibe you agree to them. If anything here is unclear, email us at support@sokovibe.co.tz before you continue.',
       'tos_section_1_title': '1. AGREEMENT',
       'tos_section_1_body': 'By creating an account or using Soko Vibe you accept these terms and our Privacy Policy. If you do not agree, stop using the app and delete your account.',
       'tos_section_2_title': '2. WHO CAN USE THE APP',
@@ -87,7 +87,7 @@
       'tos_footer': '© 2026 Soko Vibe. All rights reserved.',
       'pp_title': 'PRIVACY POLICY',
       'pp_last_updated': 'Last updated: 3 October 2026',
-      'pp_intro': 'A short, plain summary of what we collect and why. Questions: dpo@soko-vibe.com.',
+      'pp_intro': 'A short, plain summary of what we collect and why. Questions: dpo@sokovibe.co.tz.',
       'pp_section_1_title': '1. WHAT WE COLLECT',
       'pp_section_1_body': 'Your name and phone number. GPS while you use the app to deliver an item. Photos of what you sell. KYC documents if you are a seller. Payment history, usage data and crash reports. Songs on your phone are read only to show you your own music - they are never uploaded or shared.',
       'pp_section_2_title': '2. WHY WE COLLECT IT',
@@ -105,14 +105,13 @@
       'pp_section_8_title': '8. DATA HELD OUTSIDE TANZANIA',
       'pp_section_8_body': 'Your data is stored in our servers and in third-party infrastructure located outside Tanzania. Tanzania\'s Personal Data Protection Act (2022) requires a permit from the regulator before personal data leaves the country, and we hold that oversight.',
       'pp_section_9_title': '9. YOUR RIGHTS',
-      'pp_section_9_body': 'You can see, correct or delete your data by emailing dpo@soko-vibe.com. We respond within 14 working days. You can opt out of marketing any time, though order and security messages continue. If we do not resolve it, you may complain to the Personal Data Protection Commission (PDPC).',
+      'pp_section_9_body': 'You can see, correct or delete your data by emailing dpo@sokovibe.co.tz. We respond within 14 working days. You can opt out of marketing any time, though order and security messages continue. If we do not resolve it, you may complain to the Personal Data Protection Commission (PDPC).',
       'pp_section_10_title': '10. SECURITY AND CHANGES',
       'pp_section_10_body': 'We use restricted access and encryption to protect your information and user funds. We may update this policy; we will notify users by email or in-app notice before a change takes effect.',
       'pp_footer': '© 2026 Soko Vibe. All rights reserved.',
     },
   };
 
-  };
   if (!window.SokoI18n) throw new Error("legal_i18n.js must load after i18n.js");
   Object.keys(LEGAL).forEach(function (lang) {
     if (!window.SokoI18n.DICT[lang]) window.SokoI18n.DICT[lang] = {};

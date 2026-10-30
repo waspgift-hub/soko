@@ -33,6 +33,21 @@ const shells = [
 ];
 
 let failures = 0;
+
+// Key coverage alone is not enough: a file that does not parse still has every
+// key in it, and a SyntaxError blanks all of these pages because the bodies are
+// rendered from JS. Parse both copies before checking what they contain.
+for (const copy of ['hosting/legal_i18n.js', 'server/landing/legal_i18n.js']) {
+  const code = fs.readFileSync(path.join(root, copy), 'utf8');
+  try {
+    new Function(code);
+    console.log(`${copy} | parses OK`);
+  } catch (e) {
+    console.log(`${copy} | SYNTAX ERROR: ${e.message}`);
+    failures++;
+  }
+}
+
 for (const [file, prefix] of shells) {
   const html = fs.readFileSync(path.join(root, file), 'utf8');
   const used = [...html.matchAll(/data-i18n="([a-z0-9_]+)"/g)].map((x) => x[1]);

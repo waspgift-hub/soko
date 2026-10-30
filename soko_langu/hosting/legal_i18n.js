@@ -112,7 +112,6 @@
     },
   };
 
-  };
   if (!window.SokoI18n) throw new Error("legal_i18n.js must load after i18n.js");
   Object.keys(LEGAL).forEach(function (lang) {
     if (!window.SokoI18n.DICT[lang]) window.SokoI18n.DICT[lang] = {};

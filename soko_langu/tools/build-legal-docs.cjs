@@ -45,8 +45,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const LAST_UPDATED = '3 October 2026';
 
-const SUPPORT_EMAIL = 'support@soko-vibe.com';
-const DPO_EMAIL = 'dpo@soko-vibe.com';
+const SUPPORT_EMAIL = 'support@sokovibe.co.tz';
+const DPO_EMAIL = 'dpo@sokovibe.co.tz';
 const WEBSITE = 'https://www.sokovibe.co.tz';
 
 /* ------------------------------------------------------------------ */
@@ -388,8 +388,11 @@ function buildJs() {
   const swP = block('pp', PP.sw, PP_SECTIONS);
   const enP = block('pp', PP.en, PP_SECTIONS);
 
+  // NOTE: `footer` must start at the `if`, not with a closing brace — it is
+  // appended after `${header}` already closes LEGAL with "  };". Starting it
+  // with "  };" emitted a second stray brace, which was a SyntaxError that
+  // blanked every legal page on the live site (all bodies are JS-rendered).
   const footer = `
-  };
   if (!window.SokoI18n) throw new Error("legal_i18n.js must load after i18n.js");
   Object.keys(LEGAL).forEach(function (lang) {
     if (!window.SokoI18n.DICT[lang]) window.SokoI18n.DICT[lang] = {};
@@ -405,7 +408,7 @@ function buildJs() {
 }
 
 /** Same doc-card markup as the existing privacy page, for one document. */
-function shell({ titleKey, title, updatedKey, introKey, prefix, sections, url }) {
+function shell({ titleKey, title, titleTag, desc, updatedKey, introKey, prefix, sections, url }) {
   const cards = sections
     .map(
       (n) =>
@@ -414,22 +417,33 @@ function shell({ titleKey, title, updatedKey, introKey, prefix, sections, url })
     )
     .join('\n');
 
+  // `url` is the canonical clean route (/privacy-policy, not /privacy.html);
+  // the *.html form 301s there in app.js, so canonicalising to the file URL
+  // would point crawlers at a redirect.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title.toUpperCase()}</title>
-  <meta name="description" content="Soko Vibe is Tanzania's marketplace. Buy and sell with escrow-protected ClickPesa payments and nationwide delivery.">
+  <title>${titleTag} | Soko Vibe</title>
+  <meta name="description" content="${desc}">
+  <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#000000">
-  <meta property="og:title" content="Soko Vibe">
-  <meta property="og:description" content="Terms of Service and Privacy Policy for Soko Vibe.">
+  <link rel="canonical" href="${url}">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Soko Vibe">
   <meta property="og:url" content="${url}">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta property="og:title" content="${titleTag} | Soko Vibe">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:image" content="${WEBSITE}/assets/icon-512.png?v=2">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${titleTag} | Soko Vibe">
+  <meta name="twitter:description" content="${desc}">
+  <meta name="twitter:image" content="${WEBSITE}/assets/icon-512.png?v=2">
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico?v=2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png?v=2">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=2">
   <link rel="stylesheet" href="styles.css">
   <script src="i18n.js"></script>
   <script src="legal_i18n.js"></script>
@@ -437,7 +451,7 @@ function shell({ titleKey, title, updatedKey, introKey, prefix, sections, url })
 <body>
   <header class="site">
     <div class="nav-inner">
-      <a class="brand" href="index.html">
+      <a class="brand" href="/">
         <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" rx="112" fill="#000000"/><path d="M256 96l128 96v224H128V192z" fill="#ffffff" transform="scale(0.9) translate(28,28)"/></svg>
         Soko Vibe
       </a>
@@ -446,14 +460,14 @@ function shell({ titleKey, title, updatedKey, introKey, prefix, sections, url })
           <option value="sw">Kiswahili</option>
           <option value="en">English</option>
         </select>
-        <a class="nav-cta" href="index.html#app" data-i18n="nav_get_app">Get the App</a>
+        <a class="nav-cta" href="/#app" data-i18n="nav_get_app">Get the App</a>
       </div>
     </div>
   </header>
 
   <main class="doc">
     <div class="doc-inner">
-      <a class="back-home" href="index.html">&larr; <span data-i18n="back_home">Back to home</span></a>
+      <a class="back-home" href="/">&larr; <span data-i18n="back_home">Back to home</span></a>
       <h1 data-i18n="${titleKey}">${title.toUpperCase()}</h1>
       <p class="last-updated" data-i18n="${updatedKey}">${LAST_UPDATED}</p>
       <div class="doc-intro" data-i18n="${introKey}"></div>
@@ -485,22 +499,50 @@ const pages = [
   {
     dir: path.join(ROOT, 'hosting'),
     file: 'terms.html',
-    doc: { prefix: 'tos', title: TOS.en.title, sections: TOS_SECTIONS, url: `${WEBSITE}/terms.html` },
+    doc: {
+      prefix: 'tos',
+      title: TOS.en.title,
+      titleTag: 'Terms of Service',
+      desc: 'The terms that govern buying and selling on Soko Vibe: accounts, escrow payments, seller obligations, disputes and account suspension.',
+      sections: TOS_SECTIONS,
+      url: `${WEBSITE}/terms-of-service`,
+    },
   },
   {
     dir: path.join(ROOT, 'server', 'landing'),
     file: 'terms.html',
-    doc: { prefix: 'tos', title: TOS.en.title, sections: TOS_SECTIONS, url: `${WEBSITE}/terms.html` },
+    doc: {
+      prefix: 'tos',
+      title: TOS.en.title,
+      titleTag: 'Terms of Service',
+      desc: 'The terms that govern buying and selling on Soko Vibe: accounts, escrow payments, seller obligations, disputes and account suspension.',
+      sections: TOS_SECTIONS,
+      url: `${WEBSITE}/terms-of-service`,
+    },
   },
   {
     dir: path.join(ROOT, 'hosting'),
     file: 'privacy.html',
-    doc: { prefix: 'pp', title: PP.en.title, sections: PP_SECTIONS, url: `${WEBSITE}/privacy.html` },
+    doc: {
+      prefix: 'pp',
+      title: PP.en.title,
+      titleTag: 'Privacy Policy',
+      desc: "How Soko Vibe collects, uses and protects personal data, your rights under Tanzania's Personal Data Protection Act 2022, and how to reach our Data Protection Officer.",
+      sections: PP_SECTIONS,
+      url: `${WEBSITE}/privacy-policy`,
+    },
   },
   {
     dir: path.join(ROOT, 'server', 'landing'),
     file: 'privacy.html',
-    doc: { prefix: 'pp', title: PP.en.title, sections: PP_SECTIONS, url: `${WEBSITE}/privacy.html` },
+    doc: {
+      prefix: 'pp',
+      title: PP.en.title,
+      titleTag: 'Privacy Policy',
+      desc: "How Soko Vibe collects, uses and protects personal data, your rights under Tanzania's Personal Data Protection Act 2022, and how to reach our Data Protection Officer.",
+      sections: PP_SECTIONS,
+      url: `${WEBSITE}/privacy-policy`,
+    },
   },
 ];
 
@@ -508,6 +550,8 @@ for (const p of pages) {
   const html = shell({
     titleKey: `${p.doc.prefix}_title`,
     title: p.doc.title,
+    titleTag: p.doc.titleTag,
+    desc: p.doc.desc,
     updatedKey: `${p.doc.prefix}_last_updated`,
     introKey: `${p.doc.prefix}_intro`,
     prefix: p.doc.prefix,

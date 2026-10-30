@@ -730,6 +730,7 @@ footer.site {
 
 .footer-brand p { font-size: 14px; color: var(--on-surface-variant); margin-top: 12px; max-width: 320px; }
 
+footer h3,
 footer h4 { font-size: 14px; margin-bottom: 12px; }
 
 footer a {
