@@ -11,7 +11,6 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/home/product_detail.dart';
 import '../screens/home/product_reviews_screen.dart';
 import '../screens/home/search_screen.dart';
-import '../screens/music/music_catalog_screen.dart';
 import '../screens/home/checkout_screen.dart';
 import '../screens/home/category_screen.dart';
 import '../screens/home/category_products_screen.dart';
@@ -142,10 +141,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.home,
         pageBuilder: (context, state) => _premiumPage(const AuthGate()),
-      ),
-      GoRoute(
-        path: AppRoutes.music,
-        pageBuilder: (context, state) => _premiumPage(const MusicCatalogScreen()),
       ),
       GoRoute(
         path: AppRoutes.login,
