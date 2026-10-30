@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -19,7 +18,6 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'package:safe_text/safe_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- App modules ---
 import 'app/app_state.dart' as app_state;
@@ -74,30 +72,6 @@ typedef CurrencyCallback = void Function(String);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Configure Android/iOS media-session notifications for music playback.
-  if (!kIsWeb) {
-    try {
-      await JustAudioBackground.init(
-        androidNotificationChannelId: 'co.tz.sokovibe.music.playback',
-        androidNotificationChannelName: 'SokoVibe Music playback',
-        androidNotificationOngoing: true,
-      );
-    } catch (e) {
-      debugPrint('Music background service initialization failed: $e');
-    }
-  }
-
-  // Supabase powers the separate SokoVibe Music account/profile/settings area.
-  // The publishable key is intended for client apps; table access is protected by RLS.
-  try {
-    await Supabase.initialize(
-      url: 'https://ryaqkhoattdaghusbiuz.supabase.co',
-      publishableKey: 'sb_publishable_BcyNW6_2gruhx1uQQUZYXQ_UwayGbQO',
-    );
-  } catch (e) {
-    debugPrint('Supabase: initialization failed — $e');
-  }
 
   // Cap image cache at 200 MB to prevent OOM on low-RAM devices
   // while keeping enough headroom for the product feed + chat images.

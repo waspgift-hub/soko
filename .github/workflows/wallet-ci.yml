@@ -1,16 +1,16 @@
-name: Wallet CI
+name: Marketplace Payments CI
 
 on:
   push:
-    branches: [main, 'wallet/**']
+    branches: [main]
     paths:
-      - 'wallet_app/**'
       - 'wallet_worker/**'
+      - 'payment-system/**'
       - '.github/workflows/wallet-ci.yml'
   pull_request:
     paths:
-      - 'wallet_app/**'
       - 'wallet_worker/**'
+      - 'payment-system/**'
       - '.github/workflows/wallet-ci.yml'
   workflow_dispatch:
 
@@ -18,35 +18,6 @@ permissions:
   contents: read
 
 jobs:
-  wallet-apk:
-    name: Build Soko Vibe Wallet ARM64 APK
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.0'
-          channel: stable
-          cache: true
-      - name: Create Android scaffold
-        run: flutter create --platforms=android --org tz.sokovibe --project-name soko_vibe_wallet build_wallet
-      - name: Copy wallet source
-        run: |
-          cp wallet_app/pubspec.yaml build_wallet/pubspec.yaml
-          cp wallet_app/lib/main.dart build_wallet/lib/main.dart
-      - name: Analyze
-        working-directory: build_wallet
-        run: flutter analyze
-      - name: Build ARM64 release APK
-        working-directory: build_wallet
-        run: flutter build apk --release --target-platform android-arm64
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: soko-vibe-wallet-arm64
-          path: build_wallet/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-
   mongike-contract:
     name: Verify Mongike v3 contract
     runs-on: ubuntu-latest

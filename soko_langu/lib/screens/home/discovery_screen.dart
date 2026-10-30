@@ -155,11 +155,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         title: Text(context.tr('discovery')),
         actions: [
           IconButton(
-            tooltip: 'SokoVibe Music',
-            icon: const Icon(Icons.music_note_rounded),
-            onPressed: () => context.push(AppRoutes.music),
-          ),
-          IconButton(
             icon: const Icon(Icons.monetization_on_outlined),
             onPressed: () => _showCurrencyPicker(context),
           ),

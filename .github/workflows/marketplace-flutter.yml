@@ -1,4 +1,4 @@
-name: SokoVibe Music APK Validation
+name: SokoVibe Marketplace Flutter CI
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: music-apk-${{ github.ref }}
+  group: marketplace-flutter-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -54,7 +54,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sokovibe-music-test-apk
+          name: sokovibe-marketplace-test-apk
           path: soko_langu/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 14
