@@ -1285,7 +1285,7 @@ router.post('/launch-waitlist/notify', requireActiveAdmin, async (req, res) => {
     processed: batch.length,
     sent,
     failed,
-    remainingMayExist: pending.length > batch.length,
+    remainingMayExist: pending.length > sent,
   });
 });
 
