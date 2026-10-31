@@ -4,6 +4,7 @@
 require('./utils/express-async');
 
 const express = require('express');
+const crypto = require('crypto');
 const path = require('path');
 const compression = require('compression');
 const cors = require('cors');
@@ -53,6 +54,7 @@ const kycRouter = require('./modules/kyc/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
+const { getFirebaseFirestore } = require('./config/firebase');
 const requestId = require('./middleware/requestId');
 const { jsonError } = require('./utils/http');
 
@@ -370,6 +372,51 @@ console.log('[AI] persistent chat mounted');
 app.use('/api/agent', aiChatLimiter, agentRouter);
 console.log('[AGENT] agent routes mounted');
 app.use('/api', generalLimiter, legacyShopRouter);
+
+app.post('/api/launch-waitlist', async (req, res) => {
+  try {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const consent = Boolean(req.body && req.body.consent === true);
+    const source = String((req.body && req.body.source) || '/').slice(0, 200);
+
+    if (!consent) {
+      return res.status(400).json({ error: 'Please agree to receive the launch announcement.' });
+    }
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+
+    const firestore = getFirebaseFirestore();
+    if (!firestore) {
+      return res.status(503).json({ error: 'Email sign-up is temporarily unavailable. Please try again later.' });
+    }
+
+    const id = crypto.createHash('sha256').update(email).digest('hex');
+    const ref = firestore.collection('launch_waitlist').doc(id);
+    const existing = await ref.get();
+    if (existing.exists && existing.data().status === 'subscribed') {
+      return res.status(200).json({ success: true, alreadySubscribed: true });
+    }
+
+    const admin = require('firebase-admin');
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    await ref.set({
+      email,
+      consent: true,
+      consentAt: timestamp,
+      source,
+      status: 'subscribed',
+      createdAt: timestamp,
+      launchNotifiedAt: null,
+    }, { merge: true });
+
+    return res.status(201).json({ success: true, alreadySubscribed: false });
+  } catch (error) {
+    console.error('[LAUNCH-WAITLIST] Signup failed:', error.message);
+    return res.status(503).json({ error: 'We could not save your email right now. Please try again later.' });
+  }
+});
+
 
 // Legacy-compat: proven old routers under original /api paths (payouts,
 // delivery OTP, search, notifications). Firestore is the same project, so
