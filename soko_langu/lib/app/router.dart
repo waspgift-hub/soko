@@ -34,8 +34,6 @@ import '../screens/onboarding/artwork_pack_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 
 import '../screens/profile/wishlist_screen.dart';
-import '../screens/music/music_screen.dart';
-import '../screens/music/now_playing_screen.dart';
 import '../screens/profile/my_ads_screen.dart';
 import '../screens/profile/seller_dashboard_screen.dart';
 import '../screens/profile/help_center_screen.dart';
@@ -478,17 +476,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.wishlist,
         pageBuilder: (context, state) => _premiumPage(const WishlistScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.music,
-        pageBuilder: (context, state) => _premiumPage(const MusicScreen()),
-        routes: [
-          GoRoute(
-            path: 'now-playing',
-            pageBuilder: (context, state) =>
-                _premiumPage(const NowPlayingScreen()),
-          ),
-        ],
       ),
       GoRoute(
         path: AppRoutes.myAds,
