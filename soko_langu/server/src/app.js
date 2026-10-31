@@ -47,7 +47,6 @@ const reconciliationRouter = require('./modules/reconciliation/routes');
 const notificationRouter = require('./modules/notifications/routes');
 const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
 const youtubeRouter = require('./modules/youtube/routes');
-const musicRouter = require('./modules/music/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
@@ -311,7 +310,7 @@ app.use('/', fallbackRouter);
 // Per-IP ceilings for the whole v1 surface (trust proxy is 1 hop, so req.ip is
 // the real client behind the Cloudflare worker). Admin gets a wider own limiter
 // so an auth/crawler loop against one endpoint can't exhaust the general one.
-const { generalLimiter, adminLimiter, aiLimiter, lyricsLimiter } = require('./middleware/rateLimiter');
+const { generalLimiter, adminLimiter, aiLimiter } = require('./middleware/rateLimiter');
 app.use('/api/v1', generalLimiter);
 app.use('/api/v1/admin', adminLimiter);
 app.use('/health', healthRouter);
@@ -342,8 +341,6 @@ app.use('/api/v1/reconciliation', reconciliationRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1', sellerAnalyticsRouter);
 app.use('/api/v1/youtube', youtubeRouter);
-// Rate limited per user because the lyrics AI fallback spends provider tokens.
-app.use('/api/v1/music', lyricsLimiter, musicRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
