@@ -879,7 +879,7 @@ Self-ping:
 1. SECRET ROTATION URGENT
    - server/.env was in git history (commit d7b2c6c)
    - All production secrets compromised
-   - Must rotate: Firebase SA, ClickPesa, SMTP, OneSignal, Cloudinary, Groq
+   - Must rotate: Firebase SA, ClickPesa, Resend API key, OneSignal, Cloudinary, Groq
 
 2. FIRESTORE SECURITY RULES
    - No Firestore admin user exists (none have isAdmin: true)
