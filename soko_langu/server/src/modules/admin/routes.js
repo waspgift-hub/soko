@@ -1231,4 +1231,62 @@ router.post(
   }
 );
 
+
+/**
+ * Send the official launch announcement to opted-in waitlist subscribers.
+ * Runs in small batches so the admin request stays within the API timeout.
+ */
+router.post('/launch-waitlist/notify', requireActiveAdmin, async (req, res) => {
+  const firestore = getFirebaseFirestore();
+  if (!firestore) {
+    return res.status(503).json({ success: false, error: 'Firestore is unavailable.' });
+  }
+
+  const allSubscribers = await firestore.collection('launch_waitlist')
+    .where('status', '==', 'subscribed')
+    .get();
+  const pending = allSubscribers.docs.filter((doc) => {
+    const data = doc.data();
+    return !data.launchNotifiedAt && data.email;
+  });
+  const batch = pending.slice(0, 10);
+
+  let sent = 0;
+  let failed = 0;
+  await Promise.all(batch.map(async (doc) => {
+    const email = String(doc.data().email).trim();
+    const html = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#17251d;max-width:600px;margin:auto">'
+      + '<h1>SokoVibe imezinduliwa</h1>'
+      + '<p>Habari,</p>'
+      + '<p>Asante kwa kujiunga na orodha ya taarifa za SokoVibe. Tunafurahi kukujulisha kuwa marketplace yetu iko tayari.</p>'
+      + '<p>Tembelea <a href="https://www.sokovibe.co.tz/">www.sokovibe.co.tz</a> kwa taarifa rasmi.</p>'
+      + '<p style="font-size:12px;color:#68756c">Ulipokea ujumbe huu kwa sababu uliomba taarifa za uzinduzi. Kwa kuomba kuondolewa kwenye orodha, wasiliana na support@sokovibe.co.tz.</p>'
+      + '</div>';
+
+    try {
+      const delivered = await sendMail(email, 'SokoVibe imezinduliwa', html);
+      if (!delivered) {
+        failed += 1;
+        return;
+      }
+      await doc.ref.update({
+        launchNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        launchNotificationStatus: 'sent',
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      console.error('[admin:launch-waitlist] delivery failed:', error.message);
+    }
+  }));
+
+  res.json({
+    success: true,
+    processed: batch.length,
+    sent,
+    failed,
+    remainingMayExist: pending.length > sent,
+  });
+});
+
 module.exports = router;
