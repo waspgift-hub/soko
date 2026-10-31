@@ -37,7 +37,7 @@ U haijamini mifumo yetu dhidi ya hackers. Hii ndiyo nyaraka rasmi ya usalama ya 
 |---------|----------|---------|
 | OTP generation | `server/index.js:1557` | `crypto.randomInt(100000, 1000000)` |
 | Rate limit | `server/index.js:1409-1443` | 3 per 15 min per email |
-| Transport | `server/index.js:1572-1623` | Nodemailer via Gmail SMTP; credentials in env |
+| Transport | `server/src/services/mailer.js` | Resend HTTPS API; `RESEND_API_KEY` and verified `RESEND_FROM` in Render env |
 
 ### 2.3 Password Policy
 
@@ -409,7 +409,7 @@ Centralized `RateLimiter` utility backed by `SharedPreferences` timestamps:
 |---------|----------|---------|
 | `.gitignore` includes | Root `.gitignore` | `CREDENTIALS.txt`, `*.p12`, `*.jks`, `*.keystore`, `google-services.json`, `GoogleService-Info.plist`, `server.err`, `*.err` |
 | Service account JSON | Env var only | `FIREBASE_SERVICE_ACCOUNT_JSON` — never committed |
-| All API keys | Env vars only | `CLICKPESA_CLIENT_ID`, `CLICKPESA_API_KEY`, `CLICKPESA_CHECKSUM_KEY`, `ADMIN_SECRET`, `CRON_SECRET`, `MALIPOPAY_WEBHOOK_SECRET`, `WHATSAPP_WEBHOOK_SECRET`, `GMAIL_USER`, `GMAIL_PASS` |
+| All API keys | Env vars only | `CLICKPESA_CLIENT_ID`, `CLICKPESA_API_KEY`, `CLICKPESA_CHECKSUM_KEY`, `ADMIN_SECRET`, `CRON_SECRET`, `MALIPOPAY_WEBHOOK_SECRET`, `WHATSAPP_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_FROM` |
 
 ---
 
