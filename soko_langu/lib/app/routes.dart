@@ -68,8 +68,6 @@ class AppRoutes {
   static const String verifyEmail = '/verify-email';
   static const String otpVerification = '/otp-verification';
   static const String mfaEnrollment = '/mfa-enrollment';
-  static const String music = '/music';
-  static const String nowPlaying = '/music/now-playing';
 
   // Social / verification routes
   static const String followers = '/followers';
