@@ -299,7 +299,7 @@ app.use('/api/v1/reviews', reviewRouter);
 // execute against Postgres, not Firestore.
 const { generalLimiter } = require('./middleware/rateLimiter');
 app.use('/api', generalLimiter, legacyShopRouter);
-app.post('/api/launch-waitlist', generalLimiter, async (req, res) => {
+app.post('/api/launch-waitlist', async (req, res) => {
   try {
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
     const consent = req.body && req.body.consent === true;
