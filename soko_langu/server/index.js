@@ -4,7 +4,7 @@ const compression = require('compression');
 const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
+const { sendMail } = require('./src/services/mailer');
 const axios = require('axios');
 const Redis = require('ioredis');
 const path = require('path');
@@ -425,36 +425,33 @@ async function sendOneSignalNotification(userId, title, body, data = {}, opts = 
 
   const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
   if (criticalTypes.includes(notifType)) {
-    sendEmailSmtp(userId, title, body).catch(() => {});
+    sendEmailNotification(userId, title, body).catch(() => {});
   }
 
   return result;
 }
 
-// ─── SMTP Email (free via Gmail — no domain needed) ─────
-const smtpTransporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-});
-
-async function sendEmailSmtp(userId, subject, bodyText) {
-  if (!userId) { console.log('[SMTP] No userId'); return false; }
+// ─── Transactional email via the shared Resend API mailer ─────
+async function sendEmailNotification(userId, subject, bodyText) {
+  if (!userId) { console.log('[MAILER] No userId'); return false; }
   try {
     const userRecord = await admin.auth().getUser(userId);
     const email = userRecord.email;
-    if (!email) { console.log(`[SMTP] No email for user ${userId}`); return false; }
-    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${subject || ''}</h2><p>${bodyText || ''}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
-    await smtpTransporter.sendMail({
-      from: process.env.SMTP_FROM || 'Soko Vibe <waspgift@gmail.com>',
-      to: email,
-      subject: subject || '',
-      html,
-    });
-    console.log(`[SMTP] sent to ${email} subject="${subject}"`);
+    if (!email) { console.log(`[MAILER] No email for user ${userId}`); return false; }
+    const safeSubject = String(subject || '');
+    const safeBody = String(bodyText || '');
+    const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${escapeHtml(safeSubject)}</h2><p>${escapeHtml(safeBody)}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+    const sent = await sendMail(email, safeSubject, html);
+    if (!sent) return false;
+    console.log(`[MAILER] sent to ${email} subject="${safeSubject}"`);
     return true;
-  } catch (e) { console.error(`[SMTP] FAILED user=${userId}: ${e.message}`); return false; }
+  } catch (error) {
+    console.error(`[MAILER] FAILED user=${userId}: ${error.message}`);
+    return false;
+  }
 }
 
 async function sendOneSignalBulk(userIds, title, body, data = {}, opts = {}) {
@@ -1605,21 +1602,14 @@ app.post('/api/auth/send-email-otp', otpEmailRateLimit, async (req, res) => {
     const lang = ['sw', 'en', 'zh'].includes(langCode) ? langCode : 'sw';
     const copy = localizeEmailOtp(lang);
 
-    // SMTP directly to the address (unlike sendEmailSmtp, the email may
-    // not be a registered Firebase user yet at this stage)
+    // Email may be unregistered at this pre-authentication stage; Resend
+    // sends directly to the submitted address without requiring a user lookup.
     const subject = copy.subject;
     const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${copy.heading}</h2><p>${copy.body}</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${copy.expires}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
 
-    try {
-      await smtpTransporter.sendMail({
-        from: process.env.SMTP_FROM || 'Soko Vibe <waspgift@gmail.com>',
-        to: cleanEmail,
-        subject,
-        html,
-      });
-      console.log(`[SMTP] email OTP sent to ${cleanEmail}`);
-    } catch (e) {
-      console.error('/api/auth/send-email-otp SMTP error:', e.message);
+    const sent = await sendMail(cleanEmail, subject, html);
+    if (!sent) {
+      console.error('/api/auth/send-email-otp Resend delivery failed');
       return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
