@@ -79,7 +79,7 @@ Flutter / Dart (SDK ^3.11.5)
   - intl, uuid, crypto, http, carousel_slider, google_fonts, path_provider, gal, open_file
 
 Node.js (>=18) / Express (^4.18.2)
-  - firebase-admin ^11, axios, compression, cors, dotenv, nodemailer
+  - firebase-admin ^11, axios, compression, cors, dotenv, Resend HTTP API (native fetch)
   - Start script: node --optimize-for-size --expose-gc index.js
 
 ================================================================================
@@ -493,7 +493,7 @@ Files: lib/services/notification_service.dart, lib/services/local_notification_s
   sms_enabled + district_new_products + interested_districts).
   general=false suppresses ALL push (master switch).
 - Critical push types bypass prefs (payment/order/dispute/refund/escrow/kyc/deposit).
-- SMTP email fallback for critical types (Gmail SMTP via nodemailer).
+- Resend API email fallback for critical notification types.
 - Preferences endpoints: POST /api/notifications/preferences/get|set.
 - Notification tap -> deep link: /receipt/:orderId, /order-detail/:orderId,
   /product/:productId, /chat/:receiverId, /flash-sale, /notifications.
@@ -699,7 +699,7 @@ Middleware & helpers:
   (MAX_DAILY_SALE_AMOUNT = 5,000,000), auditLog, processPayout,
   retryFailedPayout, updatePayoutStatus, notifyAdmins, sendSms,
   sendOneSignalNotification, sendOneSignalBulk, postOneSignalWithRetry,
-  sendEmailSmtp, applyClickPesaPayment, releaseExpiredEscrows,
+  sendEmailNotification (Resend API), applyClickPesaPayment, releaseExpiredEscrows,
   failStalePendingBoosts, deleteProductById.
 Rate limits: 30/min general, 5/min payments, 3 OTP per 15 min.
 Constants: PLATFORM_COMMISSION_PERCENT=0.035, AD_REVENUE_PER_VIEW=15,
@@ -800,7 +800,7 @@ firestore.indexes.json (composite indexes):
 CLICKPESA_CLIENT_ID, CLICKPESA_API_KEY, CLICKPESA_CHECKSUM_KEY,
 FIREBASE_SERVICE_ACCOUNT_JSON, ADMIN_SECRET, WEBHOOK_SECRET, WEBHOOK_URL,
 LIPA_TILL_NUMBER (5722554), LIPA_TILL_NAME (Soko Vibe Marketplace),
-PORT, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
+PORT, RESEND_API_KEY, RESEND_FROM,
 ESCROW_AUTO_RELEASE_DAYS (default 0 = unset; set to override BOTH local/regional
 escrow auto-release days), MAX_DAILY_SALE_AMOUNT (5000000),
 MESEJI_API_KEY, MESEJI_SENDER_ID,

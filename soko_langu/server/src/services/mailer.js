@@ -1,36 +1,56 @@
-// SMTP mailer for transactional email (OTP codes). Uses Gmail/app-password
-// style env config, same as the legacy server.
-const nodemailer = require('nodemailer');
-
-let transporter = null;
-
-function getTransporter() {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-  }
-  return transporter;
-}
+// Central transactional email service backed by the Resend HTTP API.
+// Render provides RESEND_API_KEY and RESEND_FROM as environment variables.
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 async function sendMail(to, subject, html) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.error('[MAILER] SMTP not configured');
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+
+  if (!apiKey || !from) {
+    console.error('[MAILER] Resend is not configured (RESEND_API_KEY / RESEND_FROM missing)');
     return false;
   }
+
+  const recipients = Array.isArray(to) ? to : [to];
+  if (
+    recipients.length === 0 ||
+    recipients.some((recipient) => typeof recipient !== 'string' || !recipient.trim()) ||
+    typeof subject !== 'string' ||
+    !subject.trim() ||
+    typeof html !== 'string' ||
+    !html.trim()
+  ) {
+    console.error('[MAILER] Invalid email payload');
+    return false;
+  }
+
   try {
-    await getTransporter().sendMail({
-      from: process.env.SMTP_FROM || 'Soko Vibe <waspgift@gmail.com>',
-      to,
-      subject,
-      html,
+    const response = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: recipients,
+        subject,
+        html,
+      }),
+      signal: AbortSignal.timeout(15000),
     });
+
+    if (!response.ok) {
+      // Do not log request headers or credentials. Resend's response body is
+      // useful for diagnosing rejected sender/domain configuration.
+      const details = await response.text().catch(() => '');
+      console.error('[MAILER] Resend API rejected email:', response.status, details.slice(0, 300));
+      return false;
+    }
+
     return true;
-  } catch (e) {
-    console.error('[MAILER] send failed:', e.message);
+  } catch (error) {
+    console.error('[MAILER] Resend request failed:', error.message);
     return false;
   }
 }

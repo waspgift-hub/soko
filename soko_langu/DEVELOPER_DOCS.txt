@@ -83,7 +83,7 @@ BACKEND (Server):
   - ioredis (Redis for distributed caching)
   - ip-range-check (webhook IP whitelisting)
   - axios (HTTP client)
-  - nodemailer (email OTP)
+  - Resend HTTP API (transactional email)
   - compression (gzip)
 
 DATABASE:
@@ -214,11 +214,8 @@ Server (.env):
   ESCROW_AUTO_RELEASE_DAYS         # Auto-release after 14 days
   REDIS_URL                        # Redis connection URL
   MAX_DAILY_SALE_AMOUNT            # Max daily purchase per buyer (5,000,000 TZS)
-  SMTP_HOST                        # Email SMTP host
-  SMTP_PORT                        # Email SMTP port
-  SMTP_USER                        # Email address
-  SMTP_PASS                        # Email app password
-  SMTP_FROM                        # Sender display name
+  RESEND_API_KEY                   # Resend API key (secret)
+  RESEND_FROM                      # Verified sender, e.g. SokoVibe <no-reply@sokovibe.co.tz>
   CLICKPESA_CLIENT_ID              # ClickPesa API client ID
   CLICKPESA_API_KEY                # ClickPesa API key
   CLICKPESA_CHECKSUM_KEY           # ClickPesa checksum key
@@ -882,7 +879,7 @@ Self-ping:
 1. SECRET ROTATION URGENT
    - server/.env was in git history (commit d7b2c6c)
    - All production secrets compromised
-   - Must rotate: Firebase SA, ClickPesa, SMTP, OneSignal, Cloudinary, Groq
+   - Must rotate: Firebase SA, ClickPesa, Resend API key, OneSignal, Cloudinary, Groq
 
 2. FIRESTORE SECURITY RULES
    - No Firestore admin user exists (none have isAdmin: true)

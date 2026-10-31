@@ -85,7 +85,7 @@ async function verifyOtp(req, res) {
   }
 }
 
-// Send email OTP: same storage rules, delivered by SMTP.
+// Send email OTP: same storage rules, delivered through the shared Resend API mailer.
 async function sendEmailOtp(req, res) {
   try {
     const { email } = req.body;
