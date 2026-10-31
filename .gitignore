@@ -24,3 +24,12 @@ InShot_*.png
 analyze*.txt
 .firebase/
 *.firebase.cache
+
+# Flutter/Dart generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+
+# Firebase CLI local hosting cache
+.firebase/

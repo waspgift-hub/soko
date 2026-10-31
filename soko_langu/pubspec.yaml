@@ -83,7 +83,6 @@ dependencies:
   open_file: ^3.5.10
   video_player: ^2.9.2
   webview_flutter: ^4.13.0
-  on_audio_query: ^2.9.0
   # Audio goes through just_audio rather than video_player: only just_audio can
   # hand playback to audio_service, which is what supplies the notification,
   # lock-screen controls and background playback. video_player stays for video.
