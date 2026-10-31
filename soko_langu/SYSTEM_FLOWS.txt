@@ -42,7 +42,7 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
      |  Google/magic |    |  - users         |   | - OneSignal       |
      |  link)        |    |  - products      |   | - Meseji/NotifyAf |
      +---------------+    |  - transactions  |   | - Cloudinary      |
-                          |  - orders        |   | - SMTP (email)    |
+                          |  - orders        |   | - Resend API      |
                           |  - chat_rooms    |   | - Groq AI         |
                           |  - ... (ona s.25)|   | - Google AdMob    |
                           +------------------+   +-------------------+
@@ -71,7 +71,7 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   - firebase-admin ^11 (Firestore, Auth, FCM legacy)
   - ClickPesa API (malipo halisi) — server/clickpesa.js (343 lines)
   - OneSignal REST API (push notifications)
-  - Nodemailer SMTP (email OTP / arifa)
+  - Resend HTTP API (email OTP / transactional arifa)
   - Groq API (chat + Whisper transcription) — server/groq.js
   - Cloudinary (signed upload) — /api/cloudinary/sign
 
@@ -123,7 +123,7 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
 
 2.4 Email OTP (badala ya password)
 ------------------------------------------------
-  POST /api/auth/send-email-otp -> SMTP OTP kwa email
+  POST /api/auth/send-email-otp -> Resend API OTP kwa email
   POST /api/auth/verify-email-otp -> thibitisha
   POST /api/auth/check-phone | check-email -> uthibiti wa kuwepo akaunti
   POST /api/auth/reset-password-by-phone -> badilisha password bila kuingia
@@ -481,7 +481,7 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   3. SMS — sendSms() (Meseji kwanza muundo 07, Notify Africa ikishindwa
      2557). Inatumika kwa: OTP, dispatch, delivery, payment, refund
      (SmsNotificationService na server/listener.js)
-  4. Email (SMTP) — OTP, uthibitisho, arifa muhimu (criticalTypes)
+  4. Email (Resend API) — OTP, uthibitisho, arifa muhimu (criticalTypes)
 
   Foreground heads-up: OneSignal.addForegroundWillDisplayListener ->
   preventDefault() -> LocalNotificationService.showHeadsUp() kwenye channel
@@ -704,7 +704,7 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   - OneSignal: push notifications (App ID 2e50d6a7-...)
   - Meseji SMS (muundo 07) -> Notify Africa (2557) fallback
   - Cloudinary (signed uploads, folder soko_langu)
-  - SMTP/Nodemailer (Gmail App Password)
+  - Resend HTTP API (RESEND_API_KEY + verified sender)
   - Groq AI (chat + Whisper)
   - Google: Firebase Auth/App Check/Crashlytics/Performance/AdMob,
     Google Sign-In, Maps/Geocoding/Geolocator
