@@ -7,6 +7,7 @@ const settingsService = require('./settings-service');
 const activity = require('../../services/activity');
 const { getPrisma } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
+const { sendMail } = require('../../services/mailer');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 
 const router = Router();
@@ -664,5 +665,46 @@ router.put(
     }
   }
 );
+
+
+/**
+ * Send the official launch announcement to opted-in waitlist subscribers.
+ * Trigger manually by an authenticated admin when the marketplace is ready.
+ * Processes at most 50 records per request and marks only successful sends.
+ */
+router.post('/launch-waitlist/notify', async (req, res) => {
+  const firestore = getFirebaseFirestore();
+  if (!firestore) return res.status(503).json({ success: false, error: 'Firestore is unavailable.' });
+  const snapshot = await firestore.collection('launch_waitlist')
+    .where('status', '==', 'subscribed')
+    .where('launchNotifiedAt', '==', null)
+    .limit(50)
+    .get();
+
+  let sent = 0;
+  let failed = 0;
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.email) { failed += 1; continue; }
+    const safeEmail = String(data.email).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const html = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#17251d;max-width:600px;margin:auto">'
+      + '<h1>SokoVibe imezinduliwa</h1>'
+      + '<p>Habari,</p><p>Asante kwa kujiunga na orodha ya taarifa za SokoVibe. Tunafurahi kukujulisha kuwa marketplace yetu iko tayari.</p>'
+      + '<p>Tembelea <a href="https://www.sokovibe.co.tz/">www.sokovibe.co.tz</a> kwa taarifa rasmi.</p>'
+      + '<p style="font-size:12px;color:#68756c">Ulipokea ujumbe huu kwa sababu uliomba taarifa za uzinduzi. Kwa kuomba kuondolewa kwenye orodha, jibu ujumbe huu au wasiliana na support@sokovibe.co.tz.</p>'
+      + '</div>';
+    const ok = await sendMail(data.email, 'SokoVibe imezinduliwa', html);
+    if (ok) {
+      await doc.ref.update({
+        launchNotifiedAt: require('firebase-admin').firestore.FieldValue.serverTimestamp(),
+        launchNotificationStatus: 'sent'
+      });
+      sent += 1;
+    } else {
+      failed += 1;
+    }
+  }
+  res.json({ success: true, processed: snapshot.size, sent, failed, remainingMayExist: snapshot.size === 50 });
+});
 
 module.exports = router;
