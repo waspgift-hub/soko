@@ -52,6 +52,7 @@ const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
+const whatsappWebhookRouter = require('./modules/whatsapp/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 const { getFirebaseFirestore } = require('./config/firebase');
@@ -198,6 +199,11 @@ app.use(cors({
   credentials: false,
   maxAge: 86400,
 }));
+
+// WhatsApp webhooks must see the exact raw bytes: Meta signs the payload with
+// HMAC-SHA256, and re-serialising via express.json would change them. Mounted
+// before the global JSON parser; the router applies express.raw itself.
+app.use('/api/webhooks/whatsapp', whatsappWebhookRouter);
 
 // Body parsing. Image/video bytes never travel in a JSON body anymore (presigned
 // R2 PUT / direct Cloudinary upload), so 1mb is generous for every v1 payload —

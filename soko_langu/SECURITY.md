@@ -88,12 +88,15 @@ Webhooks are registered **before** the global rate limiter (lines 139, 184, 239)
 
 | Layer | Mechanism | Location |
 |-------|-----------|----------|
-| **1. HMAC-SHA256** | `JSON.stringify(body)` hashed with `WHATSAPP_WEBHOOK_SECRET`; constant-time comparison via `crypto.timingSafeEqual` | `server/index.js:143-181` |
-| **2. PDPA Compliance** | Phone numbers masked in all console logs | `server/index.js:167` |
+| **1. Verify token** | `GET /api/webhooks/whatsapp` echoes `hub.challenge` only when `hub.verify_token` matches `WHATSAPP_WEBHOOK_VERIFY_TOKEN` (constant-time compare) | `server/src/modules/whatsapp/webhook-controller.js` |
+| **2. HMAC-SHA256** | Exact raw request bytes hashed with `WHATSAPP_APP_SECRET`; compared against `X-Hub-Signature-256` via `crypto.timingSafeEqual`. Production fails closed when the secret is missing. | `server/src/modules/whatsapp/webhook-controller.js` |
+| **3. Idempotency** | Document id derived from Meta's `wamid` (messages) or `status id + status` (receipts), so retries overwrite instead of duplicating | `server/src/modules/whatsapp/webhook-store.js` |
 
 ### 3.4 Raw Body Preservation
 
-`express.json()` configured with `verify: (req, _res, buf) => { req.rawBody = buf; }` — preserves exact bytes for HMAC verification. Without this, JSON parsing could alter whitespace/encoding.
+The WhatsApp router applies `express.raw({ type: 'application/json' })` and is
+mounted before the global `express.json()` parser. Meta signs the exact bytes,
+so re-serialising the body would invalidate `X-Hub-Signature-256`.
 
 ---
 

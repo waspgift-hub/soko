@@ -68,12 +68,16 @@ const config = {
 
   // WhatsApp Business Cloud API (OTP template delivery). Missing token/phone
   // number id is a valid no-op — the delivery chain then falls back to SMS.
+  // verifyToken/appSecret back the inbound webhook: verifyToken is the value
+  // pasted into the Meta dashboard, appSecret validates X-Hub-Signature-256.
   whatsapp: {
     token: process.env.WHATSAPP_BUSINESS_TOKEN,
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     baseUrl: process.env.WHATSAPP_GRAPH_BASE_URL || 'https://graph.facebook.com/v20.0',
     templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'otp',
     language: process.env.WHATSAPP_LANGUAGE || 'sw',
+    verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    appSecret: process.env.WHATSAPP_APP_SECRET,
   },
   
   // AI
