@@ -295,7 +295,6 @@ class ProductService {
           originalError: Exception("Account suspended"),
         );
       }
-      final kycApproved = userData?['kyc']?['approved'] == true;
       // No product-count gate: sellers list unlimited products with or without KYC.
 
       step = 'upload-images';
@@ -321,14 +320,6 @@ class ProductService {
 
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
-      // Mirrors the verified KYC state already read above. This used to be
-      // hardcoded `true`, so every newly listed product shipped with
-      // sellerKycApproved:true and rendered a green tick for a seller who had
-      // never been verified. It is a denormalised copy of a server-owned flag
-      // for search/badging only — the authoritative Blue Tick is resolved from
-      // trusted state by SellerVerificationService, never from this field.
-      final bool sellerKycApproved = kycApproved;
-
       if (userDoc.exists) {
         final data = userDoc.data()!;
         final phone = data['phone'];
@@ -374,7 +365,7 @@ class ProductService {
           createdId = await _writeProduct(
             user.uid, name, description, price, currency, resolvedImageUrls,
             category, subcategory, stock, sellerName, sellerPhone,
-            sellerKycApproved, isWholesale, wholesaleTiers, variants,
+            isWholesale, wholesaleTiers, variants,
             attributes, brand, condition, location, district, barcode,
             imageMetadata, resolvedVideoUrl,
           );
@@ -386,7 +377,7 @@ class ProductService {
         createdId = await _writeProduct(
           user.uid, name, description, price, currency, resolvedImageUrls,
           category, subcategory, stock, sellerName, sellerPhone,
-          sellerKycApproved, isWholesale, wholesaleTiers, variants,
+          isWholesale, wholesaleTiers, variants,
           attributes, brand, condition, location, district, barcode,
           imageMetadata, resolvedVideoUrl,
         );
@@ -501,7 +492,6 @@ class ProductService {
     int stock,
     String sellerName,
     String sellerPhone,
-    bool sellerKycApproved,
     bool isWholesale,
     List<Map<String, dynamic>>? wholesaleTiers,
     List<Map<String, dynamic>>? variants,
@@ -559,9 +549,8 @@ class ProductService {
       "rating": 0.0,
       "reviewCount": 0,
       "isActive": true,
-      // Server-owned promotion fields are intentionally omitted:
-      // rules reject them on create and the server computes boost status.
-      "sellerKycApproved": sellerKycApproved,
+      // Server-owned fields (promotion state, sellerKycApproved) are omitted:
+      // rules reject them on create and the server computes them.
       "searchKeywords": searchKeywords,
       "barcode": barcode,
       "createdAt": FieldValue.serverTimestamp(),
