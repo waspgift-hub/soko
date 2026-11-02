@@ -52,6 +52,10 @@ const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
 const companyRouter = require('./modules/company/routes');
+const companyHrRouter = require('./modules/company/hr-routes');
+const companyProjectRouter = require('./modules/company/project-routes');
+const companyCalendarRouter = require('./modules/company/calendar-routes');
+const companyFinanceRouter = require('./modules/company/finance-routes');
 const engagementRouter = require('./modules/engagement/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
 const whatsappWebhookRouter = require('./modules/whatsapp/routes');
@@ -369,6 +373,10 @@ app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
 app.use('/api/v1/company', companyRouter);
+app.use('/api/v1/company', companyHrRouter);
+app.use('/api/v1/company', companyProjectRouter);
+app.use('/api/v1/company', companyCalendarRouter);
+app.use('/api/v1/company', companyFinanceRouter);
 app.use('/api/v1', engagementRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
