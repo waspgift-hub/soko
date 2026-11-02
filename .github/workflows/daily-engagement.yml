@@ -1,0 +1,20 @@
+﻿name: Daily Engagement Email
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily engagement
+        env:
+          CRON_URL: https://api.sokovibe.co.tz/api/v1/cron/daily-engagement
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          resp=$(curl -sS -o /tmp/out.txt -w "%{http_code}" -X POST "$CRON_URL" -H "x-cron-secret: $CRON_SECRET" -H "content-type: application/json" -d '{}')
+          echo "HTTP $resp"
+          cat /tmp/out.txt
+          test "$resp" -ge 200 -a "$resp" -lt 300
