@@ -188,7 +188,8 @@ service cloud.firestore {
       //   * the follower, when they follow a public target (followerId == caller)
       //   * the target (userId), when they approve a pending follow request
       //     (followerId != caller, since the target is adding someone else)
-      allow write: if isSignedIn()
+      match /followers/{followerId} {
+        allow write: if isSignedIn()
         && (
           // Follower writes their own followerId to follow a public target
           (request.auth.uid == request.resource.data.followerId
@@ -1009,6 +1010,22 @@ service cloud.firestore {
     }
 
     // ─── SMOKE: deny-all fallback for any undocumented collection ──
+    // COMPANY OS (server-written only)
+    // All access goes through the authenticated /api/v1/company backend using
+    // the Admin SDK, which bypasses these rules. Client SDK access is denied.
+    match /company_memberships/{uid} {
+      allow read, write: if false;
+    }
+    match /company_legal_entities/{id} {
+      allow read, write: if false;
+    }
+    match /company_audit_events/{id} {
+      allow read, write: if false;
+    }
+    match /company_settings/{id} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

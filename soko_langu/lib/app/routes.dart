@@ -30,6 +30,7 @@ class AppRoutes {
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
   static const String homeV2 = '/v2';
+  static const String companyConsole = '/company';
   static const String checkoutV2 = '/checkout-v2';
   static const String chatV2 = '/chat-v2';
   static const String searchV2 = '/search-v2';

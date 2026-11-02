@@ -12,6 +12,7 @@ import '../ui/screens/product_detail_v2_screen.dart';
 import '../ui/screens/orders_v2_screen.dart';
 import '../ui/screens/profile_v2_screen.dart';
 import '../ui/screens/seller_dashboard_v2_screen.dart';
+import '../screens/company/company_console_screen.dart';
 import '../ui/screens/chat_v2_screen.dart';
 import '../ui/screens/checkout_v2_screen.dart';
 import '../screens/auth/login_screen.dart';
@@ -391,6 +392,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.sellerDashboardV2,
         pageBuilder: (context, state) => _premiumPage(const SellerDashboardV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.companyConsole,
+        pageBuilder: (context, state) => _premiumPage(const CompanyConsoleScreen()),
       ),
       GoRoute(
         path: AppRoutes.chatV2,

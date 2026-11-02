@@ -46,13 +46,15 @@ const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
 const notificationRouter = require('./modules/notifications/routes');
 const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
-const youtubeRouter = require('./modules/youtube/routes');
+
 const musicRouter = require('./modules/music/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
+const companyRouter = require('./modules/company/routes');
 const engagementRouter = require('./modules/engagement/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
+const whatsappWebhookRouter = require('./modules/whatsapp/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 const requestId = require('./middleware/requestId');
@@ -198,6 +200,11 @@ app.use(cors({
   credentials: false,
   maxAge: 86400,
 }));
+
+// WhatsApp webhooks must see the exact raw bytes: Meta signs the payload with
+// HMAC-SHA256, and re-serialising via express.json would change them. Mounted
+// before the global JSON parser; the router applies express.raw itself.
+app.use('/api/webhooks/whatsapp', whatsappWebhookRouter);
 
 // Body parsing. Image/video bytes never travel in a JSON body anymore (presigned
 // R2 PUT / direct Cloudinary upload), so 1mb is generous for every v1 payload —
@@ -355,12 +362,13 @@ app.use('/api/v1/data-deletion', deletionRequestRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1', sellerAnalyticsRouter);
-app.use('/api/v1/youtube', youtubeRouter);
+
 // Rate limited per user because the lyrics AI fallback spends provider tokens.
 app.use('/api/v1/music', lyricsLimiter, musicRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
+app.use('/api/v1/company', companyRouter);
 app.use('/api/v1', engagementRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
