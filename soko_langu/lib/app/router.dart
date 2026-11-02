@@ -6,6 +6,14 @@ import '../services/ads/ad_manager.dart';
 import '../services/ads/ad_route_observer.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
+import '../ui/screens/home_v2_screen.dart';
+import '../ui/screens/search_v2_screen.dart';
+import '../ui/screens/product_detail_v2_screen.dart';
+import '../ui/screens/orders_v2_screen.dart';
+import '../ui/screens/profile_v2_screen.dart';
+import '../ui/screens/seller_dashboard_v2_screen.dart';
+import '../ui/screens/chat_v2_screen.dart';
+import '../ui/screens/checkout_v2_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -44,7 +52,10 @@ import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
+import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/onboarding/tutorials_screen.dart';
+import '../screens/profile/contact_discovery_screen.dart';
+import '../screens/verification/verification_center_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
 import '../screens/auth/otp_verification_screen.dart';
 import '../screens/auth/mfa_enrollment_screen.dart';
@@ -96,6 +107,7 @@ Page<T> _premiumPage<T>(Widget child) {
 final List<String> _authRequiredRoutes = [
   AppRoutes.checkout,
   AppRoutes.kyc,
+  AppRoutes.verificationCenter,
   AppRoutes.addProduct,
   AppRoutes.profile,
   AppRoutes.settings,
@@ -123,6 +135,7 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.postBuyerRequest,
   AppRoutes.boostProduct,
   AppRoutes.agent,
+  AppRoutes.contactDiscovery,
 ];
 
 final List<String> _adminOnlyRoutes = [
@@ -232,9 +245,31 @@ GoRouter buildRouter() {
     redirect: (context, state) {
       if (!app_state.appStateNotifier.appInitialized) return null;
 
-      final location = state.uri.toString();
+      final location = state.uri.path;
       final isAuth = app_state.appStateNotifier.isAuthenticated;
       final isAdmin = app_state.appStateNotifier.isAdmin;
+
+      if (app_state.appStateNotifier.onboardingChecked &&
+          !app_state.appStateNotifier.hasCompletedOnboarding) {
+        const onboardingExempt = {
+          AppRoutes.onboarding,
+          AppRoutes.login,
+          AppRoutes.register,
+          AppRoutes.forgotPassword,
+          AppRoutes.privacyPolicy,
+          AppRoutes.termsOfService,
+          AppRoutes.otpVerification,
+          AppRoutes.verifyEmail,
+        };
+        final exempt = onboardingExempt.any(
+          (r) => location == r || location.startsWith('$r/'),
+        );
+        if (!exempt) return AppRoutes.onboarding;
+      }
+      if (app_state.appStateNotifier.hasCompletedOnboarding &&
+          location == AppRoutes.onboarding) {
+        return AppRoutes.home;
+      }
 
       final authScreens = [AppRoutes.login, AppRoutes.register];
       if (isAuth && authScreens.any((r) => location == r || location.startsWith('$r/'))) {
@@ -315,8 +350,61 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const AccountSelectionScreen()),
       ),
       GoRoute(
+        path: AppRoutes.onboarding,
+        pageBuilder: (context, state) => _premiumPage(const OnboardingScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.contactDiscovery,
+        pageBuilder: (context, state) =>
+            _premiumPage(const ContactDiscoveryScreen()),
+      ),
+      GoRoute(
         path: AppRoutes.tutorials,
         pageBuilder: (context, state) => _premiumPage(const TutorialsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.homeV2,
+        pageBuilder: (context, state) => _premiumPage(const HomeV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.searchV2,
+        pageBuilder: (context, state) => _premiumPage(const SearchV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.productDetailV2,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Product) {
+            return _premiumPage(ProductDetailV2Screen(product: extra));
+          }
+          return _premiumPage(const HomeV2Screen());
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.ordersV2,
+        pageBuilder: (context, state) => _premiumPage(const OrdersV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.profileV2,
+        pageBuilder: (context, state) => _premiumPage(const ProfileV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerDashboardV2,
+        pageBuilder: (context, state) => _premiumPage(const SellerDashboardV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.chatV2,
+        pageBuilder: (context, state) => _premiumPage(const ChatV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.checkoutV2,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Product) {
+            return _premiumPage(CheckoutV2Screen(product: extra));
+          }
+          return _premiumPage(const HomeV2Screen());
+        },
       ),
       GoRoute(
         path: AppRoutes.chats,
@@ -657,6 +745,11 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.kyc,
         pageBuilder: (context, state) => _premiumPage(const KycScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.verificationCenter,
+        pageBuilder: (context, state) =>
+            _premiumPage(const VerificationCenterScreen()),
       ),
       GoRoute(
         path: AppRoutes.report,

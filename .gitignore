@@ -24,3 +24,5 @@ InShot_*.png
 analyze*.txt
 .firebase/
 *.firebase.cache
+
+_attic/

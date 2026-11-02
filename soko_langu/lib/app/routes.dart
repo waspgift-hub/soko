@@ -25,8 +25,18 @@ class AppRoutes {
   static const String category = '/category';
   static const String categoryProducts = '/category-products';
   static const String accountSelection = '/account-selection';
+  static const String onboarding = '/onboarding';
+  static const String contactDiscovery = '/contact-discovery';
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
+  static const String homeV2 = '/v2';
+  static const String checkoutV2 = '/checkout-v2';
+  static const String chatV2 = '/chat-v2';
+  static const String searchV2 = '/search-v2';
+  static const String productDetailV2 = '/product-v2';
+  static const String ordersV2 = '/orders-v2';
+  static const String profileV2 = '/profile-v2';
+  static const String sellerDashboardV2 = '/seller-v2';
 
   static const String editProfile = '/edit-profile';
   static const String addProduct = '/add-product';
@@ -41,6 +51,8 @@ class AppRoutes {
   static const String discovery = '/discovery';
   static const String myPurchases = '/my-purchases';
   static const String kyc = '/kyc';
+  /// Hub for email, phone, MFA, and KYC verification statuses.
+  static const String verificationCenter = '/verification-center';
   static const String report = '/report';
   static const String adminKyc = '/admin/kyc';
   static const String adminAdsConfig = '/admin/ads-config';
