@@ -1,0 +1,135 @@
+const config = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT) || 3000,
+  
+  // Firebase
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+  },
+  
+  // Database
+  database: {
+    // Never fall back to a real-looking production credential. Local development
+    // may use the documented localhost default; production must provide DATABASE_URL.
+    url: process.env.DATABASE_URL || (process.env.NODE_ENV === 'production' ? undefined : 'postgresql://sokovibe:password@localhost:5432/sokovibe'),
+    // Optional Postgres read replica (Render offers native read replicas). When
+    // set, hot catalog reads route to it; fall back to primary if unset.
+    replicaUrl: process.env.DATABASE_URL_REPLICA || '',
+  },
+  
+  // Redis
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  },
+  
+  // Cloudflare R2
+  r2: {
+    accountId: process.env.R2_ACCOUNT_ID,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    bucketImages: process.env.R2_BUCKET_IMAGES || 'soko-vibe-images',
+    bucketVideos: process.env.R2_BUCKET_VIDEOS || 'soko-vibe-videos',
+    bucketThumbnails: process.env.R2_BUCKET_THUMBNAILS || 'soko-vibe-thumbnails',
+    bucketBackups: process.env.R2_BUCKET_BACKUPS || 'soko-vibe-backups',
+    publicUrl: process.env.R2_PUBLIC_URL || 'https://media.sokovibe.co.tz',
+  },
+  
+  // Payment (ClickPesa)
+  clickpesa: {
+    apiUrl: process.env.CLICKPESA_API_URL,
+    apiKey: process.env.CLICKPESA_API_KEY,
+    apiSecret: process.env.CLICKPESA_API_SECRET,
+    webhookSecret: process.env.CLICKPESA_WEBHOOK_SECRET,
+    checksumKey: process.env.CLICKPESA_CHECKSUM_KEY,
+    allowedIps: process.env.CLICKPESA_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
+  },
+  
+  // SMS
+  sms: {
+    mesejiApiKey: process.env.MESEJI_API_KEY,
+    mesejiSenderId: process.env.MESEJI_SENDER_ID || 'MESEJI',
+    notifyAfricaApiKey: process.env.NOTIFY_AFRICA_API_KEY,
+    // Base URLs are env-swappable so the whole stack can point at ANY SMS
+    // provider (free or paid) without touching code — migration = env change.
+    mesejiBaseUrl: process.env.MESEJI_BASE_URL || 'https://meseji.co.tz/api/v1/sms/send',
+    notifyAfricaBaseUrl: process.env.NOTIFY_AFRICA_SMS_BASE_URL || 'https://api.notify.africa',
+  },
+  
+  // Push Notifications
+  onesignal: {
+    appId: process.env.ONE_SIGNAL_APP_ID,
+    apiKey: process.env.ONE_SIGNAL_REST_API_KEY,
+    baseUrl: process.env.ONE_SIGNAL_BASE_URL || 'https://onesignal.com/api/v1',
+  },
+  
+  // AI
+  groq: {
+    apiKey: process.env.GROQ_API_KEY,
+  },
+  
+  // Cloudinary (legacy image cleanup; app media now lives in R2)
+  cloudinary: {
+    destroyUrl: process.env.CLOUDINARY_DESTROY_URL || 'https://api.cloudinary.com/v1_1/dgbsohnl4/image/destroy',
+  },
+  
+  // Security
+  security: {
+    adminSecret: process.env.ADMIN_SECRET,
+    webhookSecret: process.env.WEBHOOK_SECRET,
+    encryptionKey: process.env.ENCRYPTION_KEY,
+    corsOrigins: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) || [],
+  },
+  
+  // Rate Limiting
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000,
+    max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
+  },
+  
+  // Business
+  business: {
+    // Current platform economics: 3.5% commission on product value.
+    // Override explicitly with PLATFORM_COMMISSION_PERCENT when needed.
+    platformCommissionPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT) || 3.5,
+    escrowAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    maxDailySaleAmount: parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000,
+  },
+
+  // Finance safety-net scheduler. All jobs are idempotent (state-machine
+  // guards + unique keys), so overlapping instances are safe.
+  finance: {
+    // Run the finance BullMQ worker inside the API process (current single
+    // instance). Set FINANCE_WORKER_IN_PROCESS=false when a dedicated worker
+    // process is deployed so both never double-process (BullMQ also guards).
+    workerInProcess: process.env.FINANCE_WORKER_IN_PROCESS !== 'false',
+    paymentExpireMs: (parseInt(process.env.FINANCE_PAYMENT_EXPIRE_MS) || 24 * 3600) * 1000,
+    autoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    // Compatibility alias for deployments still using the 14-day protection setting.
+    inspectionAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    withdrawalAutoProcessMs: (parseInt(process.env.FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN) || 15) * 60 * 1000,
+    withdrawalStuckMs: (parseInt(process.env.FINANCE_WITHDRAWAL_STUCK_HOURS) || 48) * 3600 * 1000,
+    reconciliationWindowMs: (parseInt(process.env.FINANCE_RECONCILIATION_WINDOW_HOURS) || 24) * 3600 * 1000,
+    disputeSlaMs: (parseInt(process.env.FINANCE_DISPUTE_SLA_HOURS) || 72) * 3600 * 1000,
+  },
+  
+  // URLs
+  urls: {
+    app: process.env.APP_URL || 'https://api.sokovibe.co.tz',
+    frontend: process.env.FRONTEND_URL || 'https://www.sokovibe.co.tz',
+    admin: process.env.ADMIN_URL || 'https://admin.sokovibe.co.tz',
+  },
+
+  // Deep-link store destinations. Left empty on purpose: the app is not yet
+  // listed on any store, so the fallback page must not advertise one. Once a
+  // real listing exists, set ANDROID_STORE_URL / IOS_STORE_URL in the env.
+  deepLink: {
+    androidStoreUrl: process.env.ANDROID_STORE_URL || '',
+    iosStoreUrl: process.env.IOS_STORE_URL || '',
+    webProductUrl: process.env.WEB_PRODUCT_URL || 'https://www.sokovibe.co.tz/product/',
+  },
+};
+
+module.exports = config;

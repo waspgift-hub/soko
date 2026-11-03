@@ -23,18 +23,16 @@ class FlashSaleService {
   Stream<List<FlashSale>> getActiveFlashSalesAtNow(DateTime now) {
     return _db
         .collection('flash_sales')
-        .where(
-          'endTime',
-          isGreaterThanOrEqualTo: now.subtract(
-            const Duration(hours: 1),
-          ),
-        )
+        .where('isActive', isEqualTo: true)
+        .limit(20)
         .snapshots()
         .map((snap) {
           try {
             return snap.docs
                 .map((doc) => FlashSale.fromFirestore(doc))
-                .where((s) => s.isActive && !s.isExpired && !s.isUpcoming)
+                .where((s) =>
+                    !s.isExpired &&
+                    s.endTime.isAfter(now.subtract(const Duration(hours: 1))))
                 .toList()
               ..sort((a, b) => a.endTime.compareTo(b.endTime));
           } catch (e) {
@@ -66,12 +64,16 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('productId', isEqualTo: productId)
+        .limit(5)
         .snapshots()
         .map((snap) {
       if (snap.docs.isEmpty) return null;
-      final sale = FlashSale.fromFirestore(snap.docs.first);
-      if (!sale.isActive || sale.isExpired) return null;
-      return sale;
+      final sales = snap.docs
+          .map((doc) => FlashSale.fromFirestore(doc))
+          .where((s) => s.isActive && !s.isExpired)
+          .toList();
+      if (sales.isEmpty) return null;
+      return sales.first;
     });
   }
 
@@ -81,6 +83,7 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('sellerId', isEqualTo: user.uid)
+        .limit(50)
         .snapshots()
         .map((snap) {
           try {
@@ -154,24 +157,22 @@ class FlashSaleService {
     return result['flashSaleId'] as String? ?? '';
   }
 
-  /// Marks expired flash sales inactive for [productId] (seller-owned docs only).
   Future<void> _deactivateExpiredForProduct(String productId) async {
-    final snap = await _db
-        .collection('flash_sales')
-        .where('productId', isEqualTo: productId)
-        .where('isActive', isEqualTo: true)
-        .get();
-    final now = DateTime.now();
-    final batch = _db.batch();
-    var hasWrites = false;
-    for (final doc in snap.docs) {
-      final sale = FlashSale.fromFirestore(doc);
-      if (now.isAfter(sale.endTime)) {
-        batch.update(doc.reference, {'isActive': false});
-        hasWrites = true;
-      }
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final token = await user.getIdToken(true);
+    final resp = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/flash-sales/deactivate-expired'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({ 'productId': productId }),
+    );
+    final result = jsonDecode(resp.body);
+    if (result['success'] != true) {
+      debugPrint('deactivateExpiredForProduct failed: ${result['error']}');
     }
-    if (hasWrites) await batch.commit();
   }
 
   /// True when a flash sale exists with endTime still in the future.
@@ -179,24 +180,42 @@ class FlashSaleService {
     final snap = await _db
         .collection('flash_sales')
         .where('productId', isEqualTo: productId)
-        .where('isActive', isEqualTo: true)
         .get();
     final now = DateTime.now();
     return snap.docs.any((doc) {
       final sale = FlashSale.fromFirestore(doc);
-      return sale.endTime.isAfter(now);
+      return sale.isActive && sale.endTime.isAfter(now);
     });
   }
 
   Future<void> deleteFlashSale(String flashSaleId) async {
-    await _db.collection('flash_sales').doc(flashSaleId).delete();
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+    final token = await user.getIdToken(true);
+    final resp = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/flash-sales/delete'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({ 'flashSaleId': flashSaleId }),
+    );
+    final result = jsonDecode(resp.body);
+    if (result['success'] != true) {
+      throw Exception(result['error'] ?? 'Failed to delete flash sale');
+    }
   }
 
   Future<void> triggerFlashSaleScan() async {
     try {
+      final user = _auth.currentUser;
+      final token = await user?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/flash-sale/scan'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
       );
     } catch (e) {
       // Server-side scan, silent fail
@@ -205,9 +224,14 @@ class FlashSaleService {
 
   Future<void> notifyFlashSale(FlashSale sale) async {
     try {
+      final user = _auth.currentUser;
+      final token = await user?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/flash-sale/notify'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'productName': sale.productName,
           'salePrice': sale.salePrice,

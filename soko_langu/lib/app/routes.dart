@@ -9,28 +9,26 @@ class AppRoutes {
   static const String chat = '/chat';
   static const String profile = '/profile';
   static const String productDetail = '/product';
+  static const String productReviews = '/product-reviews';
   static const String admin = '/admin';
   static const String sellerDashboard = '/seller';
   static const String notifications = '/notifications';
+  static const String notificationPreferences = '/notification-preferences';
   static const String settings = '/settings';
   static const String publicProfile = '/public-profile';
   static const String search = '/search';
   static const String category = '/category';
   static const String categoryProducts = '/category-products';
-  static const String verifyEmail = '/verify-email';
   static const String accountSelection = '/account-selection';
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
-  static const String shopCustomization = '/shop-customize';
-  static const String audioPlayer = '/audio';
+
   static const String editProfile = '/edit-profile';
   static const String addProduct = '/add-product';
   static const String help = '/help';
   static const String about = '/about';
-  static const String adminAdRevenue = '/admin-ad-revenue';
   static const String createGroup = '/create-group';
   static const String groupChat = '/group-chat';
-  static const String onboarding = '/onboarding';
 
   static const String sellerEarnings = '/seller-earnings';
   static const String checkout = '/checkout';
@@ -39,21 +37,25 @@ class AppRoutes {
   static const String myPurchases = '/my-purchases';
   static const String kyc = '/kyc';
   static const String report = '/report';
-  static const String adminWallet = '/admin/wallet';
+  static const String adminKyc = '/admin/kyc';
+  static const String adminBroadcast = '/admin/broadcast';
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';
   static const String createFlashSale = '/create-flash-sale';
   static const String sellerDispatch = '/seller-dispatch';
-  static const String magicLink = '/magic-link';
+  static const String sellerQuote = '/seller-quote';
 
-  static const String status = '/status';
-  static const String statusViewer = '/status-viewer';
-  static const String addStatus = '/add-status';
   static const String aiAssistant = '/ai-assistant';
+  static const String receipt = '/receipt';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
-  static const String audioList = '/audio-list';
-  static const String audioQueue = '/audio-queue';
-  static const String youtubeSearch = '/youtube-search';
-  static const String youtubePlayer = '/youtube-player';
+  static const String sellerAnalytics = '/seller-analytics';
+  static const String orderDetail = '/order-detail';
+  static const String orderFlow = '/order-flow';
+  static const String sellerOrders = '/seller-orders';
+  static const String adminUserDetail = '/admin/user';
+  static const String boostReceipt = '/boost-receipt';
+  static const String buyerRequests = '/buyer-requests';
+  static const String postBuyerRequest = '/post-buyer-request';
+  static const String verifyEmail = '/verify-email';
 }

@@ -1,0 +1,982 @@
+================================================================================
+                    SOKO VIBE — COMPLETE DEVELOPER DOCUMENTATION
+                          Last Updated: August 19, 2026
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1.  Project Overview
+  2.  Tech Stack
+  3.  Project Structure
+  4.  Setup & Installation
+  5.  Environment Variables
+  6.  Architecture
+  7.  Authentication Flow
+  8.  Payment System (ClickPesa)
+  9.  Escrow & Order Flow
+  10. Firestore Schema (57 Collections)
+  11. API Reference (80+ Endpoints)
+  12. Security Measures
+  13. Image System
+  14. Search System
+  15. Chat System
+  16. Notification System
+  17. AI Assistant (Groq)
+  18. Admin Panel
+  19. Localization (Swahili, English, Chinese)
+  20. Performance Optimizations
+  21. Deployment
+  22. Testing
+  23. Key Configuration
+  24. Known Issues & Technical Debt
+  25. Directory Reference
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Soko Vibe is a full-stack e-commerce marketplace app for Tanzania. It connects
+buyers, sellers, and riders (ride-hailing). The platform features:
+
+- Product marketplace (buy/sell with KYC-verified sellers)
+- Ride-hailing service (passengers ↔ drivers)
+- AI shopping assistant (Groq LLM)
+- In-app chat (1-on-1 + group)
+- Mobile money payments (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa)
+- Escrow system with 14-day auto-release
+- Product boost/promotion system
+- Flash sales with barcode scanning
+- "Natafuta Bidhaa" buyer requests
+- Push notifications (OneSignal)
+- Multi-language support (Swahili, English, Chinese)
+- Admin dashboard with KYC, fraud detection, analytics
+
+**Commission:** 3.5% charged to buyer at purchase. Seller receives full
+(productPrice + shippingCost).
+
+**Project ID:** sokonimoko-8c171-a8d14
+**Package Name:** com.sokolangu.app
+
+================================================================================
+2. TECH STACK
+================================================================================
+
+FRONTEND (Mobile):
+  - Flutter 3.x with Dart ^3.11.5
+  - Provider (state management)
+  - GoRouter (navigation)
+  - Firebase Auth, Firestore, Storage, Crashlytics, Performance, App Check
+  - OneSignal (push notifications)
+  - Google Maps + flutter_map
+  - cached_network_image + flutter_cache_manager
+  - safe_text (profanity filter)
+  - flutter_image_compress (WebP compression)
+  - device_info_plus + package_info_plus (consent recording)
+  - mobile_scanner (barcode/QR)
+  - speech_to_text (voice search)
+  - Hive (local cache)
+  - PDF generation (pdf + printing)
+
+BACKEND (Server):
+  - Node.js with Express.js
+  - Firebase Admin SDK (Firestore, Auth)
+  - ioredis (Redis for distributed caching)
+  - ip-range-check (webhook IP whitelisting)
+  - axios (HTTP client)
+  - nodemailer (email OTP)
+  - compression (gzip)
+
+DATABASE:
+  - Cloud Firestore (primary database)
+  - Redis (distributed cache on Render)
+
+HOSTING:
+  - Render (web service + Redis key-value store)
+  - Firebase (Auth, Firestore, Storage, Hosting, Cloud Functions)
+
+PAYMENTS:
+  - ClickPesa (USSD push, BillPay, Payout)
+  - Malipopay (additional payment rails)
+
+PUSH NOTIFICATIONS:
+  - OneSignal (primary push)
+  - Firebase Cloud Messaging (fallback)
+
+ADS:
+  - Google AdMob (banner + interstitial + rewarded)
+
+AI:
+  - Groq API (LLM chat + Whisper audio transcription)
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+soko_langu/
+  android/                    # Android platform
+    app/
+      build.gradle.kts        # R8 minification + resource shrinking enabled
+      proguard-rules.pro      # Log stripping, repackageclasses, anti-RE
+      src/main/
+        AndroidManifest.xml   # Permissions, deep links
+        res/xml/
+          network_security_config.xml  # SSL pinning (4 services)
+  assets/                     # Images, icons, fonts
+  build/                      # Build output
+  functions/                  # Firebase Cloud Functions
+    index.js                  # Firestore triggers
+    notification/             # Push notification functions
+    search/                   # Search index maintenance
+  lib/                        # Main Dart source
+    app/                      # Router, transitions, app state
+    constants/                # Tanzania districts
+    extensions/               # context.tr() localization
+    models/                   # 27 data models
+    notifiers/                # AuthNotifier
+    providers/                # ProductFeedProvider
+    repositories/             # Auth + Product repositories
+    screens/                  # 77 screens
+      auth/                   # 9 screens (login, register, OTP, etc.)
+      home/                   # 10 screens (feed, search, detail, etc.)
+      profile/                # 17 screens (seller, earnings, boost, etc.)
+      chat/                   # 6 screens (inbox, chat, groups)
+      orders/                 # 6 screens (purchases, seller orders)
+      admin/                  # 9 screens (dashboard, KYC, transactions)
+      legal/                  # 2 screens (ToS, Privacy Policy)
+      ai/                     # 1 screen (AI assistant)
+      (+ 24 more)
+    services/                 # 63 service files
+      ai/                     # AI chat + tools
+      localizations/          # Chinese translations
+    shared/                   # Loading/error widgets
+    theme/                    # Light/dark themes, colors, typography
+    utils/                    # Helpers, validators, image compressor
+    widgets/                  # 68 widgets
+      ds/                     # Design system (17 components)
+  server/                     # Express.js backend
+    index.js                  # 9000+ line main server
+    clickpesa.js              # ClickPesa integration
+    orders.js                 # Order state machine
+    search.js                 # Search router
+    notification.js           # Notification router
+    cache.js                  # Two-tier cache (Redis + memory)
+    listener.js               # Firestore triggers
+    groq.js                   # AI integration
+    money.js                  # Money helpers
+  test/                       # Flutter tests
+
+================================================================================
+4. SETUP & INSTALLATION
+================================================================================
+
+PREREQUISITES:
+  - Flutter SDK 3.x
+  - Node.js 18+
+  - Firebase CLI (`npm install -g firebase-tools`)
+  - Android Studio / Xcode
+
+FLUTTER SETUP:
+  1. Clone the repo
+  2. cd soko_langu
+  3. flutter pub get
+  4. Copy .env.example to .env (if needed)
+  5. flutter run
+
+SERVER SETUP:
+  1. cd server
+  2. cp .env.example .env   # Fill in all values
+  3. npm install
+  4. node index.js           # Runs on port 3000
+
+FIREBASE:
+  1. firebase login
+  2. firebase use sokonimoko-8c171-a8d14
+  3. firebase deploy --only firestore:rules
+  4. firebase deploy --only firestore:indexes
+
+ANDROID RELEASE:
+  1. flutter build appbundle --release
+  # OR
+  2. flutter build apk --release  # Output: build/app/outputs/flutter-apk/app-release.apk (~106MB)
+
+================================================================================
+5. ENVIRONMENT VARIABLES
+================================================================================
+
+Server (.env):
+  FIREBASE_SERVICE_ACCOUNT_JSON    # Firebase admin SDK JSON
+  ADMIN_SECRET                     # Admin API bypass secret
+  PORT                             # Server port (3000)
+  WEBHOOK_SECRET                   # ClickPesa HMAC signature key
+  ESCROW_AUTO_RELEASE_DAYS         # Auto-release after 14 days
+  REDIS_URL                        # Redis connection URL
+  MAX_DAILY_SALE_AMOUNT            # Max daily purchase per buyer (5,000,000 TZS)
+  SMTP_HOST                        # Email SMTP host
+  SMTP_PORT                        # Email SMTP port
+  SMTP_USER                        # Email address
+  SMTP_PASS                        # Email app password
+  SMTP_FROM                        # Sender display name
+  CLICKPESA_CLIENT_ID              # ClickPesa API client ID
+  CLICKPESA_API_KEY                # ClickPesa API key
+  CLICKPESA_CHECKSUM_KEY           # ClickPesa checksum key
+  MESEJI_API_KEY                   # Meseji SMS API key
+  MESEJI_SENDER_ID                 # SMS sender ID
+  CLOUDINARY_API_KEY               # Cloudinary API key
+  CLOUDINARY_API_SECRET            # Cloudinary API secret
+  ONE_SIGNAL_APP_ID                # OneSignal app ID
+  ONE_SIGNAL_REST_API_KEY          # OneSignal REST API key
+  GROQ_API_KEY                     # Groq AI API key
+  NOTIFY_AFRICA_SMS_API_KEY        # Notify Africa SMS key
+  NOTIFY_AFRICA_SENDER_ID          # Notify Africa sender ID
+  NOTIFY_WABA_API_KEY              # WhatsApp Business API key
+  WHATSAPP_WEBHOOK_SECRET          # WhatsApp webhook HMAC secret
+  MALIPOPAY_BASE_URL               # Malipay API base URL
+  MALIPOPAY_API_KEY                # Malipay API key
+  MALIPOPAY_WEBHOOK_SECRET         # Malipay webhook secret
+
+Flutter (config in code):
+  ApiConfig.baseUrl = https://soko-langu-server.onrender.com
+  Firebase project: sokonimoko-8c171-a8d14
+
+================================================================================
+6. ARCHITECTURE
+================================================================================
+
+The app follows a 3-tier architecture:
+
+  FLUTTER APP (Client)
+    ↓ HTTP REST API
+  EXPRESS.JS SERVER (Backend)
+    ↓ Firebase Admin SDK
+  CLOUD FIRESTORE (Database)
+
+Key patterns:
+- **Provider** for state management (ProductFeedProvider)
+- **Repository pattern** for data access (AuthRepository, ProductRepository)
+- **Service layer** for business logic (63 services)
+- **GoRouter** for declarative navigation
+- **Two-tier caching** (Redis distributed + in-memory LRU)
+
+Data flow:
+  1. User interacts with Screen widget
+  2. Screen calls Service method
+  3. Service calls Firestore directly OR calls Server API
+  4. Server processes business logic, writes to Firestore
+  5. Server returns response
+  6. Service updates Provider/State
+  7. Screen rebuilds with new data
+
+================================================================================
+7. AUTHENTICATION FLOW
+================================================================================
+
+Registration:
+  1. User enters phone number
+  2. Server sends OTP via Meseji/Notify Africa SMS
+  3. User enters OTP, server verifies
+  4. Firebase Auth account created with custom token
+  5. ConsentRecordingService records clickwrap consent (device fingerprint,
+     timestamp, IP, ToS/PP versions) → Firestore consentRecords + server
+  6. Profile setup screen (name, location, etc.)
+
+Login:
+  Phone + OTP → Firebase custom token → Auth state updated
+  Google Sign-In → Firebase credential → Auth state updated
+
+Phone number variants stored:
+  - Original input (e.g., "0712345678")
+  - Clean digits ("712345678")
+  - With country code ("+255712345678")
+  All stored in users/{uid}.phoneVariants array for lookup.
+
+Session:
+  - Firebase Auth handles token refresh
+  - SharedPreferences stores user profile locally
+  - AccountManager supports multi-account switching
+
+================================================================================
+8. PAYMENT SYSTEM (CLICKPESA)
+================================================================================
+
+ClickPesa is the primary payment processor. Supports:
+
+1. USSD Push (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa)
+   - Buyer dials USSD prompt on their phone
+   - Confirms payment
+   - Webhook callback confirms payment
+
+2. BillPay (bank transfer)
+   - Generates bill reference
+   - Buyer pays via bank
+
+3. Payout (disbursement to sellers)
+   - Seller requests withdrawal
+   - Server calls ClickPesa payout API
+   - Webhook confirms payout status
+
+Order reference format:
+  - Product purchase: "product_{productId}_{timestamp}" (no underscores in final ref)
+  - Boost: "boost_{boostId}_{timestamp}"
+  - All references sanitized: .replace(/[^a-zA-Z0-9]/g, '')
+
+Webhook security:
+  - IP whitelist (CLICKPESA_ALLOWED_IPS)
+  - HMAC signature verification (WEBHOOK_SECRET)
+  - Idempotency lock via Redis (30s TTL)
+
+Commission: 3.5% charged to buyer at purchase.
+  - buyerPays = productPrice + shippingCost + commission
+  - sellerReceives = productPrice + shippingCost
+  - platformKeeps = commission
+
+================================================================================
+9. ESCROW & ORDER FLOW
+================================================================================
+
+State machine (server/orders.js):
+
+  PENDING → BUYER_PAID → ESCROW_HOLD → DISPATCHED → DELIVERED → COMPLETED
+                                    ↘ DISPUTED → RESOLVED
+                                    ↘ CANCELLED (refund to buyer)
+
+Auto-release: If buyer doesn't confirm within 14 days, escrow auto-releases
+to seller. Cron job: POST /api/cron/release-escrows
+
+Flow:
+  1. Buyer pays → transaction created with status 'escrow_hold'
+  2. Seller marks dispatched → status 'dispatched'
+  3. Buyer receives → confirms delivery → status 'completed'
+  4. ClickPesa payout to seller's mobile money
+
+Dispute:
+  1. Buyer raises dispute → funds stay in escrow
+  2. Admin reviews evidence
+  3. Admin resolves → release to seller OR refund to buyer
+
+================================================================================
+10. FIRESTORE SCHEMA (57 COLLECTIONS)
+================================================================================
+
+Core collections:
+  users/                    # User profiles, balances, KYC, settings
+  products/                 # Product listings (isActive, isBoosted, brand, category)
+  transactions/             # Payments, boosts, purchases
+  orders/                   # Order mirror (synced with transactions)
+  notifications/            # In-app notifications
+  chat_rooms/               # Chat room metadata
+  chat_rooms/{id}/messages/ # Chat messages subcollection
+  categories/               # Product categories
+  reviews/                  # Product reviews
+  flash_sales/              # Flash sale events
+  consentRecords/           # GDPR consent evidence
+
+Subcollections:
+  products/{id}/comments/            # Product comments
+  products/{id}/comments/{id}/replies/ # Comment replies
+  users/{id}/following/              # User following
+  users/{id}/followers/              # User followers
+  users/{id}/cart/                   # Shopping cart
+  users/{id}/admin_withdrawals/      # Admin withdrawal records
+
+Search indexes:
+  search_index_products/    # Product search index (name, popularity, viewCount)
+  search_index_users/       # User search index
+  search_index_categories/  # Category search index
+  search_analytics/         # Search analytics
+  search_trending/          # Trending search queries
+
+Analytics:
+  product_analytics/{id}/views/         # Product view events
+  product_analytics/{id}/daily_stats/   # Daily product stats
+  boost_analytics/{id}/impressions/     # Boost impression events
+  user_analytics/{id}/search_history/   # User search history
+
+Financial:
+  payouts/                  # Payout records
+  withdrawals/              # Withdrawal records
+  revenue_transactions/     # Platform revenue tracking
+  platform_earnings/        # Platform earnings
+  admob_earnings/           # AdMob revenue records
+  deposits/                 # Wallet deposit records
+  audit_log/                # Balance change audit trail
+
+Other:
+  reports/                  # User reports/flags
+  fraud_alerts/             # Fraud detection alerts
+  statuses/                 # User status/stories
+  groups/                   # Group chat rooms
+  BuyerRequests/            # "Natafuta Bidhaa" requests
+  otp_codes/                # OTP verification codes
+  sms_logs/                 # SMS delivery logs
+  ad_views/                 # Ad view tracking
+  user_sessions/            # User session/presence
+  notification_preferences/ # Notification settings
+  app_settings/             # App settings (maintenance mode)
+  admin_notifications/      # Admin notification logs
+  admin_exports/            # Admin data export logs
+  saved_account/            # Saved payment accounts
+  whatsapp_webhook_logs/    # WhatsApp webhook logs
+  malipay_webhook_logs/     # Malipay webhook logs
+
+Key product fields:
+  isActive: bool           # Is listing active
+  isBoosted: bool          # Is product boosted
+  boostedUntil: Timestamp  # Boost expiry
+  boostTier: string        # 'bronze' | 'silver' | 'gold'
+  brand: string            # Brand name
+  category: string         # Category name
+  subcategory: string      # Subcategory name
+  searchName: string       # Lowercase name for range queries
+  searchKeywords: array    # Array of lowercase words for arrayContains
+  sellerId: string         # Seller UID
+  sellerName: string       # Denormalized seller name
+  images: array            # Cloudinary URLs
+  price: int               # Price in TZS
+  reviewCount: int         # Number of reviews
+  averageRating: double    # Average rating
+  viewCount: int           # Total views
+  popularity: int          # Popularity score
+
+================================================================================
+11. API REFERENCE (80+ ENDPOINTS)
+================================================================================
+
+Base URL: https://soko-langu-server.onrender.com
+
+AUTH:
+  POST /api/auth/send-otp         # Send phone OTP
+  POST /api/auth/verify-otp       # Verify phone OTP
+  POST /api/auth/send-email-otp   # Send email OTP
+  POST /api/auth/verify-email-otp # Verify email OTP
+  POST /api/auth/check-phone      # Check if phone registered
+  POST /api/auth/check-email      # Check if email registered
+  POST /api/phone-login           # Phone+OTP login → custom token
+
+PAYMENTS:
+  POST /api/create-marketplace-payment-link  # Initiate purchase
+  POST /api/boost-product                    # Initiate boost payment
+  POST /api/retry-payment                    # Retry pending tx
+  POST /api/clickpesa/webhook                # Payment callback (IP+HMAC)
+  POST /api/clickpesa/payout-webhook         # Payout callback
+  GET  /api/clickpesa/balance                # Account balance
+  POST /api/clickpesa/payout-preview         # Preview payout fee
+
+ESCROW:
+  POST /api/escrow/release              # Buyer confirms delivery
+  POST /api/escrow/cancel               # Buyer cancels (refund)
+  POST /api/escrow/dispute              # Buyer raises dispute
+  POST /api/escrow/dispatch             # Seller marks dispatched
+  POST /api/escrow/buyer-transport      # Buyer submits transport
+  POST /api/escrow/admin-release        # Admin force-release
+  POST /api/escrow/admin-resolve-dispute # Admin resolves dispute
+  POST /api/escrow/retry-payout         # Retry failed payout
+  POST /api/cron/release-escrows        # Auto-release expired escrows
+
+SEARCH:
+  POST /api/search/global-search        # Full search
+  POST /api/search/autocomplete         # Autocomplete
+  POST /api/search/trending             # Trending queries
+  POST /api/search/record-click         # Record search click
+  POST /api/search/most-rated           # Most-rated products
+
+NOTIFICATIONS:
+  POST /api/send-notification           # Send push + in-app
+  POST /api/send-bulk-notification      # Bulk push
+  POST /api/sms/send                    # Send SMS
+  POST /api/whatsapp/send               # Send WhatsApp
+  POST /api/notification/preferences/get # Get prefs
+  POST /api/notification/preferences/set # Set prefs
+
+SELLER:
+  GET  /api/seller/balance              # Check balance
+  POST /api/seller/withdraw             # Withdraw to mobile money
+  GET  /api/seller-analytics/:id        # Seller analytics
+  GET  /api/seller-statement/:id        # Financial statement
+  GET  /api/buyer-statement/:id         # Buyer purchase history
+
+KYC:
+  POST /api/kyc/submit                  # Submit KYC docs
+  GET  /api/kyc/status/:userId          # Get KYC status
+
+PRODUCTS:
+  DELETE /api/products/:id              # Delete product
+  POST   /api/products/:id/rating       # Rate product
+  GET    /api/popular-products          # Cached popular products
+
+FLASH SALES:
+  POST /api/flash-sale/create           # Create flash sale
+  POST /api/flash-sale/scan             # Scan/validate barcode
+  POST /api/flash-sale/notify           # Send notifications
+  POST /api/boost/notify                # Send boost notifications
+
+AI:
+  POST /api/ai/chat                     # AI chat (Groq)
+  POST /api/ai/transcribe               # Audio transcription
+
+REPORTS:
+  POST   /api/reports                   # Submit report
+  GET    /api/reports                   # List reports
+  PATCH  /api/reports/:id               # Update report
+
+FRAUD:
+  GET    /api/fraud/alerts              # List fraud alerts
+  PATCH  /api/fraud/alerts/:id/dismiss  # Dismiss alert
+  GET    /api/fraud/risk/:sellerId      # Risk score
+
+CONSENT:
+  POST /api/consent/record              # Record clickwrap consent
+
+ADMIN:
+  GET  /api/admin/users                 # List all users
+  GET  /api/admin/products              # List all products
+  PUT  /api/admin/users/:uid            # Update user
+  DELETE /api/admin/users/:uid          # Delete user
+  DELETE /api/admin/users/:uid/full-delete # GDPR full delete
+  GET  /api/admin/stats                 # Dashboard stats
+  GET  /api/admin/analytics             # Full analytics
+  GET  /api/admin/timeseries            # Daily time series
+  GET  /api/admin/transactions          # All transactions
+  GET  /api/admin/withdrawals           # All withdrawals
+  POST /api/admin/withdraw              # Admin withdrawal
+  POST /api/admin/kyc/review            # Approve/reject KYC
+  POST /api/admin/kyc/revoke            # Revoke KYC
+  GET  /api/admin/kyc/pending           # Pending KYCs
+  GET  /api/admin/finance-summary       # Finance summary
+  POST /api/admin/broadcast-notification # Broadcast to all
+  GET  /api/admin/audit-log             # Audit log
+  POST /api/admin/retro-boost           # Fix stuck boosts
+
+MISC:
+  GET  /health                          # Health check
+  GET  /ping                            # Ping check
+  GET  /api/stats                       # Public stats
+  POST /api/cloudinary/sign             # Sign Cloudinary upload
+  POST /api/cloudinary/delete           # Delete Cloudinary asset
+  POST /api/transactions/create         # Create transaction
+  GET  /api/transaction-status/:id      # Transaction status
+
+Rate Limits:
+  General: 30 requests/minute per IP
+  Payments: 5 requests/minute per IP
+  Admin secret bypasses rate limit
+
+================================================================================
+12. SECURITY MEASURES
+================================================================================
+
+1. SSL PINNING
+   - Real SPKI hashes from live cert chains (not placeholders)
+   - Primary + backup (intermediate CA) pins for each service
+   - Services: Render, Firebase, Cloudinary, OneSignal
+   - Expiry: 2027-08-18
+   - Cleartext traffic blocked
+
+2. R8 OBFUSCATION (Android Release)
+   - isMinifyEnabled = true
+   - isShrinkResources = true
+   - proguard-rules.pro: log stripping, repackageclasses, anti-RE
+
+3. FIRESTORE FIELD-LEVEL PROTECTION
+   - noSensitiveFieldChanges() blocks client writes to:
+     walletBalance, sellerBalance, pendingEscrow, totalSales,
+     grossSalesVolume, totalWithdrawn, isAdmin, isSuspended,
+     kyc, isBoosted, boostedUntil, boostTier, createdAt, etc.
+
+4. WEBHOOK SECURITY
+   - IP whitelisting (ip-range-check)
+   - HMAC signature verification
+   - Idempotency lock via Redis (30s TTL)
+
+5. RATE LIMITING
+   - 30 req/min general per IP
+   - 5 req/min for payments per IP
+   - In-memory sliding window with 5-min sweeper
+
+6. CLICKWRAP CONSENT
+   - ConsentRecordingService captures device fingerprint
+   - Records: userId, deviceId, acceptedAt, ipAddress,
+     tosVersion, ppVersion, platform, appVersion, deviceInfo
+   - Stored in Firestore consentRecords + server /api/consent/record
+
+7. PROFANITY FILTER
+   - safe_text package (Swahili language)
+   - Applied to reviews, comments, replies, chat messages
+   - 3-strike escalation policy
+
+8. FRAUD DETECTION
+   - Automated fraud alerts for suspicious patterns
+   - Seller risk scoring
+   - Device fingerprinting for banned users
+
+9. APP CHECK
+   - Firebase App Check enabled (device attestation)
+
+================================================================================
+13. IMAGE SYSTEM
+================================================================================
+
+Upload flow:
+  1. User picks image via image_picker
+  2. ImageCompressor compresses to WebP (<200KB, max 1200px)
+  3. CloudinaryService signs upload with server
+  4. Image uploaded to Cloudinary (unsigned upload)
+  5. Cloudinary URL stored in Firestore products/{id}.images[]
+
+Display:
+  - ProductCachedImage widget (standardized)
+  - SokoCacheManager: 3-day disk cache, 400 objects max
+  - memCacheWidth/memCacheHeight: decoded to display size (saves RAM)
+  - 300ms fade-in animation
+  - Shimmer gradient placeholder while loading
+  - Cloudinary server-side resizing: w_300,c_fill,q_auto,f_auto
+
+Cloudinary domains:
+  - cloudinary.com, res.cloudinary.com (+ subdomains)
+  - SSL pinned with primary + backup pins
+
+================================================================================
+14. SEARCH SYSTEM
+================================================================================
+
+Search index (maintained by Cloud Functions):
+  - search_index_products: name, popularity, viewCount, category, brand
+  - search_index_users: name, popularity
+  - search_index_categories: name, popularity
+
+Search methods:
+  1. Global search (POST /api/search/global-search)
+     - Products by searchKeywords (arrayContains / arrayContainsAny)
+     - Products by name range query (searchName >= q, searchName <= q\uf8ff)
+     - Users by displayName range query
+     - Categories by name range query
+
+  2. Autocomplete (POST /api/search/autocomplete)
+     - Real-time keystroke suggestions
+     - 90-second Redis cache per query
+     - Returns products, users, categories
+
+  3. Trending (POST /api/search/trending)
+     - Most-searched terms
+     - 5-minute Redis cache
+
+  4. Most-rated (POST /api/search/most-rated)
+     - Products sorted by reviewCount
+     - 10-minute Redis cache
+
+================================================================================
+15. CHAT SYSTEM
+================================================================================
+
+Architecture:
+  - Firestore chat_rooms collection (metadata)
+  - Subcollection: chat_rooms/{id}/messages/
+  - Typing indicators via conversations collection
+  - Real-time listeners via Firestore snapshots
+
+Features:
+  - 1-on-1 chat (buyer ↔ seller)
+  - Group chat
+  - Push notifications for new messages
+  - Message read status (isRead)
+  - Voice messages (record package)
+  - Image sharing
+  - 90-day message retention
+
+Chat room ID: sorted combination of participant UIDs (e.g., "uid1_uid2")
+
+================================================================================
+16. NOTIFICATION SYSTEM
+================================================================================
+
+Push:
+  - OneSignal primary, FCM fallback
+  - Notification channels (Android): orders, chat, promotions, security
+  - Notification preferences per type (per user)
+
+In-app:
+  - notifications collection in Firestore
+  - Real-time listener for unread count
+  - Notification screen with list
+
+Localization:
+  - Notifications translated to Swahili, English, Chinese
+  - Server-side notif_lang.js translates before sending
+
+Bulk:
+  - Admin broadcast to all users
+  - Bulk push for promotions
+  - Promotional SMS (Meseji / Notify Africa)
+  - WhatsApp Business API (Notify Africa WABA)
+
+================================================================================
+17. AI ASSISTANT (GROQ)
+================================================================================
+
+- Groq API for fast LLM inference
+- Chat endpoint: POST /api/ai/chat
+  - Context: product catalog, user queries
+  - Function calling for product search
+- Transcription: POST /api/ai/transcribe
+  - Groq Whisper for voice messages
+- Client: lib/services/groq_service.dart
+- Tools: lib/services/ai/ai_tool.dart (product search, etc.)
+
+================================================================================
+18. ADMIN PANEL
+================================================================================
+
+Admin check:
+  - emails: admin@soko-langu.com, admin@soko-vibe.com
+  - OR users/{uid}.isAdmin == true
+  - Rate limit bypass via ADMIN_SECRET header
+
+Dashboard features:
+  - User management (list, suspend, warn, delete, KYC review)
+  - Product management (list, edit, delete)
+  - Transaction management (list, status updates)
+  - Order management (list, status updates)
+  - Withdrawal management (approve, retry)
+  - KYC review (approve, reject, revoke)
+  - Analytics (timeseries, revenue, ad views)
+  - Fraud alerts (list, dismiss, risk scores)
+  - Broadcast notifications
+  - ClickPesa balance monitoring
+  - Audit log
+
+================================================================================
+19. LOCALIZATION
+================================================================================
+
+Languages:
+  - Swahili (primary, Language.swahili)
+  - English (fallback)
+  - Chinese (Mandarin)
+
+Implementation:
+  - lib/services/localization_service.dart: Main translation map (4000+ lines)
+  - lib/services/localizations/zh_translations.dart: Chinese translations
+  - lib/extensions/context_tr.dart: context.tr('key') extension
+  - safe_text profanity filter initialized with Language.swahili
+
+New ToS/PP sections (v2.0):
+  - Section 3A: Chat functionality terms
+  - Section 4.5-4.7: 3-strike profanity escalation policy
+  - Section 17: Right to Withhold/Detain/Forfeit Funds
+  - Section 19 (PP): PDPA 2022 Compliance
+
+================================================================================
+20. PERFORMANCE OPTIMIZATIONS
+================================================================================
+
+1. FIRESTORE INDEXES (41 composite)
+   - Products: isActive+createdAt, isActive+brand+createdAt,
+     isActive+category+createdAt, isActive+category+subcategory+createdAt,
+     isActive+isBoosted, sellerId+isActive, isActive+searchKeywords,
+     isActive+searchName, isActive+reviewCount
+   - Transactions: sellerId+createdAt, buyerId+createdAt, productId+buyerId+status,
+     type+status, type+productId+userId+status
+   - Orders: sellerId+status+createdAt, buyerId+productId+status
+   - Chat rooms: participants(array)+last_timestamp
+   - Notifications: userId+isRead, userId+createdAt, userId+isRead+createdAt
+   - Reviews: productId+userId, sellerId+createdAt
+   - Fraud alerts: resolved+severity, resolved+detectedAt, sellerId+resolved
+   - Payouts: source+status, userId+createdAt
+   - Withdrawals: userId+createdAt
+
+2. REDIS CACHING (Two-tier)
+   - In-memory LRU (500 entries max) + Redis distributed
+   - Popular products: 5-minute TTL
+   - Search results: 90s-10min TTL depending on endpoint
+   - Trending: 5-minute TTL
+   - Most-rated: 10-minute TTL
+   - Pattern invalidation for cache busting
+
+3. IMAGE OPTIMIZATION
+   - ProductCachedImage: memCacheWidth/memCacheHeight
+   - Cloudinary server-side: w_300,c_fill,q_auto,f_auto
+   - SokoCacheManager: 3-day disk cache, 400 objects
+   - flutter_image_compress: <200KB WebP, max 1200px
+
+4. NETWORK OPTIMIZATION
+   - Batch getProfiles() (chat inbox)
+   - Cursor-based pagination for product feeds
+   - Redundant timer removal
+   - Single streamEarnings() (was 5 streams)
+
+5. R8 MINIFICATION
+   - Code obfuscation
+   - Resource shrinking
+   - Unused code removal
+
+================================================================================
+21. DEPLOYMENT
+================================================================================
+
+Render (Backend):
+  - Auto-deploys on push to origin/master
+  - Service: soko-langu-server
+  - Region: Frankfurt (EU)
+  - Plan: Free (upgrade for production)
+  - Redis: soko-redis (Key Value, Free tier)
+
+Firebase:
+  - Rules: firebase deploy --only firestore:rules
+  - Indexes: firebase deploy --only firestore:indexes
+  - Functions: firebase deploy --only functions
+
+Android:
+  - Release APK: flutter build apk --release
+  - App Bundle: flutter build appbundle --release
+  - Signing: key.properties (release keystore)
+
+Deploy hook:
+  POST https://api.render.com/deploy/srv-d9a8pmn7f7vs739c4sj0?key=...
+
+================================================================================
+22. TESTING
+================================================================================
+
+Flutter tests:
+  flutter test
+
+Server tests:
+  cd server && node test/e2e.live.test.js
+  cd server && node test/notif_lang.test.js
+  cd server && node test/money.test.js
+
+Firestore rules test:
+  firebase emulators:start
+
+================================================================================
+23. KEY CONFIGURATION
+================================================================================
+
+Android:
+  applicationId: com.sokolangu.app
+  minSdk: Flutter default
+  targetSdk: Flutter default
+  compileSdk: Flutter default
+  R8: enabled (minify + shrink)
+
+Firestore Rules:
+  - Admin check: email-based OR isAdmin field
+  - Field-level protection: noSensitiveFieldChanges()
+  - Collection-level: 486 lines of rules
+
+Network Security:
+  - Cleartext blocked
+  - SSL pinning for 4 service groups
+  - System CA only
+
+Self-ping:
+  - Every 10 minutes to prevent Render free-tier spin-down
+
+================================================================================
+24. KNOWN ISSUES & TECHNICAL DEBT
+================================================================================
+
+1. SECRET ROTATION URGENT
+   - server/.env was in git history (commit d7b2c6c)
+   - All production secrets compromised
+   - Must rotate: Firebase SA, ClickPesa, SMTP, OneSignal, Cloudinary, Groq
+
+2. FIRESTORE SECURITY RULES
+   - No Firestore admin user exists (none have isAdmin: true)
+   - Withdraw works via admin secret auth bypass
+
+3. SERVER CODE
+   - index.js is 9000+ lines (should be modularized)
+   - Some routes have full-scan queries without indexes
+
+4. FLUTTER CODE
+   - 77 screens (could benefit from feature-based organization)
+   - Some unused imports and variables (pre-existing warnings)
+   - Duplicate map keys in localization_service.dart (pre-existing)
+
+5. CACHE
+   - Redis requires REDIS_URL in Render env (currently placeholder)
+   - Without Redis, distributed caching is inactive
+
+6. TESTING
+   - Limited Flutter test coverage
+   - Server e2e tests exist but minimal
+
+7. DEPENDENCIES
+   - Many outdated packages (pub outdated shows 126 available updates)
+   - Some pinned versions (file_picker: 11.0.2, flutter_map: 8.3.1)
+
+================================================================================
+25. DIRECTORY REFERENCE
+================================================================================
+
+lib/
+  main.dart                              # App entry point
+  firebase_options.dart                  # FlutterFire config
+  app/
+    router.dart                          # GoRouter routes
+    routes.dart                          # Route name constants
+    app_state.dart                       # Global app state
+    app_transitions.dart                 # Page transitions
+  constants/
+    tanzania_districts.dart              # TZ districts/regions
+  extensions/
+    context_tr.dart                      # context.tr() i18n
+  models/                                # 27 data models
+  notifiers/
+    auth_notifier.dart                   # Auth state ChangeNotifier
+  providers/
+    product_feed_provider.dart           # Product feed state
+  repositories/
+    auth_repository.dart                 # Auth data access
+    product_repository.dart              # Product data access
+  screens/                               # 77 screens
+    auth/ (9)                            # Login, register, OTP, etc.
+    home/ (10)                           # Feed, search, detail, etc.
+    profile/ (17)                        # Seller, earnings, boost, etc.
+    chat/ (6)                            # Inbox, chat, groups
+    orders/ (6)                          # Purchases, seller orders
+    admin/ (9)                           # Dashboard, KYC, analytics
+    legal/ (2)                           # ToS, Privacy Policy
+    ai/ (1)                              # AI assistant
+    buyer/ (1)                           # Buyer statement
+    report/ (2)                          # Reports
+    boost/ (1)                           # Boost receipt
+    kyc/ (1)                             # KYC form
+    notification/ (2)                    # Notifications, preferences
+    onboarding/ (2)                      # Onboarding, account selection
+    status/ (3)                          # Status/story
+    requests/ (2)                        # Buyer requests
+  services/                              # 63 service files
+    ai/ (2)                              # AI chat + tools
+    localizations/ (1)                   # Chinese translations
+  shared/ (2)                            # Loading/error widgets
+  theme/ (8)                             # Light/dark themes
+  utils/ (9)                             # Helpers, validators
+  widgets/                               # 68 widgets
+    ds/ (17)                             # Design system
+
+server/
+  index.js                               # Main server (9000+ lines)
+  clickpesa.js                           # ClickPesa integration
+  orders.js                              # Order state machine
+  search.js                              # Search router
+  notification.js                        # Notification router
+  notificationPrefs.js                   # Notification preferences
+  notif_lang.js                          # Notification localization
+  money.js                               # Money helpers
+  groq.js                                # AI integration
+  cache.js                               # Two-tier cache (Redis+memory)
+  listener.js                            # Firestore triggers
+  send_promo_sms.js                      # Bulk SMS script
+  send_promo_push.js                     # Bulk push script
+  test_ussd.js                           # USSD test script
+  test/                                  # Server tests
+
+functions/
+  index.js                               # Cloud Functions entry
+  notification/                          # Push notification functions
+  search/                                # Search index maintenance
+
+================================================================================
+                         END OF DEVELOPER DOCUMENTATION
+================================================================================

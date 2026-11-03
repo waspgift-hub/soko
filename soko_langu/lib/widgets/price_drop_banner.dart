@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'product_cached_image.dart';
 import '../services/price_drop_service.dart';
 import '../extensions/context_tr.dart';
 
@@ -59,7 +59,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          height: 160,
+          height: 180,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
@@ -88,11 +88,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.error.withValues(alpha: 0.9), cs.error.withValues(alpha: 0.7)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: cs.error,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,11 +134,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
   Widget _buildRightPanel(List<Map<String, dynamic>> drops, ColorScheme cs) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.error.withValues(alpha: 0.08), cs.surface],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
+        color: cs.surfaceContainerLow,
       ),
       child: Column(
         children: [
@@ -173,7 +165,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
                         ),
                         child: ClipOval(
                           child: productImage.isNotEmpty
-                              ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, errorWidget: (_, _, _) => Icon(Icons.image, color: cs.onSurface.withValues(alpha: 0.5), size: 24))
+                              ? ProductCachedImage(url: productImage, fit: BoxFit.cover)
                               : Container(color: cs.error.withValues(alpha: 0.1), child: Icon(Icons.image, color: cs.onSurface.withValues(alpha: 0.5), size: 24)),
                         ),
                       ),

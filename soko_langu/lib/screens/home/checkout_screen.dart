@@ -1,292 +1,504 @@
-import 'dart:async';
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../widgets/product_cached_image.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../constants/tanzania_districts.dart';
 import '../../models/product_model.dart';
-import '../../services/payment_service.dart';
-import '../../services/fraud_prevention_service.dart';
-import '../../services/clickpesa_service.dart';
+import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/api_config.dart';
+import '../../widgets/input_field.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/google_loading.dart';
-import '../../theme/app_colors.dart';
+import '../../widgets/soko_vibe_loading.dart';
+import '../../utils/phone_utils.dart';
+import '../../services/user_service.dart';
+import '../../widgets/soko_widgets.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
+  final int quantity;
+  final String? variantId;
+  final double? unitPrice;
 
-  const CheckoutScreen({super.key, required this.product});
+  const CheckoutScreen({
+    super.key,
+    required this.product,
+    this.quantity = 1,
+    this.variantId,
+    this.unitPrice,
+  });
 
   @override
   State<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  final _phoneController = TextEditingController();
-  final _paymentService = PaymentService();
+  final _regionCtrl = TextEditingController();
+  final _streetCtrl = TextEditingController();
+  final _landmarksCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   bool _processing = false;
-  double? _salePrice;
+  bool _detecting = false;
+  double? _latitude;
+  double? _longitude;
   String _deliveryType = 'local';
+  String? _selectedRegion;
+  String? _selectedDistrict;
+  String? _selectedWard;
 
-  double get _totalPrice => _salePrice ?? widget.product.price;
+  final FlashSaleService _flashSaleService = FlashSaleService();
+  StreamSubscription<FlashSale?>? _flashSub;
+  FlashSale? _flashSale;
+
+  /// Price actually charged: active flash-sale price wins, otherwise the
+  /// unit price chosen on product details (wholesale aware), else base.
+  double get _effectivePrice =>
+      _flashSale != null && _flashSale!.salePrice > 0
+          ? _flashSale!.salePrice
+          : (widget.unitPrice != null && widget.unitPrice! > 0
+              ? widget.unitPrice!
+              : widget.product.price);
+
+  int get _quantity => widget.quantity < 1 ? 1 : widget.quantity;
+
+  double get _lineTotal => _effectivePrice * _quantity;
 
   @override
   void initState() {
     super.initState();
-    _loadFlashSale();
+    _loadBuyerPhone();
+    _subscribeFlashSale();
   }
 
-  Future<void> _loadFlashSale() async {
-    final fs = await FlashSaleService()
+  void _subscribeFlashSale() {
+    _flashSub = _flashSaleService
         .streamFlashSaleByProductId(widget.product.id)
-        .first;
-    if (fs != null && mounted) {
-      setState(() => _salePrice = fs.salePrice);
+        .listen((sale) {
+      if (mounted) setState(() => _flashSale = sale);
+    });
+  }
+
+  Future<void> _loadBuyerPhone() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final profile = await UserService().getProfile(user.uid);
+    if (mounted && profile?.phone?.isNotEmpty == true) {
+      _phoneCtrl.text = profile!.phone!;
     }
   }
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _flashSub?.cancel();
+    _regionCtrl.dispose();
+    _streetCtrl.dispose();
+    _landmarksCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
+  }
+
+  void _matchRegion(String raw) {
+    if (raw.isEmpty) return;
+    final normalized = raw.toLowerCase().replaceAll(RegExp(r'\s*(mkoa|region)\s*$'), '').trim();
+    for (final r in kRegions) {
+      if (r.toLowerCase() == normalized) {
+        _selectedRegion = r;
+        return;
+      }
+    }
+    for (final r in kRegions) {
+      if (r.toLowerCase().contains(normalized) || normalized.contains(r.toLowerCase())) {
+        _selectedRegion = r;
+        return;
+      }
+    }
+  }
+
+  /// Matches a geocoded district name against the current region's council
+  /// list; returns null when there is no match so the user picks from the list.
+  String? _matchDistrict(String raw) {
+    if (raw.isEmpty || _selectedRegion == null) return null;
+    final list = kRegionDistricts[_selectedRegion] ?? const <String>[];
+    final normalized = raw.toLowerCase().trim();
+    for (final d in list) {
+      if (d.toLowerCase() == normalized) return d;
+    }
+    for (final d in list) {
+      if (d.toLowerCase().contains(normalized) || normalized.contains(d.toLowerCase())) return d;
+    }
+    return null;
+  }
+
+  /// Matches a geocoded neighbourhood/suburb against the current district's
+  /// kata list; returns null when there is no match so the user picks from the
+  /// list (or leaves it empty, since the street is the required field).
+  String? _matchWard(String raw) {
+    if (raw.isEmpty || _selectedDistrict == null) return null;
+    final list = kDistrictWards[_selectedDistrict] ?? const <String>[];
+    final normalized = raw.toLowerCase().trim();
+    for (final w in list) {
+      if (w.toLowerCase() == normalized) return w;
+    }
+    for (final w in list) {
+      if (w.toLowerCase().contains(normalized) || normalized.contains(w.toLowerCase())) return w;
+    }
+    return null;
+  }
+
+  Future<void> _detectLocation() async {
+    setState(() => _detecting = true);
+    try {
+      // Location service must be on and permission granted BEFORE positioning,
+      // otherwise geolocator throws PERMISSION_DENIED without any system dialog.
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() => _detecting = false);
+        _showError(context.tr('location_disabled'));
+        return;
+      }
+
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() => _detecting = false);
+        _showError(
+          perm == LocationPermission.deniedForever
+              ? context.tr('location_denied')
+              : context.tr('location_permission_denied'),
+        );
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+      _latitude = pos.latitude;
+      _longitude = pos.longitude;
+      await _reverseGeocode(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      setState(() => _detecting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('address_filled_confirm')), behavior: SnackBarBehavior.floating),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _detecting = false);
+      _showError(context.tr('imeshindwa').replaceAll('{0}', 'location'));
+    }
+  }
+
+  Future<void> _reverseGeocode(double lat, double lng) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json&addressdetails=1',
+      );
+      final resp = await http.get(uri, headers: {'User-Agent': 'SokoVibe/1.0'});
+      if (resp.statusCode != 200) return;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final address = data['address'] as Map<String, dynamic>?;
+      if (address == null) return;
+      if (!mounted) return;
+      final state = (address['state'] as String?) ?? '';
+      final suburb = (address['suburb'] as String?)
+          ?? (address['neighbourhood'] as String?)
+          ?? _landmarksCtrl.text;
+      final district = _matchDistrict((address['city_district'] as String?)
+          ?? (address['municipality'] as String?)
+          ?? (address['county'] as String?)
+          ?? (address['state_district'] as String?)
+          ?? '');
+      setState(() {
+        _regionCtrl.text = state;
+        _matchRegion(state);
+        _selectedDistrict = district;
+        _selectedWard = _matchWard(suburb);
+        _streetCtrl.text = (address['road'] as String?) ?? _streetCtrl.text;
+        _landmarksCtrl.text = suburb;
+      });
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final p = widget.product;
-    final breakdown = _paymentService.calculateFees(_totalPrice);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('checkout')), centerTitle: true),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        title: Text(
+          context.tr('checkout'),
+          style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Column(
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              children: [
+                _buildHeroProduct(context, cs, p),
+                const SizedBox(height: 16),
+                _buildTrustStrip(context, cs),
+                const SizedBox(height: 20),
+
+                _buildSectionTitle(context, cs, Icons.local_shipping_outlined, context.tr('delivery_type')),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DeliveryTypeChip(
+                        label: context.tr('delivery_within_region'),
+                        icon: Icons.location_city,
+                        selected: _deliveryType == 'local',
+                        color: cs.primary,
+                        onTap: () => setState(() => _deliveryType = 'local'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _DeliveryTypeChip(
+                        label: context.tr('delivery_outside_region'),
+                        icon: Icons.local_shipping,
+                        selected: _deliveryType == 'regional',
+                        color: cs.tertiary,
+                        onTap: () => setState(() => _deliveryType = 'regional'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                _buildSectionTitle(context, cs, Icons.home_outlined, context.tr('shipping_address')),
+                const SizedBox(height: 12),
+                _buildLocationButton(context, cs),
+                const SizedBox(height: 12),
+                _buildAddressForm(context, cs),
+                const SizedBox(height: 20),
+                _buildSectionTitle(context, cs, Icons.phone_outlined, context.tr('phone', 'Simu')),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    context.tr('checkout_phone_hint', 'Namba ya simu ya muuzaji kukuangalia'),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: TextField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      hintText: '07XX XXX XXX',
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      prefixIcon: Icon(Icons.phone_android, color: cs.primary.withValues(alpha: 0.7)),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                  ),
+                ),
+                if (_latitude != null && _longitude != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                    ),
                     child: Row(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            color: cs.surfaceContainerHighest,
-                            child: p.images.isNotEmpty
-                                ? Image.network(
-                                    p.images.first,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Icon(
-                                    Icons.image,
-                                    size: 28,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
+                        Icon(Icons.my_location, size: 18, color: cs.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            context.tr('coordinates_confirmed', 'Eneo limekamatwa'),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.primary),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                p.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                'x1  ${_salePrice != null ? context.formatPrice(_salePrice!) : context.formatPrice(p.price)}',
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.59),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
+                        Text(
+                          '${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}',
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            context.tr('payment_details'),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _detailRow(context.tr('total_price'), context.formatPrice(_totalPrice), cs),
-          _detailRow(
-            context.tr('ussd_push_fee'),
-            '+ ${context.formatPriceInt(ClickPesaService.getUssdPushFee(_totalPrice.toInt()))}',
-            cs,
-            valueColor: cs.secondary,
-          ),
-          _detailRow(
-            context.tr('clickpesa_fee'),
-            '- ${context.formatPrice(breakdown.processingFee)}',
-            cs,
-            valueColor: cs.error,
-          ),
-          _detailRow(
-            context.tr('soko_commission'),
-            '- ${context.formatPrice(breakdown.platformFee)}',
-            cs,
-            valueColor: cs.error,
-          ),
-          _detailRow(
-            context.tr('payout_fee'),
-            '- ${context.formatPrice(breakdown.payoutFee)}',
-            cs,
-            valueColor: cs.error,
-          ),
-          const Divider(height: 24),
-          _detailRow(
-            context.tr('seller_receives'),
-            context.formatPrice(breakdown.sellerReceives),
-            cs,
-            valueColor: cs.primary,
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.secondary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.secondary.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: cs.secondary, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    context.tr('you_pay_seller_receives').replaceAll('{0}', context.formatPrice(_totalPrice)).replaceAll('{1}', context.formatPrice(breakdown.sellerReceives)),
-                    style: TextStyle(color: cs.secondary, fontSize: 13),
-                  ),
-                ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            context.tr('your_phone_number'),
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-              color: cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _phoneController,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              hintText: context.tr('phone_hint'),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              prefixIcon: const Icon(Icons.phone_android),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Aina ya Usafirishaji',
-            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface),
-          ),
-          const SizedBox(height: 8),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'local', label: Text('Mtaa (siku 3)'), icon: Icon(Icons.location_on, size: 18)),
-              ButtonSegment(value: 'regional', label: Text('Mikoa (siku 7)'), icon: Icon(Icons.map, size: 18)),
-            ],
-            selected: {_deliveryType},
-            onSelectionChanged: (v) => setState(() => _deliveryType = v.first),
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _processing ? null : _processPayment,
-              icon: _processing
-                  ? const GoogleLoading(size: 20, strokeWidth: 2)
-                  : const Icon(Icons.lock),
-              label: Text(
-                _processing
-                    ? context.tr('processing')
-                    : context.tr('pay').replaceAll('{0}', context.formatPrice(_totalPrice)),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.successGreen,
-                foregroundColor: cs.surface,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          _buildBottomBar(context, cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroProduct(BuildContext context, ColorScheme cs, Product p) {
+    return Container(
+      height: 190,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Stack(
+        children: [
+          if (p.images.isNotEmpty)
+            Positioned(
+              right: -20,
+              top: -10,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: SizedBox(
+                  width: 160,
+                  height: 190,
+                  child: ProductCachedImage(
+                    url: p.images.first,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.54),
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: _processing ? null : () => context.pop(),
-            icon: const Icon(Icons.arrow_back, size: 18),
-            label: Text(context.tr('cancel')),
+          Positioned(
+            left: 16,
+            top: 16,
+            bottom: 16,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 13, color: cs.onPrimary),
+                        const SizedBox(width: 5),
+                        Text(
+                          context.tr('checkout'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onPrimary,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    p.name,
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        context.formatPrice(_lineTotal),
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: cs.primary,
+                        ),
+                      ),
+                      if (_flashSale != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          context.formatPrice(widget.product.price * _quantity),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (_quantity > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '$_quantity × ${context.formatPrice(_effectivePrice)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _detailRow(
-    String label,
-    String value,
-    ColorScheme cs, {
-    Color? valueColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+  Widget _buildTrustStrip(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.secondary.withValues(alpha: 0.18)),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Flexible(
+          Icon(Icons.shield_outlined, color: cs.secondary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.67), fontSize: 14),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              color: valueColor,
+              context.tr('checkout_trust_strip', 'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.'),
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant, height: 1.4),
             ),
           ),
         ],
@@ -294,309 +506,305 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Future<void> _processPayment() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      _showError(context.tr('enter_phone'));
+  Widget _buildSectionTitle(BuildContext context, ColorScheme cs, IconData icon, String title) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 17, color: cs.primary),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: cs.onSurface),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationButton(BuildContext context, ColorScheme cs) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: _detecting ? null : _detectLocation,
+        icon: _detecting
+            ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.primary)
+            : const Icon(Icons.my_location, size: 18),
+        label: Text(context.tr('get_location')),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.primary,
+          backgroundColor: cs.primary.withValues(alpha: 0.06),
+          side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressForm(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _selectedRegion,
+            decoration: InputDecoration(
+              hintText: context.tr('select_region'),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: true,
+              fillColor: cs.surface.withValues(alpha: 0.5),
+              isDense: true,
+            ),
+            items: kRegions
+                .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                .toList(),
+            onChanged: (v) {
+              setState(() {
+                _selectedRegion = v;
+                _selectedDistrict = null;
+                if (v != null) _regionCtrl.text = v;
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedDistrict,
+            decoration: InputDecoration(
+              hintText: context.tr('district_hint'),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: true,
+              fillColor: cs.surface.withValues(alpha: 0.5),
+              isDense: true,
+            ),
+            items: (_selectedRegion == null
+                    ? const <String>[]
+                    : (kRegionDistricts[_selectedRegion] ?? const <String>[]))
+                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                .toList(),
+            onChanged: (v) {
+              setState(() {
+                _selectedDistrict = v;
+                _selectedWard = null;
+              });
+            },
+          ),
+          if (_selectedDistrict != null &&
+              (kDistrictWards[_selectedDistrict]?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedWard,
+              decoration: InputDecoration(
+                hintText: context.tr('ward_hint'),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: true,
+                fillColor: cs.surface.withValues(alpha: 0.5),
+                isDense: true,
+              ),
+              items: kDistrictWards[_selectedDistrict]!
+                  .map((w) => DropdownMenuItem(value: w, child: Text(w)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedWard = v),
+            ),
+          ],
+          const SizedBox(height: 10),
+          AppInputField(
+            controller: _streetCtrl,
+            hint: context.tr('street_hint'),
+            textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: 10),
+          AppInputField(
+            controller: _landmarksCtrl,
+            hint: context.tr('landmarks_hint'),
+            maxLines: 2,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
+    final originalTotal = widget.product.price * _quantity;
+    final discount = _flashSale != null && originalTotal > _lineTotal
+        ? originalTotal - _lineTotal
+        : 0.0;
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.15))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: CheckoutSummary(
+          subtotal: _lineTotal,
+          discount: discount,
+          note: _flashSale != null ? context.tr('flash_sale_price', 'Flash sale price') : null,
+          action: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: _processing ? null : _submitOrder,
+              icon: _processing
+                  ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.onPrimary)
+                  : const Icon(Icons.send_rounded, size: 20),
+              label: Text(
+                _processing ? context.tr('sending') : context.tr('flow_place_order'),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitOrder() async {
+    final region = _selectedRegion ?? _regionCtrl.text.trim();
+    final district = _selectedDistrict ?? '';
+    final street = _streetCtrl.text.trim();
+    if (region.isEmpty || district.isEmpty || street.isEmpty) {
+      _showError(context.tr('fill_full_address_error'));
       return;
     }
 
+    HapticFeedback.lightImpact();
     setState(() => _processing = true);
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showError(context.tr('ingia_akaunti_kwanza'));
-      setState(() => _processing = false);
-      return;
-    }
+    if (user == null) { _showError(context.tr('ingia_akaunti_kwanza')); setState(() => _processing = false); return; }
 
     try {
       final p = widget.product;
-
-      // Re-validate flash sale expiry before payment
-      final activeFs = await FlashSaleService()
-          .streamFlashSaleByProductId(p.id)
-          .first;
-      if (activeFs != null && activeFs.isExpired) {
-        _showError(context.tr('flash_sale_expired'));
-        setState(() => _processing = false);
-        return;
-      }
-
-      await FraudPreventionService().checkSuspiciousTransaction(
-        buyerId: user.uid,
-        sellerId: p.sellerId,
-        sellerName: p.sellerName,
-        amount: _totalPrice,
-      );
-                  final result = await ClickPesaService.initiateMarketplacePayment(
-        productPrice: _totalPrice,
-        productName: p.name,
-        productId: p.id,
-        sellerId: p.sellerId,
-        sellerName: p.sellerName,
-        email: user.email ?? '',
-        phone: phone,
-        buyerId: user.uid,
-        deliveryType: _deliveryType,
-      );
-
-      if (result == null || result['order_id'] == null) {
-        final errMsg =
-            result?['error'] as String? ??
-            context.tr('failed_payment_init');
-        _showError(errMsg);
-        setState(() => _processing = false);
-        return;
-      }
-
-      final orderId = result['order_id'] as String;
-
-      if (!mounted) return;
-      _showPaymentDialog(orderId, user);
-    } catch (e) {
-      _showError(context.tr('payment_error').replaceAll('{0}', e.toString()));
-      setState(() => _processing = false);
-    }
-  }
-
-  void _showPaymentDialog(String orderId, User user) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return _PaymentPendingDialog(
-          orderId: orderId,
-          user: user,
-          onSuccess: (o, u) => _onPaymentSuccess(o, u, ctx),
-          onTimeout: () {
-            if (mounted) setState(() => _processing = false);
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _onPaymentSuccess(
-    String orderId,
-    User user,
-    BuildContext dialogContext,
-  ) async {
-    final cs = Theme.of(context).colorScheme;
-    Navigator.pop(dialogContext);
-
-    if (mounted) {
-      setState(() => _processing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('purchase_successful')),
-          backgroundColor: cs.primary,
-        ),
-      );
-      context.go(AppRoutes.home);
-    }
-  }
-
-  void _showError(String msg) {
-    final cs = Theme.of(context).colorScheme;
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: cs.error));
-  }
-}
-
-class _PaymentPendingDialog extends StatefulWidget {
-  final String orderId;
-  final User user;
-  final void Function(String orderId, User user) onSuccess;
-  final VoidCallback onTimeout;
-  const _PaymentPendingDialog({
-    required this.orderId,
-    required this.user,
-    required this.onSuccess,
-    required this.onTimeout,
-  });
-  @override
-  State<_PaymentPendingDialog> createState() => _PaymentPendingDialogState();
-}
-
-class _PaymentPendingDialogState extends State<_PaymentPendingDialog> {
-  bool _timedOut = false;
-  bool _checking = false;
-  Timer? _autoRetryTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    // After 60s, enable auto-retry polling
-    Future.delayed(const Duration(seconds: 60), () {
-      if (mounted) {
-        setState(() => _timedOut = true);
-        _startAutoRetry();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _autoRetryTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startAutoRetry() {
-    _autoRetryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) _retry();
-    });
-  }
-
-  Future<void> _retry() async {
-    if (_checking) return;
-    setState(() => _checking = true);
-    try {
-      final token = await widget.user.getIdToken();
+      final token = await user.getIdToken();
       final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/retry-payment'),
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/create'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'order_id': widget.orderId}),
+        body: jsonEncode({
+          'buyerId': user.uid,
+          'buyerName': user.displayName ?? '',
+          'buyerPhone': _phoneCtrl.text.trim().isNotEmpty ? PhoneUtils.toE164(_phoneCtrl.text.trim()) : (user.phoneNumber ?? ''),
+          'sellerId': p.sellerId,
+          'sellerName': p.sellerName,
+          'productId': p.id,
+          'productName': p.name,
+          'productImage': p.images.isNotEmpty ? p.images.first : '',
+          'productPrice': _lineTotal,
+          'quantity': _quantity,
+          'variantId': widget.variantId,
+          'unitPrice': _effectivePrice,
+          'region': region,
+          'district': district,
+          'ward': _selectedWard ?? '',
+          'street': street,
+          'landmarks': _landmarksCtrl.text.trim(),
+          'latitude': _latitude,
+          'longitude': _longitude,
+          'deliveryType': _deliveryType,
+        }),
       );
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (!mounted) return;
-      if (resp.statusCode == 200 && (body['status'] == 'completed' || body['status'] == 'escrow_hold')) {
-        _autoRetryTimer?.cancel();
-        widget.onSuccess(widget.orderId, widget.user);
+
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200 || data['success'] != true) {
+        _showError(data['error'] ?? context.tr('failed_to_create_order', 'Failed to create order'));
+        setState(() => _processing = false);
+        return;
       }
-    } catch (_) {
-      // Silently retry on next cycle
-    } finally {
-      if (mounted) setState(() => _checking = false);
+
+      final orderData = data['order'] as Map<String, dynamic>;
+      if (mounted) {
+        setState(() => _processing = false);
+        context.push('${AppRoutes.orderDetail}/${orderData['orderId']}', extra: orderData);
+      }
+    } catch (e) {
+      final friendly = context.trError(e);
+      _showError(friendly);
+      setState(() => _processing = false);
     }
   }
 
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error));
+  }
+}
+
+class _DeliveryTypeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DeliveryTypeChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('transactions')
-          .doc(widget.orderId)
-          .snapshots(),
-      builder: (context, snap) {
-        final data = snap.data?.data() as Map<String, dynamic>?;
-        final status = data?['status'] as String? ?? 'pending';
-
-        if (status == 'completed' || status == 'escrow_hold') {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onSuccess(widget.orderId, widget.user);
-          });
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 64,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  context.tr('payment_successful'),
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? color.withValues(alpha: 0.12) : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? color : cs.outline.withValues(alpha: 0.2),
+              width: selected ? 2 : 1,
             ),
-          );
-        }
-
-        if (status == 'failed') {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onTimeout();
-          });
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.cancel,
-                  color: Theme.of(context).colorScheme.error,
-                  size: 64,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  context.tr('payment_failed'),
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (!_timedOut) ...[
-                const GoogleLoading(size: 24, strokeWidth: 2),
-                const SizedBox(height: 20),
-              ],
-              Text(
-                _timedOut
-                    ? context.tr('payment_confirm_pending')
-                    : context.tr('processing_payment'),
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _timedOut
-                    ? context.tr('check_phone_ussd').replaceAll('{0}', widget.orderId)
-                    : context
-                          .tr('complete_payment_clickpesa')
-                          .replaceAll('{0}', widget.orderId),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 13,
-                ),
-              ),
-              if (_timedOut) ...[
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _checking ? null : _retry,
-                    icon: _checking
-                        ? const SizedBox(width: 20, height: 20, child: GoogleLoading(size: 20, strokeWidth: 2))
-                        : const Icon(Icons.refresh, size: 18),
-                    label: Text(_checking ? 'Checking...' : 'Check Payment Status'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Auto-checking every 30s...',
-                  textAlign: TextAlign.center,
+              Icon(icon, size: 20, color: selected ? color : cs.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
                   style: TextStyle(
-                    fontSize: 11,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? color : cs.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () {
-                      _autoRetryTimer?.cancel();
-                      widget.onTimeout();
-                      Navigator.pop(context);
-                    },
-                    child: Text(context.tr('close')),
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

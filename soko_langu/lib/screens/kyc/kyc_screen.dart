@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 import '../../services/kyc_service.dart';
+import '../../services/cloudinary_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
@@ -20,18 +20,22 @@ class KycScreen extends StatefulWidget {
 class _KycScreenState extends State<KycScreen> {
   final _fullNameController = TextEditingController();
   final _idNumberController = TextEditingController();
-  String _idType = 'National ID';
+  String _idType = 'kyc_id_national';
   bool _submitting = false;
   String? _status;
   String? _reviewNotes;
   String? _kycIdImageUrl;
   String? _kycSelfieUrl;
-  File? _idImageFile;
-  File? _selfieFile;
+  XFile? _idImageFile;
+  XFile? _selfieFile;
 
-  final _idTypes = ['National ID', 'Passport', 'Drivers License', 'Voters ID'];
+  final _idTypes = [
+    'kyc_id_national',
+    'kyc_id_passport',
+    'kyc_id_drivers',
+    'kyc_id_voters',
+  ];
   final _picker = ImagePicker();
-  final _storage = FirebaseStorage.instance;
 
   @override
   void initState() {
@@ -42,9 +46,16 @@ class _KycScreenState extends State<KycScreen> {
   Future<void> _loadStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    Map<String, dynamic>? kyc;
+    try {
+      final result = await KycService.getKycStatus(user.uid);
+      kyc = result?['kyc'] as Map<String, dynamic>?;
+    } catch (_) {}
+    if (kyc == null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      kyc = doc.data()?['kyc'] as Map<String, dynamic>?;
+    }
     if (!mounted) return;
-    final kyc = doc.data()?['kyc'] as Map<String, dynamic>?;
     setState(() {
       _status = kyc?['status'] as String? ?? 'none';
       _reviewNotes = kyc?['reviewNotes'] as String?;
@@ -60,14 +71,11 @@ class _KycScreenState extends State<KycScreen> {
     super.dispose();
   }
 
-  Future<String?> _uploadImage(File file, String prefix) async {
+  Future<String?> _uploadImage(XFile file, String prefix) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
-      final ext = file.path.split('.').last;
-      final ref = _storage.ref().child('kyc/${user.uid}/${prefix}_${const Uuid().v4()}.$ext');
-      await ref.putFile(file);
-      return await ref.getDownloadURL();
+      return await CloudinaryService.uploadImage(file, folder: 'kyc/${user.uid}');
     } catch (e) {
       debugPrint('Upload error: $e');
       return null;
@@ -102,9 +110,9 @@ class _KycScreenState extends State<KycScreen> {
     if (file != null) {
       setState(() {
         if (isSelfie) {
-          _selfieFile = File(file.path);
+          _selfieFile = file;
         } else {
-          _idImageFile = File(file.path);
+          _idImageFile = file;
         }
       });
     }
@@ -131,20 +139,25 @@ class _KycScreenState extends State<KycScreen> {
       return;
     }
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     setState(() => _submitting = true);
 
     try {
       final idImageUrl = await _uploadImage(_idImageFile!, 'id');
       final selfieUrl = await _uploadImage(_selfieFile!, 'selfie');
 
-      if (idImageUrl == null || selfieUrl == null) {
-        _showError(context.tr('failed_to_upload_image'));
+      if (idImageUrl == null) {
+        _showError(context.tr('kyc_id_image_upload_failed', 'Failed to upload the ID image. Check your connection and try again.'));
         setState(() => _submitting = false);
         return;
       }
-
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (selfieUrl == null) {
+        _showError(context.tr('kyc_selfie_upload_failed', 'Failed to upload your selfie. Check your connection and try again.'));
+        setState(() => _submitting = false);
+        return;
+      }
 
       final result = await KycService.submitKyc(
         userId: user.uid,
@@ -168,7 +181,7 @@ class _KycScreenState extends State<KycScreen> {
         _showError(result?['error'] ?? context.tr('failed_to_submit_kyc'));
       }
     } catch (e) {
-      _showError('${context.tr('error')}: $e');
+      _showError(context.trParams('imeshindwa', {'0': e.toString()}));
     }
 
     setState(() => _submitting = false);
@@ -292,22 +305,27 @@ class _KycScreenState extends State<KycScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          initialValue: _idType,
+          value: _idType,
           decoration: InputDecoration(
             labelText: context.tr('id_type'),
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.badge),
           ),
-          items: _idTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-          onChanged: (v) => setState(() => _idType = v ?? 'National ID'),
+          items: _idTypes
+              .map((t) => DropdownMenuItem(value: t, child: Text(context.tr(t))))
+              .toList(),
+          onChanged: (v) => setState(() => _idType = v ?? 'kyc_id_national'),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _idNumberController,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 20,
           decoration: InputDecoration(
             labelText: context.tr('id_number'),
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.numbers),
+            counterText: '',
           ),
         ),
         const SizedBox(height: 24),
@@ -359,7 +377,7 @@ class _KycScreenState extends State<KycScreen> {
   Widget _buildImagePicker({
     required String label,
     required IconData icon,
-    required File? file,
+    required XFile? file,
     required String? imageUrl,
     required VoidCallback onPick,
   }) {
@@ -382,7 +400,7 @@ class _KycScreenState extends State<KycScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: file != null
-                        ? Image.file(file, width: double.infinity, height: 140, fit: BoxFit.cover)
+                        ? Image.file(File(file.path), width: double.infinity, height: 140, fit: BoxFit.cover)
                         : Image.network(imageUrl!, width: double.infinity, height: 140, fit: BoxFit.cover),
                   ),
                   if (file != null)

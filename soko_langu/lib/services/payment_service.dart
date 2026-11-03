@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
+import '../models/order_statuses.dart';
+import 'api_config.dart';
 import 'fraud_prevention_service.dart';
 
 class PaymentService {
@@ -11,7 +15,7 @@ class PaymentService {
     return TransactionFeeBreakdown(productPrice: productPrice);
   }
 
-  Future<void> processTransaction({
+  Future<String> processTransaction({
     required String buyerId,
     required String buyerName,
     required String buyerPhone,
@@ -22,8 +26,6 @@ class PaymentService {
     required double productPrice,
     String? transactionReference,
   }) async {
-    final breakdown = TransactionFeeBreakdown(productPrice: productPrice);
-
     await FraudPreventionService().checkSuspiciousTransaction(
       buyerId: buyerId,
       sellerId: sellerId,
@@ -31,45 +33,32 @@ class PaymentService {
       amount: productPrice,
     );
 
-    final docRef = await _db.collection('transactions').add({
-      'buyerId': buyerId,
-      'buyerName': buyerName,
-      'buyerPhone': buyerPhone,
-      'sellerId': sellerId,
-      'sellerName': sellerName,
-      'productId': productId,
-      'productName': productName,
-      'productPrice': productPrice,
-      'processingFee': breakdown.processingFee,
-      'platformFee': breakdown.platformFee,
-      'sokovibeCommission': breakdown.platformFee,
-      'totalAmount': breakdown.totalAmount,
-      'sellerReceives': breakdown.sellerReceives,
-      'status': 'completed',
-      'paymentMethod': 'ClickPesa',
-      'transactionReference': transactionReference ?? '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    await _db.collection('users').doc(sellerId).set({
-      'sellerBalance': FieldValue.increment(breakdown.sellerReceives),
-      'totalSales': FieldValue.increment(1),
-      'grossSalesVolume': FieldValue.increment(productPrice),
-      'lastSaleAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    await _db.collection('revenue_transactions').add({
-      'userId': sellerId,
-      'amount': breakdown.sellerReceives,
-      'type': 'sale',
-      'description': 'Sale of $productName',
-      'transactionId': docRef.id,
-      'productName': productName,
-      'productPrice': productPrice,
-      'sokovibeCommission': breakdown.platformFee,
-      'buyerName': buyerName,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+    final token = await user.getIdToken(true);
+    final resp = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/transactions/create'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'buyerId': buyerId,
+        'buyerName': buyerName,
+        'buyerPhone': buyerPhone,
+        'sellerId': sellerId,
+        'sellerName': sellerName,
+        'productId': productId,
+        'productName': productName,
+        'productPrice': productPrice,
+        'transactionReference': transactionReference ?? '',
+      }),
+    );
+    final result = jsonDecode(resp.body);
+    if (result['success'] != true) {
+      throw Exception(result['error'] ?? 'Failed to process transaction');
+    }
+    return result['transactionId'] as String;
   }
 
   Stream<List<MarketplaceTransaction>> getSellerTransactions() {
@@ -78,6 +67,8 @@ class PaymentService {
     return _db
         .collection('transactions')
         .where('sellerId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -93,6 +84,8 @@ class PaymentService {
     return _db
         .collection('transactions')
         .where('buyerId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -105,11 +98,14 @@ class PaymentService {
   Future<double> getTotalPlatformEarnings() async {
     final snap = await _db
         .collection('transactions')
-        .where('status', isEqualTo: 'completed')
         .get();
     return snap.docs.fold<double>(
       0,
-      (total, doc) => total + ((doc.data()['sokovibeCommission'] ?? doc.data()['sokovibeCommission'] ?? doc.data()['platformFee'] ?? 0).toDouble()),
+      (total, doc) {
+        final d = doc.data();
+        if (!_isPaidStatus(d['status'] as String? ?? '')) return total;
+        return total + ((d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble());
+      },
     );
   }
 
@@ -119,13 +115,13 @@ class PaymentService {
     final monthStart = DateTime(now.year, now.month, 1);
     final all = await _db
         .collection('transactions')
-        .where('status', isEqualTo: 'completed')
         .get();
     double total = 0, today = 0, monthly = 0;
     int count = 0;
     for (var doc in all.docs) {
       final d = doc.data();
-      final pf = (d['sokovibeCommission'] ?? d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble();
+      if (!_isPaidStatus(d['status'] as String? ?? '')) continue;
+      final pf = (d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble();
       total += pf;
       final ts = d['createdAt'] as Timestamp?;
       if (ts != null) {
@@ -141,5 +137,33 @@ class PaymentService {
       'monthlyEarnings': monthly,
       'totalTransactions': count.toDouble(),
     };
+  }
+
+  bool _isPaidStatus(String status) {
+    return const {
+          OrderStatus.escrowHold,
+          OrderStatus.paidEscrowHold,
+          OrderStatus.paidEscrowHeld,
+          OrderStatus.dispatched,
+          OrderStatus.delivered,
+          OrderStatus.deliveryConfirmed,
+          OrderStatus.confirmed,
+          OrderStatus.completed,
+          OrderStatus.refunded,
+          OrderStatus.paid,
+          OrderStatus.inEscrow,
+          OrderStatus.readyToDispatch,
+          OrderStatus.inTransit,
+          OrderStatus.outForDelivery,
+          OrderStatus.deliveryAttempted,
+          OrderStatus.inspectionPeriod,
+          OrderStatus.otpPending,
+          OrderStatus.walletCredited,
+          OrderStatus.payoutPending,
+          OrderStatus.payoutComplete,
+          OrderStatus.disputed,
+          OrderStatus.refundPending,
+        }
+        .contains(status);
   }
 }
