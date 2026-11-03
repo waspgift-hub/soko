@@ -95,7 +95,7 @@ const DEFAULTS = {
     apiRateLimitPerMin: 300,
   },
   dailyEngagement: {
-    enabled: false,
+    enabled: true,
     timezone: 'Africa/Dar_es_Salaam',
     sendHourLocal: 9,
     channels: { email: true, push: true },

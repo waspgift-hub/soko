@@ -1,0 +1,5 @@
+﻿Analyzing main.dart...
+
+  error - main.dart:792:32 - 'BannerService' doesn't conform to the bound 'ChangeNotifier?' of the type parameter 'T'. Try using a type that is or is a subclass of 'ChangeNotifier?'. - type_argument_not_matching_bounds
+
+1 issue found.

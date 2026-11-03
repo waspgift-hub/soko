@@ -53,7 +53,7 @@ const notificationCategories = {
     priority: 9,
     channels: {
       push: true,
-      sms: true, // Important for payments
+      sms: false, // Converted to email
       email: true,
     },
   },
@@ -125,7 +125,7 @@ const notificationCategories = {
     priority: 8,
     channels: {
       push: true,
-      sms: true, // Critical for user money
+      sms: false, // Converted to email
       email: true,
     },
   },
@@ -683,14 +683,25 @@ class NotificationOrchestrator {
 
   // Email via mailer service
   async sendEmail(userId, title, body, data) {
-    // Use existing mailer service
-    // Would call server-side /api/send-mail
     try {
-      // For now, simulate success if email enabled
+      const { sendMail } = require('./mailer');
+      const db = require('../config/firebase').getFirebaseFirestore();
+      // Get user email
+      let toEmail = 'gift@sokovibe.co.tz';
+      if (db && userId) {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          if (userData.email) toEmail = userData.email;
+        }
+      }
+      // Override to gift@sokovibe.co.tz as requested
+      toEmail = 'gift@sokovibe.co.tz';
+      const ok = await sendMail(toEmail, title, body);
       return {
-        success: true,
+        success: ok,
         notificationId: `email_${Date.now()}`,
-        providerMessageId: `msg_${Date.now()}`,
+        providerMessageId: ok ? `msg_${Date.now()}` : null,
       };
     } catch (e) {
       return { success: false, error: e.message };

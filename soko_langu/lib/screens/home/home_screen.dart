@@ -530,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen>
                   Icon(Icons.payments_outlined, size: 15, color: cs.primary),
                   const SizedBox(width: 4),
                   Text(
-                    AppConfig.of(context).currency,
+                    AppConfig.of(context).currencyCode,
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,

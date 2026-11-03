@@ -1,0 +1,18 @@
+﻿Running Gradle task 'assembleDebug'...                          
+flutter : lib/main.dart:59:8: Error: Expected ';' after this.
+At line:4 char:64
++ ... oko_langu"; flutter build apk --debug --target-platform=android-arm64 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (lib/main.dart:5...';' after this.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+import 'widgets/maintenance_gate.dart'
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+lib/app/router.dart:46:8: Error: Error when reading 'lib/screens/music/music_screen.dart': The system cannot find the 
+path specified
+import '../screens/music/music_screen.dart';
+       ^
+lib/app/router.dart:47:8: Error: Error when reading 'lib/screens/music/now_playing_screen.dart': The system cannot 
+find the path specified
+import '../screens/music/now_playing_screen.dart';
+       ^

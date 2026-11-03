@@ -96,21 +96,15 @@ enum _MediaEngine { none, video, audio }
 /// original [VideoPlayerController] path. Both engines feed the same streams,
 /// so widgets never need to know which one is active.
 class ProfileMediaController {
-  ProfileMediaController({/* music preferences removed */}) {
-    _speed = _preferences.speed;
-    _shuffle = _preferences.shuffle;
-    _repeatMode = QueueRepeatMode.values.firstWhere(
-      (m) => m.name == _preferences.repeat,
-      orElse: () => QueueRepeatMode.all,
-    );
-    _favorites.addAll(_preferences.favorites);
+  ProfileMediaController() {
+    // Preferences were removed; use defaults.
   }
 
   /// Flips shuffle. Only affects which item [next] picks; the queue order and
   /// the current track are untouched, so toggling never interrupts playback.
   Future<void> toggleShuffle() async {
     _shuffle = !_shuffle;
-    await _preferences.saveShuffle(_shuffle);
+    // await _preferences.saveShuffle(_shuffle);
     if (!_disposed) _shuffleStream.add(_shuffle);
   }
 
@@ -119,7 +113,7 @@ class ProfileMediaController {
   /// Adds or removes [id] from the persisted favourites collection.
   Future<void> toggleFavorite(String id) async {
     if (!_favorites.remove(id)) _favorites.add(id);
-    await _preferences.saveFavorites(_favorites);
+    // await _preferences.saveFavorites(_favorites);
     if (!_disposed) _favoritesStream.add(Set.unmodifiable(_favorites));
   }
 
@@ -441,7 +435,7 @@ class ProfileMediaController {
 
   Future<void> setSpeed(double speed) async {
     _speed = speed;
-    await _preferences.saveSpeed(speed);
+    // await _preferences.saveSpeed(speed);
     if (_engine == _MediaEngine.audio) {
       await MediaAudioHandler.instance.setSpeed(speed);
     } else {
@@ -458,7 +452,7 @@ class ProfileMediaController {
   Future<void> cycleQueueRepeatMode() async {
     const order = [QueueRepeatMode.all, QueueRepeatMode.one, QueueRepeatMode.off];
     _repeatMode = order[(order.indexOf(_repeatMode) + 1) % order.length];
-    await _preferences.saveRepeat(_repeatMode.name);
+    // await _preferences.saveRepeat(_repeatMode.name);
     if (_engine == _MediaEngine.audio) {
       await MediaAudioHandler.instance.applyRepeatMode(_audioRepeatMode);
     }
@@ -471,10 +465,9 @@ class ProfileMediaController {
   void setSleepTimer(Duration duration) {
     cancelSleepTimer();
     _sleepEndsAt = DateTime.now().add(duration);
-    unawaited(_preferences.saveSleepEndsAtMs(
-      _sleepEndsAt!.millisecondsSinceEpoch.toDouble(),
-    ));
-    unawaited(_preferences.saveSleepEnabled(true));
+    // unawaited(_preferences.saveSleepEndsAtMs(
+    //   _sleepEndsAt!.millisecondsSinceEpoch.toDouble(),
+    // ));
     _sleepStream.add(duration);
     _sleepTicker =
         Timer.periodic(const Duration(seconds: 5), (_) {
@@ -485,8 +478,8 @@ class ProfileMediaController {
     });
     _sleepTimer = Timer(duration, () async {
       _sleepEndsAt = null;
-      unawaited(_preferences.saveSleepEndsAtMs(null));
-      unawaited(_preferences.saveSleepEnabled(false));
+      // unawaited(_preferences.saveSleepEndsAtMs(null));
+    // unawaited(_preferences.saveSleepEnabled(false));
       _sleepTicker?.cancel();
       _sleepTicker = null;
       if (!_disposed) _sleepStream.add(null);
@@ -501,8 +494,8 @@ class ProfileMediaController {
     _sleepTicker = null;
     if (_sleepEndsAt != null) {
       _sleepEndsAt = null;
-      unawaited(_preferences.saveSleepEndsAtMs(null));
-      unawaited(_preferences.saveSleepEnabled(false));
+      // unawaited(_preferences.saveSleepEndsAtMs(null));
+    // unawaited(_preferences.saveSleepEnabled(false));
       if (!_disposed) _sleepStream.add(null);
     }
   }

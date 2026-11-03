@@ -39,7 +39,7 @@ router.post('/cron/daily-engagement', async (req, res) => {
 
   const settings = await settingsService.getSettings();
   const cfg = settings.dailyEngagement || {};
-  if (!cfg.enabled) {
+  if (cfg.enabled === false) {
     return res.json({
       success: true,
       skipped: true,

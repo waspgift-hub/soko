@@ -1,0 +1,185 @@
+﻿// Transactional mailer (OTP codes + admin broadcast + KYC).
+//
+// Preferred channel is the Resend HTTP API: the domain (sokovibe.co.tz) is
+// DNS-verified there, so recipients see no-reply@sokovibe.co.tz. HTTPS beats
+// SMTP from Render (Frankfurt) â€” SMTP STARTTLS handshakes routinely push past
+// the ~15s Cloudflare edge budget in front of api.sokovibe.co.tz, while the
+// Resend HTTP call returns in ~1s.
+//
+// Cloudflare Email Sending (CF token) and nodemailer/SMTP remain as fallbacks
+// for deployments/token setups that pre-date Resend, and they are genuinely
+// tried in turn â€” sendMail() walks the configured channels and returns on the
+// first that actually delivers.
+
+const nodemailer = require('nodemailer');
+const { maskEmail } = require('../utils/pii');
+
+let transporter = null;
+
+// Keeps the HTTP request budget: a slow relay must never stall the API. The
+// Resend API answers in ~1s; 15s is guard-room for degraded networks that
+// still fits inside the API's own 20s request timeout (30s used to 504 while
+// the handler was still sending).
+const SEND_TIMEOUT_MS = 15000;
+
+function withTimeout(promise, ms = SEND_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`mailer send timeout after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
+function cloudFlareConfigured() {
+  return Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+}
+
+function resendConfigured() {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      connectionTimeout: SEND_TIMEOUT_MS,
+      greetingTimeout: SEND_TIMEOUT_MS,
+      socketTimeout: SEND_TIMEOUT_MS,
+    });
+  }
+  return transporter;
+}
+
+// Rough HTMLâ†’text so clients that only show plain text still render the code;
+// dual-format also keeps spam scores lower.
+function toPlainText(html) {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function sendViaCloudflare(to, subject, html) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/email/sending/send`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to,
+        from: {
+          address: process.env.EMAIL_FROM || 'no-reply@sokovibe.co.tz',
+          name: process.env.EMAIL_FROM_NAME || 'Soko Vibe',
+        },
+        subject,
+        html,
+        text: toPlainText(html),
+      }),
+    },
+  );
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Cloudflare email ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const body = await res.json();
+  if (body && body.success === false) {
+    throw new Error(`Cloudflare email rejected: ${(body.errors || []).map((e) => e.message).join('; ').slice(0, 200)}`);
+  }
+
+  // A 200 is NOT proof of delivery. The API answers 200 with
+  // result.permanent_bounces / result.suppressed_recipients populated when the
+  // address bounced or is on the suppression list â€” the mail never arrives. The
+  // old code ignored those and reported success, so an OTP email to a dead
+  // address looked sent, the code stayed in the store, and the user waited out
+  // a cooldown for a message that was never going to arrive.
+  const result = (body && body.result) || {};
+  const undelivered = [
+    ...(result.permanent_bounces || []),
+    ...(result.suppressed_recipients || []),
+  ];
+  if (undelivered.length) {
+    throw new Error(`Cloudflare email not delivered to ${undelivered.join(', ')}`);
+  }
+  if (!result.message_id) {
+    throw new Error('Cloudflare email returned no message_id');
+  }
+  return result;
+}
+
+// Resend API: HTTPS beats SMTP from Render (see file header). The api async
+// is one POST; the from address lives on a DNS-verified Resend domain.
+async function sendViaResend(to, subject, html) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.SMTP_FROM || 'Soko Vibe <no-reply@sokovibe.co.tz>',
+      to: [to],
+      subject,
+      html,
+      text: toPlainText(html),
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Resend email ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+// Every channel that is configured gets tried in turn, and the first one that
+// actually delivers wins. The previous version returned false on the FIRST
+// error, so the fallbacks described in the file header never ran: one Cloudflare
+// hiccup (or a 409 while Email Sending setup was still in progress) silently
+// cut off all email, including OTPs, with Resend credentials sitting unused.
+// Samsung One UI inspired email wrapper
+function wrapEmailHtml(html) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { margin: 0; padding: 0; background: #F7F7F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+  .container { max-width: 600px; margin: 0 auto; padding: 24px; }
+  .card { background: #FFFFFF; border-radius: 16px; padding: 32px; margin-bottom: 16px; }
+  .header { text-align: center; padding-bottom: 24px; border-bottom: 1px solid #E5E5E5; margin-bottom: 24px; }
+  .title { font-size: 20px; font-weight: 600; color: #000000; margin: 0 0 8px; }
+  .subtitle { font-size: 14px; color: #6B6B6B; margin: 0; }
+  .content { font-size: 15px; color: #1A1A1A; line-height: 1.6; }
+  .button { display: inline-block; background: #1F8F4E; color: #FFFFFF; padding: 14px 32px; border-radius: 24px; text-decoration: none; font-weight: 600; font-size: 15px; margin: 16px 0; }
+  .footer { text-align: center; padding-top: 24px; font-size: 12px; color: #8E8E8E; }
+  .divider { height: 1px; background: #E5E5E5; margin: 24px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+  <div class="header">
+    <img src="https://www.sokovibe.co.tz/assets/icon-512.png" width="64" height="64" alt="Soko Vibe" style="border-radius:16px; margin-bottom:12px;">
+    <h1 class="title">Soko Vibe</h1>
+    <p class="subtitle">Soko la mtandaoni - Tanzania</p>
+  </div>
+    <div class="content">
+      ${html}
+    </div>
+  </div>
+  <div class="footer">
+    <p>Soko Vibe &copy; 2026. Haki zote zimehifadhiwa.</p>
+    <p>Barua pepe hii imetumwa kwa gift@sokovibe.co.tz.</p>
+  </div>
+</div>
+</body>
+</html>`;

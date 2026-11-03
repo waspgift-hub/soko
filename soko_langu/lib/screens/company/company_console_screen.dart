@@ -174,7 +174,7 @@ class _CompanyConsoleScreenState extends State<CompanyConsoleScreen> with Single
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: UiColors.textSecondary)),
+                  Text(title, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: UiColors.muted)),
                   const SizedBox(height: 4),
                   Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 ],
@@ -260,7 +260,7 @@ class _CompanyConsoleScreenState extends State<CompanyConsoleScreen> with Single
                             Text(
                               'Anza kwa kujiunga kama Founder ili kufungua Founder Command Center',
                               textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: UiColors.textSecondary),
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: UiColors.muted),
                             ),
                             const SizedBox(height: 16),
                             UiPrimaryButton(label: 'Jiunge kama Founder', onPressed: _bootstrap),
@@ -282,7 +282,7 @@ class _CompanyConsoleScreenState extends State<CompanyConsoleScreen> with Single
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Karibu, Founder', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                              Text('Role: ${_me!['role']}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: UiColors.textSecondary)),
+                              Text('Role: ${_me!['role']}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: UiColors.muted)),
                             ],
                           ),
                         ),
@@ -461,7 +461,7 @@ class _CompanyConsoleScreenState extends State<CompanyConsoleScreen> with Single
                         ),
                         child: const Padding(
                           padding: EdgeInsets.all(16),
-                          child: Text('Hakuna vyombo vya kisheria vilivyoongezwa bado. Ongeza hapa chini.', style: TextStyle(color: UiColors.textSecondary)),
+                          child: Text('Hakuna vyombo vya kisheria vilivyoongezwa bado. Ongeza hapa chini.', style: TextStyle(color: UiColors.muted)),
                         ),
                       )
                     else
@@ -519,7 +519,7 @@ class _CompanyConsoleScreenState extends State<CompanyConsoleScreen> with Single
                         child: Column(
                           children: [
                             if (_audit.isEmpty)
-                              const Text('Hakuna shughuli zilizorekodiwa bado.', style: TextStyle(color: UiColors.textSecondary))
+                              const Text('Hakuna shughuli zilizorekodiwa bado.', style: TextStyle(color: UiColors.muted))
                             else
                               ..._audit.take(10).map((a) => Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
@@ -537,7 +537,7 @@ class _CompanyConsoleScreenState extends State<CompanyConsoleScreen> with Single
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(a['action']?.toString().replaceAll('.', ' ').toUpperCase() ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                              Text('${a['target_type']} • ${a['target_id']?.toString().substring(0, 8) ?? ''}', style: const TextStyle(fontSize: 12, color: UiColors.textSecondary)),
+                                              Text('${a['target_type']} • ${a['target_id']?.toString().substring(0, 8) ?? ''}', style: const TextStyle(fontSize: 12, color: UiColors.muted)),
                                             ],
                                           ),
                                         ),

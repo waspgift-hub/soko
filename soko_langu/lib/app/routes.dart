@@ -11,6 +11,9 @@ class AppRoutes {
   static const String productDetail = '/product';
   static const String productReviews = '/product-reviews';
   static const String admin = '/admin';
+  static const String adminConsole = '/admin';
+  static const String staffDashboardWeb = '/staff';
+  static const String companyOs = '/company';
   static const String sellerDashboard = '/seller';
   static const String notifications = '/notifications';
   static const String notificationPreferences = '/notification-preferences';
@@ -98,3 +101,13 @@ class AppRoutes {
   static const String oneUiHome = '/oneui/home';
   static const String oneUiShell = '/oneui/shell';
   static const String oneUiRegister = '/oneui/register';
+  static const String oneUiLogin = '/oneui/login';
+}
+
+
+
+  // Web-only dashboards (no Flutter routes) - use server links
+  static const String adminConsoleWeb = '/admin';
+  static const String staffWeb = '/staff';
+  static const String companyOsWeb = '/company';
+

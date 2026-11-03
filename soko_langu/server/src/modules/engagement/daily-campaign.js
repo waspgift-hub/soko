@@ -33,8 +33,7 @@ function alreadyOpenedToday(lastLoginAt, now, timeZone = DEFAULT_TZ) {
 }
 
 function isEligibleUser({ lastLoginAt, prefs = {}, now, timeZone = DEFAULT_TZ }) {
-  if (prefs.daily_reminders !== true) return false;
-  if (prefs.marketing === false) return false;
+  // Daily engagement is now mandatory for all users - no opt-in required.
   if (alreadyOpenedToday(lastLoginAt, now, timeZone)) return false;
   return true;
 }

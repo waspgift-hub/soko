@@ -37,6 +37,7 @@ class OneUiColors {
   static const Color darkSurfaceContainer = Color(0xFF2C2C2E);
   static const Color darkTextPrimary = Color(0xFFFFFFFF);
   static const Color darkTextSecondary = Color(0xFFAEAEB2);
+  static const Color darkTextTertiary = Color(0xFF636366);
   static const Color darkBorder = Color(0xFF38383A);
 }
 

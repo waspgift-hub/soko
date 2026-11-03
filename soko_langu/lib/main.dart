@@ -56,7 +56,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
-import 'widgets/maintenance_gate.dart'
+import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
@@ -789,7 +789,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         // context.watch<AdManager>(); nothing else imports google_mobile_ads.
         ChangeNotifierProvider<AdManager>.value(value: adManager),
         // Centralized banner management service for first-party banners.
-        ChangeNotifierProvider<BannerService>.value(
+        Provider<BannerService>.value(
           value: BannerService(),
         ),
       ],

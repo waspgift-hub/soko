@@ -1,0 +1,95 @@
+﻿function wrapEmailHtml(html) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<style>
+  body { margin: 0; padding: 0; background: #050505; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .container { max-width: 640px; margin: 0 auto; padding: 40px 20px; }
+  .glass-card { background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255,255,255,0.12); border-radius: 32px; padding: 48px 40px; margin-bottom: 24px; position: relative; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1); }
+  .glass-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%); }
+  .glass-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(31,143,78,0.3) 50%, transparent 100%); }
+  .liquid-bg { position: absolute; top: -60%; left: -60%; width: 220%; height: 220%; background: radial-gradient(ellipse at 20% 10%, rgba(31,143,78,0.2) 0%, transparent 45%), radial-gradient(ellipse at 80% 90%, rgba(31,143,78,0.12) 0%, transparent 45%), radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 60%); pointer-events: none; z-index: 0; }
+  .orb { position: absolute; border-radius: 50%; filter: blur(60px); pointer-events: none; z-index: 0; }
+  .orb-1 { width: 200px; height: 200px; background: rgba(31,143,78,0.15); top: -60px; right: -60px; }
+  .orb-2 { width: 150px; height: 150px; background: rgba(31,143,78,0.08); bottom: -40px; left: -40px; }
+  .header { text-align: center; padding-bottom: 36px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 36px; position: relative; z-index: 1; }
+  .logo-wrapper { display: inline-block; position: relative; margin-bottom: 20px; }
+  .logo-img { width: 80px; height: 80px; border-radius: 24px; box-shadow: 0 12px 40px rgba(31,143,78,0.4), 0 0 0 1px rgba(255,255,255,0.1); }
+  .logo-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 120px; height: 120px; background: radial-gradient(circle, rgba(31,143,78,0.3) 0%, transparent 70%); pointer-events: none; z-index: -1; }
+  .title { font-size: 28px; font-weight: 800; color: #FFFFFF; margin: 0 0 8px; letter-spacing: -0.5px; }
+  .subtitle { font-size: 13px; color: rgba(255,255,255,0.5); margin: 0; letter-spacing: 2px; text-transform: uppercase; font-weight: 500; }
+  .content { font-size: 15px; color: rgba(255,255,255,0.85); line-height: 1.8; position: relative; z-index: 1; }
+  .content h2 { color: #FFFFFF; font-size: 22px; font-weight: 700; margin: 0 0 16px; letter-spacing: -0.3px; }
+  .content h3 { color: rgba(255,255,255,0.9); font-size: 17px; font-weight: 600; margin: 24px 0 12px; }
+  .content p { margin: 0 0 18px; }
+  .content strong { color: #1F8F4E; font-weight: 600; }
+  .content ul { margin: 0 0 18px; padding-left: 20px; }
+  .content li { margin-bottom: 8px; }
+  .content .highlight { background: linear-gradient(135deg, rgba(31,143,78,0.15) 0%, rgba(31,143,78,0.05) 100%); border: 1px solid rgba(31,143,78,0.2); border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+  .button { display: inline-block; background: linear-gradient(135deg, #1F8F4E 0%, #2D6A4F 100%); color: #FFFFFF; padding: 18px 48px; border-radius: 32px; text-decoration: none; font-weight: 700; font-size: 15px; margin: 24px 0; box-shadow: 0 8px 32px rgba(31,143,78,0.5), 0 0 0 1px rgba(255,255,255,0.1); letter-spacing: 0.3px; text-transform: uppercase; }
+  .button:hover { background: linear-gradient(135deg, #2D6A4F 0%, #1F8F4E 100%); }
+  .divider { height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%); margin: 36px 0; }
+  .stats-row { display: flex; justify-content: space-between; margin: 24px 0; gap: 12px; }
+  .stat-card { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; text-align: center; }
+  .stat-value { font-size: 24px; font-weight: 700; color: #1F8F4E; margin: 0; }
+  .stat-label { font-size: 11px; color: rgba(255,255,255,0.5); margin: 4px 0 0; text-transform: uppercase; letter-spacing: 1px; }
+  .footer { text-align: center; padding-top: 32px; font-size: 12px; color: rgba(255,255,255,0.35); line-height: 1.8; }
+  .footer a { color: #1F8F4E; text-decoration: none; font-weight: 500; }
+  .footer .social { margin: 16px 0; }
+  .footer .social a { display: inline-block; margin: 0 8px; color: rgba(255,255,255,0.5); }
+  .badge { display: inline-block; background: rgba(31,143,78,0.15); color: #1F8F4E; padding: 8px 20px; border-radius: 24px; font-size: 12px; font-weight: 700; margin-bottom: 20px; border: 1px solid rgba(31,143,78,0.25); letter-spacing: 0.5px; text-transform: uppercase; }
+  .glass-inner { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 24px; margin: 20px 0; }
+  .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: rgba(255,255,255,0.5); font-size: 13px; }
+  .info-value { color: #FFFFFF; font-size: 13px; font-weight: 600; }
+  .timeline { margin: 24px 0; }
+  .timeline-item { display: flex; align-items: flex-start; margin-bottom: 16px; }
+  .timeline-dot { width: 12px; height: 12px; border-radius: 50%; background: #1F8F4E; margin-right: 16px; margin-top: 4px; flex-shrink: 0; box-shadow: 0 0 12px rgba(31,143,78,0.5); }
+  .timeline-text { font-size: 14px; color: rgba(255,255,255,0.8); }
+  .timeline-time { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .security-box { background: rgba(255,59,48,0.08); border: 1px solid rgba(255,59,48,0.2); border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+  .security-title { color: #FF3B30; font-weight: 700; font-size: 14px; margin: 0 0 8px; }
+  .security-text { color: rgba(255,255,255,0.7); font-size: 13px; margin: 0; }
+  .cta-section { text-align: center; margin: 32px 0; }
+  .cta-text { font-size: 13px; color: rgba(255,255,255,0.5); margin: 0 0 16px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="glass-card">
+    <div class="liquid-bg"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="header">
+      <div class="logo-wrapper">
+        <div class="logo-glow"></div>
+        <img src="https://www.sokovibe.co.tz/assets/icon-512.png" width="80" height="80" alt="Soko Vibe" class="logo-img">
+      </div>
+      <h1 class="title">Soko Vibe</h1>
+      <p class="subtitle">Soko la mtandaoni - Tanzania</p>
+    </div>
+    <div class="content">
+      ` + html + `
+    </div>
+    <div class="divider"></div>
+    <div class="footer">
+      <div class="social">
+        <a href="https://www.sokovibe.co.tz">Website</a> &middot;
+        <a href="mailto:support@sokovibe.co.tz">Support</a> &middot;
+        <a href="https://www.sokovibe.co.tz/privacy">Privacy</a>
+      </div>
+      <p>Soko Vibe &copy; 2026. Haki zote zimehifadhiwa.</p>
+      <p>Barua pepe hii imetumwa kwa gift@sokovibe.co.tz.</p>
+      <p style="margin-top:16px; font-size:10px; color:rgba(255,255,255,0.2);">Unsubscribe &middot; Manage Preferences &middot; Report Spam</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>`;
+}
+

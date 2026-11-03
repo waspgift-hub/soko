@@ -11,11 +11,11 @@ import 'neumorphic.dart';
 // rendered palette.
 ThemeData buildLightTheme(Color seed) {
   final scheme = const ColorScheme.light(
-    primary: Color(0xFF00C853),
-    onPrimary: Color(0xFF000000),
-    primaryContainer: Color(0xFFE8F5E9),
+    primary: Color(0xFF1F8F4E),
+    onPrimary: Color(0xFFFFFFFF),
+    primaryContainer: Color(0xFFE8F5EE),
     onPrimaryContainer: Color(0xFF00210B),
-    inversePrimary: Color(0xFF00C853),
+    inversePrimary: Color(0xFF1F8F4E),
     secondary: Color(0xFF1A1A1A),
     onSecondary: Color(0xFFFFFFFF),
     secondaryContainer: Color(0xFFE8E8E8),
@@ -24,13 +24,13 @@ ThemeData buildLightTheme(Color seed) {
     onTertiary: Color(0xFFFFFFFF),
     tertiaryContainer: Color(0xFFF0F0F0),
     onTertiaryContainer: Color(0xFF1A1A1A),
-    error: Color(0xFFD32F2F),
+    error: Color(0xFFFF3B30),
     onError: Color(0xFFFFFFFF),
     errorContainer: Color(0xFFFFDAD6),
     onErrorContainer: Color(0xFF410002),
     surface: Color(0xFFFFFFFF),
     onSurface: Color(0xFF000000),
-    surfaceDim: Color(0xFFE5E5E5),
+    surfaceDim: Color(0xFFF2F2F2),
     surfaceBright: Color(0xFFFFFFFF),
     surfaceContainerLowest: Color(0xFFFFFFFF),
     surfaceContainerLow: Color(0xFFF7F7F7),
@@ -38,7 +38,7 @@ ThemeData buildLightTheme(Color seed) {
     surfaceContainerHigh: Color(0xFFECECEC),
     surfaceContainerHighest: Color(0xFFE5E5E5),
     onSurfaceVariant: Color(0xFF6B6B6B),
-    outline: Color(0xFF747474),
+    outline: Color(0xFFD0D0D0),
     outlineVariant: Color(0xFFE5E5E5),
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
@@ -51,11 +51,11 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFF00C853),
-    onPrimary: Color(0xFF000000),
-    primaryContainer: Color(0xFF10381C),
+    primary: Color(0xFF1F8F4E),
+    onPrimary: Color(0xFFFFFFFF),
+    primaryContainer: Color(0xFF1A3D2A),
     onPrimaryContainer: Color(0xFFB7F7C9),
-    inversePrimary: Color(0xFF009624),
+    inversePrimary: Color(0xFF1F8F4E),
     secondary: Color(0xFFE8E8E8),
     onSecondary: Color(0xFF000000),
     secondaryContainer: Color(0xFF2A2A2A),
@@ -64,21 +64,21 @@ ThemeData buildDarkTheme(Color seed) {
     onTertiary: Color(0xFF000000),
     tertiaryContainer: Color(0xFF333333),
     onTertiaryContainer: Color(0xFFF0F0F0),
-    error: Color(0xFFD32F2F),
+    error: Color(0xFFFF3B30),
     onError: Color(0xFFFFFFFF),
     errorContainer: Color(0xFF8C1D18),
     onErrorContainer: Color(0xFFFFDAD6),
-    surface: Color(0xFF0B0B0B),
+    surface: Color(0xFF1C1C1E),
     onSurface: Color(0xFFFFFFFF),
     surfaceDim: Color(0xFF0B0B0B),
-    surfaceBright: Color(0xFF1E1E1E),
+    surfaceBright: Color(0xFF2C2C2E),
     surfaceContainerLowest: Color(0xFF070707),
     surfaceContainerLow: Color(0xFF121212),
     surfaceContainer: Color(0xFF161616),
-    surfaceContainerHigh: Color(0xFF1C1C1C),
+    surfaceContainerHigh: Color(0xFF1C1C1E),
     surfaceContainerHighest: Color(0xFF232323),
     onSurfaceVariant: Color(0xFFA7A7A7),
-    outline: Color(0xFF8E8E93),
+    outline: Color(0xFF38383A),
     outlineVariant: Color(0xFF292929),
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
@@ -104,8 +104,9 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   // soft-UI element base (Neu.base) is deliberately *not* used here, because a
   // soft-UI canvas would leave the flat 90% looking grey-on-grey and give the
   // soft 10% (CTAs, FAB, nav bar, input wells) nothing to contrast against.
-  final flatCanvas = Neu.canvas(scheme.brightness);
-  final flatFill = Neu.flatFill(scheme.brightness);
+  // Samsung One UI inspired: soft grey canvas for clean, modern look
+  final flatCanvas = isDark ? const Color(0xFF000000) : const Color(0xFFF7F7F7);
+  final flatFill = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
   final neuGroove = Neu.grooveColor(scheme.brightness);
 
   // Recessed fill for the soft-UI input wells. The raised element base is
