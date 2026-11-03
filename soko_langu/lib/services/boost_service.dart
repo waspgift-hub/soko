@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -8,16 +9,29 @@ import 'api_config.dart';
 class BoostService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  Future<Map<String, String>> _authHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<Map<String, dynamic>?> initiateBoostPayment({
     required String productId,
     required BoostTier tier,
     required String phone,
     required String userId,
+    String productName = '',
+    String productImage = '',
+    int productPrice = 0,
+    String paymentMethod = 'ussd_push',
   }) async {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/boost-product'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({
           'productId': productId,
           'tier': tier.name,
@@ -25,12 +39,24 @@ class BoostService {
           'durationDays': tier.durationDays,
           'phone': phone,
           'userId': userId,
+          'productName': productName,
+          'productImage': productImage,
+          'productPrice': productPrice,
+          'paymentMethod': paymentMethod,
         }),
       );
 
       if (resp.statusCode != 200) {
-        final body = jsonDecode(resp.body);
-        throw Exception(body['error'] ?? 'Boost payment failed');
+        try {
+          final body = jsonDecode(resp.body);
+          throw Exception(
+            body['error'] ?? body['message'] ?? 'Boost payment failed',
+          );
+        } on FormatException {
+          throw Exception(
+            'Server error (${resp.statusCode}). Tafadhali jaribu tena.',
+          );
+        }
       }
 
       return jsonDecode(resp.body) as Map<String, dynamic>;
@@ -44,20 +70,23 @@ class BoostService {
     required String productId,
     required BoostTier tier,
   }) async {
+    // Boost activation is SERVER-OWNED: the ClickPesa webhook writes the
+    // boost fields atomically inside the same batch as the transaction status
+    // (server/index.js webhook handler). Firestore rules reject client writes
+    // to isBoosted/isFeatured, so writing here would silently fail. Instead we
+    // poll the product (public read) until the webhook commits so the UI
+    // reflects the boost without a manual reload. Reads are public, so this
+    // never trips the rules.
     try {
-      final now = DateTime.now();
-      final boostedUntil = now.add(Duration(days: tier.durationDays));
-
-      await _db.collection('products').doc(productId).update({
-        'isBoosted': true,
-        'boostedUntil': Timestamp.fromDate(boostedUntil),
-        'boostTier': tier.name,
-        'isFeatured': true,
-        'featuredUntil': Timestamp.fromDate(boostedUntil),
-      });
+      for (var i = 0; i < 10; i++) {
+        final snap = await _db.collection('products').doc(productId).get();
+        final data = snap.data();
+        if (data != null && data['isBoosted'] == true) return;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      debugPrint('BoostService: boost not confirmed after poll window');
     } catch (e) {
-      debugPrint('BoostService handleBoostPaymentSuccess: $e');
-      rethrow;
+      debugPrint('BoostService handleBoostPaymentSuccess verify: $e');
     }
   }
 
@@ -67,9 +96,13 @@ class BoostService {
     String? sellerId,
   }) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/boost/notify'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'productId': productId,
           'tier': tierName,

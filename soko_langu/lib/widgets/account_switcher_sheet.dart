@@ -56,7 +56,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
           context.go(AppRoutes.home);
         }
       } catch (e) {
-        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: $e');
+        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: ${context.trError(e)}');
       }
     } else {
       if (!mounted) return;

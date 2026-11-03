@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 
 /// Blocks non-admin users when maintenance mode is enabled in Firestore.
 class MaintenanceGate extends StatefulWidget {
@@ -21,6 +22,8 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
     _check();
   }
 
+  String _maintenanceMessage = '';
+
   Future<void> _check() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -33,10 +36,12 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
 
       final user = FirebaseAuth.instance.currentUser;
       final email = user?.email?.toLowerCase() ?? '';
-      if (email == 'admin@soko-langu.com' || email == 'admin@soko-vibe.com') {
+      if (email == 'admin@sokovibe.co.tz' || email == 'admin@soko-langu.com' || email == 'admin@soko-vibe.com') {
         return;
       }
 
+      _maintenanceMessage = (doc.data()?['message'] as String?) ??
+          context.tr('maintenance_underway', 'App iko kwenye matengenezo. Tafadhali rudi baadaye.');
       if (mounted) setState(() => _showChild = false);
     } catch (_) {}
   }
@@ -55,7 +60,7 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
                 Icon(Icons.build_circle_outlined, size: 72, color: cs.primary),
                 const SizedBox(height: 24),
                 Text(
-                  'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
+                  _maintenanceMessage,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),

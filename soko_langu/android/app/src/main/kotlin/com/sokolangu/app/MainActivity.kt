@@ -1,14 +1,39 @@
 package com.sokolangu.app
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ContentUris
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Icon
+import android.os.Build
+import android.os.Bundle
 import android.provider.MediaStore
+import android.appwidget.AppWidgetManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "soko_lang/video_query"
+    private var pendingRoute: String? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        createNotificationChannels()
+        pendingRoute = intent?.getStringExtra("route")
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        val route = intent.getStringExtra("route") ?: return
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, "soko_lang/navigate").invokeMethod("navigate", route)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -22,6 +47,286 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/audio_library",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "queryAudio" -> result.success(queryAudio())
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/conversation_notif",
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "show") {
+                val senderName = call.argument<String>("senderName") ?: "Mtumiaji"
+                val messageText = call.argument<String>("messageText") ?: ""
+                val roomId = call.argument<String>("roomId") ?: ""
+                val senderId = call.argument<String>("senderId") ?: ""
+                ConversationNotificationHelper.show(this, senderName, messageText, roomId, senderId)
+                result.success(true)
+            } else {
+                result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/widget",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateWidget" -> {
+                    val sales = call.argument<String>("sales") ?: "TZS 0"
+                    val orders = call.argument<String>("orders") ?: "0"
+                    val balance = call.argument<String>("balance") ?: "TZS 0"
+                    WidgetDataStore.save(this, sales, orders, balance)
+                    val manager = AppWidgetManager.getInstance(this)
+                    val ids = manager.getAppWidgetIds(
+                        android.content.ComponentName(this, SokoVibeWidgetProvider::class.java)
+                    )
+                    val data = WidgetDataStore.load(this)
+                    ids.forEach { id ->
+                        SokoVibeWidgetProvider.updateAppWidget(this, manager, id, data)
+                    }
+                    result.success(true)
+                }
+                "updateFlashSales" -> {
+                    // hw: persist a local copy in case Dart prefs aren't flushed yet
+                    val trending = call.argument<String>("trendingJson") ?: ""
+                    if (trending.isNotEmpty()) WidgetDataStore.saveTrendingJson(this, trending)
+                    val manager = AppWidgetManager.getInstance(this)
+                    val ids = manager.getAppWidgetIds(
+                        android.content.ComponentName(this, FlashSalesWidgetProvider::class.java)
+                    )
+                    ids.forEach { id ->
+                        FlashSalesWidgetProvider.updateAppWidget(this, manager, id)
+                    }
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/shortcut",
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "pinShortcut") {
+                val receiverId = call.argument<String>("receiverId") ?: ""
+                val receiverName = call.argument<String>("receiverName") ?: "Chat"
+                val success = pinShortcutToHomeScreen(receiverId, receiverName)
+                result.success(success)
+            } else {
+                result.notImplemented()
+            }
+        }
+        handleIntent(intent)
+        pendingRoute?.let { route ->
+            MethodChannel(
+                flutterEngine.dartExecutor.binaryMessenger,
+                "soko_lang/navigate",
+            ).invokeMethod("navigate", route)
+            pendingRoute = null
+        }
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "shortcut_soko_vibe" && uri.host == "chat") {
+            val receiverId = uri.lastPathSegment ?: return
+            val receiverName = uri.getQueryParameter("name") ?: ""
+            pendingRoute = "/chat/$receiverId"
+        }
+    }
+
+    private fun pinShortcutToHomeScreen(receiverId: String, receiverName: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        return try {
+            val shortcutManager = getSystemService(android.content.pm.ShortcutManager::class.java)
+            if (!shortcutManager.isRequestPinShortcutSupported) return false
+            val intent = Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = android.net.Uri.parse("shortcut_soko_vibe://chat/$receiverId?name=${android.net.Uri.encode(receiverName)}")
+                putExtra("route", "/chat/$receiverId")
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val appIcon = ContextCompat.getDrawable(this, R.mipmap.ic_launcher)
+            val bitmap = Bitmap.createBitmap(108, 108, Bitmap.Config.ARGB_8888).also { bmp ->
+                val canvas = Canvas(bmp)
+                appIcon?.setBounds(0, 0, 108, 108)
+                appIcon?.draw(canvas)
+            }
+            val shortcut = android.content.pm.ShortcutInfo.Builder(this, "chat_$receiverId")
+                .setShortLabel(receiverName.take(10))
+                .setLongLabel(receiverName.take(25))
+                .setIcon(Icon.createWithBitmap(bitmap))
+                .setIntent(intent)
+                .build()
+            shortcutManager.requestPinShortcut(shortcut, null)
+            true
+        } catch (e: Exception) {
+            Log.e("Shortcut", "Failed to pin shortcut: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            // Delete old v4/v5 channels (can't modify once created — need new IDs for IMPORTANCE_MAX)
+            listOf("onesignal_default_channel","general_notifications_v4","chat_messages_v4","payments_notifications_v4","general_notifications_v5","chat_messages_v5","payments_notifications_v5","system_alerts_v5","ride_notifications_v5").forEach {
+                try { manager.deleteNotificationChannel(it) } catch (_: Exception) {}
+            }
+            // Recreate OneSignal default channel with MAX importance for instant display
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    "onesignal_default_channel",
+                    "Notifications",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Soko Vibe notifications — urgent"
+                    enableVibration(true)
+                    enableLights(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                }
+            )
+            val channels = listOf(
+                NotificationChannel(
+                    "general_notifications_v6",
+                    "Soko Vibe",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Flash sale, announcements, alerts"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "payments_notifications_v6",
+                    "Payments",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Malipo, escrow, payout, refund notifications"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "chat_messages_v6",
+                    "Chat Messages",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "New message notifications from chats"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "system_alerts_v6",
+                    "System Alerts",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Account security, suspension, verification alerts"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "ride_notifications_v6",
+                    "Ride Updates",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Ride requests, cancellations, trip updates"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                }
+            )
+            channels.forEach { manager.createNotificationChannel(it) }
+            // Android 13+ inline replies use the system notification assistant by default
+        }
+    }
+
+    private fun queryAudio(): List<Map<String, Any?>> {
+        val tracks = mutableListOf<Map<String, Any?>>()
+        try {
+            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.SIZE,
+                MediaStore.Audio.Media.MIME_TYPE,
+                MediaStore.Audio.Media.RELATIVE_PATH,
+                MediaStore.Audio.Media.DATA,
+            )
+            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+            val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+            contentResolver.query(collection, projection, selection, null, sortOrder)?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+                val pathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+                val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val contentUri = ContentUris.withAppendedId(collection, id).toString()
+                    tracks.add(
+                        mapOf(
+                            "id" to id,
+                            "title" to (cursor.getString(titleCol)?.takeIf { it.isNotBlank() }
+                                ?: cursor.getString(nameCol)?.substringBeforeLast(".") ?: "Unknown title"),
+                            "displayName" to (cursor.getString(nameCol) ?: ""),
+                            "artist" to (cursor.getString(artistCol)?.takeIf { it.isNotBlank() && it != "<unknown>" }
+                                ?: "Unknown artist"),
+                            "album" to (cursor.getString(albumCol)?.takeIf { it.isNotBlank() && it != "<unknown>" }
+                                ?: "Unknown album"),
+                            "duration" to cursor.getLong(durationCol),
+                            "size" to cursor.getLong(sizeCol),
+                            "mimeType" to (cursor.getString(mimeCol) ?: ""),
+                            "relativePath" to (if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""),
+                            "filePath" to (if (dataCol >= 0) cursor.getString(dataCol) ?: "" else ""),
+                            "contentUri" to contentUri,
+                        ),
+                    )
+                }
+            }
+            Log.d("AudioLibrary", "Found ${tracks.size} audio tracks")
+        } catch (e: Exception) {
+            Log.e("AudioLibrary", "Failed to query audio: ${e.message}", e)
+        }
+        return tracks
     }
 
     private fun queryVideos(): List<Map<String, Any?>> {

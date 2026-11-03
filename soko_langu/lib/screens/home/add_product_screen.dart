@@ -1,13 +1,17 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/product_service.dart';
-import '../../services/price_drop_service.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/network_error.dart';
+import '../../app/app_transitions.dart';
+import '../../widgets/barcode_scanner_widget.dart';
+import '../../constants/tanzania_districts.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -39,13 +43,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _stockController = TextEditingController(text: '1');
   final _brandController = TextEditingController();
   final _locationController = TextEditingController();
+  final _barcodeController = TextEditingController();
 
   String _selectedCategory = 'Electronics';
   String _selectedSubcategory = '';
   String _selectedCondition = 'new';
+  String _selectedDistrict = '';
   List<SubCategory> _subcategories = [];
   List<XFile> _newImages = [];
   List<String> _existingImages = [];
+  List<Map<String, dynamic>> _existingMeta = [];
+  List<Map<String, dynamic>> _newMeta = [];
+  XFile? _videoFile;
+  String? _existingVideoUrl;
   bool _isWholesale = false;
   bool _saving = false;
   List<_VariantEntry> _variants = [];
@@ -73,6 +83,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   List<Category> _categories = getDefaultCategories();
 
+  List<String> get _allDistricts => kRegionDistricts.values
+      .expand((d) => d)
+      .toSet()
+      .toList()
+    ..sort();
+
   bool get _isEditing => widget.product != null;
 
   @override
@@ -93,8 +109,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _selectedCondition = p.condition;
     _isWholesale = p.isWholesale;
     _existingImages = List.from(p.images);
+    _existingVideoUrl = p.videoUrl;
+    if (p.imageMetadata != null && p.imageMetadata!.length == _existingImages.length) {
+      _existingMeta = List.from(p.imageMetadata!);
+    }
     if (p.brand != null) _brandController.text = p.brand!;
     if (p.location.isNotEmpty) _locationController.text = p.location;
+    if (p.district.isNotEmpty) _selectedDistrict = p.district;
+    if (p.barcode != null) _barcodeController.text = p.barcode!;
     for (var v in p.variants) {
       final entry = _VariantEntry();
       entry.nameCtrl.text = v.name;
@@ -113,6 +135,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _stockController.dispose();
     _brandController.dispose();
     _locationController.dispose();
+    _barcodeController.dispose();
     for (var v in _variants) {
       v.dispose();
     }
@@ -150,21 +173,281 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Future<void> _pickImages() async {
+    final remaining = 5 - _existingImages.length - _newImages.length;
+    if (remaining <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('max_5_images', 'Max 5 photos'))),
+        );
+      }
+      return;
+    }
+    final src = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(context.tr('take_photo', 'Piga picha')),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title:
+                  Text(context.tr('choose_gallery', 'Chagua kutoka albamu')),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (src == null) return;
+    if (src == ImageSource.camera) {
+      final shot = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        imageQuality: 80,
+      );
+      if (shot == null) return;
+      final meta = await _decodeSize(shot);
+      if (!mounted) return;
+      setState(() {
+        _newImages.add(shot);
+        _newMeta.add(meta);
+      });
+      return;
+    }
     final List<XFile> images = await _picker.pickMultiImage(
       maxWidth: 1024,
       imageQuality: 80,
+      limit: remaining,
     );
-    if (images.isNotEmpty) {
-      setState(() => _newImages.addAll(images));
+    if (images.isEmpty) return;
+    final meta = await Future.wait(images.map(_decodeSize));
+    if (!mounted) return;
+    setState(() {
+      _newImages.addAll(images);
+      _newMeta.addAll(meta);
+    });
+  }
+
+  Future<Map<String, dynamic>> _decodeSize(XFile xfile) async {
+    try {
+      final bytes = await xfile.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      final size = <String, dynamic>{'width': img.width, 'height': img.height};
+      img.dispose();
+      return size;
+    } catch (e) {
+      return <String, dynamic>{'width': null, 'height': null};
     }
   }
 
+  Future<void> _pickVideo() async {
+    final picked = await _picker.pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+    setState(() => _videoFile = picked);
+  }
+
   void _removeExistingImage(int index) {
-    setState(() => _existingImages.removeAt(index));
+    setState(() {
+      _existingImages.removeAt(index);
+      if (index < _existingMeta.length) _existingMeta.removeAt(index);
+    });
   }
 
   void _removeNewImage(int index) {
-    setState(() => _newImages.removeAt(index));
+    setState(() {
+      _newImages.removeAt(index);
+      if (index < _newMeta.length) _newMeta.removeAt(index);
+    });
+  }
+
+  int _mediaCount() => _existingImages.length + _newImages.length;
+
+  /// Picha ya kwanza ndiyo kava. Hamisha picha kwenda mbele kwenye orodha
+  /// yake (pamoja na metadata yake) bila kuvunja mpangilio.
+  void _makeCover(int globalIndex) {
+    if (globalIndex <= 0) return;
+    if (globalIndex < _existingImages.length) {
+      setState(() {
+        final img = _existingImages.removeAt(globalIndex);
+        _existingImages.insert(0, img);
+        if (globalIndex < _existingMeta.length) {
+          final m = _existingMeta.removeAt(globalIndex);
+          _existingMeta.insert(0, m);
+        }
+      });
+      return;
+    }
+    if (_existingImages.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'remove_old_first',
+              'Ondoa picha za zamani kwanza ili hii iwe kava',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    final li = globalIndex - _existingImages.length;
+    setState(() {
+      final f = _newImages.removeAt(li);
+      _newImages.insert(0, f);
+      if (li < _newMeta.length) {
+        final m = _newMeta.removeAt(li);
+        _newMeta.insert(0, m);
+      }
+    });
+  }
+
+  Widget _brokenImage({double iconSize = 24}) => Container(
+        color: Colors.grey.shade300,
+        child: Icon(Icons.broken_image, size: iconSize),
+      );
+
+  Widget _coverImage() {
+    final ImageProvider provider = _existingImages.isNotEmpty
+        ? NetworkImage(_existingImages.first)
+        : FileImage(File(_newImages.first.path));
+    return Image(
+      image: provider,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (context, error, stackTrace) =>
+          _brokenImage(iconSize: 48),
+    );
+  }
+
+  Widget _addThumb() {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: _pickImages,
+      child: Container(
+        width: 84,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: cs.primary.withValues(alpha: 0.5),
+          ),
+          color: cs.primary.withValues(alpha: 0.07),
+        ),
+        child: Icon(Icons.add_a_photo_outlined, color: cs.primary),
+      ),
+    );
+  }
+
+  Widget _thumbTile(int globalIndex) {
+    final cs = Theme.of(context).colorScheme;
+    final isExisting = globalIndex < _existingImages.length;
+    final isCover = globalIndex == 0;
+    final Widget img = isExisting
+        ? Image.network(
+            _existingImages[globalIndex],
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _brokenImage(),
+          )
+        : Image.file(
+            File(_newImages[globalIndex - _existingImages.length].path),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _brokenImage(),
+          );
+    return Container(
+      width: 84,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isCover ? cs.primary : cs.outline.withValues(alpha: 0.4),
+          width: isCover ? 2.5 : 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            img,
+            if (isCover)
+              Positioned(
+                left: 4,
+                bottom: 4,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'KAVA',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                left: 2,
+                bottom: 2,
+                child: GestureDetector(
+                  onTap: () => _makeCover(globalIndex),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.star_outline,
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              top: 2,
+              right: 2,
+              child: GestureDetector(
+                onTap: () => isExisting
+                    ? _removeExistingImage(globalIndex)
+                    : _removeNewImage(
+                        globalIndex - _existingImages.length,
+                      ),
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: cs.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.close, size: 14, color: cs.surface),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.push<String>(
+      context,
+      buildAppRoute(builder: (_) => const BarcodeScannerWidget()),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      _barcodeController.text = result;
+    }
   }
 
   Future<void> _submit() async {
@@ -179,71 +462,80 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
 
+    final priceText = _priceController.text.replaceAll(',', '').trim();
+    final stockText = _stockController.text.replaceAll(',', '').trim();
+    final parsedPrice = double.tryParse(priceText);
+    final parsedStock = int.tryParse(stockText);
+    if (parsedPrice == null || parsedPrice <= 0) {
+      messenger.showSnackBar(SnackBar(content: Text(tr('enter_valid_price'))));
+      setState(() => _saving = false);
+      return;
+    }
+    if (parsedStock == null || parsedStock < 0) {
+      messenger.showSnackBar(SnackBar(content: Text(tr('enter_valid_stock'))));
+      setState(() => _saving = false);
+      return;
+    }
+
     setState(() => _saving = true);
     try {
       final variantData = _buildVariantData();
       if (_isEditing) {
-        final oldPrice = widget.product!.price;
-        final newPrice = double.parse(_priceController.text);
         await _productService.updateProduct(
           productId: widget.product!.id,
           name: _nameController.text,
           description: _descriptionController.text,
-          price: newPrice,
+          price: parsedPrice,
           category: _selectedCategory,
           subcategory: _selectedSubcategory,
-          stock: int.parse(_stockController.text),
+          stock: parsedStock,
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty
-              ? _brandController.text
+              ? _normalizeBrand(_brandController.text)
               : null,
           condition: _selectedCondition,
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : null,
+          district: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+          barcode: _barcodeController.text.isNotEmpty
+              ? _barcodeController.text.trim()
+              : null,
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
+          imageMetadata: [..._existingMeta, ..._newMeta].isEmpty
+              ? null
+              : [..._existingMeta, ..._newMeta],
+          newVideoFile: _videoFile,
+          videoUrl: _videoFile == null ? _existingVideoUrl : null,
         );
-        if (newPrice < oldPrice) {
-          try {
-            final discount = ((oldPrice - newPrice) / oldPrice) * 100;
-            final ps = PriceDropService();
-            await ps.createPriceDrop(
-              product: widget.product!,
-              newPrice: newPrice,
-              aiReason: '',
-            );
-            await ps.broadcastToAllUsers(
-              productName: _nameController.text,
-              originalPrice: oldPrice,
-              newPrice: newPrice,
-              discountPercent: discount.toStringAsFixed(0),
-              sellerPhone: widget.product!.sellerPhone ?? '',
-              productId: widget.product!.id,
-              productImage: widget.product!.images.isNotEmpty ? widget.product!.images.first : '',
-            );
-          } catch (_) {}
-        }
       } else {
         await _productService.addProduct(
           name: _nameController.text,
           description: _descriptionController.text,
-          price: double.parse(_priceController.text),
+          price: parsedPrice,
           category: _selectedCategory,
           subcategory: _selectedSubcategory,
           currency: 'TZS',
-          stock: int.parse(_stockController.text),
+          stock: parsedStock,
           imageFiles: _newImages,
+          imageMetadata: _newMeta.isEmpty ? null : _newMeta,
+          videoFile: _videoFile,
+          videoUrl: _videoFile == null ? _existingVideoUrl : null,
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : 'Tanzania',
+          district: _selectedDistrict,
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty
-              ? _brandController.text
+              ? _normalizeBrand(_brandController.text)
               : null,
           condition: _selectedCondition,
+          barcode: _barcodeController.text.isNotEmpty
+              ? _barcodeController.text.trim()
+              : null,
         );
       }
 
@@ -259,23 +551,49 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
+      final internalMsg = e is NetworkError ? '${e.message} ${e.originalError}' : msg;
       if (msg.contains('permission') || msg.contains('PERMISSION_DENIED') ||
           msg.contains('caller does not have permission')) {
+        // Onyesha pia hatua iliyoshindwa (kutoka step=...) ili ripoti iwe sahihi.
+        final detail = internalMsg.length > 140
+            ? '${internalMsg.substring(0, 140)}…'
+            : internalMsg;
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              '${context.tr('error')}: ${context.tr('permission_denied')}. ${context.tr('try_again')}',
+              '${context.tr('error')}: ${context.tr('permission_denied')}. ${context.tr('try_again')}\n$detail',
             ),
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      } else if (internalMsg.contains('KYC') || internalMsg.contains('kyc')) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.tr('kyc_required_selling')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 5),
           ),
         );
       } else {
         messenger.showSnackBar(
-          SnackBar(content: Text("${context.tr('error')}: $e")),
+          SnackBar(
+            content: Text(context.trError(e)),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String _normalizeBrand(String brand) {
+    final trimmed = brand.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
   }
 
   @override
@@ -316,108 +634,254 @@ class _AddProductScreenState extends State<AddProductScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.tr('product_images'),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_existingImages.length + _newImages.length}/5',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  context.tr('product_images'),
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).colorScheme.primary),
+                  context.tr('cover_hint',
+                      'Picha ya kwanza ndiyo kava inayoonekana sokoni'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                  ),
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: 100,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+                if (_existingImages.isEmpty && _newImages.isEmpty)
+                  GestureDetector(
+                    onTap: _pickImages,
+                    child: Container(
+                      height: 150,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.06),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.add_a_photo_outlined,
+                            size: 40,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            context.tr('add_photos', 'Ongeza picha'),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          Text(
+                            context.tr(
+                                'up_to_5', 'Hadi 5 • Kamera au albamu'),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Stack(
+                      children: [
+                        SizedBox(
+                          height: 210,
+                          width: double.infinity,
+                          child: _coverImage(),
+                        ),
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color:
+                                  Theme.of(context).colorScheme.primary,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              context.tr('cover_badge', 'KAVA'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 84,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount:
+                          _mediaCount() + (_mediaCount() < 5 ? 1 : 0),
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        if (index == _mediaCount() &&
+                            _mediaCount() < 5) {
+                          return _addThumb();
+                        }
+                        return _thumbTile(index);
+                      },
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  context.tr('product_video', 'Video ya bidhaa (hiari)'),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Theme.of(context).colorScheme.primary),
+                ),
+                const SizedBox(height: 8),
+                if (_videoFile == null && _existingVideoUrl == null)
+                  GestureDetector(
+                    onTap: _pickVideo,
+                    child: Container(
+                      height: 84,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.6),
+                        ),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.4),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.videocam_outlined,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            context.tr(
+                                'add_video', 'Add video (max 1)'),
+                            style: TextStyle(
+                              color:
+                                  Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Stack(
                     children: [
-                      GestureDetector(
-                        onTap: _pickImages,
-                        child: Container(
-                          width: 100,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Theme.of(context).colorScheme.outline),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.add_a_photo,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: const LinearGradient(
+                            colors: [Colors.black87, Colors.black54],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
                         ),
-                      ),
-                      ..._existingImages.map(
-                        (url) => Stack(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              width: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(
-                                  image: NetworkImage(url),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+                            Icon(
+                              Icons.play_circle_fill,
+                              size: 52,
+                              color: Colors.white.withValues(alpha: 0.9),
                             ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () => _removeExistingImage(
-                                  _existingImages.indexOf(url),
-                                ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.error,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 18,
-                                    color: Theme.of(context).colorScheme.surface,
-                                  ),
-                                ),
-                              ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _videoFile != null
+                                  ? context.tr('new_video',
+                                      'Video mpya imechaguliwa')
+                                  : context.tr('saved_video',
+                                      'Video iliyohifadhiwa'),
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 12),
                             ),
                           ],
                         ),
                       ),
-                      ..._newImages.map(
-                        (file) => Stack(
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              width: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(
-                                  image: FileImage(File(file.path)),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _videoFile = null;
+                            _existingVideoUrl = null;
+                          }),
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
                             ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    _removeNewImage(_newImages.indexOf(file)),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.error,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 18,
-                                    color: Theme.of(context).colorScheme.surface,
-                                  ),
-                                ),
-                              ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: _nameController,
@@ -482,12 +946,45 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
+                  controller: _barcodeController,
+                  decoration: InputDecoration(
+                  labelText: context.tr('barcode_label'),
+                  hintText: context.tr('barcode_hint'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.qr_code_scanner, color: Theme.of(context).colorScheme.primary),
+                      onPressed: () => _scanBarcode(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
                   controller: _locationController,
                   decoration: InputDecoration(
                     labelText: context.tr('location'),
                     border: const OutlineInputBorder(),
                     labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+                  decoration: InputDecoration(
+                    labelText: context.tr('district'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                  ),
+                  items: _allDistricts
+                      .map(
+                        (d) => DropdownMenuItem(
+                          value: d,
+                          child: Text(d, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _selectedDistrict = value ?? ''),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(

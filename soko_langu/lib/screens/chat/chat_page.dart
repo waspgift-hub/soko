@@ -4,11 +4,17 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/chat_service.dart';
 import '../../services/chat_typing.dart';
+import '../../services/notification_service.dart';
 import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
+import '../../services/shortcut_service.dart';
+import '../../services/profanity_filter.dart';
 import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
+
 import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/call_seller_button.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverId;
@@ -45,39 +51,93 @@ class _ChatPageState extends State<ChatPage> {
   Timer? _typingTimer;
   bool _autoScrolling = false;
   String? _receiverPhone;
+  String? _receiverPhoto;
+  String? _receiverName;
+  bool _receiverKyc = false;
+  bool _trustDismissed = false;
+  StreamSubscription<UserProfile?>? _profileSub;
+
+  // Optimistic messages: tempId → Message
+  final Map<String, Message> _optimisticMsgs = {};
+  final Set<String> _confirmedSends = {};
+  final Set<String> _failedSends = {};
+  final Map<String, String> _tempToRealId = {};
+
+  // Presence
+  DateTime? _otherLastActive;
+  Timer? _presenceTimer;
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
+  String get _roomId => _chatService.roomIdFor(_uid, widget.receiverId);
+
   StreamSubscription<bool>? _typingSub;
+  StreamSubscription<DateTime?>? _presenceSub;
 
   @override
   void initState() {
     super.initState();
-    _chatService.markAsRead(widget.receiverId);
+    _chatService.markAsRead(_roomId);
+    _chatService.markMessagesAsRead(_roomId);
     _inputCtrl.addListener(_onInputChanged);
     _fetchReceiverPhone();
     _typingSub = _chatTyping.observeTyping(widget.receiverId).listen((t) {
       if (mounted) setState(() => _otherTyping = t);
+    });
+    _presenceSub = _userService.streamLastActive(widget.receiverId).listen((t) {
+      if (mounted) setState(() => _otherLastActive = t);
+    });
+    _userService.updateLastActive();
+    // Tell the server this conversation is on screen so it suppresses unread,
+    // push, and in-app rows for it.
+    NotificationService.activeChatRoomId = _roomId;
+    _userService.setActiveChatRoom(_roomId);
+    // Refresh presence every 30s while chat is open
+    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _userService.updateLastActive();
     });
   }
 
   Future<void> _fetchReceiverPhone() async {
     final profile = await _userService.getProfile(widget.receiverId);
     if (mounted && profile != null) {
-      setState(() => _receiverPhone = profile.phone);
+      setState(() {
+        _receiverPhone = profile.phone;
+        _receiverPhoto = profile.profileImage;
+        _receiverName = profile.displayName;
+        _receiverKyc = profile.kycApproved;
+      });
     }
+    _profileSub = _userService.streamProfile(widget.receiverId).listen((p) {
+      if (!mounted) return;
+      setState(() {
+        if (p != null) {
+          _receiverPhone = p.phone;
+          _receiverPhoto = p.profileImage;
+          _receiverName = p.displayName;
+          _receiverKyc = p.kycApproved;
+        }
+      });
+    });
+  }
+
+  /// Receiver display name, falling back to a generic member label instead of
+  /// ever leaking the raw uid into the UI.
+  String get _displayName {
+    final name = _receiverName ?? widget.receiverName;
+    return (name.isNotEmpty) ? name : context.tr('member', 'Member');
   }
 
   void _openWhatsApp() {
     final phone = _receiverPhone;
     if (phone == null || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('phone_not_found'))),
+        SnackBar(content: Text(context.tr('phone_not_found', 'Phone Not Found'))),
       );
       return;
     }
     final msg = WhatsAppService.generateProfileMessage(
-      sellerName: widget.receiverName,
+      sellerName: _displayName,
     );
     WhatsAppService().openWhatsApp(phoneNumber: phone, message: msg);
   }
@@ -85,11 +145,19 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _typingSub?.cancel();
+    _profileSub?.cancel();
+    _presenceSub?.cancel();
+    _presenceTimer?.cancel();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();
     _typingTimer?.cancel();
     _chatTyping.stopTyping(widget.receiverId);
+    // Only clear the marker if this room is still the active one
+    if (NotificationService.activeChatRoomId == _roomId) {
+      NotificationService.activeChatRoomId = null;
+      _userService.setActiveChatRoom(null);
+    }
     super.dispose();
   }
 
@@ -107,24 +175,126 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty) return;
-    _chatService.sendMessage(
+    if (text.length > 2000) return;
+
+    final check = await ProfanityFilter().check(text);
+    if (!check.clean) {
+      if (mounted) {
+        if (check.banned) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+          await FirebaseAuth.instance.signOut();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+        }
+      }
+      return;
+    }
+
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final optimistic = Message(
+      id: tempId,
+      senderId: _uid,
       receiverId: widget.receiverId,
       content: text,
+      timestamp: DateTime.now(),
+      isRead: false,
+      isDelivered: false,
       productId: widget.productId,
       productName: widget.productName,
       replyTo: _replyTo,
       replyToContent: _replyToContent,
       replyToSender: _replyToSender,
     );
+    _optimisticMsgs[tempId] = optimistic;
+
     _inputCtrl.clear();
+    final replyToId = _replyTo;
+    final replyToContent = _replyToContent;
+    final replyToSender = _replyToSender;
     _replyTo = null;
     _replyToContent = null;
     _replyToSender = null;
     setState(() {});
     _scrollToBottom();
+
+    // Fire HTTP send in background
+    _chatService.sendMessage(
+      receiverId: widget.receiverId,
+      content: text,
+      productId: widget.productId,
+      productName: widget.productName,
+      replyTo: replyToId,
+      replyToContent: replyToContent,
+      replyToSender: replyToSender,
+    ).then((realId) {
+      if (!mounted) return;
+      if (realId != null && realId.isNotEmpty) {
+        setState(() {
+          _confirmedSends.add(tempId);
+          _tempToRealId[tempId] = realId;
+          _optimisticMsgs[tempId] = optimistic.copyWith(
+            isDelivered: true,
+          );
+        });
+      } else {
+        setState(() => _failedSends.add(tempId));
+      }
+    });
+  }
+
+  void _retryMessage(Message failedMsg) {
+    final text = failedMsg.content;
+    if (text.isEmpty) return;
+
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final optimistic = Message(
+      id: tempId,
+      senderId: _uid,
+      receiverId: widget.receiverId,
+      content: text,
+      timestamp: DateTime.now(),
+      isRead: false,
+      isDelivered: false,
+      productId: failedMsg.productId,
+      productName: failedMsg.productName,
+      replyTo: failedMsg.replyTo,
+      replyToContent: failedMsg.replyToContent,
+      replyToSender: failedMsg.replyToSender,
+    );
+
+    setState(() {
+      _failedSends.remove(failedMsg.id);
+      _optimisticMsgs.remove(failedMsg.id);
+      _optimisticMsgs[tempId] = optimistic;
+    });
+
+    _chatService.sendMessage(
+      receiverId: widget.receiverId,
+      content: text,
+      productId: failedMsg.productId,
+      productName: failedMsg.productName,
+      replyTo: failedMsg.replyTo,
+      replyToContent: failedMsg.replyToContent,
+      replyToSender: failedMsg.replyToSender,
+    ).then((realId) {
+      if (!mounted) return;
+      if (realId != null && realId.isNotEmpty) {
+        setState(() {
+          _confirmedSends.add(tempId);
+          _tempToRealId[tempId] = realId;
+          _optimisticMsgs[tempId] = optimistic.copyWith(isDelivered: true);
+        });
+      } else {
+        setState(() => _failedSends.add(tempId));
+      }
+    });
   }
 
   void _scrollToBottom() {
@@ -141,58 +311,263 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  void _removeConfirmedOptimistics() {
+    if (_optimisticMsgs.isEmpty) return;
+    _optimisticMsgs.removeWhere((tempId, msg) {
+      final realId = _tempToRealId[tempId];
+      if (realId != null && _messages.any((m) => m.id == realId)) return true;
+      if (_messages.any((m) =>
+          m.senderId == msg.senderId &&
+          m.content == msg.content &&
+          (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 60))) return true;
+      return false;
+    });
+    _failedSends.removeWhere((id) {
+      final msg = _optimisticMsgs[id];
+      return msg != null &&
+          DateTime.now().difference(msg.timestamp).inSeconds > 60;
+    });
+  }
+
+  /// Merge Firestore messages with optimistic messages, sorted by timestamp.
+  List<Message> _mergedMessages() {
+    if (_optimisticMsgs.isEmpty) return _messages;
+    final all = <Message>[..._messages, ..._optimisticMsgs.values];
+    all.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return all;
+  }
+
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  Widget _productContextCard(
+      BuildContext context, ColorScheme cs, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? cs.surfaceContainer : cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.shopping_bag_outlined,
+                color: cs.primary, size: 24),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.productName.isNotEmpty
+                      ? widget.productName
+                      : 'Product conversation',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.shield_outlined,
+                        size: 12, color: cs.primary),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text(
+                        'Protected by Soko Vibe escrow',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: widget.productId == null
+                ? null
+                : () => context.push(
+                    '${AppRoutes.productDetail}/${widget.productId}'),
+            child: Text(context.tr('view', 'View')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trustBanner(
+      BuildContext context, ColorScheme cs, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, size: 14, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              context.tr('trust_banner_msg',
+                  'Keep payments inside Soko Vibe. Never share your OTP.'),
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _trustDismissed = true),
+            child: Icon(Icons.close,
+                size: 14, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: Icon(Icons.arrow_back, color: cs.onSurface),
           onPressed: () => context.pop(),
         ),
+        titleSpacing: 0,
         title: GestureDetector(
           onTap: () => context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
-              extra: widget.receiverName),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+              extra: _displayName),
+          child: Row(
             children: [
-              Text(widget.receiverName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              if (_otherTyping)
-                Text(context.tr('typing'),
-                    style: TextStyle(fontSize: 12, color: cs.primary)),
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: cs.primary.withValues(alpha: 0.12),
+                backgroundImage: _receiverPhoto != null && _receiverPhoto!.isNotEmpty
+                    ? NetworkImage(_receiverPhoto!)
+                    : null,
+                child: _receiverPhoto == null || _receiverPhoto!.isEmpty
+                    ? Icon(Icons.person, size: 20, color: cs.primary)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(_displayName,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: cs.onSurface,
+                              ),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (_receiverKyc) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.verified,
+                              size: 15, color: cs.primary),
+                        ],
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        if (_otherTyping)
+                          _TypingDots(color: cs.primary)
+                        else if (UserService.isOnline(_otherLastActive))
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                  color: cs.brandSuccess,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(context.tr('online', 'Online'),
+                                  style: TextStyle(fontSize: 12, color: cs.brandSuccess)),
+                            ],
+                          )
+                        else if (_otherLastActive != null)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(context.tr('offline', 'Offline'),
+                                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
         actions: [
+          CallSellerButton(phone: _receiverPhone ?? '', iconOnly: true),
+          // The WhatsApp affordance keeps the official brand color; it is the
+          // single sanctioned chromatic exception (see app_colors.whatsappGreen).
           IconButton(
             icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
-            tooltip: 'WhatsApp',
+            tooltip: context.tr('whatsapp', 'WhatsApp'),
             onPressed: _openWhatsApp,
           ),
           IconButton(
-            icon: const Icon(Icons.more_vert),
+            icon: Icon(Icons.more_vert, color: cs.onSurface),
             onPressed: () => _showOptions(cs),
           ),
         ],
       ),
       body: Column(
         children: [
+          if (widget.productId != null ||
+              widget.productName.isNotEmpty)
+            _productContextCard(context, cs, isDark),
+          if (!_trustDismissed)
+            _trustBanner(context, cs, isDark),
           // Messages
           Expanded(
             child: StreamBuilder<List<Message>>(
-              stream: _chatService.getMessages(widget.receiverId),
+              stream: _chatService.getMessages(_roomId),
               builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
                 final msgs = snap.data ?? [];
                 if (msgs != _messages) {
                   _messages = msgs;
+                  // Remove optimistic messages that have been confirmed by Firestore
+                  _removeConfirmedOptimistics();
                   if (!_autoScrolling) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (_scrollCtrl.hasClients) {
@@ -201,39 +576,94 @@ class _ChatPageState extends State<ChatPage> {
                     });
                   }
                 }
+                final merged = _mergedMessages();
+                // Mark incoming messages as read
+                if (msgs.any((m) => m.senderId != _uid && !m.isRead)) {
+                  _chatService.markMessagesAsRead(_roomId);
+                }
+                if (merged.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundColor: cs.primary.withValues(alpha: 0.08),
+                          child: Icon(Icons.chat_outlined, size: 40, color: cs.primary.withValues(alpha: 0.4)),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          context.tr('no_messages_yet', 'No messages yet'),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          context.tr('send_first_message', 'Send the first message!'),
+                          style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                        ),
+                        if (widget.productName.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.shopping_bag, size: 14, color: cs.primary),
+                                const SizedBox(width: 6),
+                                Text(widget.productName,
+                                  style: TextStyle(fontSize: 13, color: cs.primary),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
                 return GestureDetector(
                   onTap: () => _focusNode.unfocus(),
                   child: ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    itemCount: msgs.length,
+                    itemCount: merged.length,
                     itemBuilder: (_, i) {
-                      final msg = msgs[i];
-                      final prevMsg = i > 0 ? msgs[i - 1] : null;
-                      final nextMsg = i < msgs.length - 1 ? msgs[i + 1] : null;
-                      final showDate =
-                          prevMsg == null || !_isSameDay(msg.timestamp, prevMsg.timestamp);
-                      final showTime = nextMsg == null ||
-                          nextMsg.senderId != msg.senderId ||
-                          nextMsg.timestamp.difference(msg.timestamp) >
+                      final msg = merged[i];
+                      final isFirstOfDay = i == 0 ||
+                          !_isSameDay(msg.timestamp, merged[i - 1].timestamp);
+                      final showTime = i == 0 ||
+                          merged[i - 1].senderId != msg.senderId ||
+                          merged[i - 1].timestamp.difference(msg.timestamp).abs() >
                               const Duration(minutes: 5);
 
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (showDate) _dateSeparator(msg.timestamp, cs),
+                          if (isFirstOfDay) _dateSeparator(msg.timestamp, cs),
                           _MessageBubble(
                             message: msg,
                             isMe: msg.senderId == _uid,
                             showTime: showTime,
-                            onReply: msg.senderId == _uid && msg.content != 'deleted'
+                            isFailed: _failedSends.contains(msg.id),
+                            onReply: msg.content == 'deleted' || msg.isDeletedForEveryone
                                 ? null
                                 : () {
+                                    final isMe = msg.senderId == _uid;
                                     _replyTo = msg.id;
                                     _replyToContent = msg.content;
-                                    _replyToSender = widget.receiverName;
+                                    _replyToSender = isMe
+                                        ? (FirebaseAuth.instance.currentUser?.displayName ?? context.tr('you', 'You'))
+                                        : _displayName;
                                     _focusNode.requestFocus();
                                     setState(() {});
                                   },
+                            onRetry: _failedSends.contains(msg.id)
+                                ? () => _retryMessage(msg)
+                                : null,
                             onReact: (emoji) {
                               _chatService.addReaction(
                                 otherUserId: widget.receiverId,
@@ -254,26 +684,31 @@ class _ChatPageState extends State<ChatPage> {
           // Reply preview
           if (_replyTo != null)
             Container(
-              color: cs.surfaceContainerHighest,
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+              color: cs.surface,
+              padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
               child: Row(
                 children: [
+                  Container(width: 4, color: cs.primary),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_replyToSender ?? '',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: cs.primary,
-                                fontWeight: FontWeight.w600)),
-                        Text(_replyToContent ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 13, color: cs.onSurfaceVariant)),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_replyToSender ?? '',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600)),
+                          Text(_replyToContent ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 13, color: cs.onSurfaceVariant)),
+                        ],
+                      ),
                     ),
                   ),
                   IconButton(
@@ -287,49 +722,64 @@ class _ChatPageState extends State<ChatPage> {
                 ],
               ),
             ),
-          // Input bar
+          // Input bar (AI style)
           Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
-              color: cs.surface,
-              border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
+              border: Border(top: BorderSide(color: cs.onSurface.withValues(alpha: 0.05))),
             ),
-            padding: EdgeInsets.only(
-              left: 12,
-              right: 8,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-              top: 8,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _inputCtrl,
-                    focusNode: _focusNode,
-                    maxLines: 5,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      hintText: context.tr('type_message'),
-                      filled: true,
-                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.6),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  _buildMicButton(cs),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _inputCtrl,
+                      focusNode: _focusNode,
+                      textInputAction: TextInputAction.send,
+                      maxLines: 5,
+                      minLines: 1,
+                      maxLength: 2000,
+                      onSubmitted: (_) => _sendMessage(),
+                      style: TextStyle(color: cs.onSurface, fontSize: 14),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        hintText: context.tr('type_message', 'Type a message...'),
+                        hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.05)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.05)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+                        ),
+                        filled: true,
+                        fillColor: cs.onSurface.withValues(alpha: 0.04),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: cs.primary,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _sendMessage,
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.send_rounded, color: cs.onPrimary, size: 18),
+                      onPressed: _sendMessage,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -341,9 +791,9 @@ class _ChatPageState extends State<ChatPage> {
     final now = DateTime.now();
     String label;
     if (_isSameDay(dt, now)) {
-      label = 'Today';
+      label = context.tr('today', 'Today');
     } else if (_isSameDay(dt, now.subtract(const Duration(days: 1)))) {
-      label = 'Yesterday';
+      label = context.tr('yesterday', 'Yesterday');
     } else {
       label = '${dt.day}/${dt.month}/${dt.year}';
     }
@@ -363,6 +813,27 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Widget _buildMicButton(ColorScheme cs) {
+    return GestureDetector(
+      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('coming_soon', 'Coming soon'))),
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        width: 44, height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cs.onSurface.withValues(alpha: 0.06),
+          border: Border.all(
+            color: cs.onSurface.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Icon(Icons.mic_none_rounded, color: cs.onSurface.withValues(alpha: 0.6), size: 20),
+      ),
+    );
+  }
+
   void _showOptions(ColorScheme cs) {
     showModalBottomSheet(
       context: context,
@@ -372,16 +843,35 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             ListTile(
               leading: const Icon(Icons.person),
-              title: Text(context.tr('view_profile')),
+              title: Text(context.tr('view_profile', 'View Profile')),
               onTap: () {
                 Navigator.pop(ctx);
                 context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
-                    extra: widget.receiverName);
+                    extra: _displayName);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.shortcut),
+              title: Text(context.tr('add_shortcut', 'Add Shortcut')),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final pinned = await pinChatShortcut(
+                  receiverId: widget.receiverId,
+                  receiverName: _displayName,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(pinned
+                        ? context.tr('shortcut_added')
+                        : context.tr('shortcut_not_supported', 'Shortcut haijaungana kwenye skrini ya nyumbani')),
+                    duration: const Duration(seconds: 2),
+                  ));
+                }
               },
             ),
             ListTile(
               leading: const Icon(Icons.block),
-              title: Text(context.tr('block')),
+              title: Text(context.tr('block', 'Block')),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _chatService.blockUser(widget.receiverId);
@@ -390,7 +880,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
             ListTile(
               leading: const Icon(Icons.delete),
-              title: Text(context.tr('delete_conversation')),
+              title: Text(context.tr('delete_conversation', 'Delete Conversation')),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _chatService.deleteConversation(widget.receiverId);
@@ -408,7 +898,9 @@ class _MessageBubble extends StatelessWidget {
   final Message message;
   final bool isMe;
   final bool showTime;
+  final bool isFailed;
   final VoidCallback? onReply;
+  final VoidCallback? onRetry;
   final void Function(String emoji) onReact;
   final ColorScheme cs;
 
@@ -416,7 +908,9 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     required this.showTime,
+    this.isFailed = false,
     this.onReply,
+    this.onRetry,
     required this.onReact,
     required this.cs,
   });
@@ -425,67 +919,99 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDeleted = message.content == 'deleted' || message.isDeletedForEveryone;
 
-    return Padding(
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        // Swipe right → reply (trigger onReply)
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          onReply?.call();
+        }
+      },
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          // Reply preview
-          if (message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted)
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            // Message bubble
             Container(
-              margin: EdgeInsets.only(
-                bottom: 2,
-                left: isMe ? 48 : 0,
-                right: isMe ? 0 : 48,
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+              padding: EdgeInsets.only(
+                left: 14, right: 14,
+                top: message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted ? 4 : 10,
+                bottom: 6,
+              ),
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
+                color: isDeleted
+                    ? cs.surfaceContainerHighest
+                    : isMe
+                        ? cs.primary
+                        : cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(8),
                   topRight: const Radius.circular(8),
-                  bottomLeft: isMe ? const Radius.circular(8) : Radius.zero,
-                  bottomRight: isMe ? Radius.zero : const Radius.circular(8),
+                  bottomLeft: isMe ? const Radius.circular(8) : const Radius.circular(2),
+                  bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(8),
                 ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(message.replyToSender ?? '',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600)),
-                  Text(message.replyToContent ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                ],
-              ),
-            ),
-          // Message bubble
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isDeleted
-                  ? cs.surfaceContainerHighest
-                  : isMe
-                      ? cs.primary
-                      : cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: isMe ? const Radius.circular(18) : Radius.zero,
-                bottomRight: isMe ? Radius.zero : const Radius.circular(18),
-              ),
-            ),
-            child: Column(
               crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
+                // Reply inner container
+                if (message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+                    decoration: BoxDecoration(
+                      color: isMe
+                          ? cs.onPrimary.withValues(alpha: 0.12)
+                          : cs.surface,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 3,
+                          decoration: BoxDecoration(
+                            color: isMe
+                                ? cs.onPrimary.withValues(alpha: 0.7)
+                                : cs.primary,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(2),
+                              bottomLeft: Radius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(message.replyToSender ?? '',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: isMe
+                                          ? cs.onPrimary
+                                          : cs.primary,
+                                      fontWeight: FontWeight.w600)),
+                              Text(message.replyToContent ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: isMe
+                                          ? cs.onPrimary.withValues(alpha: 0.85)
+                                          : cs.onSurfaceVariant)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                    ),
+                  ),
                 // Product link
                 if (message.productName != null && message.productName!.isNotEmpty && !isDeleted)
                   Container(
@@ -509,7 +1035,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 // Message content
                 if (isDeleted)
-                  Text('Message deleted',
+                  Text(context.tr('message_deleted', 'This message has been deleted'),
                       style: TextStyle(
                           fontSize: 14,
                           fontStyle: FontStyle.italic,
@@ -527,7 +1053,7 @@ class _MessageBubble extends StatelessWidget {
                     if (message.isEdited && !isDeleted)
                       Padding(
                         padding: const EdgeInsets.only(right: 4),
-                        child: Text('edited',
+                        child: Text(context.tr('edited', 'edited'),
                             style: TextStyle(
                                 fontSize: 10, color: isMe ? cs.onPrimary.withValues(alpha: 0.7) : cs.onSurfaceVariant)),
                       ),
@@ -544,11 +1070,17 @@ class _MessageBubble extends StatelessWidget {
                     if (isMe && !isDeleted)
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
-                        child: _StatusIcon(
-                          isRead: message.isRead,
-                          isDelivered: message.isDelivered,
-                          color: cs.onPrimary.withValues(alpha: 0.7),
-                        ),
+                        child: isFailed
+                            ? GestureDetector(
+                                onTap: onRetry,
+                                child: Icon(Icons.error_outline,
+                                    size: 16, color: cs.error),
+                              )
+                            : _StatusIcon(
+                                isRead: message.isRead,
+                                isDelivered: message.isDelivered,
+                                color: cs.onPrimary.withValues(alpha: 0.7),
+                              ),
                       ),
                   ],
                 ),
@@ -564,13 +1096,20 @@ class _MessageBubble extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: cs.surface,
+                            color: isMe
+                                ? cs.onPrimary.withValues(alpha: 0.12)
+                                : cs.surface,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: cs.outlineVariant),
+                            border: Border.all(
+                                color: isMe
+                                    ? cs.onPrimary.withValues(alpha: 0.25)
+                                    : cs.outlineVariant),
                           ),
                           child: Text(
                             '${e.key} ${e.value.length}',
-                            style: const TextStyle(fontSize: 12),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: isMe ? cs.onPrimary : cs.onSurface),
                           ),
                         );
                       }).toList(),
@@ -600,7 +1139,9 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
         ],
-      ),
+        ),
+        ),
+    ),
     );
   }
 
@@ -646,11 +1187,75 @@ class _StatusIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isRead) {
-      return Icon(Icons.done_all, size: 14, color: Colors.lightBlue.shade300);
+      return Icon(
+        Icons.done_all,
+        size: 14,
+        color: Theme.of(context).colorScheme.primary,
+      );
     }
     if (isDelivered) {
       return Icon(Icons.done_all, size: 14, color: color);
     }
     return Icon(Icons.done, size: 14, color: color);
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  final Color color;
+  const _TypingDots({required this.color});
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final delay = i * 0.2;
+            final t = (_controller.value - delay).clamp(0.0, 1.0);
+            final bounce = (t < 0.5)
+                ? 2 * t
+                : 2 * (1 - t);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1.5),
+              child: Transform.translate(
+                offset: Offset(0, -bounce * 3),
+                child: Container(
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(
+                    color: widget.color.withValues(alpha: 0.4 + bounce * 0.6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
   }
 }
