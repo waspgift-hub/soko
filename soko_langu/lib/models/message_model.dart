@@ -18,6 +18,32 @@ class Message {
   final bool isDeletedForEveryone;
   final Map<String, List<String>> reactions;
 
+  factory Message.fromMap(String id, Map<String, dynamic> data) {
+    final rawReactions = data['reactions'] as Map<String, dynamic>? ?? {};
+    final reactions = <String, List<String>>{};
+    rawReactions.forEach((key, value) {
+      reactions[key] = List<String>.from(value as List);
+    });
+    return Message(
+      id: id,
+      senderId: data['sender_id'] ?? data['senderId'] ?? '',
+      receiverId: data['receiver_id'] ?? data['receiverId'] ?? '',
+      content: data['text'] ?? data['content'] ?? '',
+      timestamp: (data['timestamp'] as dynamic)?.toDate() ?? DateTime.now(),
+      isRead: data['is_read'] ?? data['isRead'] ?? false,
+      isDelivered: data['is_delivered'] ?? data['isDelivered'] ?? false,
+      isEdited: data['is_edited'] ?? data['isEdited'] ?? false,
+      productId: data['product_id'] ?? data['productId'],
+      productName: data['product_name'] ?? data['productName'],
+      replyTo: data['reply_to'] ?? data['replyTo'],
+      replyToContent: data['reply_to_content'] ?? data['replyToContent'],
+      replyToSender: data['reply_to_sender'] ?? data['replyToSender'],
+      messageType: data['message_type'] ?? data['messageType'] ?? 'text',
+      isDeletedForEveryone: data['is_deleted_for_everyone'] ?? data['isDeletedForEveryone'] ?? false,
+      reactions: reactions,
+    );
+  }
+
   Message({
     required this.id,
     required this.senderId,

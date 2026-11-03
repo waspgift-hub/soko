@@ -10,6 +10,28 @@ enum FirestoreErrorKind {
   other,
 }
 
+/// Translation keys for user-facing error messages. UI renders them through
+/// `context.trError()` so errors follow the app language, not hardcoded text.
+class ErrorKeys {
+  static const poorNetwork = 'error_poor_network';
+  static const noPermission = 'error_no_permission';
+  static const notFound = 'error_not_found';
+  static const alreadyExists = 'error_already_exists';
+  static const indexBuilding = 'error_index_building';
+  static const sessionExpired = 'error_session_expired';
+  static const generic = 'error_generic';
+  static const noAccount = 'error_no_account';
+  static const wrongPassword = 'error_wrong_password';
+  static const invalidEmail = 'error_invalid_email';
+  static const accountDisabled = 'error_account_disabled';
+  static const emailInUse = 'error_email_in_use';
+  static const operationNotAllowed = 'error_operation_not_allowed';
+  static const weakPassword = 'error_weak_password';
+  static const tooManyAttempts = 'error_too_many_attempts';
+  static const invalidCredentials = 'error_invalid_credentials';
+  static const timeout = 'error_timeout';
+}
+
 class FirestoreErrorInfo {
   final FirestoreErrorKind kind;
   final String raw;
@@ -72,62 +94,65 @@ class NetworkError implements Exception {
   String toString() => userMessage;
 }
 
+/// Maps an error to a translation KEY (see [ErrorKeys]). The UI renders it via
+/// `context.trError()` so the message matches the app language. Kept key-based
+/// (not a BuildContext) so services without context can produce it.
 String translateError(dynamic error) {
   if (error is NetworkError) return error.userMessage;
 
   if (error is SocketException) {
-    return 'Poor internet connection. Please check your network.';
+    return ErrorKeys.poorNetwork;
   }
   if (error is FirebaseException) {
     switch (error.code) {
       case 'permission-denied':
-        return 'You do not have permission to perform this action. Please try logging out and back in.';
+        return ErrorKeys.noPermission;
       case 'unavailable':
       case 'deadline-exceeded':
-        return 'Poor internet connection. Please check your network.';
+        return ErrorKeys.poorNetwork;
       case 'not-found':
-        return 'The requested information was not found.';
+        return ErrorKeys.notFound;
       case 'already-exists':
-        return 'This item already exists.';
+        return ErrorKeys.alreadyExists;
       case 'failed-precondition':
-        return 'The database index is still building. Please try again shortly.';
+        return ErrorKeys.indexBuilding;
       case 'unauthenticated':
-        return 'Your session has expired. Please sign in again.';
+        return ErrorKeys.sessionExpired;
       default:
-        return error.message ?? 'Something went wrong. Please try again.';
+        return error.message ?? ErrorKeys.generic;
     }
   }
   if (error is FirebaseAuthException) {
     switch (error.code) {
       case 'user-not-found':
-        return 'No account found with this email.';
+        return ErrorKeys.noAccount;
       case 'wrong-password':
-        return 'Incorrect password. Please try again.';
+        return ErrorKeys.wrongPassword;
       case 'invalid-email':
-        return 'The email address is not valid.';
+        return ErrorKeys.invalidEmail;
       case 'user-disabled':
-        return 'This account has been disabled.';
+        return ErrorKeys.accountDisabled;
       case 'email-already-in-use':
-        return 'An account with this email already exists.';
+        return ErrorKeys.emailInUse;
       case 'operation-not-allowed':
-        return 'This sign-in method is not enabled.';
+        return ErrorKeys.operationNotAllowed;
       case 'weak-password':
-        return 'The password is too weak. Use at least 6 characters.';
+        return ErrorKeys.weakPassword;
       case 'network-request-failed':
-        return 'Poor internet connection. Please check your network.';
+        return ErrorKeys.poorNetwork;
       case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
+        return ErrorKeys.tooManyAttempts;
       case 'invalid-credential':
-        return 'Invalid login credentials. Please try again.';
+        return ErrorKeys.invalidCredentials;
       default:
-        return error.message ?? 'Poor internet connection. Please check your network.';
+        return error.message ?? ErrorKeys.poorNetwork;
     }
   }
   if (error is TimeoutException) {
-    return 'Request timed out. Poor internet connection.';
+    return ErrorKeys.timeout;
   }
   if (error is FormatException) {
-    return 'Something went wrong. Please try again.';
+    return ErrorKeys.generic;
   }
 
   final msg = error.toString();
@@ -138,15 +163,15 @@ String translateError(dynamic error) {
       msg.contains('SocketException') ||
       msg.contains('Failed host lookup') ||
       msg.contains('Connection refused')) {
-    return 'Poor internet connection. Please check your network.';
+    return ErrorKeys.poorNetwork;
   }
   if (msg.contains('PERMISSION_DENIED') ||
       msg.contains('permission') ||
       msg.contains('caller does not have permission')) {
-    return 'You do not have permission to perform this action. Please try logging out and back in.';
+    return ErrorKeys.noPermission;
   }
 
-  return 'Something went wrong. Please try again.';
+  return ErrorKeys.generic;
 }
 
 Future<T> guardNetwork<T>(Future<T> Function() operation) async {

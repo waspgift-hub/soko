@@ -12,7 +12,7 @@ class ReportService {
   Future<void> submitReport(Report report) async {
     final token = await _auth.currentUser?.getIdToken();
     final resp = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/reports'),
+      Uri.parse(ApiConfig.v1('/moderation/')),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -25,10 +25,13 @@ class ReportService {
     }
   }
 
-  Stream<List<Report>> getReports({String? status}) {
+  Stream<List<Report>> getReports({String? status, String? productId}) {
     Query query = _db.collection('reports').orderBy('createdAt', descending: true);
     if (status != null && status.isNotEmpty) {
       query = query.where('status', isEqualTo: status);
+    }
+    if (productId != null && productId.isNotEmpty) {
+      query = query.where('productId', isEqualTo: productId);
     }
     return query.snapshots().map((snap) =>
         snap.docs.map((doc) => Report.fromFirestore(doc)).toList());

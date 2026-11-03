@@ -1,230 +1,272 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
-import '../../services/product_service.dart';
+import '../../services/deep_link_service.dart';
+import '../../services/localization_service.dart';
 import '../../services/soko_cache_manager.dart';
-import 'google_loading.dart';
-import 'glass_widget.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
+import '../theme/marketplace_design_tokens.dart';
+import 'soko_vibe_watermark.dart';
+import 'ds/ds.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
   final FlashSale? flashSale;
+  final VoidCallback? onShare;
 
-  const ProductCard({super.key, required this.product, required this.onTap, this.flashSale});
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onTap,
+    this.flashSale,
+    this.onShare,
+  });
+
+  void _shareProduct(BuildContext context) {
+    final shareAction = onShare ?? () {
+      final price =
+          '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
+      final text =
+          '${product.name}\n'
+          '${context.trParams('share_price_line', {'price': price})}\n'
+          '${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(product.id)}';
+      SharePlus.instance.share(ShareParams(text: text));
+    };
+    shareAction();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = constraints.maxWidth;
-        final scale = (cardWidth / 170).clamp(0.8, 1.4);
-        final nameSize = (14 * scale).clamp(12.0, 18.0);
-        final priceSize = (13 * scale).clamp(12.0, 17.0);
-        final smallSize = (11 * scale).clamp(10.0, 14.0);
-        final badgeSize = (10 * scale).clamp(9.0, 13.0);
-        final padding = (8.0 * scale).clamp(6.0, 12.0);
-        const radius = 15.0;
+    final cs = Theme.of(context).colorScheme;
+    final displayPrice = flashSale?.salePrice ?? product.price;
+    final semanticsLabel = [
+      product.name,
+      context.formatPrice(displayPrice),
+      if (product.rating > 0)
+        '${product.rating.toStringAsFixed(1)} ${context.tr('rating')}',
+      if (product.location.trim().isNotEmpty) product.location,
+    ].join(', ');
 
-        Widget card = AnimatedGlassWidget(
-          blurSigma: 10,
-          opacity: 0.55,
-          borderRadius: radius,
-          borderWidth: 1.2,
-          borderColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-          delay: const Duration(milliseconds: 200),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
-                  child: product.images.isNotEmpty
-                      ? Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CachedNetworkImage(
-                              imageUrl: getThumbnailUrl(product.images.first),
-                              cacheManager: SokoCacheManager(),
-                              memCacheWidth: 360,
-                              memCacheHeight: 360,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                                child: const Center(
-                                  child: GoogleLoading(size: 24, strokeWidth: 2),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Theme.of(context).colorScheme.outlineVariant,
-                                child: Icon(
-                                  Icons.image,
-                                  size: 40,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            _buildSellerBadge(context, badgeSize),
-                            if (flashSale != null)
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 3 * scale),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.error,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '-${flashSale!.discountPercent.toStringAsFixed(0)}%',
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.surface,
-                                      fontSize: badgeSize,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        )
-                      : Center(
-                          child: Icon(
-                            Icons.image,
-                            size: 40,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ),
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      onTap: onTap,
+      child: AnimatedPress(
+        onTap: onTap,
+        pressedScale: 0.985,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final titleSize = width < 150 ? 13.0 : 14.0;
+            final priceSize = width < 150 ? 13.0 : 14.0;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ProductImage(
+                  product: product,
+                  flashSale: flashSale,
+                  onShare: () => _shareProduct(context),
                 ),
-              ),
-              Padding(
-                padding: EdgeInsets.all(padding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 9),
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: MarketplaceTokens.productTitle(context).copyWith(
+                    fontSize: titleSize,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                if (flashSale != null)
+                  DsPrice(
+                    price: flashSale!.salePrice,
+                    oldPrice: flashSale!.originalPrice,
+                    color: cs.error,
+                    size: priceSize,
+                    weight: FontWeight.w700,
+                  )
+                else
+                  DsPrice(
+                    price: product.price,
+                    color: cs.onSurface,
+                    size: priceSize,
+                    weight: FontWeight.w700,
+                  ),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    Text(
-                      product.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: nameSize,
+                    Expanded(
+                      child: Text(
+                        product.location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: MarketplaceTokens.metadata(context),
                       ),
                     ),
-                    SizedBox(height: 4 * scale),
-                    if (flashSale != null) ...[
-                      Text(
-                        context.formatPrice(flashSale!.salePrice),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontWeight: FontWeight.bold,
-                          fontSize: priceSize,
-                        ),
-                      ),
-                      SizedBox(height: 2 * scale),
-                      Text(
-                        context.formatPrice(flashSale!.originalPrice),
-                        style: TextStyle(
-                          decoration: TextDecoration.lineThrough,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: smallSize,
-                        ),
-                      ),
-                    ] else
-                      Text(
-                        context.formatPrice(product.price),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: priceSize,
-                        ),
-                      ),
-                    SizedBox(height: 4 * scale),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on,
-                          size: 12 * scale,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                        SizedBox(width: 2 * scale),
-                        Expanded(
-                          child: Text(
-                            product.location,
-                            style: TextStyle(
-                              fontSize: smallSize,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (product.rating > 0) ...[
-                      SizedBox(height: 2 * scale),
-                      Row(
-                        children: [
-                          Icon(Icons.star, size: 12 * scale, color: Theme.of(context).colorScheme.tertiary),
-                          SizedBox(width: 2 * scale),
-                          Text(
-                            "${product.rating.toStringAsFixed(1)} (${product.reviewCount})",
-                            style: TextStyle(
-                              fontSize: smallSize,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
+                    if (product.sellerKycApproved) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.verified_rounded,
+                        size: 15,
+                        color: cs.successGreen,
+                        semanticLabel: context.tr('verified'),
                       ),
                     ],
                   ],
                 ),
-              ),
-            ],
-          ),
-        );
-
-        return GestureDetector(onTap: onTap, child: card);
-      },
-    );
-  }
-
-  Widget _buildSellerBadge(BuildContext context, double badgeSize) {
-    return Stack(
-      children: [
-        if (product.isFeaturedValid)
-          Positioned(
-            top: 8,
-            left: 8,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Theme.of(context).colorScheme.trendingOrange, Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.7)],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.verified, size: badgeSize, color: Theme.of(context).colorScheme.surface),
-                  SizedBox(width: 3),
-                  Text(
-                    context.tr('featured'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.surface,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
+                if (product.rating > 0) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Icon(Icons.star_rounded, size: 14, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${product.rating.toStringAsFixed(1)} (${product.reviewCount})',
+                        style: MarketplaceTokens.metadata(context),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ),
-          ),
-      ],
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }
 
+class _ProductImage extends StatelessWidget {
+  final Product product;
+  final FlashSale? flashSale;
+  final VoidCallback onShare;
 
+  const _ProductImage({
+    required this.product,
+    required this.flashSale,
+    required this.onShare,
+  });
 
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(MarketplaceTokens.imageRadius),
+        child: product.images.isEmpty
+            ? ColoredBox(
+                color: cs.surfaceContainerLow,
+                child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant, size: 34),
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  Hero(
+                    tag: 'product-img-${product.id}',
+                    child: CachedNetworkImage(
+                      imageUrl: getThumbnailUrl(product.images.first),
+                      cacheManager: SokoCacheManager(),
+                      memCacheWidth: 480,
+                      memCacheHeight: 480,
+                      fit: BoxFit.cover,
+                      fadeInDuration: MarketplaceTokens.standardMotion,
+                      placeholder: (_, __) => ColoredBox(
+                        color: cs.surfaceContainerLow,
+                        child: const DsSkeleton(),
+                      ),
+                      errorWidget: (_, __, ___) => ColoredBox(
+                        color: cs.surfaceContainerLow,
+                        child: Icon(Icons.broken_image_outlined, color: cs.onSurfaceVariant, size: 32),
+                      ),
+                    ),
+                  ),
+                  if (product.isFeaturedValid)
+                    Positioned(
+                      left: 8,
+                      top: 8,
+                      child: _ImageLabel(
+                        label: context.tr('featured'),
+                        background: Colors.black.withValues(alpha: 0.72),
+                        foreground: Colors.white,
+                      ),
+                    ),
+                  if (flashSale != null)
+                    Positioned(
+                      left: 8,
+                      bottom: 8,
+                      child: _ImageLabel(
+                        label: '-${flashSale!.discountPercent.toStringAsFixed(0)}%',
+                        background: cs.error,
+                        foreground: cs.onError,
+                      ),
+                    ),
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.52),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: onShare,
+                        child: const SizedBox(
+                          width: MarketplaceTokens.touchTarget,
+                          height: MarketplaceTokens.touchTarget,
+                          child: Icon(Icons.share_outlined, size: 18, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 7,
+                    bottom: 7,
+                    child: IgnorePointer(child: SokoVibeWatermark()),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _ImageLabel extends StatelessWidget {
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  const _ImageLabel({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: foreground,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}

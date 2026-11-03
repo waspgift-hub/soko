@@ -1,0 +1,763 @@
+// Compat orders/checkout router: verbatim port of proven old-server
+// handlers (payment-link, statements, transaction-status, transactions
+// create, gateway-fee, orders transition) under original /api paths.
+const express = require('express');
+const admin = require('firebase-admin');
+const { getFirebaseFirestore } = require('../../config/firebase');
+const { requireUser, isOwnerOrAdmin } = require('./auth-helpers');
+const { sendOneSignalNotification } = require('./notify');
+const {
+  clickpesaCollect,
+  clickpesaUssdPushPreview,
+  calcGatewayFee,
+} = require('../../../clickpesa');
+const { resolveEffectivePrice } = require('../../../money');
+const { paymentLimiter } = require('../../middleware/rateLimiter');
+const config = require('../../config');
+const cache = require('../../../cache');
+const { getRedis } = require('../../config/redis');
+
+try {
+  cache.setRedisClient(getRedis());
+} catch (e) {
+  console.error('[COMPAT-ORDERS] cache wiring failed:', e.message);
+}
+
+const db = getFirebaseFirestore();
+const shippingValidation = require('../shipping/shipping-validation');
+const MAX_DAILY_SALE_AMOUNT = config.business.maxDailySaleAmount;
+const { getSettings, commissionPercent } = require('../admin/settings-service');
+
+const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
+
+/**
+ * Platform commission as a fraction of the product price (0.035 = 3.5%).
+ *
+ * Precedence:
+ *  1. `paymentsAndCurrency.platformCommissionPct` from admin settings — what the
+ *     owner sets in the admin panel, so a rate change applies to the next order
+ *     instead of the next deploy. Without this the panel field was inert: it
+ *     saved to Firestore but no payment path read it.
+ *  2. `PLATFORM_COMMISSION_PERCENT` env var.
+ *  3. 0 — Soko Vibe charges no platform fee by default.
+ *
+ * Resolved per request rather than captured at module load so a panel change
+ * takes effect immediately. settings-service caches for 300s, which bounds the
+ * Firestore cost to one read every five minutes.
+ */
+async function commissionRate() {
+  try {
+    const s = await getSettings();
+    const v = commissionPercent(s);
+    if (v > 0) return v;
+    // A stored 0 is a legitimate "free" setting, so only fall through to the
+    // env chain when the field is absent entirely.
+    if (s?.paymentsAndCurrency?.platformCommissionPct !== undefined) return 0;
+  } catch (_) {
+    // Firestore unavailable: fall through to the env/default chain.
+  }
+  const env = Number(PLATFORM_COMMISSION_PERCENT);
+  return Number.isFinite(env) && env >= 0 ? env : 0;
+}
+
+function asyncHandler(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+}
+
+function sanitize(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
+}
+
+// v2 auto-release window: 48h after dispatch (matches /cron/auto-release).
+const AUTO_RELEASE_MS = 48 * 60 * 60 * 1000;
+// Historical spellings of "funds held" produced by the engine over time.
+const ESCROW_STATES = ['pending', 'quoted', 'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
+const DISPATCH_STATES = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
+const TRANSIT_STATES = ['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted'];
+const INSPECTION_STATES = ['delivered', 'inspection_period', 'otp_pending'];
+const RELEASABLE_STATES = [...TRANSIT_STATES, ...INSPECTION_STATES];
+
+// Role-guarded Firestore order state machine for the app-facing lifecycle.
+// The full money moves (escrow release / payout) stay in /api/escrow/* and
+// /api/orders/verify-delivery — this endpoint only flips the state.
+const TRANSITION_RULES = {
+  quoted: { actors: ['seller', 'admin'], from: ESCROW_STATES },
+  dispatched: { actors: ['seller', 'admin'], from: DISPATCH_STATES },
+  in_transit: { actors: ['seller', 'admin'], from: TRANSIT_STATES },
+  out_for_delivery: { actors: ['seller', 'admin'], from: TRANSIT_STATES },
+  delivered: { actors: ['buyer', 'seller', 'admin'], from: RELEASABLE_STATES },
+  inspection_period: { actors: ['buyer', 'seller', 'admin'], from: RELEASABLE_STATES },
+  confirmed: { actors: ['buyer', 'admin'], from: RELEASABLE_STATES },
+  delivery_confirmed: { actors: ['buyer', 'admin'], from: RELEASABLE_STATES },
+  disputed: { actors: ['buyer', 'admin'], from: [...DISPATCH_STATES, ...TRANSIT_STATES, 'delivered', 'inspection_period'] },
+  cancelled: { actors: ['buyer', 'admin'], from: ESCROW_STATES },
+};
+
+// Applies a non-monetary state change onto the Firestore `orders` doc and
+// returns the updated projection. Throws { status, message } on bad input.
+async function applyTransition(db, docRef, order, newStatus, uid, note) {
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const base = { updatedAt: timestamp };
+  switch (newStatus) {
+    case 'quoted': {
+      let shippingCost = 0;
+      try { shippingCost = Math.round(Number((JSON.parse(note || '{}') || {}).shippingCost || 0)); } catch (_) {}
+      if (!(shippingCost > 0)) {
+        const err = new Error('Cannot transition: valid shippingCost required');
+        err.status = 400;
+        throw err;
+      }
+      const totalAmount = (order.productPrice || 0) + shippingCost;
+      const buyerAddrMap =
+        order.deliveryAddress && typeof order.deliveryAddress === 'object'
+          ? order.deliveryAddress
+          : {};
+      const validation = shippingValidation.validateShippingQuote({
+        amount: shippingCost,
+        shippingAddress: {
+          region: order.region || buyerAddrMap.region || '',
+          city: order.district || buyerAddrMap.district || '',
+        },
+        sellerRegion: order.sellerRegion || '',
+      });
+      await docRef.update({
+        ...base,
+        status: 'quoted',
+        shippingCost,
+        totalAmount,
+        shippingQuote: {
+          amount: shippingCost,
+          setAt: timestamp,
+          setBy: uid,
+          verdict: validation.verdict,
+          distanceTier: validation.distanceTier,
+          reason: validation.reason || null,
+          baseline: validation.baseline,
+        },
+      });
+      return { status: 'quoted', shippingCost, totalAmount };
+    }
+    case 'dispatched': {
+      await docRef.update({
+        ...base,
+        status: 'dispatched',
+        dispatchedAt: timestamp,
+        flowStage: 'in_transit',
+        autoReleaseDeadline: new Date(Date.now() + AUTO_RELEASE_MS),
+        dispatchProof: { note: note || '', dispatchedAt: timestamp },
+      });
+      return { status: 'dispatched', flowStage: 'in_transit' };
+    }
+    case 'in_transit': {
+      await docRef.update({ ...base, status: 'in_transit', flowStage: 'in_transit', inTransitAt: timestamp });
+      return { status: 'in_transit', flowStage: 'in_transit' };
+    }
+    case 'out_for_delivery': {
+      await docRef.update({ ...base, status: 'out_for_delivery', flowStage: 'out_for_delivery', outForDeliveryAt: timestamp });
+      return { status: 'out_for_delivery', flowStage: 'out_for_delivery' };
+    }
+    case 'delivered':
+    case 'inspection_period': {
+      await docRef.update({
+        ...base,
+        status: 'delivered',
+        deliveredAt: timestamp,
+        flowStage: 'inspection_period',
+        inspectionMinutes: 30,
+        inspectionDeadline: new Date(Date.now() + 30 * 60 * 1000),
+        arrivalConfirmedBy: uid,
+      });
+      return { status: 'delivered', flowStage: 'inspection_period' };
+    }
+    case 'confirmed':
+    case 'delivery_confirmed': {
+      // Marks the buyer's confirmation; the actual money release runs through
+      // /api/escrow/release or /api/orders/verify-delivery.
+      await docRef.update({ ...base, confirmedBy: uid, deliveryConfirmedAt: timestamp });
+      return { status: order.status, confirmedBy: uid };
+    }
+    case 'disputed': {
+      await docRef.update({
+        ...base,
+        status: 'disputed',
+        disputeInfo: {
+          reason: note || 'Sijapata mzigo',
+          evidenceUrls: [],
+          raisedAt: timestamp,
+          resolved: false,
+          raisedBy: uid,
+        },
+      });
+      return { status: 'disputed' };
+    }
+    case 'cancelled': {
+      await docRef.update({ ...base, status: 'cancelled', cancelledAt: timestamp, cancelledBy: uid });
+      return { status: 'cancelled' };
+    }
+    default: {
+      const err = new Error(`Unknown transition target: ${newStatus}`);
+      err.status = 400;
+      throw err;
+    }
+  }
+}
+
+async function verifyAuthToken(req) {
+  const { getFirebaseAuth } = require('../../config/firebase');
+  const authHeader = req.headers.authorization || req.headers['Authorization'] || '';
+  const token = authHeader.replace('Bearer ', '');
+  if (!token) return null;
+  try {
+    const auth = getFirebaseAuth();
+    if (!auth) return null;
+    return await auth.verifyIdToken(token);
+  } catch {
+    return null;
+  }
+}
+// Check daily transaction limit for a buyer
+async function checkDailyLimit(buyerId, amount) {
+  if (!db) return true;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const snap = await db.collection('transactions')
+      .where('buyerId', '==', buyerId)
+      .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(today))
+      .get();
+    let dailyTotal = 0;
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.status === 'completed' || d.status === 'pending' || d.status === 'escrow_hold') {
+        dailyTotal += (d.productPrice || 0);
+      }
+    });
+    if (dailyTotal + amount > MAX_DAILY_SALE_AMOUNT) {
+      return false;
+    }
+    return true;
+  } catch { return true; }
+}
+
+// Check for duplicate pending payment on same product by same buyer
+// Auto-cancel stale pending transactions older than 30 minutes
+async function checkDuplicatePayment(productId, buyerId) {
+  if (!db) return false;
+  try {
+    const snap = await db.collection('transactions')
+      .where('productId', '==', productId)
+      .where('buyerId', '==', buyerId)
+      .where('status', 'in', ['pending', 'escrow_hold'])
+      .get();
+
+    if (snap.docs.length === 0) return false;
+
+    const now = Date.now();
+    const PENDING_TIMEOUT = 5 * 60 * 1000;   // 5 min — pending STK expired
+    let activeEscrow = false;
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const createdAt = data.createdAt?.toDate?.()?.getTime?.() || 0;
+
+      if (data.status === 'escrow_hold') {
+        // Real escrow — never cancel automatically
+        activeEscrow = true;
+      } else if (createdAt > 0 && (now - createdAt) > PENDING_TIMEOUT) {
+        // Stale pending (>5 min) — auto-cancel, allow retry
+        await doc.ref.update({ status: 'failed', cancelledAt: admin.firestore.FieldValue.serverTimestamp(), cancelReason: 'auto-cancelled (stale)' });
+      } else {
+        // Recent pending — cancel it so user can retry now
+        await doc.ref.update({ status: 'cancelled', cancelledAt: admin.firestore.FieldValue.serverTimestamp(), cancelReason: 'superseded by new payment' });
+      }
+    }
+
+    return activeEscrow;
+  } catch { return false; }
+}
+
+const router = express.Router();
+
+/**
+ * Quotes the real cost of a USSD push before the buyer commits, so the amount
+ * shown at checkout is the amount that leaves their phone balance.
+ *
+ * Why this exists: ClickPesa charges its own fee "in addition to the charges of
+ * the MNOs", so the local USSD_PUSH_FEE_TIERS table under-quotes every
+ * transaction by the MNO fee the buyer never sees. This route asks ClickPesa
+ * for the authoritative per-method fee.
+ *
+ * The chargeable total is recomputed here with the exact same inputs and
+ * arithmetic as /create-marketplace-payment-link (flash-sale-aware price,
+ * shipping, commission, gateway fee) rather than trusting a client-supplied
+ * total — otherwise a client could quote a fee for an amount it never charges,
+ * and the number shown would still not match the debit.
+ */
+router.post('/clickpesa/preview-ussd-push', paymentLimiter, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
+    const { productPrice, productId, phone, shippingCost, paymentMethod, provider } = req.body;
+    if (!productPrice || !productId || !phone) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (req.body.buyerId && decoded.uid !== req.body.buyerId) {
+      return res.status(403).json({ error: 'Buyer ID mismatch' });
+    }
+
+    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
+
+    // Same money math as the payment route, so quote and charge agree.
+    const effectivePrice = await resolveEffectivePrice(db, productId, productPrice);
+    const commission = Math.round(effectivePrice * (await commissionRate()));
+    // BillPay's 1% is deducted from the collected amount; USSD push is charged
+    // by ClickPesa on top, so it is never pre-added.
+    const gatewayFee = isBillPay ? calcGatewayFee('billpay', effectivePrice, provider) : 0;
+    const totalAmount = effectivePrice + Math.round(shippingCost || 0) + commission + gatewayFee;
+
+    // BillPay does not use USSD push, so there is no per-method fee to quote.
+    if (isBillPay) {
+      return res.json({
+        success: true,
+        totalAmount,
+        platformFee: commission,
+        gatewayFee,
+        methods: [],
+      });
+    }
+
+    // orderReference is required by ClickPesa but unused for a preview; send a
+    // stable alphanumeric placeholder so nothing downstream tries to reconcile
+    // it against a real order.
+    const previewRef = `pv${Date.now().toString(36)}`;
+    let raw;
+    try {
+      raw = await clickpesaUssdPushPreview({
+        amount: totalAmount,
+        orderReference: previewRef,
+        phoneNumber: phone,
+      });
+    } catch (e) {
+      // A preview failure must never block checkout. The client falls back to
+      // its local tier table, which is an underestimate but not a wrong order.
+      console.error('[CLICKPESA-PREVIEW] ClickPesa call failed:', e.message);
+      return res.status(502).json({ error: 'Fee preview unavailable' });
+    }
+
+    // Normalise: ClickPesa nests the payload under `data` on some responses, and
+    // `fee` is absent when a method is unavailable.
+    const payload = (raw && typeof raw === 'object' && raw.data && typeof raw.data === 'object') ? raw.data : raw;
+    const activeMethods = Array.isArray(payload?.activeMethods) ? payload.activeMethods : [];
+    const methods = activeMethods.map((m) => ({
+      name: typeof m?.name === 'string' ? m.name : '',
+      status: typeof m?.status === 'string' ? m.status : 'UNKNOWN',
+      fee: Number.isFinite(Number(m?.fee)) ? Number(m.fee) : null,
+    }));
+
+    res.json({
+      success: true,
+      totalAmount,
+      platformFee: commission,
+      gatewayFee,
+      methods,
+    });
+  } catch (e) {
+    console.error('[CLICKPESA-PREVIEW] error:', e.message);
+    res.status(500).json({ error: 'Fee preview failed' });
+  }
+});
+
+router.post('/create-marketplace-payment-link', paymentLimiter, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
+    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId, paymentMethod, provider } = req.body;
+    if (buyerId && decoded.uid !== buyerId) {
+      return res.status(403).json({ error: 'Buyer ID mismatch' });
+    }
+    if (!productPrice || !productId || !sellerId || !phone) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Price the buyer is actually charged: an active flash sale overrides the
+    // client-supplied (stale full) price so commission + total are computed on
+    // the real sale price, and the buyer can't be overcharged at checkout.
+    const effectivePrice = await resolveEffectivePrice(db, productId, productPrice);
+
+    // Resolve buyer name before ClickPesa call
+    let buyerName = '';
+    if (buyerId) {
+      try {
+        const buyerDoc = await db.collection('users').doc(buyerId).get();
+        buyerName = buyerDoc.data()?.name || buyerDoc.data()?.displayName || '';
+      } catch (_) {}
+    }
+
+    // Fraud checks — skip if resubmitting existing transaction
+    if (buyerId && !existingTransactionId) {
+      const suspended = await checkSuspended(buyerId);
+      if (suspended) return res.status(403).json({ error: 'Account suspended' });
+
+      const isDuplicate = await checkDuplicatePayment(productId, buyerId);
+      if (isDuplicate) return res.status(400).json({ error: 'A pending payment already exists for this product' });
+
+      const withinLimit = await checkDailyLimit(buyerId, effectivePrice);
+      if (!withinLimit) return res.status(400).json({ error: `Daily purchase limit of TZS ${MAX_DAILY_SALE_AMOUNT.toLocaleString()} exceeded` });
+    }
+
+    // Use existing transaction ID if provided, otherwise generate new one.
+    // ClickPesa requires orderReference to be alphanumeric-only, so strip any
+    // base64url chars (e.g. '-'/'_') from the buyer UID fragment.
+    const orderIdSuffix = (buyerId ? buyerId.replace(/[^A-Za-z0-9]/g, '').substring(0, 4) : '') || 'x';
+    const order_id = existingTransactionId || `p${Date.now().toString(36)}${orderIdSuffix}`;
+
+    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
+
+    // Include shipping + platform commission + gateway fee in total sent to ClickPesa
+    const commission = Math.round(effectivePrice * (await commissionRate()));
+    // BillPay 1% fee is deducted from collected amount (add it on top so seller still
+    // gets full total). USSD Push fee is charged to the customer by ClickPesa on top,
+    // so never pre-add it or the processing fee is charged twice.
+    const gatewayFee = isBillPay ? calcGatewayFee('billpay', effectivePrice, provider) : 0;
+    const totalAmount = effectivePrice + Math.round(shippingCost || 0) + commission + gatewayFee;
+
+    if (isBillPay) {
+      // ── BillPay flow: create order control number ──
+      const billResult = await clickpesaCreateBillPayOrder({
+        billAmount: totalAmount,
+        billDescription: `${sanitize(productName || 'Product')}`,
+        billPaymentMode: 'EXACT',
+        billReference: order_id,
+      });
+
+      if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+        const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+        return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+      }
+
+      const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+      const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
+
+      const productImg = req.body.productImage || '';
+      if (db) {
+        await db.collection('transactions').doc(order_id).set({
+          type: 'purchase',
+          productId,
+          productName: sanitize(productName),
+          productImage: productImg,
+          sellerId,
+          sellerName: sanitize(sellerName),
+          buyerPhone: phone,
+          buyerId: buyerId || '',
+          buyerName,
+          productPrice: effectivePrice,
+          shippingCost: Math.round(shippingCost || 0),
+          platformFee: commission,
+          gatewayFee,
+          totalAmount,
+          status: 'pending',
+          paymentMethod: 'BillPay',
+          billPayNumber,
+          deliveryType: deliveryType || 'local',
+          autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
+          clickpesaReference: clickpesaRef,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      res.json({
+        order_id,
+        billPayNumber,
+        gatewayFee,
+        totalAmount,
+        clickpesaReference: clickpesaRef,
+        message: `BillPay control number: ${billPayNumber}. Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalAmount.toLocaleString()} > PIN.`,
+      });
+    } else {
+      // ── USSD Push flow (async — return immediately, ClickPesa fires in background) ──
+      const phoneDigits = phone.replace(/\D/g, '');
+      const normalizedPhone = phoneDigits.startsWith('0')
+        ? '255' + phoneDigits.substring(1)
+        : phoneDigits.startsWith('255')
+          ? phoneDigits
+          : '255' + phoneDigits;
+
+      const productImg = req.body.productImage || '';
+      const txData = {
+        type: 'purchase',
+        productId, productName: sanitize(productName), productImage: productImg,
+        sellerId, sellerName: sanitize(sellerName), buyerPhone: normalizedPhone,
+        buyerId: buyerId || '', buyerName,
+        productPrice: effectivePrice, shippingCost: Math.round(shippingCost || 0),
+        platformFee: commission, processingFee: gatewayFee,
+        totalAmount, status: 'pending', paymentMethod: 'ClickPesa',
+        deliveryType: deliveryType || 'local',
+        autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      await db.collection('transactions').doc(order_id).set(txData, { merge: true });
+
+      // Fire ClickPesa async — don't wait for it
+      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+      clickpesaCollect({ amount: totalAmount, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl })
+        .then((result) => {
+          const ref = result?.id || result?.orderReference || '';
+          if (!ref) {
+            console.error(`[USSD] ClickPesa no ref for ${order_id}`);
+            return;
+          }
+          return db.collection('transactions').doc(order_id).update({ clickpesaReference: ref, ussdSent: true });
+        })
+        .then(() => console.log(`[USSD] Push sent for ${order_id}`))
+        .catch((err) => {
+          console.error(`[USSD] ClickPesa error for ${order_id}:`, err?.response?.data || err.message);
+          db.collection('transactions').doc(order_id).update({ ussdFailed: true, ussdError: err?.message || 'ClickPesa error' }).catch(() => {});
+        });
+
+      res.json({
+        order_id, gatewayFee, totalAmount,
+        message: `Malipo ya TZS ${totalAmount.toLocaleString()} yanatuma USSD push kwa simu yako. Ada ya ClickPesa inaongezwa kwenye malipo yako.`,
+      });
+    }
+  } catch (e) {
+    console.error('create-marketplace-payment-link error:', e.message);
+    const msg = e.message && e.message.includes('payment')
+      ? e.message
+      : 'Internal server error';
+    res.status(500).json({ error: msg });
+  }
+});
+
+router.get('/transaction-status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    // Auth FIRST — a 404 before auth would let anyone probe which transaction
+    // IDs exist in the database.
+    if (!(await requireUser(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cacheKey = `tx-status:${orderId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const doc = await db.collection('transactions').doc(orderId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Transaction not found' });
+
+    const data = doc.data();
+    if (!(await isOwnerOrAdmin(req, res, data.buyerId || data.userId || ''))) return;
+    // Canonical v2 read model for the app: prefer the explicit flowStage the
+    // engine now writes, else derive from the legacy status string.
+    const LEGACY_TO_V2 = {
+      pending: 'payment_pending', escrow_hold: 'in_escrow', paid_escrow_hold: 'in_escrow',
+      paid_escrow_held: 'in_escrow', quoted: 'shipping_fee_submitted',
+      dispatched: 'in_transit', delivered: 'delivered', completed: 'wallet_credited',
+      disputed: 'disputed', refunded: 'refunded', cancelled: 'cancelled', failed: 'failed',
+    };
+    const v2Status = data.flowStage || LEGACY_TO_V2[data.status] || data.status || 'pending';
+    const toIso = (v) => (v ? (v.toDate ? v.toDate().toISOString() : new Date(v).toISOString()) : null);
+    const result = {
+      success: true,
+      status: data.status || 'pending',
+      v2Status,
+      flowStage: data.flowStage || null,
+      escrowReleased: data.escrowReleased === true,
+      inspectionDeadline: toIso(data.inspectionDeadline),
+      autoReleaseDeadline: toIso(data.autoReleaseDeadline),
+      walletCreditedAt: toIso(data.walletCreditedAt),
+      escrowReleasedAt: toIso(data.escrowReleasedAt || data.completedAt),
+      failureReason: data.failureReason || null,
+      completedAt: data.completedAt || null,
+    };
+    // 3s TTL — this endpoint is polled rapidly during USSD payment confirmation
+    await cache.set(cacheKey, result, 3_000);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+router.post('/transactions/create', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productPrice, transactionReference } = req.body;
+  if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  let decoded;
+  try {
+    decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  if (decoded.uid !== buyerId) {
+    return res.status(403).json({ error: 'Buyer ID does not match authenticated user' });
+  }
+  const userDoc = await db.collection('users').doc(sellerId).get();
+  if (userDoc.exists && userDoc.data().isSuspended === true) {
+    return res.status(403).json({ error: 'Seller is suspended' });
+  }
+
+  const price = await resolveEffectivePrice(db, productId, productPrice);
+  // USSD Push fee is charged to the customer by ClickPesa on top of the amount, so
+  // we don't pre-add it here — totalAmount reflects what is actually sent to ClickPesa.
+  const processingFee = 0;
+  const platformFee = Math.round(price * (await commissionRate()));
+  // Buyer (payer) bears commission; seller receives the full price.
+  const totalAmount = price + platformFee;
+  const sellerReceives = price;
+
+  const txRef = await db.collection('transactions').doc();
+  await txRef.set({
+    buyerId, buyerName: buyerName || '', buyerPhone: buyerPhone || '',
+    sellerId, sellerName: sellerName || '',
+    productId, productName,
+    productPrice: price, processingFee, platformFee,
+    sokovibeCommission: platformFee,
+    totalAmount, sellerReceives,
+    // Never mark a sale complete from this endpoint — real payment must be
+    // confirmed via the ClickPesa webhook before money moves to the seller.
+    status: 'pending',
+    paymentMethod: 'ClickPesa',
+    transactionReference: transactionReference || '',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  res.json({ success: true, transactionId: txRef.id });
+}));
+
+router.post('/gateway-fee', (req, res) => {
+  try {
+    const { method, amount, provider } = req.body;
+    if (!method || !amount) {
+      return res.status(400).json({ error: 'method and amount are required' });
+    }
+    const fee = calcGatewayFee(method, Math.round(amount), provider);
+    res.json({ fee, method, amount: Math.round(amount) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router.post('/orders/transition', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { orderId, newStatus, note } = req.body;
+    if (!orderId || !newStatus) {
+      return res.status(400).json({ error: 'Missing orderId or newStatus' });
+    }
+
+    const doc = await db.collection('orders').doc(orderId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
+    const order = doc.data();
+
+    // Authorization: buyer, seller, or admin
+    const isBuyer = order.buyerId === decoded.uid;
+    const isSeller = order.sellerId === decoded.uid;
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    if (!isBuyer && !isSeller && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to transition this order' });
+    }
+
+    // Role-based transition enforcement: buyer can't dispatch, seller can't confirm, etc.
+    const actorRole = isAdmin ? 'admin' : isSeller ? 'seller' : 'buyer';
+    const rule = TRANSITION_RULES[newStatus];
+    if (!rule) {
+      return res.status(400).json({ error: `Unknown transition target: ${newStatus}` });
+    }
+    if (rule.actors.indexOf(actorRole) === -1) {
+      return res.status(403).json({ error: `Role '${actorRole}' cannot transition order to '${newStatus}'` });
+    }
+    if (rule.from.indexOf(order.status) === -1) {
+      return res.status(400).json({ error: `Cannot transition from status: ${order.status}` });
+    }
+
+    const result = await applyTransition(db, doc.ref, order, newStatus, decoded.uid, note);
+
+    // Real-time status notifications: buyer on quote, buyer on dispatch
+    // Payment confirmations are NOT sent here — the ClickPesa webhook is the
+    // single source so the seller/buyer don't get duplicate "payment done" rows.
+    try {
+      if (newStatus === 'quoted') {
+        // Seller set the shipping cost — buyer must pay the updated bill
+        let costLabel = '';
+        let shippingCost = 0;
+        try {
+          const parsed = JSON.parse(note || '{}');
+          shippingCost = Number(parsed.shippingCost || 0);
+          if (shippingCost > 0) costLabel = ` la TZS ${shippingCost.toLocaleString()}`;
+        } catch (_) {}
+        await db.collection('notifications').add({
+          userId: order.buyerId,
+          title: 'Gharama ya Usafirishaji Imewekwa!',
+          body: `Muuzaji ameweka gharama ya usafirishaji${costLabel}. Lipa sasa ili agizo litumwe.`,
+          type: 'payment',
+          data: { type: 'order', orderId, sellerId: order.sellerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.buyerId,
+          'Gharama ya Usafirishaji Imewekwa!',
+          `Muuzaji ameweka gharama ya usafirishaji${costLabel}. Lipa sasa.`,
+          { type: 'order', orderId, sellerId: order.sellerId }
+        );
+        // Confirm to the seller that their quote was delivered to the buyer
+        const sellerConfirmBody = `Quote yako ya usafirishaji ya TZS ${shippingCost.toLocaleString()} imetumwa kwa ${order.buyerName || 'mnunuzi'}.`;
+        await db.collection('notifications').add({
+          userId: order.sellerId,
+          title: 'Quote Imetumwa!',
+          body: sellerConfirmBody,
+          type: 'order',
+          data: { type: 'order', orderId, buyerId: order.buyerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.sellerId,
+          'Quote Imetumwa!',
+          sellerConfirmBody,
+          { type: 'order', orderId, buyerId: order.buyerId }
+        );
+      } else if (newStatus === 'dispatched') {
+        await db.collection('notifications').add({
+          userId: order.buyerId,
+          title: 'Agizo Limetumwa!',
+          body: `${order.productName || ''} limetumwa — fuatilia usafirishaji kwenye app.`,
+          type: 'order',
+          data: { type: 'order', orderId, sellerId: order.sellerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.buyerId,
+          'Agizo Limetumwa!',
+          `${order.productName || ''} limetumwa — fuatilia usafirishaji kwenye app.`,
+          { type: 'order', orderId, sellerId: order.sellerId }
+        );
+      }
+    } catch (e) {
+      console.error('order transition notify error:', e.message);
+    }
+
+    res.json({ success: true, order: result });
+  } catch (e) {
+    console.error('/api/orders/transition error:', e.message);
+    const status = e.message.startsWith('Cannot transition') ? 400 : 500;
+    res.status(status).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+module.exports = router;

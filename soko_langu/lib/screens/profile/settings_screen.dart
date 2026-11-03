@@ -206,19 +206,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const SizedBox(height: 20),
               _buildSectionTitle(context.tr('notifications')),
-              _buildTile(
-                icon: Icons.notifications,
-                title: context.tr('push_notifications'),
-                trailing: Switch(
-                  value: _notificationsEnabled,
-                  activeThumbColor: Theme.of(context).colorScheme.primary,
-                  onChanged: (value) async {
-                    final notif = NotificationService();
-                    await notif.setEnabled(value);
-                    if (mounted) setState(() => _notificationsEnabled = value);
-                  },
-                ),
-              ),
+            _buildTile(
+                 icon: Icons.notifications,
+                 title: context.tr('push_notifications'),
+                 trailing: Switch(
+                   value: _notificationsEnabled,
+                   activeThumbColor: Theme.of(context).colorScheme.primary,
+                   onChanged: (value) async {
+                     final notif = NotificationService();
+                     await notif.setEnabled(value);
+                     if (mounted) setState(() => _notificationsEnabled = value);
+                   },
+                 ),
+               ),
+               _buildTile(
+                 icon: Icons.tune,
+                 title: context.tr('notification_preferences'),
+                 onTap: () => context.push(AppRoutes.notificationPreferences),
+               ),
               const Divider(),
               _buildSectionTitle(
                 '${context.tr('language')} & ${context.tr('currency')}',
@@ -228,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: context.tr('language'),
                 subtitle:
                     LocalizationService.supportedLanguages[config.langCode] ??
-                    'Swahili',
+                    context.tr('swahili'),
                 onTap: () => _showLanguagePicker(context, config),
               ),
               _buildTile(
@@ -279,6 +284,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.help,
                 title: context.tr('help'),
                 onTap: () => context.push(AppRoutes.help),
+              ),
+              _buildTile(
+                icon: Icons.route_outlined,
+                title: context.tr('how_it_works'),
+                onTap: () => context.push(AppRoutes.orderFlow),
               ),
               _buildTile(
                 icon: Icons.info,
@@ -462,6 +472,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
 
   void _showCurrencyPicker(BuildContext context, AppConfig config) {
     showModalBottomSheet(
