@@ -4,7 +4,6 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
-  awesome_notifications
   cloud_firestore
   connectivity_plus
   file_selector_windows
@@ -13,14 +12,18 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_core
   firebase_storage
   flutter_secure_storage_windows
+  gal
   geolocator_windows
   permission_handler_windows
+  printing
   record_windows
   share_plus
+  speech_to_text_windows
   url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  flutter_local_notifications_windows
   jni
 )
 

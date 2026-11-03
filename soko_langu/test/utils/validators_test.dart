@@ -31,7 +31,7 @@ void main() {
       expect(Validators.password('abc'), isNotNull);
     });
     test('returns null for valid password', () {
-      expect(Validators.password('abcdef'), isNull);
+      expect(Validators.password('abcdefgh'), isNull);
       expect(Validators.password('longpassword123'), isNull);
     });
   });

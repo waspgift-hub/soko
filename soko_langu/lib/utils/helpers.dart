@@ -1,10 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:file_picker/file_picker.dart';
+import '../extensions/context_tr.dart';
 import '../services/cloudinary_service.dart';
-import '../widgets/google_loading.dart';
+import '../widgets/soko_vibe_loading.dart';
 
 Future<bool> requestPermissionWithDialog(
   BuildContext context,
@@ -19,18 +18,16 @@ Future<bool> requestPermissionWithDialog(
       final open = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Permission Required'),
-          content: Text(
-            'This permission was permanently denied. Please enable it in app settings.',
-          ),
+          title: Text(ctx.tr('permission_required')),
+          content: Text(ctx.tr('permission_permanently_denied')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: Text(ctx.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Open Settings'),
+              child: Text(ctx.tr('open_settings')),
             ),
           ],
         ),
@@ -45,54 +42,6 @@ Future<bool> requestPermissionWithDialog(
   }
 
   return false;
-}
-
-Future<bool> _requestMediaPermissions(BuildContext context) async {
-  if (!Platform.isAndroid) {
-    return requestPermissionWithDialog(
-      context,
-      Permission.photos,
-      'permission_photos',
-    );
-  }
-
-  final androidVersion =
-      int.tryParse(
-        Platform.operatingSystemVersion.split('(').last.split('.').first,
-      ) ??
-      0;
-
-  if (androidVersion >= 33) {
-    for (final p in [Permission.photos, Permission.videos, Permission.audio]) {
-      final granted = await requestPermissionWithDialog(
-        context,
-        p,
-        p.toString(),
-      );
-      if (!granted) return false;
-    }
-    return true;
-  }
-
-  return requestPermissionWithDialog(
-    context,
-    Permission.storage,
-    'permission_storage',
-  );
-}
-
-Future<List<PlatformFile>?> pickMedia(BuildContext context) async {
-  final granted = await _requestMediaPermissions(context);
-  if (!granted) return null;
-
-  if (!context.mounted) return null;
-
-  final result = await FilePicker.pickFiles(
-    type: FileType.media,
-    allowMultiple: true,
-  );
-
-  return result?.files;
 }
 
 Future<String?> pickAndUploadImage(BuildContext context) async {
@@ -110,7 +59,7 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const GoogleLoadingPage(),
+    builder: (_) => const SokoVibeDotLoadingPage(),
   );
 
   try {
@@ -133,7 +82,7 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to upload image. Check your connection.'),
+          content: Text(context.tr('failed_to_upload_image')),
           backgroundColor: Colors.red,
         ),
       );

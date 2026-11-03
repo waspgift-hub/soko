@@ -1,0 +1,22 @@
+name: Server Keep-Alive
+
+# The payments backend runs on a Render free-tier instance that sleeps after
+# ~15 min idle and can take ~60s on cold start. This cron pings its /health
+# every 10 minutes so the box stays warm on GitHub's infrastructure — no
+# third-party monitoring account needed.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake backend
+        run: |
+          curl -fsS -o /dev/null \
+            -w "soko-langu-server /health -> %{http_code} (%{time_total}s)\n" \
+            https://soko-langu-server.onrender.com/health
+        continue-on-error: true

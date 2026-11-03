@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+
+# ============================================================
+# BASE - shared dependencies
+# ============================================================
+FROM node:20-slim AS base
+
+# ffmpeg for video transcoding workers
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ============================================================
+# DEPS - install prod deps (keep prisma CLI for migrations)
+# ============================================================
+FROM base AS deps
+
+COPY package*.json ./
+COPY prisma ./prisma
+RUN npm ci && npx prisma generate
+
+# ============================================================
+# PROD - final image
+# ============================================================
+FROM base AS prod
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+# Copy node_modules (includes prisma CLI + generated client) from deps
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy application source and prisma schema/migrations
+COPY package*.json ./
+COPY prisma ./prisma
+COPY src ./src
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Run migrations, then start the API
+# NOTE: migrations run as part of a separate one-off container in docker-compose;
+# the default command just starts the server.
+CMD ["node", "src/index.js"]

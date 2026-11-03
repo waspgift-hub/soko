@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/comment_model.dart';
 import '../services/comment_service.dart';
+import '../services/profanity_filter.dart';
 import '../extensions/context_tr.dart';
+import '../theme/app_motion.dart';
 import 'google_loading.dart';
+import 'ds/ds.dart';
 
 class CommentSection extends StatefulWidget {
   final String productId;
@@ -38,6 +42,22 @@ class _CommentSectionState extends State<CommentSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('login_required'))),
       );
+      return;
+    }
+    final check = await ProfanityFilter().check(text);
+    if (!check.clean) {
+      if (mounted) {
+        if (check.banned) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+          await _auth.signOut();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+        }
+      }
       return;
     }
     try {
@@ -100,13 +120,32 @@ class _CommentSectionState extends State<CommentSection> {
                               final text = replyController.text.trim();
                               if (text.isEmpty) return;
                               setSheetState(() => sending = true);
-                              await _commentService.addReply(
-                                productId: widget.productId,
-                                commentId: commentId,
-                                text: text,
-                              );
-                              replyController.clear();
-                              if (ctx.mounted) Navigator.pop(ctx);
+                              final check = await ProfanityFilter().check(text);
+                              if (!check.clean) {
+                                setSheetState(() => sending = false);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(ctx).colorScheme.error),
+                                  );
+                                }
+                                return;
+                              }
+                              try {
+                                await _commentService.addReply(
+                                  productId: widget.productId,
+                                  commentId: commentId,
+                                  text: text,
+                                );
+                                replyController.clear();
+                                if (ctx.mounted) Navigator.pop(ctx);
+                              } catch (e) {
+                                setSheetState(() => sending = false);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
+                                  );
+                                }
+                              }
                             },
                           ),
                   ],
@@ -161,10 +200,7 @@ class _CommentSectionState extends State<CommentSection> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
-                onPressed: _addComment,
-              ),
+              _BurstSendButton(onPressed: _addComment),
             ],
           ),
         ),
@@ -172,12 +208,6 @@ class _CommentSectionState extends State<CommentSection> {
         StreamBuilder<List<ProductComment>>(
           stream: _commentsStream,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
-              );
-            }
             final comments = snap.data ?? [];
             if (comments.isEmpty) {
               return Padding(
@@ -190,24 +220,109 @@ class _CommentSectionState extends State<CommentSection> {
                 ),
               );
             }
-            return ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: comments.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final c = comments[i];
-                return _CommentTile(
-                  comment: c,
-                  productId: widget.productId,
-                  onReply: () => _showReplySheet(c.id),
-                );
-              },
+            return Column(
+              children: [
+                for (int i = 0; i < comments.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _AnimatedCommentTile(
+                    key: ValueKey(comments[i].id),
+                    child: _CommentTile(
+                      comment: comments[i],
+                      productId: widget.productId,
+                      onReply: () => _showReplySheet(comments[i].id),
+                    ),
+                  ),
+                ],
+              ],
             );
           },
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+class _BurstSendButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _BurstSendButton({required this.onPressed});
+
+  @override
+  State<_BurstSendButton> createState() => _BurstSendButtonState();
+}
+
+class _BurstSendButtonState extends State<_BurstSendButton> {
+  int _burstTick = 0;
+
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    setState(() => _burstTick++);
+    widget.onPressed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          icon: Icon(Icons.send, color: cs.primary),
+          onPressed: _handleTap,
+        ),
+        Positioned.fill(
+          child: DsMicroBurst(
+            color: cs.primary,
+            trigger: _burstTick,
+            size: 56,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnimatedCommentTile extends StatefulWidget {
+  final Widget child;
+
+  const _AnimatedCommentTile({super.key, required this.child});
+
+  @override
+  State<_AnimatedCommentTile> createState() => _AnimatedCommentTileState();
+}
+
+class _AnimatedCommentTileState extends State<_AnimatedCommentTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: Motion.cardEnter);
+    _slide = Tween(begin: const Offset(0, -0.25), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _controller, curve: Motion.easeOutCubic));
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Motion.easeInOutCubic,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }
@@ -239,19 +354,15 @@ class _CommentTile extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                backgroundImage: comment.userImage != null
-                    ? NetworkImage(comment.userImage!)
-                    : null,
-                child: comment.userImage == null
-                    ? Text(
-                        comment.userName.isNotEmpty
-                            ? comment.userName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                backgroundImage:
+                    comment.userImage != null && comment.userImage!.isNotEmpty
+                        ? NetworkImage(comment.userImage!)
+                        : null,
+                child: comment.userImage == null || comment.userImage!.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
                       )
                     : null,
               ),
@@ -381,11 +492,6 @@ class _CommentTile extends StatelessWidget {
                       ),
                       builder: (ctx, snap) {
                         final replies = snap.data ?? [];
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                            child: GoogleLoading(size: 24, strokeWidth: 2),
-                          );
-                        }
                         if (replies.isEmpty) {
                           return Center(
                             child: Text(
@@ -411,19 +517,15 @@ class _CommentTile extends StatelessWidget {
                                   CircleAvatar(
                                     radius: 14,
                                     backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                                    backgroundImage: r.userImage != null
-                                        ? NetworkImage(r.userImage!)
-                                        : null,
-                                    child: r.userImage == null
-                                        ? Text(
-                                            r.userName.isNotEmpty
-                                                ? r.userName[0].toUpperCase()
-                                                : '?',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: Theme.of(context).colorScheme.primary,
-                                            ),
+                                    backgroundImage:
+                                        r.userImage != null && r.userImage!.isNotEmpty
+                                            ? NetworkImage(r.userImage!)
+                                            : null,
+                                    child: r.userImage == null || r.userImage!.isEmpty
+                                        ? Icon(
+                                            Icons.person,
+                                            size: 16,
+                                            color: Theme.of(context).colorScheme.primary,
                                           )
                                         : null,
                                   ),
@@ -498,7 +600,7 @@ class _CommentTile extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
+                        child:                     TextField(
                           controller: replyController,
                           maxLines: 2,
                           decoration: InputDecoration(
@@ -514,17 +616,33 @@ class _CommentTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton(
-                        icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
+                      _BurstSendButton(
                         onPressed: () async {
                           final text = replyController.text.trim();
                           if (text.isEmpty) return;
-                          await CommentService().addReply(
-                            productId: productId,
-                            commentId: comment.id,
-                            text: text,
-                          );
-                          replyController.clear();
+                          final check = await ProfanityFilter().check(text);
+                          if (!check.clean) {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(ctx).colorScheme.error),
+                              );
+                            }
+                            return;
+                          }
+                          try {
+                            await CommentService().addReply(
+                              productId: productId,
+                              commentId: comment.id,
+                              text: text,
+                            );
+                            replyController.clear();
+                          } catch (e) {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
+                              );
+                            }
+                          }
                         },
                       ),
                     ],
