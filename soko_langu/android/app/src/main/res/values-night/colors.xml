@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash_background">#2D6A4F</color>
+    <color name="splash_background">#FF000000</color>
+    <!-- Widget: Dashboard (dark theme) -->
+    <color name="widget_dashboard_bg">#FF000000</color>
+    <color name="widget_text_primary">#FFFFFFFF</color>
+    <color name="widget_text_secondary">#CCFFFFFF</color>
+    <color name="widget_button">#FF2E2E2E</color>
+    <color name="widget_divider">#33FFFFFF</color>
+
+    <!-- Widget: Flash Sales (dark theme) -->
+    <color name="widget_flash_bg">#FF000000</color>
+    <color name="widget_flash_product_bg">#33FFFFFF</color>
+    <color name="widget_flash_price">#FFFFFFFF</color>
+    <color name="widget_flash_orig_price">#AAFFFFFF</color>
+    <color name="widget_flash_discount">#FFBDBDBD</color>
 </resources>

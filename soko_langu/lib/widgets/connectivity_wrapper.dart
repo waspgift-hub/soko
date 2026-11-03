@@ -1,13 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
+import '../services/api_config.dart';
+import '../widgets/soko_vibe_loading.dart';
 import '../extensions/context_tr.dart';
 
-/// Monitors network connectivity and shows an Instagram-style offline UI.
-///
-/// **Mid-session disconnect** → a thin animated banner slides down from the top.
-/// **App-launch disconnect** → a full-screen fallback with logo, message, and a
-/// "Try Again" button using the #4CAF50 green.
 class ConnectivityWrapper extends StatefulWidget {
   final Widget child;
   const ConnectivityWrapper({super.key, required this.child});
@@ -16,230 +13,121 @@ class ConnectivityWrapper extends StatefulWidget {
   State<ConnectivityWrapper> createState() => _ConnectivityWrapperState();
 }
 
-class _ConnectivityWrapperState extends State<ConnectivityWrapper>
-    with SingleTickerProviderStateMixin {
+class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   bool _offline = false;
   bool _initialized = false;
-  /// True when the app started while offline — prevents the banner from showing
-  /// until the user has at least seen the app once online.
-  bool _startedOffline = false;
-
-  StreamSubscription<List<ConnectivityResult>>? _sub;
-  late AnimationController _bannerCtrl;
-  late Animation<Offset> _bannerSlide;
+  Timer? _retryTimer;
+  int _retryCount = 0;
 
   @override
   void initState() {
     super.initState();
-
-    _bannerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _bannerSlide = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _bannerCtrl,
-      curve: Curves.easeOutCubic,
-    ));
-
-    _sub = Connectivity().onConnectivityChanged.listen(_onChange);
-    _checkInitialConnectivity();
+    _checkServer();
   }
 
-  Future<void> _checkInitialConnectivity() async {
-    try {
-      final results = await Connectivity().checkConnectivity();
-      if (!mounted) return;
-      final offline = results.every((r) => r == ConnectivityResult.none);
-      setState(() {
-        _offline = offline;
-        _startedOffline = offline;
-        _initialized = true;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _initialized = true);
-    }
-  }
-
-  void _onChange(List<ConnectivityResult> results) {
-    final offline = results.every((r) => r == ConnectivityResult.none);
-    if (offline == _offline) return;
+  Future<void> _checkServer() async {
+    final reachable = await _isServerReachable();
     if (!mounted) return;
-    setState(() => _offline = offline);
-
-    if (_startedOffline && !offline) {
-      _startedOffline = false;
-      return;
+    setState(() {
+      _offline = !reachable;
+      _initialized = true;
+    });
+    if (!reachable) {
+      _startRetryTimer();
+    } else {
+      _retryTimer?.cancel();
+      _retryCount = 0;
     }
+  }
 
-    if (!_startedOffline) {
-      if (offline) {
-        _bannerCtrl.forward();
+  void _startRetryTimer() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      final reachable = await _isServerReachable();
+      if (!mounted) return;
+      if (reachable) {
+        _retryTimer?.cancel();
+        setState(() {
+          _offline = false;
+          _retryCount = 0;
+        });
       } else {
-        _bannerCtrl.reverse();
+        setState(() {
+          _retryCount++;
+        });
       }
+    });
+  }
+
+  Future<bool> _isServerReachable() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/health'),
+      ).timeout(const Duration(seconds: 5));
+      return resp.statusCode < 600;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _getDynamicMessage() {
+    if (_retryCount == 0) {
+      return context.tr('connection_lost', 'Connection lost. Reconnecting...');
+    } else if (_retryCount < 3) {
+      return context.tr('still_connecting', 'Still trying to connect...');
+    } else if (_retryCount < 6) {
+      return context.tr('network_unstable', 'Network unstable. Please check your settings.');
+    } else {
+      return context.tr('connection_timeout', 'Connection timeout. We are still trying...');
     }
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
-    _bannerCtrl.dispose();
+    _retryTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _retry() async {
-    try {
-      final results = await Connectivity().checkConnectivity();
-      if (!mounted) return;
-      final offline = results.every((r) => r == ConnectivityResult.none);
-      if (!offline) {
-        setState(() {
-          _offline = false;
-          _startedOffline = false;
-        });
-      }
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) return widget.child;
-
-    if (_startedOffline && _offline) {
-      return _OfflineFallback(onRetry: _retry);
-    }
+    if (!_initialized || !_offline) return widget.child;
 
     return Stack(
       children: [
-        widget.child,
-        if (!_startedOffline)
-          SlideTransition(
-            position: _bannerSlide,
-            child: const _OfflineBanner(),
+        AbsorbPointer(
+          child: Opacity(
+            opacity: 0.6, 
+            child: widget.child,
           ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Full-screen fallback — shown when the app starts with no connectivity
-// ---------------------------------------------------------------------------
-
-class _OfflineFallback extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _OfflineFallback({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
+        ),
+        Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Spacer(flex: 2),
-              Image.asset(
-                'assets/app_icon.png',
-                width: 96,
-                height: 96,
-                errorBuilder: (_, _, _) => Icon(
-                  Icons.wifi_off_rounded,
-                  size: 80,
-                  color: cs.onSurface.withValues(alpha: 0.3),
-                ),
-              ),
-              const SizedBox(height: 24),
+              const SokoVibeLoading(size: 60),
+              const SizedBox(height: 16),
               Text(
-                context.tr('no_internet_connection'),
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                context.tr('check_connection_try_again'),
+                _getDynamicMessage(),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
-                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: onRetry,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    context.tr('try_again'),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('please_stay_on_screen', 'Please stay on this screen'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 ),
               ),
-              const Spacer(flex: 3),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Top floating banner — slides down on mid-session disconnect
-// ---------------------------------------------------------------------------
-
-class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final topPadding = MediaQuery.of(context).padding.top;
-    return Container(
-      padding: EdgeInsets.only(top: topPadding + 4, bottom: 8),
-      decoration: BoxDecoration(
-        color: cs.primary,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wifi_off_rounded, size: 16, color: cs.onPrimary.withValues(alpha: 0.7)),
-          const SizedBox(width: 8),
-          Text(
-            context.tr('no_internet_connection_lower'),
-            style: TextStyle(
-              color: cs.onPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

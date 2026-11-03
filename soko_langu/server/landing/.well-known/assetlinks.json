@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.sokolangu.app",
+      "sha256_cert_fingerprints": [
+        "381F259381F2F349DDB813E7BBD1FDC42ABF78A23BBCFBFE65D9B6B4E20CAF77",
+        "4D0D74A02A3DEFEBC50EE84B22826A1E149EF02F57306ECDC318E80E19E91F2F"
+      ]
+    }
+  }
+]

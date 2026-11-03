@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../extensions/context_tr.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
-  const VerifyEmailScreen({super.key});
+  const VerifyEmailScreen({super.key, this.email});
+
+  /// Email to send/verify the OTP against. Falls back to the signed-in user.
+  final String? email;
 
   @override
   State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
@@ -18,11 +22,21 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   String? _email;
 
   @override
+  void initState() {
+    super.initState();
+    _email = widget.email;
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _email ??= GoRouterState.of(context).extra is Map
-        ? (GoRouterState.of(context).extra as Map)['email'] as String?
-        : null;
+    if (_email == null || _email!.isEmpty) {
+      final extraEmail = GoRouterState.of(context).extra is Map
+          ? (GoRouterState.of(context).extra as Map)['email'] as String?
+          : null;
+      _email = extraEmail ??
+          FirebaseAuth.instance.currentUser?.email;
+    }
   }
 
   @override
@@ -82,7 +96,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           const SizedBox(height: 24),
                           Text(
                             sent
-                                ? 'Ingiza OTP'
+                                ? context.tr('enter_otp')
                                 : context.tr('verify_email_title'),
                             style: TextStyle(
                               fontSize: 24,
@@ -93,8 +107,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           const SizedBox(height: 12),
                           Text(
                             sent
-                                ? 'Tuma OTP uliopokea kwenye barua pepe yako'
-                                : 'OTP itatumwa kwenye barua pepe yako',
+                                ? context.tr('enter_otp_email_sent')
+                                : context.tr('otp_will_be_sent_to_email'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.6),
@@ -188,7 +202,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                       strokeWidth: 2,
                                     )
                                   : Text(
-                                      'Tuma OTP tena',
+                                      context.tr('resend_otp'),
                                       style: TextStyle(color: cs.primary),
                                     ),
                             ),
@@ -212,7 +226,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                         strokeWidth: 2,
                                       )
                                     : Text(
-                                        'Tuma OTP',
+                                        context.tr('send_otp'),
                                         style: TextStyle(
                                           color: cs.onPrimary,
                                           fontSize: 16,
@@ -240,7 +254,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      error,
+                                      context.tr(error),
                                       style: TextStyle(
                                         color: cs.error,
                                         fontSize: 13,

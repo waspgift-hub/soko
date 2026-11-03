@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "REPLACE_WITH_ACTUAL_IOS_TEAM_ID.com.example.sokoLangu"
+        ],
+        "components": [
+          {
+            "/": "/product/*",
+            "comment": "Matches https://www.sokovibe.co.tz/product/{id}"
+          },
+          {
+            "/": "/seller/*",
+            "comment": "Matches https://www.sokovibe.co.tz/seller/{id}"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,507 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:intl/intl.dart';
+import 'package:open_file/open_file.dart';
+import '../../services/receipt_pdf_service.dart';
+import '../../models/transaction_model.dart';
+import '../../extensions/context_tr.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
+
+class ReceiptScreen extends StatefulWidget {
+  final String orderId;
+  const ReceiptScreen({super.key, required this.orderId});
+
+  @override
+  State<ReceiptScreen> createState() => _ReceiptScreenState();
+}
+
+class _ReceiptScreenState extends State<ReceiptScreen> {
+  String _lang = 'sw'; // sw or en
+
+  /// Receipts resolve from `transactions` (legacy) or `orders` (current flow).
+  ///
+  /// New orders are created under `orders` by `/api/orders/create` and only
+  /// get a `transactions` twin after payment — so a single stream must cover
+  /// both, otherwise the receipt shows "order not found".
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _orderStream() {
+    final fs = FirebaseFirestore.instance;
+    return fs
+        .collection('transactions')
+        .doc(widget.orderId)
+        .snapshots()
+        .asyncMap((tx) async {
+      if (tx.exists) return tx;
+      final order = await fs.collection('orders').doc(widget.orderId).get();
+      if (order.exists) return order;
+      return tx;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        title: Text(context.tr('receipt')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Text(_lang == 'sw' ? 'EN' : 'SW', style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary, fontSize: 14)),
+            onPressed: () => setState(() => _lang = _lang == 'sw' ? 'en' : 'sw'),
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [cs.primary.withValues(alpha: 0.05), cs.surface, cs.secondary.withValues(alpha: 0.05)],
+          ),
+        ),
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: _orderStream(),
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: GoogleLoading());
+            final d = snap.data!.data() as Map<String, dynamic>?;
+            if (d == null) return Center(child: Text(context.tr('order_not_found'), style: TextStyle(color: cs.error)));
+
+            final status = d['status'] as String? ?? 'pending';
+            final productName = d['productName'] as String? ?? context.tr('product');
+            final productDescription = d['productDescription'] as String? ?? d['description'] as String? ?? '';
+            final productDetails = d['productDetails'] as String? ?? '';
+            final price = (d['productPrice'] ?? 0).toDouble();
+            final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
+            final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
+            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
+            final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + clickpesaFee);
+            final buyerName = d['buyerName'] as String? ?? '';
+            final sellerName = d['sellerName'] as String? ?? '';
+            final buyerPhone = d['buyerPhone'] as String? ?? '';
+            final sellerPhone = d['sellerPhone'] as String? ?? '';
+            final sellerLocation = d['sellerLocation'] as String? ?? d['sellerShopLocation'] as String? ?? '';
+            final deliveryAddress = d['deliveryAddress'] as Map<String, dynamic>?
+                // orders-format docs keep address at top level
+                ?? (d['region'] != null
+                    ? {
+                        'region': d['region'],
+                        'district': d['district'],
+                        'ward': d['ward'],
+                        'street': d['street'],
+                        'landmarks': d['landmarks'],
+                      }
+                    : null);
+            final createdAt = d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : DateTime.now();
+            final productImage = d['productImage'] as String? ?? '';
+            final paymentMethod = d['paymentMethod'] as String? ?? 'ClickPesa';
+            final transactionReference = d['transactionReference'] as String? ?? d['transactionId'] as String?;
+            final courierName = d['courierName'] as String?;
+            final driverPhone = d['driverPhone'] as String?;
+            final trackingNumber = d['trackingNumber'] as String?;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 20, 16, 32),
+              child: _buildReceiptCard(context, cs, d, status, productName, productDescription, productDetails,
+                  price, shippingCost, platformFee, clickpesaFee, totalAmount,
+                  buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
+                  deliveryAddress, createdAt,
+                  productImage, paymentMethod, transactionReference,
+                  courierName, driverPhone, trackingNumber),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReceiptCard(
+    BuildContext context, ColorScheme cs, Map<String, dynamic> d,
+    String status, String productName, String productDescription, String productDetails,
+    double price, double shippingCost, double platformFee, double clickpesaFee, double totalAmount,
+    String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
+    Map<String, dynamic>? deliveryAddress,
+    DateTime createdAt, String productImage,
+    String paymentMethod, String? transactionReference,
+    String? courierName, String? driverPhone, String? trackingNumber,
+  ) {
+    final nf = NumberFormat('#,###', 'en');
+
+    // Seller receives = price - platformFee (what seller actually gets);
+    // prefer the stored field when the server recorded the true payout.
+    final storedSellerReceives = (d['sellerReceives'] as num?)?.toDouble();
+    final sellerReceives = (storedSellerReceives != null && storedSellerReceives > 0)
+        ? storedSellerReceives
+        : price - platformFee;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(color: cs.primary.withValues(alpha: 0.1), blurRadius: 40, offset: const Offset(0, 20)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 60, offset: const Offset(0, 30)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [cs.surface.withValues(alpha: 0.25), cs.surfaceContainerLow.withValues(alpha: 0.15)],
+              ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context, cs, widget.orderId, createdAt),
+                const SizedBox(height: 24),
+                _divider(cs),
+                const SizedBox(height: 20),
+                // Product + Seller Details
+                _infoSection(cs, context.tr( 'order_details', 'Maelezo ya Agizo'), [
+                  _infoRow(cs, context.tr( 'product', 'Bidhaa'), productName),
+                  if (productDescription.isNotEmpty)
+                    _infoRow(cs, context.tr( 'description', 'Maelezo'), productDescription),
+                  if (productDetails.isNotEmpty)
+                    _infoRow(cs, context.tr( 'details', 'Kinachouzwa'), productDetails),
+                  _infoRow(cs, context.tr( 'buyer_label', 'Mnunuzi'), buyerName),
+                  _infoRow(cs, context.tr( 'seller', 'Muuzaji'), sellerName),
+                  if (sellerPhone.isNotEmpty)
+                    _infoRow(cs, context.tr( 'seller_phone', 'Simu ya Muuzaji'), sellerPhone),
+                  if (sellerLocation.isNotEmpty)
+                    _infoRow(cs, context.tr( 'seller_location', 'Duka lipo'), sellerLocation),
+                  if (buyerPhone.isNotEmpty)
+                    _infoRow(cs, context.tr( 'buyer_phone', 'Simu ya Mnunuzi'), buyerPhone),
+                ]),
+                const SizedBox(height: 16),
+                // Delivery Address
+                if (deliveryAddress != null) ...[
+                  _infoSection(cs, context.tr( 'shipping_address', 'Anwani ya Usafirishaji'), [
+                    _infoRow(cs, context.tr( 'region', 'Mkoa'), deliveryAddress['region'] as String? ?? ''),
+                    _infoRow(cs, context.tr( 'district', 'Wilaya'), deliveryAddress['district'] as String? ?? ''),
+                    if (deliveryAddress['ward'] != null && (deliveryAddress['ward'] as String? ?? '').isNotEmpty)
+                      _infoRow(cs, context.tr( 'ward', 'Kata'), deliveryAddress['ward'] as String),
+                    _infoRow(cs, context.tr( 'street', 'Mtaa'), deliveryAddress['street'] as String? ?? ''),
+                    if (deliveryAddress['landmarks'] != null)
+                      _infoRow(cs, context.tr( 'landmarks', 'Alama'), deliveryAddress['landmarks'] as String),
+                  ]),
+                  if (courierName != null || driverPhone != null || trackingNumber != null) ...[
+                    const SizedBox(height: 16),
+                    _infoSection(cs, context.tr( 'dispatch_info', 'Maelezo ya Usafirishaji'), [
+                      if (courierName != null) _infoRow(cs, context.tr( 'courier', 'Mtoa huduma'), courierName),
+                      if (driverPhone != null) _infoRow(cs, context.tr( 'driver_phone', 'Simu ya Dereva'), driverPhone),
+                      if (trackingNumber != null) _infoRow(cs, context.tr( 'tracking', 'Namba ya kufuatilia'), trackingNumber),
+                    ]),
+                  ],
+                  const SizedBox(height: 16),
+                ],
+                // Payment Breakdown
+                _infoSection(cs, context.tr( 'payment_breakdown', 'Mgawanyo wa Malipo'), [
+                  _infoRow(cs, context.tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
+                  if (shippingCost > 0)
+                    _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
+                  _infoRow(cs, context.tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(clickpesaFee.toInt())}', valueColor: cs.tertiary),
+                ]),
+                const SizedBox(height: 8),
+                _divider(cs),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(context.tr( 'total', 'Jumla'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                    const Spacer(),
+                    Text('TSh ${nf.format(totalAmount.toInt())}',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary,
+                        shadows: [Shadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 8)],
+                      )),
+                  ],
+                ),
+                if (sellerReceives > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(context.tr( 'seller_gets', 'Muuzaji anapata'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                      const Spacer(),
+                      Text('TSh ${nf.format(sellerReceives.toInt())}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.successGreen)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 24),
+                // Download Button
+                _buildDownloadButton(context, cs, productName, price, shippingCost, platformFee, clickpesaFee, sellerReceives,
+                    totalAmount, buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
+                    deliveryAddress, createdAt, status, productImage, paymentMethod, transactionReference,
+                    productDescription, productDetails),
+                const SizedBox(height: 24),
+                _buildCloseButton(context, cs),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, ColorScheme cs, String orderId, DateTime createdAt) {
+    return Center(
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset('assets/app_icon.png', height: 32, errorBuilder: (_, _, _) =>
+                Icon(Icons.store, size: 28, color: cs.primary)),
+              const SizedBox(width: 8),
+              Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)]),
+              shape: BoxShape.circle,
+              border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+            ),
+            child: Icon(Icons.receipt_long, color: cs.primary, size: 28),
+          ),
+          const SizedBox(height: 10),
+          Text(context.tr( 'receipt_title', 'RISITI YA UNUNUZI'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
+          const SizedBox(height: 6),
+          Text('#$orderId', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          const SizedBox(height: 2),
+          Text('${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDownloadButton(
+    BuildContext context, ColorScheme cs,
+    String productName, double price, double shippingCost, double platformFee, double clickpesaFee, double sellerReceives,
+    double totalAmount, String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
+    Map<String, dynamic>? deliveryAddress, DateTime createdAt, String status, String productImage,
+    String paymentMethod, String? transactionReference, String productDescription, String productDetails,
+  ) {
+    return Center(
+      child: _ReceiptDownloadButton(
+        orderId: widget.orderId, productName: productName, productImageUrl: productImage,
+        price: price, shippingCost: shippingCost, platformFee: platformFee, clickpesaFee: clickpesaFee,
+        sellerReceives: sellerReceives, totalAmount: totalAmount,
+        buyerName: buyerName, sellerName: sellerName, buyerPhone: buyerPhone, sellerPhone: sellerPhone,
+        sellerLocation: sellerLocation, deliveryAddress: deliveryAddress, createdAt: createdAt,
+        status: status, paymentMethod: paymentMethod, transactionReference: transactionReference,
+        productDescription: productDescription, productDetails: productDetails,
+        lang: _lang,
+      ),
+    );
+  }
+
+  Widget _divider(ColorScheme cs) {
+    return Container(height: 1, decoration: BoxDecoration(
+      gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0), cs.primary.withValues(alpha: 0.3), cs.primary.withValues(alpha: 0)]),
+    ));
+  }
+
+  Widget _buildCloseButton(BuildContext context, ColorScheme cs) {
+    return Center(
+      child: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+          ),
+          child: Text(context.tr('close'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoSection(ColorScheme cs, String title, List<Widget> rows) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface.withValues(alpha: 0.8))),
+        const SizedBox(height: 8),
+        ...rows,
+      ],
+    );
+  }
+
+  Widget _infoRow(ColorScheme cs, String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 140, child: Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: valueColor ?? cs.onSurface))),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiptDownloadButton extends StatefulWidget {
+  final String orderId, productName, productImageUrl;
+  final double price, shippingCost, platformFee, clickpesaFee, sellerReceives, totalAmount;
+  final String buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation;
+  final Map<String, dynamic>? deliveryAddress;
+  final DateTime createdAt;
+  final String status, paymentMethod, productDescription, productDetails;
+  final String? transactionReference;
+  final String lang;
+
+  const _ReceiptDownloadButton({
+    required this.orderId, required this.productName, required this.productImageUrl,
+    required this.price, required this.shippingCost, required this.platformFee, required this.clickpesaFee,
+    required this.sellerReceives, required this.totalAmount,
+    required this.buyerName, required this.sellerName, required this.buyerPhone, required this.sellerPhone,
+    required this.sellerLocation, this.deliveryAddress, required this.createdAt, required this.status,
+    required this.paymentMethod, this.transactionReference,
+    required this.productDescription, required this.productDetails, required this.lang,
+  });
+
+  @override
+  State<_ReceiptDownloadButton> createState() => _ReceiptDownloadButtonState();
+}
+
+class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
+  bool _isGenerating = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // ignore: unused_local_variable
+    final isSw = widget.lang == 'sw';
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isGenerating ? null : _onDownload,
+            icon: _isGenerating
+                ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: cs.primary)
+                : const Icon(Icons.download_rounded, size: 18),
+            label: Text(_isGenerating ? context.tr('generating', 'Generating...') : context.tr('download_receipt', 'Download Receipt')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cs.primary,
+              side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isGenerating ? null : _onShare,
+            icon: const Icon(Icons.share, size: 18),
+            label: Text(context.tr('share_receipt', 'Share Receipt')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cs.secondary,
+              side: BorderSide(color: cs.secondary.withValues(alpha: 0.3)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _onDownload() async {
+    setState(() => _isGenerating = true);
+    try {
+      final pdfBytes = await ReceiptPdfService.generate(
+        orderId: widget.orderId, productName: widget.productName,
+        productImageUrl: widget.productImageUrl, price: widget.price,
+        shippingCost: widget.shippingCost, clickpesaFee: widget.clickpesaFee,
+        totalAmount: widget.totalAmount, buyerName: widget.buyerName,
+        sellerName: widget.sellerName, buyerPhone: widget.buyerPhone,
+        sellerPhone: widget.sellerPhone, deliveryAddress: widget.deliveryAddress,
+        createdAt: widget.createdAt, status: widget.status,
+        paymentMethod: widget.paymentMethod, transactionReference: widget.transactionReference,
+        platformFee: widget.platformFee, sellerReceives: widget.sellerReceives,
+        sellerLocation: widget.sellerLocation, productDescription: widget.productDescription,
+        productDetails: widget.productDetails, lang: widget.lang,
+      );
+      await _saveToDownloads(pdfBytes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error_label', 'Error')}: $e')));
+      }
+    }
+    if (mounted) setState(() => _isGenerating = false);
+  }
+
+  Future<void> _onShare() async {
+    setState(() => _isGenerating = true);
+    try {
+      final pdfBytes = await ReceiptPdfService.generate(
+        orderId: widget.orderId, productName: widget.productName,
+        productImageUrl: widget.productImageUrl, price: widget.price,
+        shippingCost: widget.shippingCost, clickpesaFee: widget.clickpesaFee,
+        totalAmount: widget.totalAmount, buyerName: widget.buyerName,
+        sellerName: widget.sellerName, buyerPhone: widget.buyerPhone,
+        sellerPhone: widget.sellerPhone, deliveryAddress: widget.deliveryAddress,
+        createdAt: widget.createdAt, status: widget.status,
+        paymentMethod: widget.paymentMethod, transactionReference: widget.transactionReference,
+        platformFee: widget.platformFee, sellerReceives: widget.sellerReceives,
+        sellerLocation: widget.sellerLocation, productDescription: widget.productDescription,
+        productDetails: widget.productDetails, lang: widget.lang,
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/receipt_${widget.orderId}.pdf');
+      await file.writeAsBytes(pdfBytes);
+      await Share.shareXFiles([XFile(file.path)], text: context.trParams('share_receipt_text', {'orderId': widget.orderId}));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error_label', 'Error')}: $e')));
+      }
+    }
+    if (mounted) setState(() => _isGenerating = false);
+  }
+
+  Future<void> _saveToDownloads(Uint8List pdfBytes) async {
+    if (Platform.isAndroid) {
+      final extDir = await getExternalStorageDirectory();
+      final dir = extDir != null ? Directory('${extDir.path}/Download') : await getApplicationDocumentsDirectory();
+      if (extDir != null && !await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final file = File('${dir.path}/receipt_${widget.orderId}.pdf');
+      await file.writeAsBytes(pdfBytes);
+      await OpenFile.open(file.path);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('receipt_saved', 'Receipt saved')), duration: const Duration(seconds: 3)),
+        );
+      }
+    } else {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/receipt_${widget.orderId}.pdf');
+      await file.writeAsBytes(pdfBytes);
+      await Share.shareXFiles([XFile(file.path)], text: context.trParams('share_receipt_text', {'orderId': widget.orderId}));
+    }
+  }
+}

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Soko Vibe — Admin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%239cd9b0'/><text x='50' y='70' font-family='Arial' font-size='58' font-weight='bold' text-anchor='middle' fill='%23043c26'>S</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<!-- ============ SPLASH ============ -->
+<div id="screen" class="screen">
+  <div class="splash-card">
+    <div class="spinner"></div>
+    <div class="splash-logo">S</div>
+    <h1>Soko Vibe</h1>
+    <p>Admin ni inasubiri watumishi…</p>
+  </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginCard" class="screen" hidden>
+  <div class="auth-card">
+    <div class="logo-badge">S</div>
+    <h1>Dukani Admin</h1>
+    <p>Ingia kama msimamizi wa Soko Vibe</p>
+    <input id="secVal" class="field" type="password" autocomplete="off" placeholder="ADMIN_SECRET">
+    <button id="secSave" class="btn accent full">Ingia</button>
+    <div class="err" id="authErr"></div>
+    <p class="hint">Siri ya admin pekee ndiyo njia ya kuingia. Itahifadhiwa kwenye kifaa chako tu.</p>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" hidden>
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="logo-badge">S</div>
+      <div>
+        <div class="nm">Soko Vibe</div>
+        <div class="sub">Admin Panel</div>
+      </div>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-sec="dashboard"><i data-lucide="layout-dashboard"></i><span data-i18n="nav-dashboard">Dashibodi</span></button>
+      <div class="grp" data-i18n="grp-manage">Usimamizi</div>
+      <button class="nav-item" data-sec="users"><i data-lucide="users"></i><span data-i18n="nav-users">Watumiaji</span></button>
+      <button class="nav-item" data-sec="sellers"><i data-lucide="store"></i><span data-i18n="nav-sellers">Wauzaji</span></button>
+      <button class="nav-item" data-sec="products"><i data-lucide="package"></i><span data-i18n="nav-products">Bidhaa</span></button>
+      <button class="nav-item" data-sec="orders"><i data-lucide="shopping-cart"></i><span data-i18n="nav-orders">Maagizo</span></button>
+      <div class="grp" data-i18n="grp-protect">Ulinzi na Mahusiano</div>
+      <button class="nav-item" data-sec="disputes"><i data-lucide="scale"></i><span data-i18n="nav-disputes">Migogoro</span></button>
+      <button class="nav-item" data-sec="refunds"><i data-lucide="rotate-ccw"></i><span data-i18n="nav-refunds">Marejesho</span></button>
+      <button class="nav-item" data-sec="reports"><i data-lucide="shield-alert"></i><span data-i18n="nav-reports">Ripoti & Ulinzi</span></button>
+      <button class="nav-item" data-sec="kyc"><i data-lucide="badge-check"></i><span data-i18n="nav-kyc">Wathibitisho (KYC)</span></button>
+      <div class="grp" data-i18n="grp-sales">Mauzo</div>
+      <button class="nav-item" data-sec="promos"><i data-lucide="megaphone"></i><span data-i18n="nav-promos">Boost & Flash Sales</span></button>
+      <div class="grp" data-i18n="grp-finance">Fedha</div>
+      <button class="nav-item" data-sec="revenue"><i data-lucide="banknote"></i><span data-i18n="nav-revenue">Mapato ya Jukwaa</span></button>
+      <button class="nav-item" data-sec="finance"><i data-lucide="wallet"></i><span data-i18n="nav-finance">Fedha & Ledger</span></button>
+      <button class="nav-item" data-sec="referrals"><i data-lucide="gift"></i><span data-i18n="nav-referrals">Rufaa</span></button>
+      <div class="grp" data-i18n="grp-comm">Mawasiliano</div>
+      <button class="nav-item" data-sec="broadcasts"><i data-lucide="megaphone"></i><span data-i18n="nav-broadcasts">Matangazo ya Broad</span></button>
+      <button class="nav-item" data-sec="audit"><i data-lucide="scroll-text"></i><span data-i18n="nav-audit">Ukaguzi (Audit)</span></button>
+      <button class="nav-item" data-sec="settings"><i data-lucide="settings"></i><span data-i18n="nav-settings">Mipangilio</span></button>
+      <div class="grp" data-i18n="grp-stats">Takwimu</div>
+      <button class="nav-item" data-sec="stats"><i data-lucide="activity"></i><span data-i18n="nav-stats">Takwimu za Matumizi</span></button>
+    </nav>
+    <div class="me">
+      <img id="meAvatar" alt="" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23e2f5eb'/><text x='16' y='21' font-family='Arial' font-size='14' font-weight='600' fill='%23043c26' text-anchor='middle'>?</text></svg>">
+      <div class="who"><b id="meName">—</b><span id="meRole">admin</span></div>
+      <button class="iconbtn" id="logoutBtn" title="Ondoka"><i data-lucide="log-out"></i></button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="topbar">
+      <button class="iconbtn" id="menuBtn" title="Menyu"><i data-lucide="menu"></i></button>
+      <h2 id="pageTitle">Dashibodi</h2>
+      <div class="spacer"></div>
+      <span class="lastupd" id="lastUpd"></span>
+      <button class="btn sm" id="langBtn">SW · EN</button>
+      <button class="iconbtn" id="refreshBtn" title="Sasisha"><i data-lucide="refresh-cw"></i></button>
+      <button class="iconbtn" id="themeBtn" title="Badilisha rangi"><i data-lucide="moon"></i></button>
+    </div>
+
+    <section class="section active" data-sec="dashboard" id="sec-dashboard"></section>
+    <section class="section" data-sec="users" id="sec-users"></section>
+    <section class="section" data-sec="sellers" id="sec-sellers"></section>
+    <section class="section" data-sec="products" id="sec-products"></section>
+    <section class="section" data-sec="orders" id="sec-orders"></section>
+    <section class="section" data-sec="disputes" id="sec-disputes"></section>
+    <section class="section" data-sec="refunds" id="sec-refunds"></section>
+    <section class="section" data-sec="reports" id="sec-reports"></section>
+    <section class="section" data-sec="kyc" id="sec-kyc"></section>
+    <section class="section" data-sec="promos" id="sec-promos"></section>
+    <section class="section" data-sec="revenue" id="sec-revenue"></section>
+    <section class="section" data-sec="finance" id="sec-finance"></section>
+    <section class="section" data-sec="referrals" id="sec-referrals"></section>
+    <section class="section" data-sec="broadcasts" id="sec-broadcasts"></section>
+    <section class="section" data-sec="audit" id="sec-audit"></section>
+    <section class="section" data-sec="stats" id="sec-stats"></section>
+    <section class="section" data-sec="settings" id="sec-settings"></section>
+  </main>
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div id="drawerOverlay" class="overlay" hidden></div>
+<aside id="drawer" hidden><button class="iconbtn" id="drawerClose"><i data-lucide="x"></i></button><div id="drawerBody"></div></aside>
+
+<div id="modalOverlay" class="overlay" hidden></div>
+<div id="modalRoot" hidden></div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="/admin/admin.js"></script>
+</body>
+</html>

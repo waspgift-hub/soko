@@ -28,6 +28,8 @@ linter:
 analyzer:
   errors:
     deprecated_member_use: ignore
+  exclude:
+    - integration_test/**
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
