@@ -17,9 +17,8 @@
 // path (legacy money flows key on `transactions` escrow fields which v2 never
 // writes on mirrored docs).
 const { Router } = require('express');
-const { FieldValue } = require('firebase-admin/firestore');
+const commerceStore = require('../../services/commerce-store');
 const { getStore } = require('../../config/database');
-const { getFirebaseAuth, getFirebaseFirestore } = require('../../config/firebase');
 const { optionalAuth } = require('../../middleware/auth');
 const paymentService = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
@@ -69,19 +68,17 @@ function buildLegacyMirror(order, body) {
     landmarks: body.landmarks || null,
     deliveryType: body.deliveryType || 'local',
     sourceV2: true,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: commerceStore.serverTimestamp(),
+    updatedAt: commerceStore.serverTimestamp(),
   };
 }
 
 // Best-effort mirror so a transient Firestore hiccup never fails the API call.
 async function mirrorOrderToLegacy(order, body) {
   try {
-    const db = getFirebaseFirestore();
-    if (!db) return;
     const doc = buildLegacyMirror(order, body);
-    await db.collection('orders').doc(order.id).set(doc, { merge: true });
-    await db.collection('transactions').doc(order.id).set(doc, { merge: true });
+    await commerceStore.upsertDocument('orders', order.id, doc);
+    await commerceStore.upsertDocument('transactions', order.id, doc);
   } catch (e) {
     console.error('[SHOP-SYNC] Firestore mirror failed:', e.message);
   }
@@ -89,11 +86,10 @@ async function mirrorOrderToLegacy(order, body) {
 
 async function mirrorStatusToLegacy(order) {
   try {
-    const db = getFirebaseFirestore();
-    if (!db) return;
     const status = LEGACY_STATUS[order.status] || 'pending';
-    await db.collection('orders').doc(order.id).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    await db.collection('transactions').doc(order.id).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const patch = { status, updatedAt: commerceStore.serverTimestamp() };
+    await commerceStore.upsertDocument('orders', order.id, patch);
+    await commerceStore.upsertDocument('transactions', order.id, patch);
   } catch (e) {
     console.error('[SHOP-SYNC] status mirror failed:', e.message);
   }
@@ -108,7 +104,7 @@ async function resolveShopBuyer(req, res, next) {
     if (req.firebaseUid) {
       if (!req.user) {
         const store = getStore();
-        const rec = await getFirebaseAuth().getUser(req.firebaseUid);
+        const rec = await require('firebase-admin').auth().getUser(req.firebaseUid);
         req.user = await store.user.create({
           data: {
             firebaseUid: req.firebaseUid,

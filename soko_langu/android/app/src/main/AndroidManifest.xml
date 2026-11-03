@@ -68,6 +68,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <!-- www.sokovibe.co.tz — canonical -->
                 <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/product" />
+                <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/p" />
                 <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/seller" />
                 <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/profile" />
                 <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/order" />
@@ -76,6 +77,7 @@
                 <data android:scheme="https" android:host="www.sokovibe.co.tz" android:pathPrefix="/search" />
                 <!-- apex sokovibe.co.tz (302 to www) — still declared for verification -->
                 <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/product" />
+                <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/p" />
                 <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/seller" />
                 <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/profile" />
                 <data android:scheme="https" android:host="sokovibe.co.tz" android:pathPrefix="/order" />

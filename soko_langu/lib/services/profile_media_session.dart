@@ -37,18 +37,6 @@ class ProfileMediaSession {
     await controller.setQueue(items, startAt: startAt);
   }
 
-  /// Music (on-device songs, YouTube results) has no seller context — the
-  /// mini player returns to the now-playing screen instead.
-  Future<void> playMusicQueue({
-    required List<ProfileMediaItem> items,
-    int startAt = 0,
-  }) async {
-    sellerId = null;
-    sellerName = null;
-    returnRoute = '/music/now-playing';
-    await controller.setQueue(items, startAt: startAt);
-  }
-
   void enterInlinePlayer() => _inlinePlayers++;
 
   void exitInlinePlayer() {

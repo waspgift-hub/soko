@@ -6,8 +6,7 @@
 // 2939-2997). The deployed failStalePendingBoosts sweeper only covers stale
 // USSD boosts after ~10min; real-time callbacks (and BillPay/KYC) needed the
 // v1 webhook, which previously routed them to the order path and 404'd.
-const admin = require('firebase-admin');
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 const { sendOneSignalNotification } = require('../legacy-compat/notify');
 
 const BOOST_TIERS = {
@@ -16,13 +15,9 @@ const BOOST_TIERS = {
   gold: { price: 10000, days: 30 },
 };
 
-function sessionTimestamp() {
-  return admin.firestore.FieldValue.serverTimestamp();
-}
-
-async function addRevenue(firestore, data) {
+async function addRevenue(data) {
   try {
-    await firestore.collection('revenue_transactions').add({ ...data, createdAt: sessionTimestamp() });
+    await commerceStore.addDocument('revenue_transactions', { ...data, createdAt: commerceStore.serverTimestamp() });
   } catch (e) {
     console.error('[REVENUE]', data.type, e.message);
   }
@@ -34,21 +29,17 @@ async function confirmLegacyTransaction({
   providerPaymentId = '',
   failureReason = 'Payment failed',
 }) {
-  const firestore = getFirebaseFirestore();
-  if (!firestore) throw new Error('FIRESTORE_NOT_CONFIGURED');
-
   const finalStatus = String(status || '');
   // ClickPesa reports pending checkpoints too; only terminal states move money.
   if (finalStatus !== 'completed' && finalStatus !== 'failed') {
     return { status: 'SKIPPED_UNSUPPORTED', webhookStatus: finalStatus };
   }
 
-  const txDoc = await firestore.collection('transactions').doc(orderReference).get();
-  if (!txDoc.exists) {
+  const tx = await commerceStore.getDocument('transactions', orderReference);
+  if (!tx) {
     console.warn(`[TX] ${orderReference} not found in transactions; no-op`);
     return { status: 'NOOP_NOT_FOUND' };
   }
-  const tx = txDoc.data();
 
   // Idempotency (same guard as the legacy router): finalized rows are skipped,
   // except a failed->completed recovery when ClickPesa later confirms success.
@@ -60,10 +51,10 @@ async function confirmLegacyTransaction({
   }
 
   if (finalStatus === 'failed') {
-    await txDoc.ref.update({
+    await commerceStore.updateDocument('transactions', orderReference, {
       status: 'failed',
       failureReason,
-      completedAt: sessionTimestamp(),
+      completedAt: commerceStore.serverTimestamp(),
     });
     const notifyUserId = tx.userId || tx.buyerId;
     if (notifyUserId) {
@@ -78,15 +69,15 @@ async function confirmLegacyTransaction({
   }
 
   if (tx.type === 'boost') {
-    return boostSuccess(firestore, txDoc, tx, orderReference, providerPaymentId);
+    return boostSuccess(tx, orderReference, providerPaymentId);
   }
   if (tx.type === 'kyc_fee') {
-    return kycSuccess(firestore, txDoc, tx, orderReference, providerPaymentId);
+    return kycSuccess(tx, orderReference, providerPaymentId);
   }
   return { status: 'SKIPPED_UNKNOWN_TYPE', txType: tx.type };
 }
 
-async function boostSuccess(firestore, txDoc, tx, orderId, providerPaymentId) {
+async function boostSuccess(tx, orderId, providerPaymentId) {
   const tier = tx.tier || 'bronze';
   const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
   const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
@@ -128,7 +119,7 @@ async function boostSuccess(firestore, txDoc, tx, orderId, providerPaymentId) {
       { type: 'boost', productId: tx.productId || '' },
     ).catch(() => {});
   }
-  await addRevenue(firestore, {
+  await addRevenue({
     userId: 'platform',
     amount: tx.amount || tierConfig.price,
     sokoLanguCommission: tx.amount || tierConfig.price,
@@ -142,18 +133,18 @@ async function boostSuccess(firestore, txDoc, tx, orderId, providerPaymentId) {
   return { status: 'COMPLETED', type: 'boost' };
 }
 
-async function kycSuccess(firestore, txDoc, tx, orderId, providerPaymentId) {
+async function kycSuccess(tx, orderId, providerPaymentId) {
   // The completed transaction doubles as the fee receipt:
   // kyc-service.hasPaidKycFee looks for exactly this shape, so the fee stays
   // paid across rejection/resubmission cycles (one time per seller).
-  await txDoc.ref.update({
+  await commerceStore.updateDocument('transactions', orderId, {
     status: 'completed',
     clickpesaReference: providerPaymentId || '',
-    completedAt: sessionTimestamp(),
+    completedAt: commerceStore.serverTimestamp(),
   });
 
   const feeAmount = tx.amount || 15000;
-  await addRevenue(firestore, {
+  await addRevenue({
     userId: 'platform',
     amount: feeAmount,
     sokoLanguCommission: feeAmount,

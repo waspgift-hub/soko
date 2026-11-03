@@ -448,34 +448,63 @@ class _HomeScreenState extends State<HomeScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
+        titleSpacing: 18,
         title: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                'assets/app_icon.png',
-                height: 40,
-                width: 40,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) =>
-                    Icon(Icons.storefront_rounded, size: 32, color: cs.primary),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/app_icon.png',
+                  height: 32,
+                  width: 32,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      Icon(Icons.storefront_rounded, size: 24, color: cs.primary),
+                ),
               ),
             ),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  context.tr('soko'),
-                  style: AppTypography.brandTitle(cs.primary).copyWith(fontSize: 22),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Soko Vibe',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
-                  context.tr('vibe'),
+                  context.tr('explore_market', 'Soko Huria la Tanzania'),
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurfaceVariant,
-                    letterSpacing: 2.5,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.75),
                   ),
                 ),
               ],
@@ -483,19 +512,44 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.monetization_on_outlined, color: cs.primary),
-            tooltip: context.tr('change_currency'),
-            onPressed: () => _showCurrencyPicker(context),
+          // Currency pill
+          GestureDetector(
+            onTap: () => _showCurrencyPicker(context),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.brightness == Brightness.dark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.payments_outlined, size: 15, color: cs.primary),
+                  const SizedBox(width: 4),
+                  Text(
+                    AppConfig.of(context).currency,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
+          const SizedBox(width: 4),
+          // Notification bell
           Stack(
+            clipBehavior: Clip.none,
             children: [
               IconButton(
-                icon: Icon(Icons.notifications_outlined, color: cs.primary),
+                icon: Icon(Icons.notifications_outlined, color: cs.onSurface, size: 23),
                 tooltip: context.tr('notifications'),
                 onPressed: () {
-                  // Don't stack a second notification route on a fast double tap —
-                  // the resulting duplicate page entries crash element teardown.
                   if (GoRouterState.of(context).matchedLocation == AppRoutes.notifications) {
                     return;
                   }
@@ -504,18 +558,18 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               if (_unreadCount > 0)
                 Positioned(
-                  right: 6,
-                  top: 6,
+                  right: 8,
+                  top: 8,
                   child: Container(
-                    padding: EdgeInsets.all(_unreadCount > 9 ? 4 : 6),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
-                    constraints: BoxConstraints(minWidth: 18, minHeight: 18),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     child: Text(
                       '$_unreadCount',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 9,
                         color: cs.surface,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -523,6 +577,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
             ],
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -541,82 +596,17 @@ class _HomeScreenState extends State<HomeScreen>
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      // Animated gradient line at top
-                      const AnimatedGradientLine(height: 3),
-                      const SizedBox(height: AppInsets.md),
-                      // Premium search bar
+                      const SizedBox(height: 8),
+                      // Samsung One UI Inspired Search Bar
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppInsets.lg,
-                          0,
-                          AppInsets.lg,
-                          AppInsets.md,
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: cs.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(
-                                  alpha: cs.brightness == Brightness.dark ? 0.2 : 0.05,
-                                ),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchCtrl,
-                            readOnly: true,
-                            onTap: () => context.push(AppRoutes.search),
-                            decoration: InputDecoration(
-                              hintText: context.tr('search_products_users_hint'),
-                              hintStyle: TextStyle(
-                                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                                fontSize: 14,
-                              ),
-                              prefixIcon: Icon(Icons.search_rounded, color: cs.primary, size: 22),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                              suffixIcon: GestureDetector(
-                                onTap: _showFilterSheet,
-                                child: Semantics(
-                                  button: true,
-                                  label: context.tr('filter'),
-                                  onTap: _showFilterSheet,
-                                  child: Container(
-                                    margin: const EdgeInsets.all(6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                                    decoration: BoxDecoration(
-                                      color: cs.primary.withValues(
-                                        alpha: _hasActiveFilters ? 0.18 : 0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.tune_rounded, color: cs.primary, size: 16),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _hasActiveFilters
-                                              ? '$_activeFilterCount'
-                                              : context.tr('filter'),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: cs.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                        child: OneUISearchBar(
+                          hintText: context.tr('search_products_users_hint', 'Tafuta bidhaa, maduka, au huduma...'),
+                          controller: _searchCtrl,
+                          readOnly: true,
+                          onTap: () => context.push(AppRoutes.search),
+                          filterCount: _activeFilterCount,
+                          onFilterTap: _showFilterSheet,
                         ),
                       ),
                       // Brand chips

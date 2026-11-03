@@ -383,7 +383,7 @@ class EarnMoneyBanner extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '+${context.currencySymbol()}',
-                        style: Ds.labelLarge(cs.primary).copyWith(fontWeight: FontWeight.bold),
+                        style: Ds.labelLg(cs.primary).copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

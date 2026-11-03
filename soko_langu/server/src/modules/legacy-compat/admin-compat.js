@@ -4,10 +4,12 @@
 // browser admin panel keeps working with zero client changes. Admin gating
 // mirrors the old semantics: x-admin-secret OR Firebase admin (isAdmin flag).
 const express = require('express');
-const admin = require('firebase-admin');
-const { getFirebaseFirestore } = require('../../config/firebase');
 const { requireAdmin } = require('./auth-helpers');
 const { sendOneSignalNotification } = require('./notify');
+const OrderService = require('../modules/orders/order-service');
+
+const commerceStore = require('../../services/commerce-store');
+
 const {
   clickpesaBalance,
   clickpesaRawBalances,
@@ -32,8 +34,6 @@ const PAYED_STATUSES = new Set([
   'refunded',
 ]);
 
-const db = getFirebaseFirestore();
-
 // In-memory TTL cache for the heavy aggregation endpoints. These aggregate
 // full Firestore collections (users, transactions, revenue_transactions) on
 // every request, which made the panel idle 3–7s on a blank page. 30–60s
@@ -51,28 +51,32 @@ function clearAdminCache() {
 }
 
 async function updateSellerKycOnProducts(sellerId, kycApproved) {
-  if (!db || !sellerId) return;
+  if (!sellerId) return;
   try {
-    const productsSnap = await db.collection('products').where('sellerId', '==', sellerId).get();
-    const batch = db.batch();
-    let count = 0;
-    productsSnap.docs.forEach((doc) => {
-      batch.update(doc.ref, { sellerKycApproved: kycApproved });
-      count++;
-    });
-    if (count > 0) await batch.commit();
+    const productsList = await commerceStore.listDocuments('products', { where: { sellerId } });
+    if (productsList.length === 0) return;
+    await commerceStore.batchUpdate(productsList.map(doc => ({
+      collection: 'products',
+      docId: doc.id,
+      data: { sellerKycApproved: kycApproved }
+    })));
   } catch (e) {
     console.error(`Failed to update sellerKycApproved for ${sellerId}:`, e);
   }
 }
 
 async function auditLog(entry) {
-  await db.collection('audit_log').add({
-    userId: entry.userId || null,
-    type: entry.type || 'admin_action',
-    amount: entry.amount || 0,
-    reason: entry.reason || '',
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  await commerceStore.writeAuditLog({
+    actorId: entry.userId || null,
+    actorType: 'admin',
+    action: entry.type || 'admin_action',
+    entityType: 'system',
+    entityId: null,
+    oldState: null,
+    newState: null,
+    requestId: null,
+    ipAddress: null,
+    userAgent: null,
   });
 }
 
@@ -80,35 +84,29 @@ const router = express.Router();
 
 async function adminGate(req, res) {
   const auth = await requireAdmin(req, res);
-  return auth.ok;
+  return auth.ok ? auth : null;
 }
 
 // ---- Dashboard KPIs ----
 router.get('/stats', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const result = await memGet('admin.stats', 30_000, async () => {
       const [usersSnap, ordersSnap, withdrawalsSnap, adViewsSnap] = await Promise.all([
-        db.collection('users').count().get(),
-        db.collection('orders').count().get(),
-        db.collection('withdrawals').count().get(),
-        db.collection('ad_views').count().get(),
+        commerceStore.countDocuments(commerceStore.COLLECTIONS.users),
+        OrderService.countOrders(),
+        commerceStore.countDocuments(commerceStore.COLLECTIONS.withdrawals),
+        commerceStore.countDocuments('ad_views'),
       ]);
 
-      const balanceSnap = await db.collection('users').get();
-      let totalSellerBalance = 0;
-      balanceSnap.docs.forEach((doc) => {
-        const d = doc.data();
-        totalSellerBalance += d.sellerBalance || 0;
-      });
+      const totalSellerBalance = await commerceStore.sumField(commerceStore.COLLECTIONS.users, 'sellerBalance');
 
       return {
-        totalUsers: usersSnap.data().count,
-        totalOrders: ordersSnap.data().count,
-        totalWithdrawals: withdrawalsSnap.data().count,
-        totalAdViews: adViewsSnap.data().count,
+        totalUsers: usersSnap,
+        totalOrders: ordersSnap,
+        totalWithdrawals: withdrawalsSnap,
+        totalAdViews: adViewsSnap,
         totalSellerBalance,
       };
     });
@@ -123,11 +121,12 @@ router.get('/stats', async (req, res) => {
 router.get('/transactions', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
-    const snap = await db.collection('transactions').orderBy('createdAt', 'desc').limit(limit).get();
-    const transactions = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const transactions = await commerceStore.listDocuments(commerceStore.COLLECTIONS.transactions, {
+      orderBy: 'createdAt',
+      limit: limit,
+    });
     res.json({ transactions });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -138,11 +137,12 @@ router.get('/transactions', async (req, res) => {
 router.get('/withdrawals', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
-    const snap = await db.collection('withdrawals').orderBy('createdAt', 'desc').limit(limit).get();
-    const withdrawals = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const withdrawals = await commerceStore.listDocuments(commerceStore.COLLECTIONS.withdrawals, {
+      orderBy: 'createdAt',
+      limit: limit,
+    });
     res.json({ withdrawals });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -153,7 +153,6 @@ router.get('/withdrawals', async (req, res) => {
 router.get('/analytics', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const result = await memGet('admin.analytics', 45_000, async () => {
       const now = new Date();
@@ -161,18 +160,18 @@ router.get('/analytics', async (req, res) => {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
       const [usersSnap, productsSnap, txSnap, sessionsSnap] = await Promise.all([
-        db.collection('users').get(),
-        db.collection('products').get(),
-        db.collection('transactions').get(),
-        db.collection('user_sessions').get(),
+        commerceStore.listDocuments('users'),
+        commerceStore.listDocuments('products'),
+        commerceStore.listDocuments('transactions'),
+        commerceStore.listDocuments('user_sessions'),
       ]);
 
       let totalUsers = 0, newUsersToday = 0, newUsersThisMonth = 0;
       const locationDistribution = {};
       const ageDistribution = {};
-      for (const doc of usersSnap.docs) {
+      for (const doc of usersSnap) {
         totalUsers++;
-        const d = doc.data();
+        const d = doc;
         const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
         if (createdAt) {
           if (createdAt >= todayStart) newUsersToday++;
@@ -193,7 +192,7 @@ router.get('/analytics', async (req, res) => {
 
       let totalProducts = 0, activeProducts = 0, inactiveProducts = 0;
       const productsByCategory = {};
-      for (const doc of productsSnap.docs) {
+      for (const doc of productsSnap) {
         totalProducts++;
         const d = doc.data();
         if (d.isActive !== false) activeProducts++; else inactiveProducts++;
@@ -210,8 +209,8 @@ router.get('/analytics', async (req, res) => {
         const c = new Date(t.getFullYear(), t.getMonth(), t.getDate());
         return Math.round((c - day0) / 86400000);
       };
-      for (const doc of txSnap.docs) {
-        const d = doc.data();
+      for (const doc of txSnap) {
+        const d = doc;
         const status = d.status || '';
         const amount = d.totalAmount || 0;
         const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
@@ -224,8 +223,8 @@ router.get('/analytics', async (req, res) => {
           if (b >= 0 && b < 7) revByDay[b] += amount;
         }
       }
-      for (const doc of usersSnap.docs) {
-        const d = doc.data();
+      for (const doc of usersSnap) {
+        const d = doc;
         const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
         if (!createdAt) continue;
         const b = bucketFor(createdAt);
@@ -241,8 +240,8 @@ router.get('/analytics', async (req, res) => {
       }
 
       let perSecond = 0, perMinute = 0, perHour = 0, perDay = 0, perMonth = 0, perYear = 0;
-      for (const doc of sessionsSnap.docs) {
-        const ts = doc.data().lastActive;
+      for (const doc of sessionsSnap) {
+        const ts = doc.lastActive;
         const lastActive = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
         if (!lastActive) continue;
         const diffMs = now - lastActive;
@@ -262,7 +261,7 @@ router.get('/analytics', async (req, res) => {
         totalRevenue, revenueToday, revenueThisMonth,
         revenueOverTime, userGrowth,
         locationDistribution, ageDistribution,
-        activeUserCounts: { perSecond, perMinute, perHour, perDay, perMonth, perYear, allTime: sessionsSnap.docs.length },
+        activeUserCounts: { perSecond, perMinute, perHour, perDay, perMonth, perYear, allTime: sessionsSnap.length },
       };
     });
 
@@ -276,7 +275,6 @@ router.get('/analytics', async (req, res) => {
 router.get('/timeseries', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const days = Math.min(parseInt(req.query.days) || 30, 90);
     const result = await memGet('admin.ts.' + days, 45_000, async () => {
@@ -291,8 +289,8 @@ router.get('/timeseries', async (req, res) => {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
 
       const [txSnap, usersSnap] = await Promise.all([
-        db.collection('transactions').get(),
-        db.collection('users').get(),
+        commerceStore.listDocuments('transactions'),
+        commerceStore.listDocuments('users'),
       ]);
 
       for (const doc of txSnap.docs) {
@@ -306,8 +304,8 @@ router.get('/timeseries', async (req, res) => {
         series[i].commission += (d.sokoLanguCommission || d.sokovibeCommission || d.platformFee || d.platformCommission || 0);
       }
 
-      for (const doc of usersSnap.docs) {
-        const d = doc.data();
+      for (const doc of usersSnap) {
+        const d = doc;
         const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
         if (!created || created < start) continue;
         const i = index.get(created.toISOString().slice(0, 10));
@@ -328,19 +326,18 @@ router.get('/timeseries', async (req, res) => {
 router.get('/online', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const result = await memGet('admin.online', 15_000, async () => {
       const [sessionsSnap, usersCountSnap] = await Promise.all([
-        db.collection('user_sessions').get(),
-        db.collection('users').count().get(),
+        commerceStore.listDocuments('user_sessions'),
+        commerceStore.countDocuments('users'),
       ]);
 
       const now = Date.now();
       let lastMinute = 0, last5Min = 0, last15Min = 0, lastHour = 0, lastDay = 0;
       const recent = [];
-      for (const doc of sessionsSnap.docs) {
-        const ts = doc.data().lastActive;
+      for (const doc of sessionsSnap) {
+        const ts = doc.lastActive;
         const lastActive = ts ? (ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime()) : 0;
         if (!lastActive) continue;
         const diff = now - lastActive;
@@ -355,7 +352,7 @@ router.get('/online', async (req, res) => {
 
       return {
         success: true,
-        totalUsers: (usersCountSnap.data() || {}).count || 0,
+        totalUsers: usersCountSnap || 0,
         online: { lastMinute, last5Min, last15Min, lastHour, lastDay },
         recentlyActive: recent.slice(0, 30),
         asOf: now,
@@ -372,58 +369,68 @@ router.get('/online', async (req, res) => {
 router.get('/finance-summary', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const result = await memGet('admin.finance', 30_000, async () => {
       // All Firestore reads run in parallel — previously serialized (6 waits)
       // — so one cold compute ≈ max(read), not the sum.
       const [adSnap, admobSnap, revSnap, txSnap, withdrawSnap, adminWithdrawSnap, clickRes] = await Promise.allSettled([
-        db.collection('ad_views').count().get(),
-        db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get(),
-        db.collection('revenue_transactions').get(),
-        db.collection('transactions').get(),
-        db.collection('withdrawals').get(),
-        db.collection('admin_withdrawals').get(),
+        commerceStore.countDocuments('ad_views'),
+        commerceStore.listDocuments('admob_earnings', { orderBy: 'month', direction: 'desc', limit: 1 }),
+        commerceStore.listDocuments('revenue_transactions'),
+        commerceStore.listDocuments('transactions'),
+        commerceStore.listDocuments('withdrawals'),
+        commerceStore.listDocuments('admin_withdrawals'),
         memGet('clickpesa.balance', 120_000, () => clickpesaBalance()),
       ]);
 
-      const estimatedAdRevenue = (adSnap.status === 'fulfilled' ? adSnap.value.data().count : 0) * AD_REVENUE_PER_VIEW;
+      const estimatedAdRevenue = (adSnap.status === 'fulfilled' ? adSnap.value : 0) * AD_REVENUE_PER_VIEW;
 
       let actualAdRevenue = 0;
       const admob = admobSnap.status === 'fulfilled' ? admobSnap.value : null;
-      if (admob && !admob.empty) actualAdRevenue = admob.docs[0].data().amount || 0;
+      if (admob && admob.length > 0) actualAdRevenue = admob[0].amount || 0;
 
+      // Platform revenue is split into distinct buckets so the admin panel can
+      // tell apart commissions, boost placements, KYC verification fees, and
+      // everything else (e.g. profanity seizures). `sale` rows carry no
+      // platform revenue (seller earnings) and are deliberately skipped.
       let totalCommissions = 0, totalBoostRevenue = 0;
+      let totalKycRevenue = 0, totalOtherRevenue = 0;
       if (revSnap.status === 'fulfilled') {
-        revSnap.value.docs.forEach((doc) => {
-          const d = doc.data();
-          if (d.type === 'boost') totalBoostRevenue += (d.sokoLanguCommission || 0);
-          else totalCommissions += (d.sokoLanguCommission || 0);
+        revSnap.value.forEach((doc) => {
+          const d = doc || {};
+          const amt = Number(d.sokoLanguCommission || d.amount || 0) || 0;
+          const type = String(d.type || '').toLowerCase();
+          if (type === 'boost') totalBoostRevenue += amt;
+          else if (type === 'kyc_fee') totalKycRevenue += amt;
+          else if (type === 'sale') { /* seller earnings, not platform revenue */ }
+          else if (type === 'profanity_seizure') totalOtherRevenue += amt;
+          else totalCommissions += amt; // commission + any uncategorised platform revenue
         });
       }
 
-      const totalAdminBalance = actualAdRevenue + totalCommissions + totalBoostRevenue;
+      const totalPlatformRevenue = totalCommissions + totalBoostRevenue + totalKycRevenue + totalOtherRevenue;
+      const totalAdminBalance = actualAdRevenue + totalPlatformRevenue;
 
       let totalProcessed = 0;
       if (txSnap.status === 'fulfilled') {
-        txSnap.value.docs.forEach((doc) => {
-          const d = doc.data();
+        txSnap.value.forEach((doc) => {
+          const d = doc;
           if (PAYED_STATUSES.has(d.status)) totalProcessed += (d.totalAmount || 0);
         });
       }
 
       let totalPaidOut = 0;
       if (withdrawSnap.status === 'fulfilled') {
-        withdrawSnap.value.docs.forEach((doc) => {
-          const d = doc.data();
+        withdrawSnap.value.forEach((doc) => {
+          const d = doc;
           if (d.status === 'completed') totalPaidOut += (d.netAmount || d.amount || 0);
         });
       }
 
       let totalAdminPaidOut = 0, totalAdminWithdrawn = 0;
       if (adminWithdrawSnap.status === 'fulfilled') {
-        adminWithdrawSnap.value.docs.forEach((doc) => {
-          const d = doc.data();
+        adminWithdrawSnap.value.forEach((doc) => {
+          const d = doc;
           if (d.status === 'completed') {
             totalAdminPaidOut += (d.netAmount || d.amount || 0);
             totalAdminWithdrawn += (d.amount || 0);
@@ -432,7 +439,10 @@ router.get('/finance-summary', async (req, res) => {
       }
 
       const totalPayouts = totalPaidOut + totalAdminPaidOut;
-      const availableBalance = totalCommissions + totalBoostRevenue - totalAdminPaidOut;
+      // Only ClickPesa-collected platform revenue is withdrawable through
+      // ClickPesa; AdMob revenue is settled by Google separately. Keep this in
+      // sync with payouts.js /admin/withdraw.
+      const availableBalance = totalPlatformRevenue - totalAdminPaidOut;
       const actualClickPesaBalance = clickRes.status === 'fulfilled' ? (clickRes.value || 0) : 0;
 
       return {
@@ -441,6 +451,9 @@ router.get('/finance-summary', async (req, res) => {
         actualAdRevenue,
         totalCommissions,
         totalBoostRevenue,
+        totalKycRevenue,
+        totalOtherRevenue,
+        totalPlatformRevenue,
         totalAdminBalance,
         totalProcessed,
         totalUserPaidOut: totalPaidOut,
@@ -469,20 +482,21 @@ router.get('/finance-summary', async (req, res) => {
 router.get('/analytics/boosts', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const [activeSnap, histSnap] = await Promise.allSettled([
-      db.collection('products').where('isBoosted', '==', true).limit(200).get(),
-      // Filter boost rows in JS: type+timestamp needs a composite index that
-      // isn't guaranteed to exist; a single timestamp desc is always servable.
-      db.collection('revenue_transactions').orderBy('timestamp', 'desc').limit(300).get(),
+      commerceStore.listDocuments('products', { where: { isBoosted: true }, limit: 200 }),
+      commerceStore.listDocuments(commerceStore.COLLECTIONS.revenueTransactions, {
+        orderBy: 'timestamp',
+        limit: 300,
+      }),
     ]);
 
     const active = [];
     if (activeSnap.status === 'fulfilled') {
       const now = Date.now();
-      for (const doc of activeSnap.value.docs) {
-        const d = doc.data();
+      for (const doc of activeSnap.value) {
+        const d = doc;
         const until = d.boostedUntil && d.boostedUntil.toDate ? d.boostedUntil.toDate() : (d.boostedUntil instanceof Date ? d.boostedUntil : null);
         if (until && until.getTime() < now) continue; // stale flag → not really active
         active.push({
@@ -501,8 +515,8 @@ router.get('/analytics/boosts', async (req, res) => {
       const nameMap = {};
       await Promise.all(sellerIds.map(async (sid) => {
         try {
-          const u = await db.collection('users').doc(sid).get();
-          if (u.exists) nameMap[sid] = u.data().displayName || u.data().email || '';
+          const u = await commerceStore.getDocument('users', sid);
+          if (u) nameMap[sid] = u.displayName || u.email || '';
         } catch (_) {}
       }));
       active.forEach((a) => { if (!a.sellerName) a.sellerName = nameMap[a.sellerId] || ''; });
@@ -510,16 +524,16 @@ router.get('/analytics/boosts', async (req, res) => {
 
     const history = [];
     if (histSnap.status === 'fulfilled') {
-      const sellerIds = [...new Set(histSnap.value.docs.map((doc) => doc.data().userId).filter(Boolean))];
+      const sellerIds = [...new Set(histSnap.value.map((doc) => doc.userId).filter(Boolean))];
       const nameMap = {};
       await Promise.all(sellerIds.map(async (sid) => {
         try {
-          const u = await db.collection('users').doc(sid).get();
-          if (u.exists) nameMap[sid] = u.data().displayName || u.data().email || '';
+          const u = await commerceStore.getDocument('users', sid);
+          if (u) nameMap[sid] = u.displayName || u.email || '';
         } catch (_) {}
       }));
-      histSnap.value.docs.forEach((doc) => {
-        const d = doc.data();
+      histSnap.value.forEach((doc) => {
+        const d = doc;
         // the query has no type filter (composite index risk), so keep only boosts
         if (d.type !== 'boost') return;
         const ts = d.timestamp && d.timestamp.toDate ? d.timestamp.toDate() : null;
@@ -549,12 +563,12 @@ router.get('/analytics/boosts', async (req, res) => {
 router.get('/analytics/flash-sales', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
-    const snap = await db.collection('flash_sales').orderBy('createdAt', 'desc').limit(300).get();
+    const flashSalesList = await commerceStore.listDocuments('flash_sales', { orderBy: 'createdAt', direction: 'desc', limit: 300 });
     const now = Date.now();
-    const flashSales = snap.docs.map((doc) => {
-      const d = doc.data();
+    const flashSales = flashSalesList.map((doc) => {
+      const d = doc;
       const toISO = (v) => (v && v.toDate ? v.toDate() : v instanceof Date ? v : null) ? ((v.toDate ? v.toDate() : v).toISOString()) : null;
       const start = toISO(d.startTime);
       const end = toISO(d.endTime);
@@ -597,24 +611,27 @@ router.get('/analytics/flash-sales', async (req, res) => {
 router.get('/revenue-ledger', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-    const snap = await db.collection('revenue_transactions').orderBy('timestamp', 'desc').limit(limit + offset).get();
-    const docs = snap.docs.slice(offset, offset + limit);
+    const docs = await commerceStore.listDocuments(commerceStore.COLLECTIONS.revenueTransactions, {
+      orderBy: 'timestamp',
+      limit: limit + offset,
+      offset: 0, // listDocuments handles offset internally if passed, but here we need to slice manually because we might be using a custom offset logic. Actually, commerceStore.listDocuments already has offset.
+    });
+    const slicedDocs = docs.slice(offset, offset + limit);
 
-    const sellerIds = [...new Set(docs.map((d) => d.data().userId).filter(Boolean))];
+    const sellerIds = [...new Set(slicedDocs.map((d) => d.userId).filter(Boolean))];
     const nameMap = {};
     await Promise.all(sellerIds.map(async (sid) => {
       try {
-        const u = await db.collection('users').doc(sid).get();
-        if (u.exists) nameMap[sid] = u.data().displayName || u.data().email || '';
+        const u = await commerceStore.getDocument('users', sid);
+        if (u) nameMap[sid] = u.displayName || u.email || '';
       } catch (_) {}
     }));
 
-    const entries = docs.map((doc) => {
-      const d = doc.data();
+    const entries = slicedDocs.map((doc) => {
+      const d = doc;
       const ts = d.timestamp && d.timestamp.toDate ? d.timestamp.toDate() : null;
       return {
         id: doc.id,
@@ -629,7 +646,7 @@ router.get('/revenue-ledger', async (req, res) => {
       };
     });
 
-    res.json({ entries, total: snap.docs.length, limit, offset });
+    res.json({ entries, total: docs.length, limit, offset });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -639,12 +656,14 @@ router.get('/revenue-ledger', async (req, res) => {
 router.get('/revenue-withdrawals', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    const snap = await db.collection('admin_withdrawals').orderBy('createdAt', 'desc').limit(limit).get();
-    const withdrawals = snap.docs.map((doc) => {
-      const d = doc.data();
+    const withdrawals = await commerceStore.listDocuments(commerceStore.COLLECTIONS.adminWithdrawals, {
+      orderBy: 'createdAt',
+      limit: limit,
+    });
+    const results = withdrawals.map((doc) => {
+      const d = doc;
       const ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : null;
       return {
         id: doc.id,
@@ -658,7 +677,7 @@ router.get('/revenue-withdrawals', async (req, res) => {
         createdAt: ts ? ts.toISOString() : null,
       };
     });
-    res.json({ withdrawals, total: withdrawals.length });
+    res.json({ withdrawals: results, total: withdrawals.length });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -668,7 +687,7 @@ router.get('/revenue-withdrawals', async (req, res) => {
 router.get('/clickpesa/transactions', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { type = 'all', status = '', channel = '', currency = '', startDate = '', endDate = '', limit = '100' } = req.query;
     const maxLimit = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
@@ -732,16 +751,17 @@ router.get('/clickpesa/transactions', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const result = await memGet('admin.users', 60_000, async () => {
-      const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
-      const users = snap.docs.map((doc) => {
-        const u = { uid: doc.id, ...doc.data() };
-        if (typeof u.sellerBalance !== 'undefined') u.sellerBalance = Math.max(0, u.sellerBalance || 0);
-        if (typeof u.pendingEscrow !== 'undefined') u.pendingEscrow = Math.max(0, u.pendingEscrow || 0);
-        if (typeof u.coins !== 'undefined') u.coins = Math.max(0, u.coins || 0);
-        return u;
+      const usersList = await commerceStore.listDocuments('users', { orderBy: 'createdAt', direction: 'desc' });
+      const users = usersList.map((u) => {
+        const user = { uid: u.id, ...u };
+        delete user.id;
+        if (typeof user.sellerBalance !== 'undefined') user.sellerBalance = Math.max(0, user.sellerBalance || 0);
+        if (typeof user.pendingEscrow !== 'undefined') user.pendingEscrow = Math.max(0, user.pendingEscrow || 0);
+        if (typeof user.coins !== 'undefined') user.coins = Math.max(0, user.coins || 0);
+        return user;
       });
       return { users };
     });
@@ -756,7 +776,7 @@ router.get('/users', async (req, res) => {
 router.put('/users/:uid', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { uid } = req.params;
     const updates = {};
@@ -767,7 +787,7 @@ router.put('/users/:uid', async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
-    await db.collection('users').doc(uid).update(updates);
+    await commerceStore.updateDocument('users', uid, updates);
     clearAdminCache();
     res.json({ updated: true, uid, updates });
   } catch (e) {
@@ -779,11 +799,10 @@ router.put('/users/:uid', async (req, res) => {
 router.get('/products', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const result = await memGet('admin.products', 60_000, async () => {
-      const snap = await db.collection('products').orderBy('createdAt', 'desc').get();
-      const products = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const products = await commerceStore.listDocuments('products', { orderBy: 'createdAt', direction: 'desc' });
       return { products };
     });
 
@@ -797,7 +816,7 @@ router.get('/products', async (req, res) => {
 router.put('/products/:id', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { id } = req.params;
     const updates = {};
@@ -808,7 +827,7 @@ router.put('/products/:id', async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
-    await db.collection('products').doc(id).update(updates);
+    await commerceStore.updateDocument('products', id, updates);
     clearAdminCache();
     res.json({ updated: true, id, updates });
   } catch (e) {
@@ -820,11 +839,10 @@ router.put('/products/:id', async (req, res) => {
 router.get('/orders', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const result = await memGet('admin.orders', 60_000, async () => {
-      const snap = await db.collection('orders').orderBy('createdAt', 'desc').get();
-      const orders = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const orders = await OrderService.listOrders();
       return { orders };
     });
 
@@ -837,17 +855,14 @@ router.get('/orders', async (req, res) => {
 // ---- Update order status ----
 router.put('/orders/:id', async (req, res) => {
   try {
-    if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const auth = await adminGate(req, res);
+    if (!auth) return;
+    
 
     const { id } = req.params;
     const { status } = req.body;
-    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
-    }
-    await db.collection('orders').doc(id).update({ status });
-    await auditLog({ type: 'order_status_change', reason: `Order ${id} status → ${status}` });
+
+    await OrderService.adminUpdateOrderStatus(id, status, auth.uid);
     clearAdminCache();
     res.json({ updated: true, id, status });
   } catch (e) {
@@ -859,15 +874,15 @@ router.put('/orders/:id', async (req, res) => {
 router.get('/kyc/pending', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
-    const snap = await db.collection('users').where('kyc.status', '==', 'pending').limit(50).get();
-    const pending = snap.docs.map((doc) => ({
-      uid: doc.id,
-      displayName: doc.data().displayName || '',
-      email: doc.data().email || '',
-      phone: doc.data().phone || '',
-      kyc: doc.data().kyc || {},
+    const pendingList = await commerceStore.listDocuments('users', { where: { 'kyc.status': 'pending' }, limit: 50 });
+    const pending = pendingList.map((u) => ({
+      uid: u.id,
+      displayName: u.displayName || '',
+      email: u.email || '',
+      phone: u.phone || '',
+      kyc: u.kyc || {},
     }));
     res.json({ pending });
   } catch (e) {
@@ -879,21 +894,21 @@ router.get('/kyc/pending', async (req, res) => {
 router.post('/kyc/review', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { userId, approve, notes } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
 
     const status = approve ? 'approved' : 'rejected';
 
-    await db.collection('users').doc(userId).update({
+    await commerceStore.updateDocument('users', userId, {
       'kyc.status': status,
       'kyc.reviewedAt': admin.firestore.FieldValue.serverTimestamp(),
       'kyc.reviewNotes': notes || '',
       'kyc.approved': approve === true,
     });
 
-    await db.collection('notifications').add({
+    await commerceStore.addDocument('notifications', {
       userId,
       title: approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa',
       body: approve
@@ -977,14 +992,14 @@ async function collectKyc({ status, q, limit, skip }) {
   let scanned = 0;
   while (scanned < KYC_MAX_SCAN) {
     const take = Math.min(KYC_PAGE_SCAN, KYC_MAX_SCAN - scanned);
-    const snap = await db.collection('users')
-      .where('kyc.status', 'in', KYC_STATUSES)
-      .offset(scanned)
-      .limit(take)
-      .get();
-    scanned += snap.docs.length;
-    for (const doc of snap.docs) {
-      const d = doc.data();
+    const docs = await commerceStore.listDocuments('users', {
+      where: [{ field: 'kyc.status', op: 'in', value: KYC_STATUSES }],
+      offset: scanned,
+      limit: take,
+    });
+    scanned += docs.length;
+    for (const doc of docs) {
+      const d = doc;
       if (status && status !== 'all' && d.kyc.status !== status) continue;
       const row = {
         uid: doc.id,
@@ -997,7 +1012,7 @@ async function collectKyc({ status, q, limit, skip }) {
       if (!kycMatches(row, needle)) continue;
       matched.push(row);
     }
-    if (snap.docs.length < take) break;
+    if (docs.length < take) break;
   }
 
   matched.sort((a, b) => b._t - a._t);
@@ -1014,7 +1029,7 @@ async function collectKyc({ status, q, limit, skip }) {
 router.get('/kyc/all', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { rows, total, truncated } = await collectKyc({
       status: req.query.status,
@@ -1036,34 +1051,34 @@ router.get('/kyc/all', async (req, res) => {
 router.post('/kyc/revoke', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { userId, reason } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
 
-    await db.collection('users').doc(userId).update({
+    await commerceStore.updateDocument('users', userId, {
       'kyc.status': 'revoked',
       'kyc.approved': false,
-      'kyc.revokedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'kyc.revokedAt': commerceStore.serverTimestamp,
       'kyc.reviewNotes': reason || 'KYC imefutwa na admin.',
     });
 
     await updateSellerKycOnProducts(userId, false);
 
-    await db.collection('audit_log').add({
+    await commerceStore.addDocument('audit_log', {
       userId,
       type: 'kyc_revoked',
       amount: 0,
       reason: `KYC revoked by admin. Reason: ${reason || ''}`,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: commerceStore.serverTimestamp,
     });
 
-    await db.collection('notifications').add({
+    await commerceStore.addDocument('notifications', {
       userId,
       title: 'KYC Imefutwa',
       body: `KYC yako imefutwa na admin. Sababu: ${reason || 'Wasiliana na msaada'}. Tuma tena KYC yako.`,
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: commerceStore.serverTimestamp,
     });
 
     clearAdminCache();
@@ -1080,12 +1095,12 @@ router.post('/kyc/revoke', async (req, res) => {
 router.post('/kyc/delete', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
 
-    await db.collection('users').doc(userId).set({
+    await commerceStore.updateDocument('users', userId, {
       kyc: {
         status: 'none',
         approved: false,
@@ -1093,7 +1108,7 @@ router.post('/kyc/delete', async (req, res) => {
         reviewedAt: null,
         revokedAt: null,
       },
-    }, { merge: true });
+    });
 
     await updateSellerKycOnProducts(userId, false);
 
@@ -1104,12 +1119,12 @@ router.post('/kyc/delete', async (req, res) => {
       reason: 'KYC deleted by admin.',
     });
 
-    await db.collection('notifications').add({
+    await commerceStore.addDocument('notifications', {
       userId,
       title: 'KYC Imefutwa',
       body: 'KYC yako imefutwa na admin. Tuma tena KYC yako inapohitajika.',
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: commerceStore.serverTimestamp,
     });
 
     clearAdminCache();
@@ -1123,11 +1138,10 @@ router.post('/kyc/delete', async (req, res) => {
 router.get('/audit-log', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
-    const snap = await db.collection('audit_log').orderBy('timestamp', 'desc').limit(limit).get();
-    const logs = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const logs = await commerceStore.listDocuments('audit_log', { orderBy: 'timestamp', direction: 'desc', limit });
     res.json({ logs });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -1140,10 +1154,9 @@ const publicRouter = express.Router();
 publicRouter.get('/reports', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
     const limit = Math.min(parseInt(req.query.limit) || 200, 500);
-    const snap = await db.collection('reports').orderBy('createdAt', 'desc').limit(limit).get();
-    const reports = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const reports = await commerceStore.listDocuments('reports', { orderBy: 'createdAt', direction: 'desc', limit });
     res.json({ reports });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -1153,13 +1166,147 @@ publicRouter.get('/reports', async (req, res) => {
 publicRouter.get('/fraud/alerts', async (req, res) => {
   try {
     if (!(await adminGate(req, res))) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    
     const limit = Math.min(parseInt(req.query.limit) || 200, 500);
-    const snap = await db.collection('fraud_alerts').orderBy('createdAt', 'desc').limit(1000).get();
-    let alerts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let alerts = await commerceStore.listDocuments('fraud_alerts', { orderBy: 'createdAt', direction: 'desc', limit: 1000 });
     if (req.query.resolved === 'false') alerts = alerts.filter((a) => a.resolved === false);
     alerts = alerts.slice(0, limit);
     res.json({ alerts });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Admin MFA (TOTP) ------------------------------------------------------
+// Enrollment is opt-in: an admin generates a secret, scans the QR in an
+// authenticator app, then confirms with a valid code. Verification endpoints
+// are provided here; enforcement in requireAdmin is intentionally NOT enabled
+// yet (would lock out the existing secret-only panel). Enable enforcement only
+// after the panel UI learns to send x-admin-totp.
+const totp = require('../../services/totp');
+const crypto = require('crypto');
+
+function encryptSecret(plain) {
+  const key = crypto.createHash('sha256').update(String(process.env.ENCRYPTION_KEY || process.env.ADMIN_SECRET || 'soko-vibe')).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, enc]).toString('base64');
+}
+
+function decryptSecret(blob) {
+  const raw = Buffer.from(String(blob), 'base64');
+  const iv = raw.slice(0, 12);
+  const tag = raw.slice(12, 28);
+  const enc = raw.slice(28);
+  const key = crypto.createHash('sha256').update(String(process.env.ENCRYPTION_KEY || process.env.ADMIN_SECRET || 'soko-vibe')).digest();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+}
+
+router.post('/mfa/enroll', async (req, res) => {
+  try {
+    const auth = await adminGate(req, res);
+    if (!auth) return;
+    const uid = auth.uid || 'admin-secret';
+    const secret = totp.generateSecret();
+    const account = uid === 'admin-secret' ? 'admin-secret' : uid;
+    const uri = totp.otpauthUri({ secret, account });
+    // Store as pending (not active) until verified.
+    try {
+      await commerceStore.updateDocument('users', uid, { 'mfa.pendingSecret': encryptSecret(secret) });
+    } catch (_) { /* user doc may not exist for admin-secret */ }
+    res.json({ success: true, secret, otpauthUri: uri });
+  } catch (e) {
+    console.error('[MFA][ENROLL]', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/mfa/verify', async (req, res) => {
+  try {
+    const auth = await adminGate(req, res);
+    if (!auth) return;
+    const uid = auth.uid || 'admin-secret';
+    const code = req.body && req.body.code;
+    const user = await commerceStore.getDocument('users', uid);
+    const pending = user && user.mfa && user.mfa.pendingSecret;
+    if (!pending) return res.status(400).json({ error: 'No pending enrollment' });
+    const secret = decryptSecret(pending);
+    if (!totp.verify(secret, code)) {
+      return res.status(400).json({ error: 'Invalid code' });
+    }
+    await commerceStore.updateDocument('users', uid, {
+      'mfa.secret': encryptSecret(secret),
+      'mfa.enabled': true,
+      'mfa.pendingSecret': null,
+      'mfa.enrolledAt': commerceStore.serverTimestamp,
+    });
+    clearAdminCache();
+    res.json({ success: true, message: 'MFA enabled' });
+  } catch (e) {
+    console.error('[MFA][VERIFY]', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/mfa/disable', async (req, res) => {
+  try {
+    const auth = await adminGate(req, res);
+    if (!auth) return;
+    const uid = auth.uid || 'admin-secret';
+    const code = req.body && req.body.code;
+    const user = await commerceStore.getDocument('users', uid);
+    const secretBlob = user && user.mfa && user.mfa.secret;
+    if (user && user.mfa && user.mfa.enabled) {
+      if (!secretBlob) return res.status(400).json({ error: 'MFA not configured' });
+      const secret = decryptSecret(secretBlob);
+      if (!totp.verify(secret, code)) return res.status(400).json({ error: 'Invalid code' });
+    }
+    await commerceStore.updateDocument('users', uid, {
+      'mfa.secret': null,
+      'mfa.enabled': false,
+      'mfa.pendingSecret': null,
+    });
+    clearAdminCache();
+    res.json({ success: true, message: 'MFA disabled' });
+  } catch (e) {
+    console.error('[MFA][DISABLE]', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Login-time TOTP check: called after the admin secret has been validated.
+// Returns ok:true if MFA is disabled OR the supplied code is valid.
+router.post('/mfa/login-check', async (req, res) => {
+  try {
+    const auth = await adminGate(req, res);
+    if (!auth) return;
+    const uid = auth.uid || 'admin-secret';
+    const code = req.body && req.body.code;
+    const user = await commerceStore.getDocument('users', uid);
+    const enabled = !!(user && user.mfa && user.mfa.enabled && user.mfa.secret);
+    if (!enabled) return res.json({ success: true, ok: true, mfaEnabled: false });
+    let secret;
+    try { secret = decryptSecret(user.mfa.secret); } catch (_) { return res.status(500).json({ error: 'MFA secret unreadable' }); }
+    if (!totp.verify(secret, code)) return res.status(400).json({ success: false, ok: false, error: 'Invalid code' });
+    res.json({ success: true, ok: true, mfaEnabled: true });
+  } catch (e) {
+    console.error('[MFA][LOGIN-CHECK]', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/mfa/status', async (req, res) => {
+  try {
+    const auth = await adminGate(req, res);
+    if (!auth) return;
+    const uid = auth.uid || 'admin-secret';
+    const user = await commerceStore.getDocument('users', uid);
+    const enabled = !!(user && user.mfa && user.mfa.enabled);
+    res.json({ success: true, enabled, hasPending: !!(user && user.mfa && user.mfa.pendingSecret) });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }

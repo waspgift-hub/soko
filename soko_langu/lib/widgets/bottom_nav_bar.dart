@@ -44,11 +44,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         return const HomeScreen();
       case 1:
         return const DiscoveryScreen();
+      // Music removed.
       case 2:
         return const SizedBox.shrink();
       case 3:
-        return const ChatInboxScreen();
+        // Sell is the central FAB, not a stacked tab.
+        return const SizedBox.shrink();
       case 4:
+        return const ChatInboxScreen();
+      case 5:
         return const ProfilePage();
       default:
         return const SizedBox.shrink();
@@ -56,8 +60,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _selectTab(int index) {
-    // Guest wall: Sell, Chat and Profile need an account.
-    if ((index == 2 || index == 3 || index == 4) &&
+    // Guest wall: Sell, Chat and Profile need an account. Music (2) is the
+    // user's own library, so it stays reachable without signing in.
+    if (index >= 3 &&
         FirebaseAuth.instance.currentUser == null) {
       requireAuth(context);
       return;
@@ -158,30 +163,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlassNavBar(ColorScheme cs) {
-    // The pill is FLAT, deliberately deviating from the `navBar` raised style
-    // in SurfacePolicy: it is a persistent element that is on screen for the
-    // whole session, so a soft-UI extrusion there reads as noise rather than
-    // emphasis. One directional shadow plus a hairline edge is enough to lift
-    // it off the content behind it. The bar's single soft accent is the Sell
-    // FAB, which is a real high-commitment control.
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final isDark = cs.brightness == Brightness.dark;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 12),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 10),
       child: RepaintBoundary(
         child: SizedBox(
-          height: 72,
+          height: 68,
           child: Container(
             decoration: BoxDecoration(
-              color: Neu.flatFill(cs.brightness),
-              borderRadius: BorderRadius.circular(40),
+              color: isDark ? const Color(0xFF181A1F) : Colors.white,
+              borderRadius: BorderRadius.circular(28),
               border: Border.all(
-                color: Neu.grooveColor(cs.brightness),
-                width: 0.5,
+                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                width: 0.8,
               ),
-              boxShadow: Neu.flat(NeuFlatDepth.rest, cs.brightness),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildTab(
                   0,
@@ -192,16 +199,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 ),
                 _buildTab(
                   1,
-                  Icons.diamond_outlined,
-                  Icons.diamond_rounded,
+                  Icons.explore_outlined,
+                  Icons.explore_rounded,
                   context.tr('discovery'),
                   cs,
                 ),
                 _buildSellTab(cs),
                 _buildTab(
-                  3,
-                  Icons.chat_outlined,
-                  Icons.chat_rounded,
+                  4,
+                  Icons.chat_bubble_outline_rounded,
+                  Icons.chat_bubble_rounded,
                   context.tr('chat'),
                   cs,
                   badgeCount: _unreadTotal,
@@ -215,13 +222,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// FLAT selected-tab background: a translucent brand-green tint, matching the
-  /// desktop sidebar so the two nav surfaces read as one system. Previously a
-  /// `Neu.inset` groove, which put a second soft-UI treatment next to the pill
-  /// and the FAB and made the bar read as entirely soft-UI.
   BoxDecoration _selectedTabDecoration(ColorScheme cs) => BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(24),
+        color: cs.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(18),
       );
 
   Widget _buildTab(
@@ -240,21 +243,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         label: label,
         onTap: () => _selectTab(index),
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
           onTap: () => _selectTab(index),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration:
-                isSelected ? _selectedTabDecoration(cs) : null,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: isSelected ? _selectedTabDecoration(cs) : null,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AnimatedScale(
-                  duration: const Duration(milliseconds: 180),
-                  scale: isSelected ? 1 : 0.9,
+                  duration: const Duration(milliseconds: 200),
+                  scale: isSelected ? 1.05 : 0.92,
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
@@ -263,28 +267,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         color: isSelected
                             ? cs.primary
                             : cs.onSurface.withValues(alpha: 0.45),
-                        size: 24,
+                        size: 22,
                       ),
                       if (badgeCount > 0)
                         Positioned(
-                          top: -6,
-                          right: -10,
+                          top: -5,
+                          right: -8,
                           child: Container(
                             constraints: const BoxConstraints(
-                              minWidth: 18,
-                              minHeight: 18,
+                              minWidth: 16,
+                              minHeight: 16,
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: cs.error,
-                              borderRadius: BorderRadius.circular(12),
-                              // Ring in the pill's own fill so the badge reads as
-                              // a cutout against it. Previously used the scaffold
-                              // colour, which matched the old grey soft-UI base
-                              // and would have left a pale halo on the flat fill.
+                              borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: Neu.flatFill(cs.brightness),
+                                color: cs.brightness == Brightness.dark ? const Color(0xFF181A1F) : Colors.white,
                                 width: 1.5,
                               ),
                             ),
@@ -292,7 +292,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               badgeCount > 99 ? '99+' : '$badgeCount',
                               style: TextStyle(
                                 color: cs.onError,
-                                fontSize: 9.5,
+                                fontSize: 9,
                                 fontWeight: FontWeight.w800,
                                 height: 1.2,
                               ),
@@ -302,15 +302,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 10.5,
                     color: isSelected
                         ? cs.primary
-                        : cs.onSurface.withValues(alpha: 0.45),
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        : cs.onSurface.withValues(alpha: 0.5),
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ],
@@ -322,56 +325,70 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildProfileTab(ColorScheme cs) {
-    final isSelected = _currentIndex == 4;
+    final isSelected = _currentIndex == 5;
     return Expanded(
       child: Semantics(
         button: true,
         selected: isSelected,
         label: context.tr('profile'),
-        onTap: () => _selectTab(4),
+        onTap: () => _selectTab(5),
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
-          onTap: () => _selectTab(4),
+          onTap: () => _selectTab(5),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration:
-                isSelected ? _selectedTabDecoration(cs) : null,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: isSelected ? _selectedTabDecoration(cs) : null,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AnimatedScale(
-                  duration: const Duration(milliseconds: 180),
-                  scale: isSelected ? 1 : 0.9,
-                  child: CircleAvatar(
-                    radius: 13,
-                    backgroundColor: cs.primary.withValues(alpha: 0.12),
-                    backgroundImage: _profilePhotoUrl != null &&
-                            _profilePhotoUrl!.isNotEmpty
-                        ? NetworkImage(_profilePhotoUrl!)
-                        : null,
-                    child: _profilePhotoUrl == null || _profilePhotoUrl!.isEmpty
-                        ? Icon(
-                            Icons.person_outline,
-                            color: isSelected
-                                ? cs.primary
-                                : cs.onSurface.withValues(alpha: 0.45),
-                            size: 16,
-                          )
-                        : null,
+                  duration: const Duration(milliseconds: 200),
+                  scale: isSelected ? 1.05 : 0.92,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? cs.primary : Colors.transparent,
+                        width: 1.8,
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(1.5),
+                    child: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: cs.primary.withValues(alpha: 0.12),
+                      backgroundImage: _profilePhotoUrl != null &&
+                              _profilePhotoUrl!.isNotEmpty
+                          ? NetworkImage(_profilePhotoUrl!)
+                          : null,
+                      child: _profilePhotoUrl == null || _profilePhotoUrl!.isEmpty
+                          ? Icon(
+                              isSelected ? Icons.person_rounded : Icons.person_outline_rounded,
+                              color: isSelected
+                                  ? cs.primary
+                                  : cs.onSurface.withValues(alpha: 0.45),
+                              size: 14,
+                            )
+                          : null,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   context.tr('profile'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 10.5,
                     color: isSelected
                         ? cs.primary
-                        : cs.onSurface.withValues(alpha: 0.45),
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        : cs.onSurface.withValues(alpha: 0.5),
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ],
@@ -389,6 +406,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         label: context.tr('sell'),
         onTap: _openAddProduct,
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
           onTap: _openAddProduct,
           child: Column(
@@ -396,27 +414,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: cs.primary,
-                  shape: BoxShape.circle,
-                  // The bar's one soft-UI accent. Selling is the highest
-                  // commitment action available here, and now that the pill and
-                  // the selected tab are flat this is the only extruded element
-                  // left — which is what gives it its emphasis. Tinted dual
-                  // shadow so the green reads as extruded from the flat pill.
-                  boxShadow: Neu.raisedHue(4, cs.primary),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.primary.withValues(alpha: 0.38),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 26),
               ),
-              const SizedBox(height: 1),
+              const SizedBox(height: 2),
               Text(
                 context.tr('sell'),
                 style: TextStyle(
                   fontSize: 10,
                   color: cs.primary,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
@@ -446,13 +466,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         context.tr('discovery'),
         1,
       ),
-      _NavItem(Icons.chat_outlined, Icons.chat_rounded, context.tr('chat'), 3,
-        badgeCount: _unreadTotal),
+      _NavItem(
+        Icons.chat_outlined,
+        Icons.chat_rounded,
+        context.tr('chat'),
+        4,
+        badgeCount: _unreadTotal,
+      ),
       _NavItem(
         Icons.person_outline,
         Icons.person_rounded,
         context.tr('profile'),
-        4,
+        5,
       ),
     ];
 

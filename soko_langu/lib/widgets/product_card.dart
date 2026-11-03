@@ -54,7 +54,7 @@ class ProductCard extends StatelessWidget {
         final priceSize = (13 * scale).clamp(12.0, 16.0);
         final smallSize = (10.5 * scale).clamp(9.5, 12.5);
         final padding = (8.0 * scale).clamp(6.0, 11.0);
-        const radius = 15.0;
+        const radius = 20.0;
 
         final card = Container(
           decoration: SurfacePolicy.decorate(

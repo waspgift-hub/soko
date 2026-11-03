@@ -2,8 +2,7 @@
 // Handles: event categorization, user preferences, channel selection,
 // localization, deduplication, retry, rate limiting, and delivery tracking.
 
-const { ObjectId } = require('mongodb');
-const Joi = require('joi');
+// Firestore-backed orchestrator. Mongo/Joi are not part of this stack.
 
 // ---------------------------------------------------------------------------
 // Event Catalogue — Categories and templates

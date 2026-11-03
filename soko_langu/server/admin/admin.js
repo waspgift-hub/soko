@@ -6,6 +6,7 @@
 
 const API = '';
 const SECRET_KEY = 'sv_admin_secret';
+let MFA_CODE = '';
 const THEME_KEY = 'sv_admin_theme';
 // A request must never hang the UI forever: abort slow calls so every
 // section either renders or shows its error instead of spinning endlessly.
@@ -124,6 +125,8 @@ const TITLES_EN = {
   promos: 'Boost & Flash Sales', revenue: 'Platform Revenue', finance: 'Finance & Ledger',
   referrals: 'Referrals', broadcasts: 'Broadcasts', audit: 'Audit', stats: 'Usage Statistics', settings: 'Settings',
   landing: 'Landing / Waitlist',
+  insights: 'AI business briefing',
+  releases: 'App releases',
 };
 const SW2EN = {
   // Nav / titles
@@ -334,6 +337,7 @@ async function api(path, opts = {}) {
   const s = secret();
   if (!s) throw new Error('Ingia kwanza');
   const headers = { ...(opts.headers || {}), 'x-admin-secret': s };
+  if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
   if (opts.body && typeof opts.body === 'object') {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
@@ -349,6 +353,14 @@ async function api(path, opts = {}) {
     clearTimeout(to);
   }
   let j = null; try { j = await r.json(); } catch (_) {}
+  if (r.status === 401 && j && j.error === 'MFA_REQUIRED' && !opts._mfaRetry) {
+    const code = await promptTotpCode();
+    if (code) {
+      MFA_CODE = code;
+      opts._mfaRetry = true;
+      return api(path, opts);
+    }
+  }
   if (r.status === 401) {
     try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
     showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
@@ -434,6 +446,8 @@ const TITLES = {
   finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
   stats: 'Takwimu za Matumizi', settings: 'Mipangilio',
   landing: 'Landing / Waitlist',
+  insights: 'AI BI',
+  releases: 'Matoleo',
 };
 const Pg = {};
 function pgState(sec, field) {
@@ -2205,6 +2219,82 @@ async function loadStats() {
   touch(); icons();
 }
 
+async function loadInsights() {
+  const el = secEl('insights');
+  el.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia muhtasari…</div>';
+  try {
+    const j = await postJSON('/api/v1/admin/ai/insights', {});
+    const d = (j && j.data) || {};
+    const f = d.facts || {};
+    const actions = d.recommendedActions || [];
+    el.innerHTML =
+      '<div class="ov-head"><div><h2>Muhtasari wa biashara</h2><p class="dim">Kutoka dashibodi na metrics halisi. AI haibuni namba.</p></div></div>' +
+      '<div class="card"><p>' + esc(d.summary || 'Hakuna muhtasari.') + '</p>' +
+      '<p class="hint3">Imezalishwa ' + esc(f.generatedAt || '—') + (d.aiUsed ? ' · maandishi yalipolishiwa' : ' · template tu') + '</p></div>' +
+      '<div class="grid kpis" style="margin-top:16px">' +
+      kpi('Watumiaji', fmtNum(f.users), 'wapya leo ' + fmtNum(f.newUsersToday), 'users') +
+      kpi('Maagizo', fmtNum(f.orders), 'yaliyokamilika ' + fmtNum(f.completedOrders), 'shopping-bag') +
+      kpi('Bidhaa', fmtNum(f.products), '', 'package') +
+      kpi('Tume TSh', fmtNum(f.commissionRevenueTzs), 'escrow ' + fmtNum(f.escrowHeldTzs), 'wallet') +
+      '</div>' +
+      '<div class="card" style="margin-top:16px"><div class="cardhead"><h3>Hatua zinazopendekezwa</h3></div>' +
+      (actions.length ? '<ul>' + actions.map((a) => '<li>' + esc(a) + '</li>').join('') + '</ul>' : '<p class="dim">Hakuna hatua ya fedha au usalama iliyopendekezwa kutoka vipimo.</p>') +
+      '<p class="hint">Vyanzo: ' + esc((f.sources || []).join(', ')) + '</p></div>';
+  } catch (e) {
+    el.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>';
+  }
+  touch(); icons();
+}
+
+async function loadReleases() {
+  const el = secEl('releases');
+  el.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia matoleo…</div>';
+  try {
+    const j = await getJSON('/api/v1/admin/settings');
+    const s = (j && j.data) || {};
+    const r = s.appRelease || {};
+    el.innerHTML =
+      '<div class="ov-head"><div><h2>Matoleo ya programu</h2><p class="dim">Hifadhi metadata tu. Hii haichapishi Google Play wala App Store.</p></div></div>' +
+      '<div class="card"><div class="settings-grid">' +
+      '<div class="settings-group">' +
+      '<label class="lab">Toleo jipya</label><input id="rel-latestVersion" class="field" value="' + esc(r.latestVersion || '') + '">' +
+      '<label class="lab">Build</label><input id="rel-latestBuild" class="field" type="number" value="' + esc(r.latestBuild || 0) + '">' +
+      '<label class="lab">Toleo la chini linalotumika</label><input id="rel-minSupportedVersion" class="field" value="' + esc(r.minSupportedVersion || '') + '">' +
+      '<label class="lab">Build ya chini</label><input id="rel-minSupportedBuild" class="field" type="number" value="' + esc(r.minSupportedBuild || 0) + '">' +
+      '</div><div class="settings-group">' +
+      '<label class="lab">Umuhimu</label><select id="rel-urgency" class="field">' +
+      ['none','recommended','required'].map((u) => '<option value="' + u + '"' + (r.urgency === u ? ' selected' : '') + '>' + u + '</option>').join('') +
+      '</select>' +
+      '<label class="lab">Maelezo ya toleo</label><textarea id="rel-releaseNotes" class="field" rows="5">' + esc(r.releaseNotes || '') + '</textarea>' +
+      '<label class="lab chk"><input type="checkbox" id="rel-published" ' + (r.published ? 'checked' : '') + '> Imechapishwa kwa wateja (thibitisha kwanza)</label>' +
+      '<p class="hint">URL za duka zimeachwa tupu hadi listing rasmi ipatikane.</p>' +
+      '<button class="btn" id="rel-save">Hifadhi metadata</button>' +
+      '</div></div></div>';
+    $('rel-save').addEventListener('click', async () => {
+      try {
+        await putJSON('/api/v1/admin/settings', { patch: { appRelease: {
+          latestVersion: $('rel-latestVersion').value,
+          latestBuild: Number($('rel-latestBuild').value),
+          minSupportedVersion: $('rel-minSupportedVersion').value,
+          minSupportedBuild: Number($('rel-minSupportedBuild').value),
+          urgency: $('rel-urgency').value,
+          releaseNotes: $('rel-releaseNotes').value,
+          published: $('rel-published').checked,
+          androidDownloadUrl: '',
+          iosDownloadUrl: '',
+        }}});
+        toast('Imehifadhiwa');
+        loadReleases();
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+  } catch (e) {
+    el.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>';
+  }
+  touch(); icons();
+}
+
 // ---------------------------------------------------------------------------
 // Promos: Boost & Flash Sale analytics
 // ---------------------------------------------------------------------------
@@ -2291,10 +2381,13 @@ async function loadRevenue() {
       '<div class="grid kpis">' +
       kpi('Tume ya Mauzo', fmtTZS(fin.totalCommissions || 0), 'commission fee', 'percent') +
       kpi('Ada za Boost', fmtTZS(fin.totalBoostRevenue || 0), 'boost fee', 'megaphone') +
-      kpi('Jumla ya Mapato', fmtTZS(fin.totalAdminBalance || 0), 'commission + boost', 'coins') +
+      kpi('Ada za KYC', fmtTZS(fin.totalKycRevenue || 0), 'kyc fee', 'shield-check') +
+      kpi('Mapato Mengine', fmtTZS(fin.totalOtherRevenue || 0), 'other service', 'layers') +
+      kpi('Mapato ya AdMob', fmtTZS(fin.actualAdRevenue || 0), 'actual ad revenue', 'megaphone') +
+      kpi('Jumla ya Mapato', fmtTZS(fin.totalAdminBalance || 0), 'all revenue', 'coins') +
       kpi('Inapatikana kuondolewa', fmtTZS(fin.availableBalance || 0), 'baada ya withdrawals', 'banknote') +
       '</div>' +
-      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) → ClickPesa</button></div>' +
+      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) ClickPesa</button><button class="btn sm" onclick="mfaManage()">MFA (TOTP)</button></div>' +
       '<div class="grid cols2" style="margin-top:6px">' +
       '<div class="card"><div class="cardhead"><h3>Ledger ya Mapato (commission/boost)</h3></div>' +
       '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Mtumiaji</th><th>Aina</th><th>Kiasi</th><th>Tume</th></tr></thead><tbody>' +
@@ -2819,7 +2912,7 @@ const LOADERS = {
   kyc: loadKyc, promos: loadPromos, revenue: loadRevenue,
   finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
   landing: loadLanding,
-  stats: loadStats, settings: loadSettings,
+  stats: loadStats, insights: loadInsights, releases: loadReleases, settings: loadSettings,
 };
 function bindToolbar(sec, qId, goId, qKey) {
   const el = secEl(sec);
@@ -2914,6 +3007,15 @@ async function trySecretLogin() {
   try { localStorage.setItem(SECRET_KEY, v); } catch (_) {}
   try {
     await getJSON('/api/v1/admin/dashboard');
+    let st = null;
+    try { st = await getJSON('/api/admin/mfa/status'); } catch (_) {}
+    if (st && st.enabled) {
+      const code = await promptTotpCode();
+      if (!code) { throw new Error('MFA code required'); }
+      const chk = await postJSON('/api/admin/mfa/login-check', { code });
+      if (!chk || !chk.ok) { throw new Error('MFA code invalid'); }
+      MFA_CODE = code;
+    }
     $('meName').textContent = 'ADMIN_SECRET';
     $('meRole').textContent = 'secret mode';
     showApp();
@@ -2924,10 +3026,26 @@ async function trySecretLogin() {
     $('secSave').disabled = false;
   }
 }
+
+function promptTotpCode() {
+  return new Promise((resolve) => {
+    openModal(
+      '<h3>MFA Code</h3>' +
+      '<p class="msub">Ingiza code ya 6 tarakimu kutoka kwenye app ya authenticator.</p>' +
+      '<label>Code (TOTP)</label><input class="field" id="totpLoginCode" placeholder="123456" maxlength="6">' +
+      '<div class="mfooter"><button class="btn" id="totpCancel">Futa</button><button class="btn accent" id="totpOk">Ingia</button></div>'
+    );
+    $('totpCancel').onclick = () => { closeModal(); resolve(null); };
+    $('totpOk').onclick = () => { const c = ($('totpLoginCode').value || '').trim(); closeModal(); resolve(c || null); };
+    const inp = $('totpLoginCode');
+    if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('totpOk').click(); });
+  });
+}
 $('secSave').onclick = () => { trySecretLogin().catch(handleActionErr); };
 $('secVal').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('secSave').click(); });
 $('logoutBtn').onclick = () => {
   try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+  MFA_CODE = '';
   location.reload();
 };
 
@@ -2960,3 +3078,49 @@ window.addEventListener('error', (ev) => {
 
 // Apply stored theme on first paint
 applyTheme();
+async function mfaManage() {
+  let status;
+  try { status = await getJSON('/api/admin/mfa/status'); } catch (e) { toast(e.message, false); return; }
+  const enabled = !!(status && status.enabled);
+  const pending = !!(status && status.hasPending);
+  openModal(
+    '<h3>MFA (TOTP)</h3>' +
+    '<p class="msub">Hali: ' + (enabled ? 'IMAMILISHWA' : (pending ? 'ENROLLMENT INASUBIRI' : 'IMEZIMWA')) + '</p>' +
+    (enabled
+      ? '<label>Code ya kuzima (TOTP)</label><input class="field" id="mfaCode" placeholder="123456">' +
+        '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn danger" onclick="mfaDisable()">Zima MFA</button></div>'
+      : (pending
+        ? '<label>Code ya kuthibitisha</label><input class="field" id="mfaCode" placeholder="123456">' +
+          '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn accent" onclick="mfaVerify()">Thibitisha</button></div>'
+        : '<p class="msub">Bonyeza "Anza Enrollment" kuanza.</p>' +
+          '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn accent" onclick="mfaEnroll()">Anza Enrollment</button></div>'))
+  );
+}
+async function mfaEnroll() {
+  try {
+    const r = await postJSON('/api/admin/mfa/enroll', {});
+    openModal(
+      '<h3>MFA Enrollment</h3>' +
+      '<p class="msub">Scan QR hii kwenye app ya authenticator au andika secret manually.</p>' +
+      '<div style="text-align:center;margin:12px 0"><code style="word-break:break-all">' + esc(r.secret) + '</code></div>' +
+      '<p class="msub">otpauth URI: <code style="word-break:break-all;font-size:11px">' + esc(r.otpauthUri) + '</code></p>' +
+      '<label>Code ya kuthibitisha</label><input class="field" id="mfaCode" placeholder="123456">' +
+      '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn accent" onclick="mfaVerify()">Thibitisha</button></div>'
+    );
+  } catch (e) { toast(e.message, false); }
+}
+async function mfaVerify() {
+  const code = ($('mfaCode') && $('mfaCode').value) || '';
+  try {
+    await postJSON('/api/admin/mfa/verify', { code });
+    closeModal(); toast('MFA imewashwa', true);
+  } catch (e) { toast(e.message, false); }
+}
+async function mfaDisable() {
+  const code = ($('mfaCode') && $('mfaCode').value) || '';
+  if (!(await confirmModal('Zima MFA', 'Una uhakika unataka kuzima MFA?', 'Ndiyo, zima', true))) return;
+  try {
+    await postJSON('/api/admin/mfa/disable', { code });
+    closeModal(); toast('MFA imezimwa', true);
+  } catch (e) { toast(e.message, false); }
+}

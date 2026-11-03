@@ -665,6 +665,6 @@ class UserService {
   /// Claims a username for the current user via the username service.
   /// Throws if the username is already taken or invalid.
   Future<void> claimUsername(String username) async {
-    return UsernameService().claim(_auth.currentUser!.uid, username);
+    return UsernameService.instance.claim(_auth.currentUser!.uid, username);
   }
 }

@@ -5,10 +5,19 @@ let mediaQueue = null;
 let financeQueue = null;
 let notificationQueue = null;
 
+// Failed jobs retry with exponential backoff instead of being dropped on the
+// first error. Keep finished-job history bounded so Redis memory stays flat.
+const DEFAULT_JOB_OPTIONS = {
+  attempts: 5,
+  backoff: { type: 'exponential', delay: 5000 },
+  removeOnComplete: 100,
+  removeOnFail: 500,
+};
+
 function getMediaQueue() {
   if (!mediaQueue) {
     const connection = getRedis();
-    mediaQueue = new Queue('media', { connection });
+    mediaQueue = new Queue('media', { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS });
   }
   return mediaQueue;
 }
@@ -18,7 +27,7 @@ function getMediaQueue() {
 function getNotificationQueue() {
   if (!notificationQueue) {
     const connection = getRedis();
-    notificationQueue = new Queue('notifications', { connection });
+    notificationQueue = new Queue('notifications', { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS });
   }
   return notificationQueue;
 }
@@ -26,7 +35,7 @@ function getNotificationQueue() {
 function getFinanceQueue() {
   if (!financeQueue) {
     const connection = getRedis();
-    financeQueue = new Queue('finance', { connection });
+    financeQueue = new Queue('finance', { connection, defaultJobOptions: DEFAULT_JOB_OPTIONS });
   }
   return financeQueue;
 }
@@ -87,6 +96,7 @@ async function closeQueues() {
 }
 
 module.exports = {
+  FINANCE_SCHEDULE,
   getMediaQueue,
   getFinanceQueue,
   getNotificationQueue,

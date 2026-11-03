@@ -421,7 +421,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                       ),
                     ),
-                  ],
                 ],
                 Column(
                   mainAxisSize: MainAxisSize.min,

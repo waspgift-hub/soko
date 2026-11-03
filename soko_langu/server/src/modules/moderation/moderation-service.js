@@ -1,6 +1,5 @@
-const admin = require('firebase-admin');
 const { getStore } = require('../../config/database');
-const { getFirebaseAuth, getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 const { notifyAdmins } = require('../legacy-compat/notify');
 
 function httpError(status, message) {
@@ -32,7 +31,7 @@ async function submitReport({ reporterUid, reporterName, reportedUserId, reporte
     throw httpError(400, 'Missing required fields');
   }
   const store = getStore();
-  const auth = getFirebaseAuth();
+  const auth = require('firebase-admin').auth();
 
   let email = null;
   let phone = null;
@@ -59,23 +58,20 @@ async function submitReport({ reporterUid, reporterName, reportedUserId, reporte
 
   // Mirror to Firestore so existing admin screens keep working.
   try {
-    const store = getFirebaseFirestore();
-    if (store) {
-      await store.collection('reports').add({
-        reporterId: reporterUid,
-        reporterName: reporterName || 'Anonymous',
-        reportedUserId,
-        reportedUserName: reportedUserName || 'Anonymous',
-        productId: productId || null,
-        productName: productName || null,
-        reason,
-        description,
-        status: 'pending',
-        adminNote: null,
-        pgReportId: report.id,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
+    await commerceStore.addDocument('reports', {
+      reporterId: reporterUid,
+      reporterName: reporterName || 'Anonymous',
+      reportedUserId,
+      reportedUserName: reportedUserName || 'Anonymous',
+      productId: productId || null,
+      productName: productName || null,
+      reason,
+      description,
+      status: 'pending',
+      adminNote: null,
+      pgReportId: report.id,
+      createdAt: commerceStore.serverTimestamp(),
+    });
   } catch (e) {
     console.error('[MODERATION] firestore mirror failed:', e.message);
   }

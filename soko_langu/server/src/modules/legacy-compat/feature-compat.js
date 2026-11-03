@@ -32,6 +32,7 @@ const { localizeNotif, localizeDefaultReason, smsSafeForGateway } = require('../
 const { parseFlashSaleEndTime, isFlashSaleStillActive } = require('../../../money');
 const cache = require('../../../cache');
 const config = require('../../config');
+const commerceStore = require('../../services/commerce-store');
 
 // ─── Legacy constants (server/index.js) ─────────────────────────────────
 const BOOST_TIERS = {
@@ -80,12 +81,11 @@ const notifLangCache = new Map();
 
 // ─── Notification helpers (ported from server/index.js) ────────────────
 async function getUserNotifLang(db, userId) {
-  if (!db) return 'sw';
   const cached = notifLangCache.get(`notif_lang:${userId}`);
   if (cached) return cached;
   try {
-    const snap = await db.collection('users').doc(userId).get();
-    const lang = (snap.exists && snap.data().langCode) || 'sw';
+    const user = await commerceStore.getDocument('users', userId, { db });
+    const lang = user?.langCode || 'sw';
     notifLangCache.set(`notif_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
     return lang;
   } catch (e) {
@@ -96,13 +96,11 @@ async function getUserNotifLang(db, userId) {
 
 // SMS language is a SEPARATE preference (smsLangCode) from the in-app language.
 async function getUserSmsLang(db, userId) {
-  if (!db) return 'sw';
   const cached = notifLangCache.get(`sms_lang:${userId}`);
   if (cached) return cached;
   try {
-    const snap = await db.collection('users').doc(userId).get();
-    const data = snap.data() || {};
-    const lang = data.smsLangCode || data.langCode || 'sw';
+    const user = await commerceStore.getDocument('users', userId, { db });
+    const lang = user?.smsLangCode || user?.langCode || 'sw';
     notifLangCache.set(`sms_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
     return lang;
   } catch (e) {
@@ -198,18 +196,18 @@ async function notifyBoostPaymentFailed(db, tx, reason = '') {
     const reasonText = reason ? `. Sababu: ${localizeDefaultReason(reasonLang, reason)}` : '';
     const title = 'Malipo ya Boost Yameshindikana';
     const body = `Boost ya ${tx.productName || 'bidhaa yako'} haikukamilika${reasonText}. Jaribu tena kwenye app.`;
-    await db.collection('notifications').add({
+    await commerceStore.addDocument("notifications", {
       userId: tx.userId,
       title,
       body,
       isRead: false,
       type: 'boost',
       data: { type: 'boost', status: 'failed', productId: tx.productId || '' },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: commerceStore.serverTimestamp,
     });
     await sendOneSignalNotification(tx.userId, title, body, { type: 'boost', status: 'failed', productId: tx.productId || '' });
-    const userSnap = await db.collection('users').doc(tx.userId).get();
-    const phone = userSnap.data()?.phone || tx.buyerPhone || '';
+    const user = await commerceStore.getDocument("users", tx.userId);
+    const phone = user?.phone || tx.buyerPhone || '';
     if (phone) {
       const amount = tx.totalAmount || tx.amount || 0;
       const msg = `Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
@@ -298,25 +296,25 @@ async function releaseExpiredEscrows(db) {
       await doc.ref.update({
         status: 'delivered',
         escrowReleased: true,
-        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        escrowReleasedAt: commerceStore.serverTimestamp,
         escrowAutoReleased: true,
       });
 
       if (sellerId && sellerReceives > 0) {
-        const autoSellerDoc = await db.collection('users').doc(sellerId).get();
-        const autoPending = autoSellerDoc.exists ? (autoSellerDoc.data().pendingEscrow || 0) : 0;
+        const autoSeller = await commerceStore.getDocument("users", sellerId);
+        const autoPending = autoSeller ? (autoSeller.pendingEscrow || 0) : 0;
         const actualPending = Math.min(sellerReceives, autoPending);
-        await db.collection('users').doc(sellerId).update({
+        await commerceStore.updateDocument("users", sellerId, {
           sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
           pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
         });
 
-        await db.collection('notifications').add({
+        await commerceStore.addDocument("notifications", {
           userId: sellerId,
           title: 'Escrow Imefunguliwa Kiotomatiki',
           body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
           isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
         try {
           await sendOneSignalNotification(sellerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_auto_release', transactionId: doc.id });
@@ -324,12 +322,12 @@ async function releaseExpiredEscrows(db) {
       }
 
       if (tx.buyerId) {
-        await db.collection('notifications').add({
+        await commerceStore.addDocument("notifications", {
           userId: tx.buyerId,
           title: 'Escrow Imefunguliwa Kiotomatiki',
           body: `Muda wa escrow ya ${tx.productName || 'Bidhaa'} umeisha. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda.`,
           isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
         try {
           await sendOneSignalNotification(tx.buyerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`, { type: 'escrow_auto_release', transactionId: doc.id });
@@ -371,9 +369,8 @@ function clickPesaFailureReasonFrom(resp, orderId) {
 // failure the transaction stays pending so the next run can retry — the same
 // recovery the poller gives the full router.
 async function boostPaymentSuccess(db, orderId) {
-  const txDoc = await db.collection('transactions').doc(orderId).get();
-  if (!txDoc.exists) return;
-  const tx = txDoc.data();
+  const tx = await commerceStore.getDocument("transactions", orderId);
+  if (!tx) return;
   if (tx.status === 'completed' || tx.status === 'escrow_hold') return;
 
   const tier = tx.tier || 'bronze';
@@ -383,7 +380,7 @@ async function boostPaymentSuccess(db, orderId) {
   const batch = db.batch();
   batch.update(txDoc.ref, {
     status: 'completed',
-    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    completedAt: commerceStore.serverTimestamp,
   });
   if (tx.productId) {
     batch.update(db.collection('products').doc(tx.productId), {
@@ -439,7 +436,7 @@ async function failStalePendingBoosts(db) {
         await doc.ref.update({
           status: 'failed',
           failureReason: reason,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          completedAt: commerceStore.serverTimestamp,
         });
         await notifyBoostPaymentFailed(db, tx, reason);
         continue;
@@ -450,7 +447,7 @@ async function failStalePendingBoosts(db) {
       await doc.ref.update({
         status: 'failed',
         failureReason: reason,
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        completedAt: commerceStore.serverTimestamp,
       });
       await notifyBoostPaymentFailed(db, tx, reason);
     }
@@ -464,7 +461,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
   const A = fbAdmin || admin;
 
   function verifyToken(header) {
-    return A.auth().verifyIdToken(String(header || '').replace('Bearer ', '').trim());
+    return require('firebase-admin').auth().verifyIdToken(String(header || '').replace('Bearer ', '').trim());
   }
 
   const router = express.Router();
@@ -474,15 +471,17 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
     try {
       const { phone } = req.body;
       if (!phone) return res.status(400).json({ error: 'Phone is required' });
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanPhone = phone.replace(/\D/g, '');
-      const snap = await db.collection('users')
-        .where('phone', 'in', [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`])
-        .limit(1)
-        .get();
+      const users = await commerceStore.listDocuments('users', {
+        where: [
+          { field: 'phone', op: 'in', value: [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`] }
+        ],
+        limit: 1,
+        db
+      });
 
-      res.json({ exists: !snap.empty });
+      res.json({ exists: users.length > 0 });
     } catch (e) {
       console.error('/api/auth/check-phone error:', e.message);
       res.status(500).json({ error: 'Internal server error' });
@@ -493,17 +492,19 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
     try {
       const { email } = req.body;
       if (!email) return res.status(400).json({ error: 'Email is required' });
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-      const snap = await db.collection('users')
-        .where('email', '==', email.trim().toLowerCase())
-        .limit(1)
-        .get();
+      const users = await commerceStore.listDocuments('users', {
+        where: [
+          { field: 'email', op: '==', value: email.trim().toLowerCase() }
+        ],
+        limit: 1,
+        db
+      });
 
-      let exists = !snap.empty;
+      let exists = users.length > 0;
       if (!exists) {
         try {
-          await A.auth().getUserByEmail(email.trim().toLowerCase());
+          await require('firebase-admin').auth().getUserByEmail(email.trim().toLowerCase());
           exists = true;
         } catch (_) {}
       }
@@ -571,17 +572,18 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
 
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
 
-      await db.collection('notifications').add({
+      await commerceStore.addDocument('notifications', {
         userId,
         title,
         body: body || '',
         data: data || {},
         isRead: false,
-        createdAt: A.firestore.FieldValue.serverTimestamp(),
-      });
+        createdAt: commerceStore.serverTimestamp,
+      }, { db });
+
 
       const notifType = data && data.type;
       await sendOneSignalNotification(userId, title, body || '', { ...(data || {}), type: notifType || 'general' });
@@ -607,10 +609,10 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
 
-      const existing = userDoc.data().kyc;
+      const existing = user.kyc;
       if (existing && existing.status === 'approved') {
         return res.status(400).json({ error: 'KYC already approved' });
       }
@@ -670,11 +672,11 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           const feeTx = feeSnap.docs[0];
           feeAmount = feeTx.data().amount || 15000;
           feeReference = feeTx.id;
-          feePaidAt = feeTx.data().completedAt || A.firestore.FieldValue.serverTimestamp();
+          feePaidAt = feeTx.data().completedAt || commerceStore.serverTimestamp;
         }
       } catch (_) {}
 
-      await db.collection('users').doc(userId).update({
+      await commerceStore.updateDocument("users", userId, {
         kyc: {
           fullName,
           firstName: (firstName || '').trim().slice(0, 100),
@@ -695,7 +697,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           status,
           approved: false,
           reviewNotes: reason,
-          submittedAt: A.firestore.FieldValue.serverTimestamp(),
+          submittedAt: commerceStore.serverTimestamp,
           reviewedAt: null,
         },
       });
@@ -703,24 +705,25 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       // Notify admin about new KYC submission
       const adminSnap = await db.collection('users').where('isAdmin', '==', true).limit(5).get();
       for (const adminDoc of adminSnap.docs) {
-        await db.collection('notifications').add({
+        await commerceStore.addDocument('notifications', {
           userId: adminDoc.id,
           title: 'KYC Mpya Imewasilishwa',
           body: `${fullName} ametuma KYC yake. Tafadhali kagua.`,
           isRead: false,
-          createdAt: A.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
           data: { type: 'kyc_review', userId },
-        });
+        }, { db });
+
         await sendOneSignalNotification(adminDoc.id, 'KYC Mpya Imewasilishwa', `${fullName} ametuma KYC yake. Tafadhali kagua.`, { type: 'kyc', userId }).catch(() => {});
       }
 
       // Notify user
-      await db.collection('notifications').add({
+      await commerceStore.addDocument("notifications", {
         userId,
         title: 'KYC Imewasilishwa',
         body: 'KYC yako imewasilishwa. Subiri ukaguzi wa admin. Utapata taarifa ikikubaliwa.',
         isRead: false,
-        createdAt: A.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
 
       res.json({
@@ -747,10 +750,10 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         if (!adminAuth.ok) return;
       }
 
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
 
-      const kyc = userDoc.data().kyc || { status: 'none' };
+      const kyc = user.kyc || { status: 'none' };
       res.json({ kyc });
     } catch (e) {
       res.status(500).json({ error: 'Internal server error' });
@@ -768,9 +771,12 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       // clientMessageId, so return the original instead of duplicating.
       if (clientMessageId) {
         try {
-          const dupSnap = await db.collection('chat_rooms').doc(roomId).collection('messages').where('client_message_id', '==', clientMessageId).limit(1).get();
-          if (!dupSnap.empty) {
-            return res.json({ success: true, messageId: dupSnap.docs[0].id, duplicate: true });
+          const users = await commerceStore.listDocuments('chat_rooms/' + roomId + '/messages', {
+            where: [{ field: 'client_message_id', op: '==', value: clientMessageId }],
+            limit: 1,
+          });
+          if (users.length > 0) {
+            return res.json({ success: true, messageId: users[0].id, duplicate: true });
           }
         } catch (_) {}
       }
@@ -782,7 +788,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       let decoded;
       try {
-        decoded = await A.auth().verifyIdToken(authHeader.slice(7));
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
       } catch {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -790,26 +796,26 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         return res.status(403).json({ error: 'Sender ID mismatch' });
       }
 
-      const senderDoc = await db.collection('users').doc(senderId).get();
-      if (senderDoc.exists && senderDoc.data().isSuspended === true) {
+      const senderDoc = await commerceStore.getDocument("users", senderId);
+      if (senderDoc && senderDoc.isSuspended === true) {
         return res.status(403).json({ error: 'Account suspended' });
       }
 
-      const roomDoc = await db.collection('chat_rooms').doc(roomId).get();
-      if (!roomDoc.exists) {
+      const roomDoc = await commerceStore.getDocument('chat_rooms', roomId);
+      if (!roomDoc) {
         return res.status(404).json({ error: 'Chat room not found' });
       }
-      const room = roomDoc.data();
+      const room = roomDoc;
       if (!room.participants.includes(senderId)) {
         return res.status(403).json({ error: 'You are not a participant in this room' });
       }
 
       // Write message to Firestore
-      const msgRef = await db.collection('chat_rooms').doc(roomId).collection('messages').add({
+      const messageId = await commerceStore.addDocument('chat_rooms/' + roomId + '/messages', {
         sender_id: senderId,
         receiver_id: receiverId,
         text,
-        timestamp: A.firestore.FieldValue.serverTimestamp(),
+        timestamp: commerceStore.serverTimestamp,
         is_read: false,
         is_delivered: true,
         ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
@@ -821,9 +827,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       });
 
       // Update room metadata
-      await db.collection('chat_rooms').doc(roomId).update({
+      await commerceStore.updateDocument('chat_rooms', roomId, {
         last_message: text,
-        last_timestamp: A.firestore.FieldValue.serverTimestamp(),
+        last_timestamp: commerceStore.serverTimestamp,
       });
 
       // Presence-aware delivery: a recipient currently viewing this exact
@@ -832,17 +838,17 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       // elsewhere (fresh lastActive) we still bump unread + in-app badge but
       // skip the disruptive heads-up push.
       const RECEIVER_FRESH_MS = 2 * 60 * 1000;
-      const senderName = senderDoc.exists
-        ? (senderDoc.data().displayName || senderDoc.data().name || 'Mtumiaji')
+      const senderName = senderDoc
+        ? (senderDoc.displayName || senderDoc.name || 'Mtumiaji')
         : 'Mtumiaji';
       let receiverActiveHere = false;
       let receiverFresh = false;
       let receiverData = null;
       let receiverRoomId = null;
       try {
-        const receiverDoc = await db.collection('users').doc(receiverId).get();
-        if (receiverDoc.exists) {
-          receiverData = receiverDoc.data();
+        const receiverDoc = await commerceStore.getDocument("users", receiverId);
+        if (receiverDoc) {
+          receiverData = receiverDoc;
           receiverRoomId = receiverData.activeChatRoom || null;
           const lastActive = receiverData.lastActive;
           if (lastActive && typeof lastActive.toMillis === 'function') {
@@ -854,12 +860,12 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
 
       if (!receiverActiveHere) {
         try {
-          await db.collection('chat_rooms').doc(roomId).update({
-            [`unread_counts.${receiverId}`]: A.firestore.FieldValue.increment(1),
+          await commerceStore.updateDocument('chat_rooms', roomId, {
+            [`unread_counts.${receiverId}`]: commerceStore.increment(1),
           });
           const legacyField = receiverData?.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
-          await db.collection('chat_rooms').doc(roomId).update({
-            [legacyField]: A.firestore.FieldValue.increment(1),
+          await commerceStore.updateDocument('chat_rooms', roomId, {
+            [legacyField]: commerceStore.increment(1),
           });
         } catch (_) {}
       }
@@ -872,19 +878,20 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
 
       if (!receiverActiveHere) {
         try {
-          await db.collection('notifications').add({
+          await commerceStore.addDocument('notifications', {
             userId: receiverId,
             title: senderName,
             body: text,
             type: 'chat',
             data: { senderId, senderName, roomId },
             isRead: false,
-            createdAt: A.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
+
         } catch (_) {}
       }
 
-      res.json({ success: true, messageId: msgRef.id });
+      res.json({ success: true, messageId: messageId });
     } catch (e) {
       console.error('/api/chat/send error:', e);
       res.status(500).json({ error: 'Internal server error' });
@@ -898,7 +905,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       const token = authHeader.replace('Bearer ', '');
       if (!token) return res.status(401).json({ error: 'Unauthorized' });
       let decoded;
-      try { decoded = await A.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+      try { decoded = await require('firebase-admin').auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
       const { productId, tier, amount, durationDays, phone, productName, productImage, productPrice, paymentMethod } = req.body;
       const identity = resolveRequestIdentity(decoded, req.body.userId);
@@ -926,7 +933,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
               : 'superseded by new boost';
             await doc.ref.update({
               status: 'failed',
-              cancelledAt: A.firestore.FieldValue.serverTimestamp(),
+              cancelledAt: commerceStore.serverTimestamp,
               cancelReason: reason,
             });
           }
@@ -975,7 +982,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
 
         if (db) {
-          await db.collection('transactions').doc(order_id).set({
+          await commerceStore.setDocument("transactions", order_id, {
             type: 'boost',
             productId,
             productName: productName || '',
@@ -995,7 +1002,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             clickpesaReference: clickpesaRef,
             status: 'pending',
             paymentMethod: 'BillPay',
-            createdAt: A.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
         }
 
@@ -1011,7 +1018,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       } else {
         // USSD Push flow (async — return immediately)
         if (db) {
-          await db.collection('transactions').doc(order_id).set({
+          await commerceStore.setDocument("transactions", order_id, {
             type: 'boost', productId, productName: productName || '',
             productImage: productImage || '', productPrice: productPrice || 0,
             tier: tier.toLowerCase(), amount: tierConfig.price, gatewayFee,
@@ -1019,7 +1026,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             userId: userId || '', buyerId: userId || '', buyerName: userId || '',
             buyerPhone: normalizedPhone, sellerName: 'Soko Vibe',
             status: 'pending', paymentMethod: paymentMethod || 'ussd_push',
-            createdAt: A.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
         }
 
@@ -1028,21 +1035,20 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           .then((result) => {
             const ref = result?.id || result?.orderReference || '';
             if (!ref) { console.error(`[USSD] Boost ClickPesa no ref for ${order_id}`); return; }
-            return db.collection('transactions').doc(order_id).update({ clickpesaReference: ref, ussdSent: true });
+            return commerceStore.updateDocument("transactions", order_id, { clickpesaReference: ref, ussdSent: true });
           })
           .then(() => console.log(`[USSD] Boost push sent for ${order_id}`))
           .catch((err) => {
             console.error(`[USSD] Boost ClickPesa error:`, err?.response?.data || err.message);
             const reason = err?.response?.data?.message || err?.message || 'USSD push haikufika';
-            db.collection('transactions').doc(order_id).get().then(txSnap => {
-              if (!txSnap.exists) return;
-              const txData = txSnap.data();
-              return txSnap.ref.update({
+            commerceStore.getDocument("transactions", order_id).then(tx => {
+              if (!tx) return;
+              return commerceStore.updateDocument("transactions", order_id, {
                 status: 'failed',
                 ussdFailed: true,
                 failureReason: reason,
-                completedAt: A.firestore.FieldValue.serverTimestamp(),
-              }).then(() => notifyBoostPaymentFailed(db, txData, reason));
+                completedAt: commerceStore.serverTimestamp,
+              }).then(() => notifyBoostPaymentFailed(db, tx, reason));
             }).catch(() => {});
           });
 
@@ -1066,10 +1072,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       if (!db) return res.status(503).json({ error: 'Database not configured' });
       if (!(await isOwnerOrAdmin(req, res, userId))) return;
 
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
 
-      const user = userDoc.data();
       res.json({
         sellerBalance: user.sellerBalance || 0,
         totalSales: user.totalSales || 0,
@@ -1093,13 +1098,13 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       let decoded;
       try {
-        decoded = await A.auth().verifyIdToken(authHeader.slice(7));
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
       } catch {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       if (decoded.uid !== sellerId) {
-        const userDoc = await db.collection('users').doc(decoded.uid).get();
-        if (!userDoc.exists || !userDoc.data().isAdmin) {
+        const caller = await commerceStore.getDocument("users", decoded.uid);
+        if (!caller || !caller.isAdmin) {
           return res.status(401).json({ error: 'Unauthorized' });
         }
       }
@@ -1274,22 +1279,21 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       let decoded;
       try {
-        decoded = await A.auth().verifyIdToken(authHeader.slice(7));
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
       } catch {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       if (decoded.uid !== sellerId) {
-        const userDoc = await db.collection('users').doc(decoded.uid).get();
-        if (!userDoc.exists || !userDoc.data().isAdmin) {
+        const caller = await commerceStore.getDocument("users", decoded.uid);
+        if (!caller || !caller.isAdmin) {
           return res.status(401).json({ error: 'Unauthorized' });
         }
       }
 
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-      const sellerDoc = await db.collection('users').doc(sellerId).get();
-      if (!sellerDoc.exists) return res.status(404).json({ error: 'Seller not found' });
-      const sellerData = sellerDoc.data();
+      const sellerData = await commerceStore.getDocument("users", sellerId);
+      if (!sellerData) return res.status(404).json({ error: 'Seller not found' });
       const sellerName = sellerData.businessName || sellerData.name || sellerData.displayName || 'Muuzaji';
       const sellerPhone = sellerData.phone || sellerData.phoneNumber || '';
       const sellerEmail = sellerData.email || '';
@@ -1451,22 +1455,21 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       let decoded;
       try {
-        decoded = await A.auth().verifyIdToken(authHeader.slice(7));
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
       } catch {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       if (decoded.uid !== buyerId) {
-        const userDoc = await db.collection('users').doc(decoded.uid).get();
-        if (!userDoc.exists || !userDoc.data().isAdmin) {
+        const caller = await commerceStore.getDocument("users", decoded.uid);
+        if (!caller || !caller.isAdmin) {
           return res.status(401).json({ error: 'Unauthorized' });
         }
       }
 
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-      const buyerDoc = await db.collection('users').doc(buyerId).get();
-      if (!buyerDoc.exists) return res.status(404).json({ error: 'Buyer not found' });
-      const buyerData = buyerDoc.data();
+      const buyerData = await commerceStore.getDocument("users", buyerId);
+      if (!buyerData) return res.status(404).json({ error: 'Buyer not found' });
       const buyerName = buyerData.name || buyerData.displayName || 'Mnunuzi';
       const buyerPhone = buyerData.phone || buyerData.phoneNumber || '';
       const buyerEmail = buyerData.email || '';
@@ -1640,7 +1643,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       const token = authHeader.split(' ')[1];
       try {
-        await A.auth().verifyIdToken(token);
+        await require('firebase-admin').auth().verifyIdToken(token);
       } catch {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -1675,7 +1678,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       let decoded;
       try {
-        decoded = await A.auth().verifyIdToken(authHeader.split(' ')[1]);
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.split(' ')[1]);
       } catch {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -1699,8 +1702,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       // here proves ownership — every other URL (including guessed or scraped
       // asset URLs in the shared Cloudinary account) is rejected.
       try {
-        const userSnap = await db.collection('users').doc(decoded.uid).get();
-        const current = userSnap.data();
+        const current = await commerceStore.getDocument("users", decoded.uid);
         if (!current || current.profileImage !== imageUrl) {
           return res.json({ success: false, skipped: true });
         }
@@ -1770,7 +1772,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             body: body || '',
             data: { type: 'system', broadcast: 'true' },
             isRead: false,
-            createdAt: A.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
           notifCount++;
         }
@@ -1840,7 +1842,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
       let decoded;
       try {
-        decoded = await A.auth().verifyIdToken(authHeader.slice(7));
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
       } catch {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -1861,8 +1863,8 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       // Check if user is suspended
-      const userDoc = await db.collection('users').doc(sellerId).get();
-      if (userDoc.exists && userDoc.data().isSuspended === true) {
+      const seller = await commerceStore.getDocument("users", sellerId);
+      if (seller && seller.isSuspended === true) {
         return res.status(403).json({ error: 'Account suspended' });
       }
 
@@ -1889,7 +1891,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         return res.status(400).json({ error: 'Product already has an active flash sale', code: 'FLASH_SALE_ALREADY_ACTIVE' });
       }
 
-      const ref = await db.collection('flash_sales').add({
+      const ref = await commerceStore.addDocument("flash_sales", {
         productId,
         productName: productName || '',
         productImage: productImage || '',
@@ -1903,9 +1905,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         stock: stock || 0,
         soldCount: 0,
         isActive: true,
-        startTime: startTime ? new Date(startTime) : A.firestore.FieldValue.serverTimestamp(),
+        startTime: startTime ? new Date(startTime) : commerceStore.serverTimestamp,
         endTime: endTime ? new Date(endTime) : new Date(Date.now() + 24 * 3600000),
-        createdAt: A.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
 
       res.json({ success: true, flashSaleId: ref.id });
@@ -1950,7 +1952,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         const salePrice = originalPrice * (1 - discountPercent / 100);
         const images = data.images || [];
 
-        await db.collection('flash_sales').add({
+        await commerceStore.addDocument("flash_sales", {
           productId: doc.id,
           productName: data.name || '',
           productImage: images.length > 0 ? images[0] : '',
@@ -1964,9 +1966,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           stock: data.stock || 0,
           soldCount,
           isActive: true,
-          startTime: A.firestore.FieldValue.serverTimestamp(),
+          startTime: commerceStore.serverTimestamp,
           endTime: new Date(now.getTime() + 24 * 3600000),
-          createdAt: A.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
         created++;
       }
@@ -2072,7 +2074,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             type: 'flash_sale',
             data: { type: 'flash_sale', image: productImage || '' },
             isRead: false,
-            createdAt: A.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
           batched++;
         }
@@ -2094,7 +2096,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     try {
-      await A.auth().verifyIdToken(authHeader.slice(7));
+      await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
     } catch {
       return res.status(401).json({ error: 'Invalid token' });
     }
@@ -2124,7 +2126,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
     if (!auth.ok) return;
     const { flashSaleId } = req.body;
     if (!flashSaleId) return res.status(400).json({ error: 'flashSaleId required' });
-    await db.collection('flash_sales').doc(flashSaleId).delete();
+    await commerceStore.deleteDocument("flash_sales", flashSaleId);
     res.json({ success: true });
   });
 
@@ -2162,7 +2164,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       const token = authHeader.replace('Bearer ', '');
       if (!token) return res.status(401).json({ error: 'Unauthorized' });
       let decoded;
-      try { decoded = await A.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+      try { decoded = await require('firebase-admin').auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
       const { userId, phone, amount, method } = req.body;
       if (!userId || decoded.uid !== userId) {
@@ -2192,7 +2194,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           totalCharge,
           status: 'pending',
           paymentMethod: 'BillPay',
-          createdAt: A.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
 
         const billResult = await clickpesaCreateBillPayOrder({
@@ -2246,7 +2248,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           totalCharge,
           status: 'pending',
           paymentMethod: 'ClickPesa',
-          createdAt: A.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
 
         // Fire ClickPesa async — return immediately

@@ -38,12 +38,12 @@ async function sendSms(phone, message) {
   }
 }
 
-module.exports = function ({ admin, db }) {
+module.exports = function ({ commerceStore }) {
   async function sendOtp(req, res) {
     try {
       const { phone } = req.body;
       if (!phone) return res.status(400).json({ error: 'Phone number is required' });
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
 
       const otp = crypto.randomInt(100000, 1000000).toString();
       const hashed = crypto.createHash('sha256').update(otp).digest('hex');
@@ -51,20 +51,20 @@ module.exports = function ({ admin, db }) {
 
       const cleanPhone = phone.replace(/\D/g, '');
 
-      await db.collection('otp_codes').doc(cleanPhone).set({
+      await commerceStore.setDocument('otp_codes', cleanPhone, {
         otpHash: hashed,
         expiresAt,
         used: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
 
       const message = `OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
       const langCode = ['sw', 'en'].includes(req.body.langCode) ? req.body.langCode : 'sw';
       const sent = await sendSms(cleanPhone, smsSafeForGateway(langCode, message));
 
-      await db.collection('otp_codes').doc(cleanPhone).update({
+      await commerceStore.updateDocument('otp_codes', cleanPhone, {
         smsSent: sent,
-        smsAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        smsAttemptedAt: commerceStore.serverTimestamp,
       }).catch(() => {});
 
       if (!sent) {
@@ -83,7 +83,7 @@ module.exports = function ({ admin, db }) {
     try {
       const { phone, otp } = req.body;
       if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required' });
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanPhone = phone.replace(/\D/g, '');
       const doc = await db.collection('otp_codes').doc(cleanPhone).get();
@@ -241,19 +241,21 @@ module.exports = function ({ admin, db }) {
 
       await otpDoc.ref.update({ used: true });
 
-      const usersSnap = await db.collection('users')
-        .where('phone', 'in', [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`])
-        .limit(1)
-        .get();
+      const users = await commerceStore.listDocuments('users', {
+        where: [
+          { field: 'phone', op: 'in', value: [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`] }
+        ],
+        limit: 1,
+      });
 
-      if (usersSnap.empty) {
+      if (users.length === 0) {
         return res.status(404).json({ error: 'auth_no_account' });
       }
 
-      const uid = usersSnap.docs[0].id;
+      const uid = users[0].id;
 
       try {
-        await admin.auth().updateUser(uid, { password: newPassword });
+        await require('firebase-admin').auth().updateUser(uid, { password: newPassword });
       } catch (authErr) {
         return res.status(500).json({ error: 'failed_to_reset_password' });
       }
@@ -269,38 +271,40 @@ module.exports = function ({ admin, db }) {
     try {
       const { phone, otp } = req.body;
       if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required' });
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanPhone = phone.replace(/\D/g, '');
 
-      const otpDoc = await db.collection('otp_codes').doc(cleanPhone).get();
-      if (!otpDoc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
+      const otpDoc = await commerceStore.getDocument('otp_codes', cleanPhone);
+      if (!otpDoc) return res.status(400).json({ error: 'auth_otp_expired' });
 
-      const otpData = otpDoc.data();
+      const otpData = otpDoc;
       if (otpData.used) return res.status(400).json({ error: 'auth_otp_invalid' });
       if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
 
       const hashed = crypto.createHash('sha256').update(otp).digest('hex');
       if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
 
-      await otpDoc.ref.update({ used: true });
+      await commerceStore.updateDocument('otp_codes', cleanPhone, { used: true });
 
-      const usersSnap = await db.collection('users')
-        .where('phone', 'in', [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`])
-        .limit(1)
-        .get();
+      const users = await commerceStore.listDocuments('users', {
+        where: [
+          { field: 'phone', op: 'in', value: [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`] }
+        ],
+        limit: 1,
+      });
 
       let uid;
-      if (usersSnap.empty) {
+      if (users.length === 0) {
         const email = `phone_${cleanPhone}@soko-vibe.com`;
         const password = crypto.randomBytes(24).toString('base64url');
-        const userRecord = await admin.auth().createUser({
+        const userRecord = await require('firebase-admin').auth().createUser({
           email,
           password,
           displayName: `User ${cleanPhone.slice(-4)}`,
         });
         uid = userRecord.uid;
-        await db.collection('users').doc(uid).set({
+        await commerceStore.setDocument('users', uid, {
           displayName: `User ${cleanPhone.slice(-4)}`,
           email,
           phone: cleanPhone,
@@ -321,13 +325,13 @@ module.exports = function ({ admin, db }) {
           soldCount: 0,
           isAdmin: false,
           isSuspended: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
       } else {
-        uid = usersSnap.docs[0].id;
+        uid = users[0].id;
       }
 
-      const token = await admin.auth().createCustomToken(uid);
+      const token = await require('firebase-admin').auth().createCustomToken(uid);
       res.json({ success: true, token });
     } catch (e) {
       console.error('/api/phone-login error:', e.message);

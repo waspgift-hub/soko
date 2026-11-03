@@ -19,6 +19,7 @@ import '../report/admin_reports_screen.dart';
 import 'admin_transactions_tab.dart';
 import 'admin_clickpesa_screen.dart';
 import 'admin_kyc_document_view_screen.dart';
+import 'admin_banner_management_screen.dart';
 import '../../widgets/product_cached_image.dart';
 import 'package:intl/intl.dart';
 
@@ -2536,10 +2537,9 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
       ),
     );
   }
-  }
 
   // ─── BANNER MANAGEMENT TAB ───────────────────────────────────────
   Widget _buildBannerManagementTab() {
-    return AdminBannerManagementScreen();
+    return const AdminBannerManagementScreen();
   }
 }

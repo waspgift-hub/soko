@@ -310,7 +310,7 @@ class _ButtonContent extends StatelessWidget {
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisSize.center,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(icon, size: iconSize, color: color),
         const SizedBox(width: 6),

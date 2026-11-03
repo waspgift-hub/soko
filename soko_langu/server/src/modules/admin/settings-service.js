@@ -5,7 +5,7 @@
 // keeps settings cluster-wide across instances, needs no Prisma model and no
 // Postgres migration. When Firestore is unavailable (local/dev) the service
 // falls back to an in-memory copy so the panel stays fully usable.
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 
 const SETTINGS_COLLECTION = 'app_settings';
 const SETTINGS_DOC = 'admin_settings';
@@ -94,6 +94,23 @@ const DEFAULTS = {
     enableCompression: true,
     apiRateLimitPerMin: 300,
   },
+  dailyEngagement: {
+    enabled: false,
+    timezone: 'Africa/Dar_es_Salaam',
+    sendHourLocal: 9,
+    channels: { email: true, push: true },
+  },
+  appRelease: {
+    latestVersion: '1.0.1',
+    latestBuild: 2,
+    minSupportedVersion: '1.0.0',
+    minSupportedBuild: 1,
+    urgency: 'none',
+    releaseNotes: '',
+    androidDownloadUrl: '',
+    iosDownloadUrl: '',
+    published: false,
+  },
 };
 
 let MEMORY = null;
@@ -143,17 +160,11 @@ function maskAll(settings) {
   return out;
 }
 
-function getFirestore() {
-  return getFirebaseFirestore();
-}
-
 async function getFromFirestore() {
-  const db = getFirestore();
-  if (!db) return null;
   try {
-    const snap = await db.collection(SETTINGS_COLLECTION).doc(SETTINGS_DOC).get();
-    if (!snap.exists) return null;
-    return safeMerge(null, snap.data() || {});
+    const snap = await commerceStore.getDocument(SETTINGS_COLLECTION, SETTINGS_DOC);
+    if (!snap) return null;
+    return safeMerge(null, snap || {});
   } catch (e) {
     console.error('[settings-service] Firestore read failed:', e?.message || e);
     return null;
@@ -171,12 +182,11 @@ function getSettingsForRender(settings) { return maskAll(settings || cloneDefaul
 async function getSettingsMasked() { return getSettingsForRender(await getSettings()); }
 
 async function writeToFirestore(settings) {
-  const db = getFirestore();
-  if (!db) return false;
   try {
-    await db.collection(SETTINGS_COLLECTION).doc(SETTINGS_DOC).set(
-      { ...settings, updatedAt: new Date().toISOString() },
-      { merge: true }
+    await commerceStore.upsertDocument(
+      SETTINGS_COLLECTION,
+      SETTINGS_DOC,
+      { ...settings, updatedAt: new Date().toISOString() }
     );
     return true;
   } catch (e) {

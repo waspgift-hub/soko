@@ -6,6 +6,7 @@
         "appID": "344682929526.com.sokolangu.app",
         "paths": [
           "/product/*",
+          "/p/*",
           "/seller/*",
           "/profile/*",
           "/order/*",
@@ -19,6 +20,7 @@
         "appIDs": ["344682929526.com.sokolangu.app"],
         "components": [
           { "/": "/product/*", "comment": "Product deep link" },
+          { "/": "/p/*", "comment": "Short product alias" },
           { "/": "/seller/*", "comment": "Seller profile" },
           { "/": "/profile/*", "comment": "User profile" },
           { "/": "/order/*", "comment": "Order (auth required)" },

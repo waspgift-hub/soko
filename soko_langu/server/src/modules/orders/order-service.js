@@ -445,6 +445,66 @@ async function disputeOrder({ orderId, filedBy, reason, description }) {
   return dispute;
 }
 
+async function getOrderById(id) {
+  const store = getStore();
+  return store.order.findUnique({ where: { id } });
+}
+
+async function countOrders() {
+  const store = getStore();
+  return store.order.count();
+}
+
+async function listOrders({ limit = 50, offset = 0, orderBy = 'desc' } = {}) {
+  const store = getStore();
+  return store.order.findMany({
+    take: limit,
+    skip: offset,
+    orderBy: { createdAt: orderBy },
+  });
+}
+
+async function getOrdersBySeller(sellerId, { limit = 50, offset = 0 } = {}) {
+  const store = getStore();
+  return store.order.findMany({
+    where: { sellerId },
+    take: limit,
+    skip: offset,
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+async function adminUpdateOrderStatus(orderId, status, actorId) {
+  if (!OrderStateMachine.isValidState(status)) {
+    throw httpError(400, 'INVALID_ORDER_STATUS');
+  }
+  const store = getStore();
+  const updated = await store.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: { status, statusChangedBy: actorId },
+    });
+
+    await audit(tx, {
+      actorId,
+      actorType: 'admin',
+      action: 'ADMIN_STATUS_OVERRIDE',
+      entityType: 'order',
+      entityId: orderId,
+      oldState: { status: order.status },
+      newState: { status },
+    });
+
+    return updated;
+  });
+
+  await syncLegacyOrderStatus(updated);
+  return updated;
+}
+
 module.exports = {
   DEFAULT_TIMERS,
   createOrder,
@@ -456,4 +516,9 @@ module.exports = {
   cancelOrder,
   disputeOrder,
   generateOrderNumber,
+  getOrderById,
+  countOrders,
+  listOrders,
+  getOrdersBySeller,
+  adminUpdateOrderStatus,
 };

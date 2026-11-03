@@ -296,6 +296,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
   }
+
+  Future<void> _confirmLogoutAll() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -486,6 +488,21 @@ trailing: Switch(
                 icon: Icons.help,
                 title: context.tr('help'),
                 onTap: () => context.push(AppRoutes.help),
+              ),
+              _buildTile(
+                icon: Icons.school_outlined,
+                title: context.tr('tutorials_title'),
+                onTap: () => context.push(AppRoutes.tutorials),
+              ),
+              _buildTile(
+                icon: Icons.verified_user_outlined,
+                title: context.tr('verification_center_title'),
+                onTap: () => context.push(AppRoutes.verificationCenter),
+              ),
+              _buildTile(
+                icon: Icons.person_search_outlined,
+                title: context.tr('contact_discovery_title'),
+                onTap: () => context.push(AppRoutes.contactDiscovery),
               ),
               _buildTile(
                 icon: Icons.image_outlined,

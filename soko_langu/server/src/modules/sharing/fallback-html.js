@@ -111,9 +111,9 @@ async function productFallbackHtml(product) {
         ${descSummary ? `<div class="desc">${escapeHtml(descSummary)}</div>` : ''}
         <div class="cta">
           <a class="btn btn-primary" href="${escapeHtml(deepLink)}" onclick="openApp('${escapeHtml(deepLink)}'); return false;">Fungua kwenye Soko Vibe</a>
-          <a class="btn btn-outline" href="https://play.google.com/store/apps/details?id=com.sokolangu.app">Pakua App</a>
+          <a class="btn btn-outline" href="/support">Jinsi ya kupata app</a>
         </div>
-        <div class="notice">Unaona ukurasa wa wavuti kwa sababu Soko Vibe haijasakinishwa. Sakinisha app kwa uzoefu bora — pesa zako ziko salama kwenye escrow.</div>
+        <div class="notice">Huu ni ukurasa wa wavuti wa bidhaa. Google Play na App Store bado hazijachapisha app — angalia /support kwa jinsi ya kupata toleo rasmi la majaribio.</div>
       </div>
     </div>
   `;
@@ -143,7 +143,7 @@ async function sellerFallbackHtml(seller) {
         ${seller.rating ? `<div class="price" style="font-size:14px;color:#ffd54f">⭐ ${Number(seller.rating).toFixed(1)} / 5</div>` : ''}
         <div class="cta" style="justify-content:center">
           <a class="btn btn-primary" href="${escapeHtml(canonical)}">Fungua kwenye Soko Vibe</a>
-          <a class="btn btn-outline" href="https://play.google.com/store/apps/details?id=com.sokolangu.app">Pakua App</a>
+          <a class="btn btn-outline" href="/support">Jinsi ya kupata app</a>
         </div>
       </div>
     </div>

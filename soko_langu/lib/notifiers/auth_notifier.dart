@@ -126,6 +126,13 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
+  /// Marks the intro flow as finished so the router stops redirecting to it.
+  Future<void> completeOnboarding(String? _) async {
+    await _onboardingService.markCompleted();
+    app_state.appStateNotifier.setOnboarding(completed: true);
+    notifyListeners();
+  }
+
   Future<void> initialize() async {
     try {
       final currentUser = _authRepo.currentUser;

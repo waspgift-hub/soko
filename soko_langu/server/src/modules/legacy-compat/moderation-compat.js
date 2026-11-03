@@ -1,8 +1,7 @@
 // Compat profanity check: verbatim port of the legacy endpoint, including
 // the 3-strike suspension rule.
 const express = require('express');
-const admin = require('firebase-admin');
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 const { containsProfanity } = require('../../services/profanity');
 const { requireUser } = require('./auth-helpers');
 
@@ -20,35 +19,36 @@ router.post('/moderation/check-text', async (req, res) => {
     const clean = !containsProfanity(text);
     if (!clean) {
       const uid = auth.uid;
-      const db = getFirebaseFirestore();
-      if (uid && db) {
-        const userRef = db.collection('users').doc(uid);
-        const userDoc = await userRef.get();
-        if (userDoc.exists) {
-          const userData = userDoc.data();
+      if (uid) {
+        const userDoc = await commerceStore.getDocument('users', uid);
+        if (userDoc) {
+          const userData = userDoc;
           const warnings = (userData.profanityWarnings || 0) + 1;
           if (warnings >= 3) {
-            const balance = userData.balance || 0;
-            await userRef.update({
+            // Platform money lives in sellerBalance (Firestore wallet seam), not the
+            // legacy `balance` field — seizing the wrong field left the seller's
+            // real wallet untouched and fabricated a revenue row.
+            const balance = userData.sellerBalance || userData.balance || 0;
+            await commerceStore.updateDocument('users', uid, {
               isSuspended: true,
               isDeleted: true,
               suspendedReason: 'Repeated profanity violations',
               profanityWarnings: warnings,
             });
             if (balance > 0) {
-              await db.collection('revenue_transactions').add({
+              await commerceStore.addDocument(commerceStore.COLLECTIONS.revenueTransactions, {
                 userId: uid,
                 type: 'profanity_seizure',
                 amount: balance,
                 sokoLanguCommission: balance,
                 description: `Balance seized: ${warnings} profanity violations`,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                timestamp: commerceStore.serverTimestamp,
               });
-              await userRef.update({ balance: 0 });
+              await commerceStore.updateDocument('users', uid, { balance: 0, sellerBalance: 0 });
             }
             return res.json({ clean: false, banned: true, message: 'Account deleted due to repeated profanity violations' });
           }
-          await userRef.update({ profanityWarnings: warnings });
+          await commerceStore.updateDocument('users', uid, { profanityWarnings: warnings });
           return res.json({ clean: false, banned: false, warning: warnings, message: `Profanity detected (${warnings}/3 warnings before account deletion)` });
         }
       }
@@ -61,3 +61,4 @@ router.post('/moderation/check-text', async (req, res) => {
 });
 
 module.exports = router;
+

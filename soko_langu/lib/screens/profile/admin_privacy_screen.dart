@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../app/routes.dart';
+import '../../models/seller_verification.dart';
 
 import '../../services/user_service.dart';
 import '../../services/seller_verification_service.dart';
-import '../../api_config.dart';
+import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
@@ -61,18 +64,14 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
       final profile = await _userService.getProfile(user.uid);
       if (!mounted) return;
 
-      final verification = await _verificationService.resolve(user.uid);
+      final visibility = await _userService.getPrivateSettings();
       if (!mounted) return;
 
-      // Read privacy setting from the server-owned users/{uid} doc
-      final snap =
-          await _userService.getPrivateSettings(user.uid);
-      if (!mounted) return;
-
+      final name = profile?.username ?? '';
       setState(() {
-        _username = profile.username.isNotEmpty ? profile.username : '';
-        _usernameController.text = _username ?? '';
-        _isPrivate = snap.data()?['visibility']?['isPrivate'] == true;
+        _username = name;
+        _usernameController.text = name;
+        _isPrivate = visibility?['isPrivate'] == true;
         _isLoading = false;
       });
     } catch (e) {
@@ -209,12 +208,12 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
                         ),
                       ],
                     ),
-                    Switch(
-                      value: _isPrivate,
-                      onChanged: _isLoading ? null : _togglePrivate,
-                    ),
-                  ],
-                ),
+                  ),
+                  Switch(
+                    value: _isPrivate,
+                    onChanged: _isLoading ? null : _togglePrivate,
+                  ),
+                ],
               ),
             ),
           ),
@@ -266,7 +265,7 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
             padding: const EdgeInsets.all(AppInsets.s4),
             child: Row(
               children: [
-                FutureBuilder<SellerVerification>(
+                FutureBuilder<SellerVerification?>(
                   future: _verificationService.resolve(
                     FirebaseAuth.instance.currentUser!.uid,
                   ),
@@ -301,7 +300,7 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
                 const Spacer(),
                 TextButton(
                   onPressed: () {
-                    context.pushNamed('admin_kyc');
+                    context.push(AppRoutes.kyc);
                   },
                   child: Text(context.tr('kyc_management')),
                 ),
@@ -327,7 +326,7 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
           fontSize: AppFontSize.xs,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.1,
-          color: cs.onSurfaceVariant,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       ),
     );

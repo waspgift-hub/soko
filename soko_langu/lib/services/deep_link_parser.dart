@@ -123,12 +123,16 @@ class DeepLinkParser {
       switch (first) {
         case 'product':
         case 'p':
+          final ref = query['ref'];
+          final loc = (ref != null && ref.isNotEmpty && _isSafeId(ref))
+              ? '/product/$id?ref=${Uri.encodeComponent(ref)}'
+              : '/product/$id';
           return DeepLinkRoute(
             type: DeepLinkType.product,
             id: id,
             query: query,
             rawUri: uri,
-            internalLocation: '/product/$id',
+            internalLocation: loc,
           );
         case 'seller':
         case 'store':
@@ -212,7 +216,11 @@ class DeepLinkParser {
   }
 
   // Helpers to generate share URLs
-  static String productUrl(String productId) => '$webBaseUrl/product/$productId';
+  static String productUrl(String productId, {String? ref}) {
+    final base = '$webBaseUrl/product/$productId';
+    if (ref == null || ref.isEmpty || !_isSafeId(ref)) return base;
+    return '$base?ref=${Uri.encodeQueryComponent(ref)}';
+  }
   static String sellerUrl(String sellerId) => '$webBaseUrl/seller/$sellerId';
   static String profileUrl(String userIdOrUsername) =>
       '$webBaseUrl/profile/$userIdOrUsername';

@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const admin = require('firebase-admin');
+const commerceStore = require('../../services/commerce-store');
 const bcrypt = require('bcryptjs');
 const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
@@ -8,9 +8,10 @@ const adminService = require('./admin-service');
 const settingsService = require('./settings-service');
 const activity = require('../../services/activity');
 const { getStore } = require('../../config/database');
-const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const { sendMail } = require('../../services/mailer');
+const { publicPayload, normalizeRelease } = require('../config/app-release');
+const { buildFacts, maybePolish } = require('./insights');
 const cache = require('../../../cache');
 const productStore = require('../products/product-store');
 const crypto = require('crypto');
@@ -38,6 +39,15 @@ const router = Router();
  * The Flutter app caches this at startup and uses it in place of the previously
  * hardcoded 3.5%, which is how the app came to disagree with the server.
  */
+router.get('/config/app-version', async (req, res) => {
+  try {
+    const s = (await settingsService.getSettings()) || {};
+    res.json({ success: true, data: publicPayload(s.appRelease) });
+  } catch (e) {
+    res.json({ success: true, data: publicPayload(null) });
+  }
+});
+
 router.get('/config/commission', async (req, res) => {
   try {
     const s = (await settingsService.getSettings()) || {};
@@ -216,6 +226,37 @@ router.get(
 router.get('/metrics', async (req, res) => {
   const data = await adminService.getMetrics();
   res.json({ success: true, data });
+});
+
+router.post('/ai/insights', async (req, res) => {
+  try {
+    const [dash, metrics] = await Promise.all([
+      adminService.getDashboard(),
+      adminService.getMetrics(),
+    ]);
+    const facts = buildFacts({
+      kpis: dash.kpis || {},
+      metrics: metrics || {},
+      generatedAt: new Date().toISOString(),
+    });
+    const { chat } = require('../ai/ai-gateway');
+    const data = await maybePolish(facts, async (prompt) => {
+      const result = await chat(
+        {
+          model: process.env.GROQ_ADMIN_MODEL || 'llama-3.1-8b-instant',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 400,
+          temperature: 0.1,
+        },
+        { timeoutMs: 8000 },
+      );
+      const parsed = JSON.parse(result.text || '{}');
+      return parsed?.choices?.[0]?.message?.content || '';
+    });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: { message: e.message } });
+  }
 });
 
 // Audit log search (append-only; no update/delete endpoints exist)
@@ -779,8 +820,9 @@ router.put(
 // browser panel reads it with the server's admin SDK instead of opening rules.
 
 function fsDoc(d) {
-  const data = d.data() || {};
-  const out = { id: d.id };
+  if (!d) return null;
+  const { id, ...data } = d;
+  const out = { id };
   for (const k of Object.keys(data)) {
     // Timestamps serialize as ISO so the panel renders dates without a client SDK.
     out[k] = data[k] && typeof data[k].toDate === 'function' ? data[k].toDate().toISOString() : data[k];
@@ -788,25 +830,29 @@ function fsDoc(d) {
   return out;
 }
 
-async function landingSnapshot(db, collectionName, limit) {
-  const ref = db.collection(collectionName);
-  const [snap, cnt] = await Promise.all([
-    ref.orderBy('createdAt', 'desc').limit(limit).get(),
-    ref.count().get(),
-  ]);
-  return { items: snap.docs.map(fsDoc), total: cnt.data().count };
+async function landingSnapshot(collectionName, limit) {
+  const items = await commerceStore.listDocuments(collectionName, {
+    orderBy: 'createdAt',
+    direction: 'desc',
+    limit: limit,
+  });
+  const total = await commerceStore.countDocuments(collectionName);
+  return { items: items.map(fsDoc), total };
 }
 
 // Overview: waitlist subscribers, feature suggestions and public comments.
 router.get('/landing', async (req, res) => {
-  const db = getFirebaseFirestore();
-  if (!db) return res.status(503).json({ error: 'FIRESTORE_UNAVAILABLE' });
-  const [waitlist, suggestions, comments] = await Promise.all([
-    landingSnapshot(db, 'landing_waitlist', 500),
-    landingSnapshot(db, 'landing_feature_suggestions', 200),
-    landingSnapshot(db, 'landing_comments', 100),
-  ]);
-  res.json({ success: true, data: { waitlist, suggestions, comments } });
+  try {
+    const [waitlist, suggestions, comments] = await Promise.all([
+      landingSnapshot('landing_waitlist', 500),
+      landingSnapshot('landing_feature_suggestions', 200),
+      landingSnapshot('landing_comments', 100),
+    ]);
+    res.json({ success: true, data: { waitlist, suggestions, comments } });
+  } catch (e) {
+    console.error('[admin:landing] read failed:', e?.message || e);
+    res.status(500).json({ success: false, error: 'Kuna hitilifu ya ndani wakati wa kusoma data ya landing.' });
+  }
 });
 
 // Broadcast an email to every waitlist subscriber ("the app is ready").
@@ -822,25 +868,24 @@ router.post(
     }),
   }),
   async (req, res) => {
-    const db = getFirebaseFirestore();
-    if (!db) return res.status(503).json({ error: 'FIRESTORE_UNAVAILABLE' });
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      return res.status(503).json({ error: 'SMTP haijasanidiwa (weka SMTP_USER/SMTP_PASS).' });
-    }
+    try {
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        return res.status(503).json({ error: 'SMTP haijasanidiwa (weka SMTP_USER/SMTP_PASS).' });
+      }
 
-    const snap = await db.collection('landing_waitlist').get();
-    const entries = snap.docs.map(fsDoc);
-    const byEmail = {};
-    const emails = [];
-    for (const e of entries) {
-      const em = String(e.email || '').trim().toLowerCase();
-      if (!em || byEmail[em]) continue;
-      byEmail[em] = e;
-      emails.push(em);
-    }
-    if (!emails.length) {
-      return res.json({ success: true, data: { total: 0, sent: 0, failed: 0 } });
-    }
+      const entries = await commerceStore.listDocuments('landing_waitlist');
+      const serializedEntries = entries.map(fsDoc);
+      const byEmail = {};
+      const emails = [];
+      for (const e of serializedEntries) {
+        const em = String(e.email || '').trim().toLowerCase();
+        if (!em || byEmail[em]) continue;
+        byEmail[em] = e;
+        emails.push(em);
+      }
+      if (!emails.length) {
+        return res.json({ success: true, data: { total: 0, sent: 0, failed: 0 } });
+      }
 
     const escapeHtml = (v) =>
       String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -884,15 +929,14 @@ router.post(
     } catch (ae) {
       console.error('[admin:landing] audit write skipped:', ae?.message || ae);
     }
-    try {
-      await db.collection('landing_broadcasts').add({
+    await commerceStore.addDocument('landing_broadcasts', {
         subject: req.body.subject,
         body: req.body.body,
         total: emails.length,
         sent,
         failed,
         executedBy: req.user?.id || 'admin',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp(),
       });
     } catch (ce) {
       console.error('[admin:landing] broadcast log write failed:', ce?.message || ce);
@@ -948,7 +992,7 @@ router.put(
     const docRef = db.collection('dataDeletionRequests').doc(req.params.id);
     const before = await docRef.get();
     if (!before.exists) return res.status(404).json({ error: 'DATA_DELETION_REQUEST_NOT_FOUND' });
-    const patch = { status: req.body.status, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    const patch = { status: req.body.status, updatedAt: commerceStore.serverTimestamp() };
     if (req.body.note != null && req.body.note.trim()) patch.note = req.body.note.trim();
     await docRef.set(patch, { merge: true });
     try {
@@ -997,10 +1041,9 @@ function roleLabel(role) {
   return r ? r.label : role;
 }
 
+// staffDb is no longer used as we use commerceStore directly.
 function staffDb() {
-  const db = getFirebaseFirestore();
-  if (!db) throw Object.assign(new Error('FIRESTORE_UNAVAILABLE'), { status: 503 });
-  return db;
+  return commerceStore;
 }
 
 /** Normalize + validate a staff email. */
@@ -1042,25 +1085,25 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const db = staffDb();
     const { q, role, active, page, limit } = req.query;
     const p = Number(page);
     const l = Number(limit);
-    let ref = db.collection(STAFF_COLL).orderBy('createdAt', 'desc');
-    // Firestore: one equality filter + orderBy per query. Email uniqueness is
-    // enforced at write time; search is done client-side over the fetched page
-    // for simplicity (staff tables are small).
-    const snap = await ref.get();
-    let rows = snap.docs.map((d) => serializeStaff(d));
-    if (role) rows = rows.filter((r) => r.role === role);
-    if (active !== undefined) rows = rows.filter((r) => r.active === (active === 'true'));
+    
+    const rows = await commerceStore.listDocuments(STAFF_COLL, { 
+      orderBy: 'createdAt', 
+      direction: 'desc' 
+    });
+    
+    let filteredRows = rows.map(serializeStaff);
+    if (role) filteredRows = filteredRows.filter((r) => r.role === role);
+    if (active !== undefined) filteredRows = filteredRows.filter((r) => r.active === (active === 'true'));
     if (q) {
       const s = String(q).toLowerCase();
-      rows = rows.filter((r) => r.email.includes(s) || r.name.toLowerCase().includes(s));
+      filteredRows = filteredRows.filter((r) => r.email.includes(s) || r.name.toLowerCase().includes(s));
     }
-    const total = rows.length;
+    const total = filteredRows.length;
     const start = (p - 1) * l;
-    const pageRows = rows.slice(start, start + l);
+    const pageRows = filteredRows.slice(start, start + l);
     res.json({ success: true, data: { staff: pageRows, pagination: { page: p, limit: l, total, pages: Math.ceil(total / l) } } });
   }
 );
@@ -1079,13 +1122,12 @@ router.post(
     }),
   }),
   async (req, res) => {
-    const db = staffDb();
     const email = cleanEmail(req.body.email);
     const role = STAFF_ROLES.some((r) => r.id === req.body.role) ? req.body.role : 'support';
 
     // Uniqueness: email must not already exist (any status).
-    const byEmail = await db.collection(STAFF_COLL).where('email', '==', email).limit(1).get();
-    if (!byEmail.empty) {
+    const byEmail = await commerceStore.listDocuments(STAFF_COLL, { where: { email }, limit: 1 });
+    if (byEmail.length > 0) {
       return res.status(409).json({ success: false, error: 'EMAIL_EXISTS' });
     }
 
@@ -1099,12 +1141,12 @@ router.post(
     const doc = {
       id, email, name: String(req.body.name || '').trim() || email.split('@')[0], role,
       permissions: perms, active: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: commerceStore.serverTimestamp(),
+      updatedAt: commerceStore.serverTimestamp(),
       createdBy: req.user?.id || 'admin-secret',
       passwordHash,
     };
-    await db.collection(STAFF_COLL).doc(id).set(doc);
+    await commerceStore.setDocument(STAFF_COLL, id, doc);
     await writeAudit({
       ...auditFromReq(req),
       action: 'staff.create',
@@ -1132,17 +1174,14 @@ router.put(
     }),
   }),
   async (req, res) => {
-    const db = staffDb();
-    const ref = db.collection(STAFF_COLL).doc(req.params.id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND' });
-    const cur = snap.data() || {};
+    const cur = await commerceStore.getDocument(STAFF_COLL, req.params.id);
+    if (!cur) return res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND' });
 
-    const updates = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    const updates = { updatedAt: commerceStore.serverTimestamp() };
     if (req.body.email !== undefined) {
       const email = cleanEmail(req.body.email);
-      const dup = await db.collection(STAFF_COLL).where('email', '==', email).limit(1).get();
-      const existsElsewhere = !dup.empty && dup.docs[0].id !== req.params.id;
+      const dup = await commerceStore.listDocuments(STAFF_COLL, { where: { email }, limit: 1 });
+      const existsElsewhere = dup.length > 0 && dup[0].id !== req.params.id;
       if (existsElsewhere) return res.status(409).json({ success: false, error: 'EMAIL_EXISTS' });
       updates.email = email;
     }
@@ -1156,7 +1195,7 @@ router.put(
     if (req.body.permissions !== undefined) updates.permissions = req.body.permissions;
     if (req.body.active !== undefined) updates.active = !!req.body.active;
 
-    await ref.set(updates, { merge: true });
+    await commerceStore.upsertDocument(STAFF_COLL, req.params.id, updates);
     await writeAudit({
       ...auditFromReq(req),
       action: 'staff.update',
@@ -1165,7 +1204,7 @@ router.put(
       oldState: { email: cur.email, role: cur.role, active: cur.active },
       newState: updates,
     });
-    const after = await ref.get();
+    const after = await commerceStore.getDocument(STAFF_COLL, req.params.id);
     res.json({ success: true, data: serializeStaff(after) });
   }
 );
@@ -1176,16 +1215,13 @@ router.delete(
   requireActiveAdmin,
   validate({ params: z.object({ id: z.string().min(1) }) }),
   async (req, res) => {
-    const db = staffDb();
-    const ref = db.collection(STAFF_COLL).doc(req.params.id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND' });
-    const cur = snap.data() || {};
+    const cur = await commerceStore.getDocument(STAFF_COLL, req.params.id);
+    if (!cur) return res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND' });
     // Never let an admin remove themselves while logged in via this panel.
     if (req.user && req.user.id === cur.createdBy) {
       return res.status(400).json({ success: false, error: 'CANNOT_REMOVE_SELF' });
     }
-    await ref.delete();
+    await commerceStore.deleteDocument(STAFF_COLL, req.params.id);
     await writeAudit({
       ...auditFromReq(req),
       action: 'staff.delete',
@@ -1204,14 +1240,13 @@ router.post(
     body: z.object({ email: z.string().email(), password: z.string().min(1) }),
   }),
   async (req, res) => {
-    const db = staffDb();
     const email = String(req.body.email).trim().toLowerCase();
-    const byEmail = await db.collection(STAFF_COLL).where('email', '==', email).limit(1).get();
-    if (byEmail.empty) {
+    const byEmail = await commerceStore.listDocuments(STAFF_COLL, { where: { email }, limit: 1 });
+    if (byEmail.length === 0) {
       return res.status(401).json({ success: false, error: 'INVALID_CREDENTIALS' });
     }
-    const doc = byEmail.docs[0];
-    const d = doc.data() || {};
+    const doc = byEmail[0];
+    const d = doc || {};
     if (d.active === false) {
       return res.status(403).json({ success: false, error: 'STAFF_INACTIVE' });
     }
@@ -1221,12 +1256,12 @@ router.post(
     }
     const token = crypto.randomBytes(24).toString('hex');
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    await db.collection(SESSION_COLL).doc(token).set({
+    await commerceStore.setDocument(SESSION_COLL, token, {
       token, staffId: doc.id, email: d.email, role: d.role, name: d.name,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: commerceStore.serverTimestamp(),
+      expiresAt: commerceStore.serverTimestamp(),
     });
-    await doc.ref.update({ lastLoginAt: admin.firestore.FieldValue.serverTimestamp() });
+    await commerceStore.updateDocument(STAFF_COLL, doc.id, { lastLoginAt: commerceStore.serverTimestamp() });
     res.json({ success: true, data: { token, staff: { id: doc.id, email: d.email, name: d.name, role: d.role, permissions: d.permissions || permsFor(d.role) }, expiresAt: expiresAt.toISOString() } });
   }
 );

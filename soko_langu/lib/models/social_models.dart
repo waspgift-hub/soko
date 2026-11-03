@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 /// A one-directional "follow" relationship: [followerId] follows [followingId].
 ///
@@ -23,7 +24,7 @@ class FollowRelationship {
     return FollowRelationship(
       followerId: followerId,
       followingId: followingId,
-      createdAt: _ts(d['createdAt']),
+      createdAt: _ts(d['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
 
@@ -76,7 +77,7 @@ class FollowRequest {
     return FollowRequest(
       requesterId: requesterId,
       targetId: targetId,
-      createdAt: _ts(d['createdAt']),
+      createdAt: _ts(d['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
 
@@ -130,7 +131,7 @@ class BlockedAccount {
     return BlockedAccount(
       blockerId: blockerId,
       blockedId: blockedId,
-      createdAt: _ts(d['createdAt']),
+      createdAt: _ts(d['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
 

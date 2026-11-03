@@ -16,7 +16,7 @@ function isBot(req) {
 
 // Product web fallback — works when app not installed.
 // Serves full HTML with OG + product card, install CTA, and "Open in Soko Vibe" button.
-router.get('/product/:slugOrId', async (req, res) => {
+async function serveProductFallback(req, res) {
   try {
     const store = getStore();
     const product = await store.product.findFirst({
@@ -46,7 +46,9 @@ router.get('/product/:slugOrId', async (req, res) => {
     console.error('product fallback error', e);
     res.status(500).json({ success: false, error: 'INTERNAL' });
   }
-});
+}
+
+router.get(['/product/:slugOrId', '/p/:slugOrId'], serveProductFallback);
 
 // Seller / profile fallback
 router.get(['/seller/:username', '/profile/:username'], async (req, res) => {
@@ -85,7 +87,7 @@ router.get('/order/:orderId', (req, res) => {
         <p class="desc">Ingia kwenye Soko Vibe kuona maelezo ya oda. Taarifa za siri (anwani, malipo, OTP) zinaonekana tu ukiwa umeingia.</p>
         <div class="cta" style="justify-content:center">
           <a class="btn btn-primary" href="${canonical}">Ingia na Fungua Oda</a>
-          <a class="btn btn-outline" href="https://play.google.com/store/apps/details?id=com.sokolangu.app">Pakua App</a>
+          <a class="btn btn-outline" href="/support">Jinsi ya kupata app</a>
         </div>
       </div>
     </div>

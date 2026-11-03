@@ -24,6 +24,7 @@ class DeepLinkService {
   static const String webBaseUrl = DeepLinkParser.webBaseUrl;
 
   static const String _pendingPrefsKey = 'pending_deep_link';
+  static const String _referralPrefsKey = 'share_ref';
 
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _subscription;
@@ -75,6 +76,10 @@ class DeepLinkService {
     }
     // analytics without sensitive data
     _trackDeepLink(route);
+    final ref = route.query['ref'];
+    if (ref != null && ref.isNotEmpty) {
+      unawaited(_persistReferral(ref));
+    }
     _pending = uri;
     _emit();
   }
@@ -128,6 +133,13 @@ class DeepLinkService {
     }
     // also flush any normal pending that was waiting for auth
     _emit();
+  }
+
+  Future<void> _persistReferral(String ref) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_referralPrefsKey, ref);
+    } catch (_) {}
   }
 
   Future<void> _persistPendingAuth(String loc) async {

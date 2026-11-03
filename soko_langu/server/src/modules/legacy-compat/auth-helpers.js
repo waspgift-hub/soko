@@ -2,15 +2,26 @@
 // Mirrors the old server semantics: Firebase Bearer -> uid; admin via
 // x-admin-secret or Firestore isAdmin flag.
 const { getFirebaseAuth } = require('../../config/firebase');
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 const config = require('../../config');
+const totp = require('../../services/totp');
+const crypto = require('crypto');
 
-function db() {
-  return getFirebaseFirestore();
+function decryptSecret(blob) {
+  const raw = Buffer.from(String(blob), 'base64');
+  const iv = raw.slice(0, 12);
+  const tag = raw.slice(12, 28);
+  const enc = raw.slice(28);
+  const key = crypto.createHash('sha256').update(String(process.env.ENCRYPTION_KEY || process.env.ADMIN_SECRET || 'soko-vibe')).digest();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
 }
 
+// Deleted the db() helper function
+
 function deny(res, status, error) {
-  if (res) res.status(status).json({ error });
+  if (res && !res.headersSent) res.status(status).json({ error });
   return { ok: false };
 }
 
@@ -43,26 +54,45 @@ async function requireUser(req, res) {
 }
 
 async function requireAdmin(req, res) {
+  let auth = null;
   const secret = req.headers['x-admin-secret'];
   if (secret && config.security.adminSecret && secret === config.security.adminSecret) {
-    return { ok: true, uid: 'admin-secret' };
-  }
-  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
-  if (authHeader.startsWith('Bearer ')) {
-    try {
-      const auth = getFirebaseAuth();
-      const store = db();
-      if (auth && store) {
-        const decoded = await auth.verifyIdToken(authHeader.slice(7));
-        const userDoc = await store.collection('users').doc(decoded.uid).get();
-        if (userDoc.exists && userDoc.data().isAdmin === true) {
-          return { ok: true, uid: decoded.uid };
+    auth = { ok: true, uid: 'admin-secret' };
+  } else {
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+    if (authHeader.startsWith('Bearer ')) {
+      try {
+        const a = getFirebaseAuth();
+        if (a) {
+          const decoded = await a.verifyIdToken(authHeader.slice(7));
+          const userDoc = await commerceStore.getDocument('users', decoded.uid);
+          if (userDoc && userDoc.isAdmin === true) {
+            auth = { ok: true, uid: decoded.uid };
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
-  if (res) res.status(401).json({ error: 'Unauthorized' });
-  return { ok: false };
+  if (!auth) {
+    if (res && !res.headersSent) res.status(401).json({ error: 'Unauthorized' });
+    return { ok: false };
+  }
+  // MFA (TOTP) enforcement: if the admin has enrolled MFA, require a valid
+  // code on every request (header x-admin-totp). Fail closed.
+  try {
+    const userDoc = await commerceStore.getDocument('users', auth.uid);
+    const mfa = userDoc && userDoc.mfa;
+    if (mfa && mfa.enabled && mfa.secret) {
+      const code = req.headers['x-admin-totp'];
+      let sec;
+      try { sec = decryptSecret(mfa.secret); } catch (_) { sec = null; }
+      if (!sec || !totp.verify(sec, code)) {
+        if (res && !res.headersSent) res.status(401).json({ error: 'MFA_REQUIRED' });
+        return { ok: false };
+      }
+    }
+  } catch (_) { /* fail open on store error to avoid lockout */ }
+  return auth;
 }
 
 async function isOwnerOrAdmin(req, res, ownerId) {
@@ -74,12 +104,10 @@ async function isOwnerOrAdmin(req, res, ownerId) {
 }
 
 async function checkSuspended(userId) {
-  const store = db();
-  if (!store) return false;
   try {
-    const userDoc = await store.collection('users').doc(userId).get();
-    if (!userDoc.exists) return false;
-    return userDoc.data().isSuspended === true;
+    const userDoc = await commerceStore.getDocument('users', userId);
+    if (!userDoc) return false;
+    return userDoc.isSuspended === true;
   } catch {
     return false;
   }

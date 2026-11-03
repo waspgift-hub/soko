@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/routes.dart';
-import '../../widgets/animations/soko_animated_illustration.dart';
 
 /// A safe, restartable guide to existing marketplace features.
 ///
@@ -30,7 +29,7 @@ class _TutorialsScreenState extends State<TutorialsScreen> {
           'Hakuna bidhaa itanunuliwa kwenye hatua hii.',
       actionLabel: 'Fungua utafutaji',
       route: AppRoutes.search,
-      illustration: SokoIllustration.search,
+      icon: Icons.search,
     ),
     _TutorialStep(
       title: 'Weka bidhaa yako',
@@ -38,7 +37,7 @@ class _TutorialsScreenState extends State<TutorialsScreen> {
           'kuchapisha mwenyewe baadaye.',
       actionLabel: 'Fungua kuongeza bidhaa',
       route: AppRoutes.addProduct,
-      illustration: SokoIllustration.selling,
+      icon: Icons.add_business_outlined,
     ),
     _TutorialStep(
       title: 'Linda akaunti yako',
@@ -46,7 +45,7 @@ class _TutorialsScreenState extends State<TutorialsScreen> {
           'Kutuma nyaraka kunahitaji uthibitisho wako wa kawaida.',
       actionLabel: 'Fungua uthibitishaji',
       route: AppRoutes.kyc,
-      illustration: SokoIllustration.security,
+      icon: Icons.verified_user_outlined,
     ),
     _TutorialStep(
       title: 'Pata msaada wa Soko Vibe',
@@ -54,7 +53,7 @@ class _TutorialsScreenState extends State<TutorialsScreen> {
           'athari kubwa vitaomba idhini yako kabla havijatekelezwa.',
       actionLabel: 'Fungua msaidizi',
       route: AppRoutes.agent,
-      illustration: SokoIllustration.support,
+      icon: Icons.support_agent,
     ),
   ];
 
@@ -113,7 +112,7 @@ class _TutorialsScreenState extends State<TutorialsScreen> {
             children: [
               LinearProgressIndicator(value: (_page + 1) / _steps.length),
               const SizedBox(height: 32),
-              SokoAnimatedIllustration(step.illustration, size: 152),
+              Icon(step.icon, size: 96, color: cs.primary),
               const SizedBox(height: 28),
               Text(step.title,
                   textAlign: TextAlign.center,
@@ -164,12 +163,12 @@ class _TutorialStep {
     required this.description,
     required this.actionLabel,
     required this.route,
-    required this.illustration,
+    required this.icon,
   });
 
   final String title;
   final String description;
   final String actionLabel;
   final String route;
-  final SokoIllustration illustration;
+  final IconData icon;
 }

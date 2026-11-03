@@ -1,132 +1,52 @@
-/**
- * Webhook outbox (Layer-2 idempotency).
- *
- * Append-only receipt of provider webhook events. A unique dedup_key (provider
- * event id, or a sha256 of the payload when no id is present) makes re-delivery
- * and multi-instance concurrency at-most-once:
- *
- *   received -> processing -> processed
- *   received/processing -> failed (attempts++, retryable)
- *   processed  -> duplicate (ack 200, no-op)
- *
- * If the webhook_events table has not been provisioned yet (fresh deploy), the
- * module degrades to an in-process, ephemeral dedupe map instead of crashing.
- */
-const crypto = require('crypto');
-const { getStore } = require('../../config/database');
-
-const TABLE_MISSING_CODE = 'P2021';
-
-// Ephemeral fallback used only when the DB table is absent (pre-migration).
-const eventCache = new Map();
-const CACHE_TTL_MS = 60 * 1000;
-
-function isTableMissingError(e) {
-  return !!e && (e.code === TABLE_MISSING_CODE || /does not exist/i.test(String(e.message || '')));
-}
+// Webhook outbox facade.
+//
+// The authoritative implementation lives in `src/services/commerce-store.js`
+// (commerce-store.recordWebhookEvent / markWebhookStatus), which claim the
+// dedup key INSIDE a Firestore transaction via `create()` — a read-then-set
+// check there is a time-of-check/time-of-use race that two concurrent deliveries
+// of the same ClickPesa event would both lose. The webhooks collection is part of
+// the commerce data domain, so it is owned here rather than in a generic store.
+//
+// Re-exported under the historical names so callers (payment-service) keep their
+// existing surface; behaviour is now the atomic one described in the Phase 3/5
+// money-safety requirements.
+const commerce = require('../../services/commerce-store');
 
 function buildDedupKey(providerName, webhookId, payload) {
   if (webhookId) return `${providerName}:${String(webhookId).slice(0, 200)}`;
+  const crypto = require('crypto');
   const raw = JSON.stringify(payload ?? {});
   return `${providerName}:sha256:${crypto.createHash('sha256').update(raw).digest('hex')}`;
 }
 
-function cacheGet(key) {
-  const entry = eventCache.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt < Date.now()) {
-    eventCache.delete(key);
-    return null;
+async function recordWebhookEvent({ provider, dedupKey, type, rawPayload, signature, orderReference } = {}) {
+  const claimed = await commerce.recordWebhookEvent({
+    provider,
+    dedupKey,
+    type,
+    rawPayload,
+    signature,
+    orderReference,
+  });
+  // `claimed` carries `{ claimed, duplicate, id, status, orderReference }` from
+  // the transaction outcome. Callers branch on `claimed === false` (loser of the
+  // race) or `duplicate === true` (re-delivery of an already-processed event).
+  if (claimed && claimed.claimed === false) {
+    return claimed;
   }
-  return entry;
-}
-
-function cacheSet(dedupKey, status) {
-  const entry = { dedupKey, status, expiresAt: Date.now() + CACHE_TTL_MS, id: null };
-  eventCache.set(dedupKey, entry);
-  return entry;
-}
-
-/**
- * Record a webhook event; returns the existing row when the event was already
- * seen so callers can de-dupe by status.
- */
-async function recordWebhookEvent({ provider, dedupKey, type, rawPayload, signature, orderReference }) {
-  const store = getStore();
-  try {
-    const existing = await store.webhookEvent.findUnique({ where: { dedupKey } });
-    if (existing) return existing;
-    return await store.webhookEvent.create({
-      data: {
-        provider,
-        dedupKey,
-        type,
-        status: 'received',
-        rawPayload,
-        signature,
-        orderReference: orderReference || null,
-      },
-    });
-  } catch (e) {
-    if (isTableMissingError(e)) {
-      const cached = cacheGet(dedupKey);
-      if (cached) return cached;
-      return cacheSet(dedupKey, 'received');
-    }
-    throw e;
-  }
+  return claimed;
 }
 
 async function markWebhookProcessing(event) {
-  const store = getStore();
-  if (!event || !event.id) return;
-  try {
-    await store.webhookEvent.update({
-      where: { id: event.id },
-      data: { status: 'processing' },
-    });
-  } catch (e) {
-    if (isTableMissingError(e)) return;
-    throw e;
-  }
+  return commerce.markWebhookStatus(event, commerce.WEBHOOK_STATUS_PROCESSING);
 }
 
 async function markWebhookProcessed(event) {
-  if (!event || !event.dedupKey) return;
-  if (event.id) {
-    try {
-      await getStore().webhookEvent.update({
-        where: { id: event.id },
-        data: { status: 'processed', processedAt: new Date() },
-      });
-      return;
-    } catch (e) {
-      if (!isTableMissingError(e)) throw e;
-    }
-  }
-  const cached = cacheGet(event.dedupKey);
-  if (cached) cached.status = 'processed';
+  return commerce.markWebhookStatus(event, commerce.WEBHOOK_STATUS_PROCESSED);
 }
 
 async function markWebhookFailed(event, error) {
-  if (!event || !event.dedupKey) return;
-  if (event.id) {
-    try {
-      await getStore().webhookEvent.update({
-        where: { id: event.id },
-        data: {
-          status: 'failed',
-          attempts: { increment: 1 },
-          lastError: error && error.message ? String(error.message).slice(0, 500) : 'unknown',
-        },
-      });
-      return;
-    } catch (e) {
-      if (!isTableMissingError(e)) throw e;
-    }
-  }
-  const cached = cacheGet(event.dedupKey);
-  if (cached) cached.status = 'failed';
+  return commerce.markWebhookStatus(event, commerce.WEBHOOK_STATUS_FAILED, { error });
 }
 
 module.exports = {
@@ -135,8 +55,8 @@ module.exports = {
   markWebhookProcessing,
   markWebhookProcessed,
   markWebhookFailed,
-  WEBHOOK_STATUS_RECEIVED: 'received',
-  WEBHOOK_STATUS_PROCESSING: 'processing',
-  WEBHOOK_STATUS_PROCESSED: 'processed',
-  WEBHOOK_STATUS_FAILED: 'failed',
+  WEBHOOK_STATUS_RECEIVED: commerce.WEBHOOK_STATUS_RECEIVED,
+  WEBHOOK_STATUS_PROCESSING: commerce.WEBHOOK_STATUS_PROCESSING,
+  WEBHOOK_STATUS_PROCESSED: commerce.WEBHOOK_STATUS_PROCESSED,
+  WEBHOOK_STATUS_FAILED: commerce.WEBHOOK_STATUS_FAILED,
 };

@@ -75,7 +75,6 @@ enum AdScreen {
   messages,
   chat,
   profile,
-  music,
   aiAssistant,
   notifications,
   wishlist,
@@ -105,7 +104,6 @@ enum AdPlacement {
   profileFooter,
   wishlistFooter,
   flashSaleFooter,
-  musicFeedFooter,
   interstitialTabSwitch,
   interstitialSearchComplete,
   interstitialCategoryLeave,
@@ -129,7 +127,6 @@ enum AdPlacement {
         AdPlacement.profileFooter => 'profile.footer',
         AdPlacement.wishlistFooter => 'wishlist.footer',
         AdPlacement.flashSaleFooter => 'flashsale.footer',
-        AdPlacement.musicFeedFooter => 'music.feed.footer',
         AdPlacement.interstitialTabSwitch => 'interstitial.tab_switch',
         AdPlacement.interstitialSearchComplete =>
           'interstitial.search_complete',
@@ -176,7 +173,6 @@ enum AdPlacement {
         AdPlacement.flashSaleFooter => AdScreen.flashSale,
         AdPlacement.rewardedCreateFlashSale => AdScreen.flashSale,
         AdPlacement.rewardedUnlockContact => AdScreen.messages,
-        AdPlacement.musicFeedFooter => AdScreen.music,
         AdPlacement.interstitialTabSwitch => AdScreen.unknown,
       };
 

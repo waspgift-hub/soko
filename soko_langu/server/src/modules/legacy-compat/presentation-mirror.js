@@ -12,6 +12,7 @@
 const { FieldValue } = require('firebase-admin/firestore');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { legacyStatusOf } = require('./legacy-status');
+const commerceStore = require('../../services/commerce-store');
 
 // Default instance wired to the real Firestore (no-op when unconfigured).
 async function syncLegacyOrderStatus(order) {
@@ -27,16 +28,16 @@ function buildSyncLegacyOrderStatus(db) {
       if (!db) return;
       // Only touch docs that already exist — mirroring is for app/web orders
       // that were mirrored at creation, never for pure-v2 orders.
-      const snapshot = await db.collection('orders').doc(order.id).get();
-      if (!snapshot.exists) return;
+      const snapshot = await commerceStore.getDocument('orders', order.id, { db });
+      if (!snapshot) return;
       const patch = { status: legacyStatusOf(order.status), updatedAt: FieldValue.serverTimestamp() };
       // Mirror the money fields so invoices drawn from Firestore show the
       // server-locked totals, not the creation-time zeros.
       if (order.shippingFee != null) patch.shippingCost = Number(order.shippingFee);
       if (order.totalAmount != null) patch.totalAmount = Number(order.totalAmount);
       if (order.platformCommission != null) patch.platformFee = Number(order.platformCommission);
-      await db.collection('orders').doc(order.id).set(patch, { merge: true });
-      await db.collection('transactions').doc(order.id).set(patch, { merge: true });
+      await commerceStore.updateDocument('orders', order.id, patch, { db });
+      await commerceStore.updateDocument('transactions', order.id, patch, { db });
     } catch (e) {
       console.error('[SYNC] Firestore status mirror failed:', e.message);
     }

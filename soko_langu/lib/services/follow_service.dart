@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/social_models.dart';
-import 'api_config.dart';
 import 'notification_service.dart';
 
 /// Centralized service for the social graph: follow / unfollow, follow
@@ -25,9 +25,6 @@ class FollowService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final NotificationService _notifications = NotificationService();
-
-  /// How many accounts are returned per page of followers / following.
-  static const int _pageSize = 20;
 
   /// Current user's uid, or null when signed out.
   String? get _uid => _auth.currentUser?.uid;
@@ -98,12 +95,12 @@ class FollowService {
     batch.set(themRef.collection('followers').doc(_uid!),
         FollowRelationship(followerId: _uid!, followingId: targetId, createdAt: DateTime.now()).toMap());
 
-    // Increment denormalized counts on the public projection.
+    // I follow them: their follower count and my following count both go up.
     batch.update(themRef, {
-      'followingCount': FieldValue.increment(1),
+      'followerCount': FieldValue.increment(1),
     });
     batch.update(meRef, {
-      'followerCount': FieldValue.increment(1),
+      'followingCount': FieldValue.increment(1),
     });
 
     await batch.commit();
@@ -133,8 +130,8 @@ class FollowService {
     final batch = _db.batch();
     batch.delete(meRef.collection('following').doc(targetId));
     batch.delete(themRef.collection('followers').doc(_uid!));
-    batch.update(themRef, {'followingCount': FieldValue.increment(-1)});
-    batch.update(meRef, {'followerCount': FieldValue.increment(-1)});
+    batch.update(themRef, {'followerCount': FieldValue.increment(-1)});
+    batch.update(meRef, {'followingCount': FieldValue.increment(-1)});
     await batch.commit();
   }
 
@@ -203,13 +200,14 @@ class FollowService {
     final batch = _db.batch();
     final now = DateTime.now();
 
-    batch.set(meRef.collection('following').doc(requesterId),
-        FollowRelationship(followerId: _uid!, followingId: requesterId, createdAt: now).toMap());
-    batch.set(themRef.collection('followers').doc(_uid!),
+    // Requester follows me: I gain a follower, they gain a following.
+    batch.set(meRef.collection('followers').doc(requesterId),
+        FollowRelationship(followerId: requesterId, followingId: _uid!, createdAt: now).toMap());
+    batch.set(themRef.collection('following').doc(_uid!),
         FollowRelationship(followerId: requesterId, followingId: _uid!, createdAt: now).toMap());
 
-    batch.update(meRef, {'followingCount': FieldValue.increment(1)});
-    batch.update(themRef, {'followerCount': FieldValue.increment(1)});
+    batch.update(meRef, {'followerCount': FieldValue.increment(1)});
+    batch.update(themRef, {'followingCount': FieldValue.increment(1)});
 
     // Delete the request from both sides.
     batch.delete(meRef.collection('followRequests').doc(requesterId));
@@ -277,10 +275,28 @@ class FollowService {
     return doc.data()?['followerCount'] as int? ?? 0;
   }
 
+  /// Stream of follower count for [ownerId].
+  Stream<int> followerCountStream(String ownerId) {
+    return _db
+        .collection('users')
+        .doc(ownerId)
+        .snapshots()
+        .map((doc) => doc.data()?['followerCount'] as int? ?? 0);
+  }
+
   /// Count of accounts [ownerId] is following (denormalized).
   Future<int> followingCount(String ownerId) async {
     final doc = await _db.collection('users').doc(ownerId).get();
     return doc.data()?['followingCount'] as int? ?? 0;
+  }
+
+  /// Stream of following count for [ownerId].
+  Stream<int> followingCountStream(String ownerId) {
+    return _db
+        .collection('users')
+        .doc(ownerId)
+        .snapshots()
+        .map((doc) => doc.data()?['followingCount'] as int? ?? 0);
   }
 
   // ─── Block / unblock ────────────────────────────────────────────────────

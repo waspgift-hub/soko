@@ -10,7 +10,7 @@
  * definitions here is what makes the route importable at all.
  */
 
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 
 // Escrow auto-release windows. These are business policy, not tunables: a
 // regional shipment is handed to a courier who may sit on it for days, while a
@@ -32,18 +32,10 @@ const ESCROW_LOCAL_DAYS = 3;
  */
 async function checkSuspended(uid) {
   if (!uid) return false;
-  let db;
   try {
-    db = getFirebaseFirestore();
-  } catch (_) {
-    return false;
-  }
-  if (!db) return false;
-  try {
-    const doc = await db.collection('users').doc(uid).get();
-    if (!doc.exists) return false;
-    const data = doc.data() || {};
-    return data.suspended === true || data.isSuspended === true || data.accountStatus === 'suspended';
+    const user = await commerceStore.getDocument('users', uid);
+    if (!user) return false;
+    return user.suspended === true || user.isSuspended === true || user.accountStatus === 'suspended';
   } catch (err) {
     console.error('[fraud] suspension check failed, allowing checkout:', err.message);
     return false;
@@ -51,3 +43,4 @@ async function checkSuspended(uid) {
 }
 
 module.exports = { checkSuspended, ESCROW_REGIONAL_DAYS, ESCROW_LOCAL_DAYS };
+

@@ -7,7 +7,7 @@
 // OneSignal heads-up delivery is deliberately not sent here: it lives in
 // legacy-compat/notify.js, which addresses users by Firebase UID (matching
 // `OneSignal.login(user.uid)`), unlike the old Postgres-id push service.
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 
 const PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -24,7 +24,8 @@ function toISO(value) {
 }
 
 function serializeDoc(doc) {
-  const d = doc.data();
+  if (!doc) return null;
+  const d = doc || {};
   return {
     id: doc.id,
     userId: d.userId,
@@ -38,35 +39,33 @@ function serializeDoc(doc) {
 }
 
 async function createNotification({ userId, title, body, type = 'INFO', data = {} }) {
-  const db = getFirebaseFirestore();
-  const ref = await db.collection('notifications').add({
+  const docId = await commerceStore.addDocument('notifications', {
     userId,
     title,
     body,
     type,
     data: data || {},
     isRead: false,
-    createdAt: new Date(),
+    createdAt: commerceStore.serverTimestamp(),
   });
-  const snap = await ref.get();
+  const snap = await commerceStore.getDocument('notifications', docId);
   return serializeDoc(snap);
 }
 
 async function listNotifications(firebaseUid, { page = 1, limit = PAGE_SIZE } = {}) {
-  const db = getFirebaseFirestore();
   const take = Math.min(Math.max(1, limit), MAX_PAGE_SIZE);
   const skip = (Math.max(1, page) - 1) * take;
 
-  const snap = await db
-    .collection('notifications')
-    .where('userId', '==', firebaseUid)
-    .orderBy('createdAt', 'desc')
-    .limit(HYDRATE_CAP)
-    .get();
+  const items = await commerceStore.listDocuments('notifications', {
+    where: { userId: firebaseUid },
+    orderBy: 'createdAt',
+    direction: 'desc',
+    limit: HYDRATE_CAP,
+  });
 
-  const items = snap.docs.map((d) => serializeDoc(d));
-  const total = items.length;
-  const pageItems = items.slice(skip, skip + take);
+  const serializedItems = items.map((d) => serializeDoc(d));
+  const total = serializedItems.length;
+  const pageItems = serializedItems.slice(skip, skip + take);
 
   return {
     notifications: pageItems,
@@ -75,59 +74,48 @@ async function listNotifications(firebaseUid, { page = 1, limit = PAGE_SIZE } = 
 }
 
 async function unreadCount(firebaseUid) {
-  const db = getFirebaseFirestore();
-  const snap = await db
-    .collection('notifications')
-    .where('userId', '==', firebaseUid)
-    .where('isRead', '==', false)
-    .get();
-  return snap.size;
+  const items = await commerceStore.listDocuments('notifications', {
+    where: { userId: firebaseUid, isRead: false },
+  });
+  return items.length;
 }
 
 async function markRead(firebaseUid, notificationId) {
-  const db = getFirebaseFirestore();
-  const ref = db.collection('notifications').doc(notificationId);
-  const doc = await ref.get();
-  if (!doc.exists || doc.data().userId !== firebaseUid) return false;
-  if (doc.data().isRead) return true;
-  await ref.update({ isRead: true, readAt: new Date() });
+  const doc = await commerceStore.getDocument('notifications', notificationId);
+  if (!doc || doc.userId !== firebaseUid) return false;
+  if (doc.isRead) return true;
+  await commerceStore.updateDocument('notifications', notificationId, { isRead: true, readAt: new Date() });
   return true;
 }
 
 async function markAllRead(firebaseUid) {
-  const db = getFirebaseFirestore();
-  const snap = await db
-    .collection('notifications')
-    .where('userId', '==', firebaseUid)
-    .where('isRead', '==', false)
-    .get();
-  if (snap.size === 0) return 0;
-  const batch = db.batch();
-  snap.docs.forEach((d) => batch.update(d.ref, { isRead: true, readAt: new Date() }));
-  await batch.commit();
-  return snap.size;
+  const items = await commerceStore.listDocuments('notifications', {
+    where: { userId: firebaseUid, isRead: false },
+  });
+  if (items.length === 0) return 0;
+  const updates = items.map(d => ({
+    id: d.id,
+    updates: { isRead: true, readAt: new Date() }
+  }));
+  await commerceStore.batchUpdate('notifications', updates);
+  return items.length;
 }
 
 async function deleteNotification(firebaseUid, notificationId) {
-  const db = getFirebaseFirestore();
-  const ref = db.collection('notifications').doc(notificationId);
-  const doc = await ref.get();
-  if (!doc.exists || doc.data().userId !== firebaseUid) return false;
-  await ref.delete();
+  const doc = await commerceStore.getDocument('notifications', notificationId);
+  if (!doc || doc.userId !== firebaseUid) return false;
+  await commerceStore.deleteDocument('notifications', notificationId);
   return true;
 }
 
 async function deleteAll(firebaseUid) {
-  const db = getFirebaseFirestore();
-  const snap = await db
-    .collection('notifications')
-    .where('userId', '==', firebaseUid)
-    .get();
-  if (snap.size === 0) return 0;
-  const batch = db.batch();
-  snap.docs.forEach((d) => batch.delete(d.ref));
-  await batch.commit();
-  return snap.size;
+  const items = await commerceStore.listDocuments('notifications', {
+    where: { userId: firebaseUid },
+  });
+  if (items.length === 0) return 0;
+  const docIds = items.map(d => d.id);
+  await commerceStore.batchDelete('notifications', docIds);
+  return items.length;
 }
 
 module.exports = {

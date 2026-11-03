@@ -12,6 +12,10 @@
 const { FieldValue } = require('firebase-admin/firestore');
 const { getFirebaseFirestore } = require('../config/firebase');
 
+const serverTimestamp = FieldValue.serverTimestamp;
+
+const increment = FieldValue.increment;
+
 const COLLECTIONS = {
   wallets: 'wallets', // { sellerUid: id }
   ledger: 'walletTransactions', // id = ledgerId (idempotent)
@@ -20,8 +24,118 @@ const COLLECTIONS = {
   withdrawals: 'withdrawals',
   payoutTransactions: 'payoutTransactions',
   webhooks: 'webhookEvents', // id = dedupKey (idempotent)
-  audit: 'auditLogs',
+  audit: 'audit_log', // aligned with admin-compat.js
+  transactions: 'transactions',
+  revenueTransactions: 'revenue_transactions',
+  adminWithdrawals: 'admin_withdrawals',
 };
+
+// Generic collection helpers for admin reporting
+
+async function countDocuments(collectionName, { where = [], db } = {}) {
+  const store = db || localDb();
+  let query = store.collection(collectionName);
+  for (const [field, value] of Object.entries(where)) {
+    query = query.where(field, '==', value);
+  }
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
+async function listDocuments(collectionName, { orderBy, direction = 'desc', limit, offset = 0, where = [], db } = {}) {
+  const store = db || localDb();
+  let query = store.collection(collectionName);
+  
+  if (Array.isArray(where)) {
+    for (const { field, op = '==', value } of where) {
+      query = query.where(field, op, value);
+    }
+  } else if (where && typeof where === 'object') {
+    for (const [field, value] of Object.entries(where)) {
+      query = query.where(field, '==', value);
+    }
+  }
+  
+  if (orderBy) {
+    query = query.orderBy(orderBy, direction);
+  }
+  if (offset > 0) {
+    query = query.offset(offset);
+  }
+  if (limit) {
+    query = query.limit(limit);
+  }
+  const snap = await query.get();
+  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function sumField(collectionName, field, { where = [], db } = {}) {
+  const store = db || localDb();
+  let query = store.collection(collectionName);
+  for (const [f, v] of Object.entries(where)) {
+    query = query.where(f, '==', v);
+  }
+  const snap = await query.get();
+  return snap.docs.reduce((acc, doc) => acc + (Number(doc.data()[field]) || 0), 0);
+}
+
+
+async function updateDocument(collectionName, docId, updates, { db } = {}) {
+  const store = db || localDb();
+  await store.collection(collectionName).doc(docId).update(updates);
+}
+
+async function upsertDocument(collectionName, docId, data, { db } = {}) {
+  const store = db || localDb();
+  await store.collection(collectionName).doc(docId).set(data, { merge: true });
+}
+
+async function setDocument(collectionName, docId, data, { db } = {}) {
+  const store = db || localDb();
+  await store.collection(collectionName).doc(docId).set(data);
+}
+
+
+async function deleteDocument(collectionName, docId, { db } = {}) {
+  const store = db || localDb();
+  await store.collection(collectionName).doc(docId).delete();
+}
+
+async function batchDelete(deletions, { db } = {}) {
+  const store = db || localDb();
+  const batch = store.batch();
+  deletions.forEach(({ collection, docId }) => {
+    const ref = store.collection(collection).doc(docId);
+    batch.delete(ref);
+  });
+  await batch.commit();
+}
+
+async function batchUpdate(updates, { db } = {}) {
+  const store = db || localDb();
+  const batch = store.batch();
+  updates.forEach(({ collection, docId, data }) => {
+    const ref = store.collection(collection).doc(docId);
+    batch.update(ref, data);
+  });
+  await batch.commit();
+}
+
+
+async function addDocument(collectionName, data, { db } = {}) {
+  const store = db || localDb();
+  const ref = store.collection(collectionName).doc();
+  await ref.set(data);
+  return ref.id;
+}
+
+async function getDocument(collectionName, docId, { db } = {}) {
+  const store = db || localDb();
+  const snap = await store.collection(collectionName).doc(docId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
 
 const LEDGER_TYPES = {
   PAYMENT_RECEIVED: 'PAYMENT_RECEIVED',
@@ -446,6 +560,11 @@ async function settleEscrowToSeller({
 
 // ---- Webhook outbox (Layer-2 idempotency, now native to Firestore) ----
 
+const WEBHOOK_STATUS_RECEIVED = 'received';
+const WEBHOOK_STATUS_PROCESSING = 'processing';
+const WEBHOOK_STATUS_PROCESSED = 'processed';
+const WEBHOOK_STATUS_FAILED = 'failed';
+
 /**
  * Records a webhook event, atomically claiming the dedup key.
  *
@@ -568,12 +687,24 @@ function storeWith(db) {
     recordWebhookEvent: (o) => recordWebhookEvent({ ...o, db }),
     markWebhookStatus: (e, s, o) => markWebhookStatus(e, s, { ...o, db }),
     writeAuditLog: (o) => writeAuditLog({ ...o, db }),
+    runTransaction: (callback, o) => runTransaction(callback, { ...o, db }),
   };
+}
+
+async function runTransaction(callback, { db } = {}) {
+  const store = db || localDb();
+  return await store.runTransaction(async (tx) => {
+    return await callback(tx, store);
+  });
 }
 
 module.exports = {
   COLLECTIONS,
   LEDGER_TYPES,
+  WEBHOOK_STATUS_RECEIVED,
+  WEBHOOK_STATUS_PROCESSING,
+  WEBHOOK_STATUS_PROCESSED,
+  WEBHOOK_STATUS_FAILED,
   buildLedgerId,
   tzs,
   applyBalance,
@@ -592,4 +723,19 @@ module.exports = {
   markWebhookStatus,
   writeAuditLog,
   storeWith,
+  countDocuments,
+  listDocuments,
+  sumField,
+  updateDocument,
+  addDocument,
+  getDocument,
+  batchUpdate,
+  upsertDocument,
+  setDocument,
+  deleteDocument,
+  batchDelete,
+  serverTimestamp,
+  increment,
+  runTransaction,
 };
+

@@ -22,6 +22,17 @@ router.get('/me', (req, res) => {
   res.json({ success: true, data: req.companyMembership || null });
 });
 
+// GET /api/company/overview — founder command center summary
+router.get('/overview', rbac.requireCompanyMember, async (req, res, next) => {
+  try {
+    const overview = require('./overview');
+    const data = await overview.getOverview();
+    res.json({ success: true, data });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // POST /api/company/bootstrap — create the first founder membership.
 // Allowed only when no founder exists yet. Idempotent for the same uid.
 router.post('/bootstrap', async (req, res, next) => {

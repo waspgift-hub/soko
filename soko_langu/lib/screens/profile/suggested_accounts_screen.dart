@@ -1,18 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../services/follow_service.dart';
+import '../../extensions/context_tr.dart';
+import '../../models/seller_verification.dart';
+import '../../services/seller_verification_service.dart';
 import '../../services/social_suggestion_service.dart';
 import '../../services/user_service.dart';
-import '../../services/seller_verification_service.dart';
-import '../../models/social_models.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
-import '../../theme/app_typography.dart';
-import '../../theme/design_tokens.dart';
-import '../../extensions/context_tr.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
-import '../../models/user_profile.dart';
+import '../../widgets/social/follow_button.dart';
 
 /// Suggested accounts screen — shows recommended sellers/users to follow.
 ///
@@ -30,11 +24,9 @@ class SuggestedAccountsScreen extends StatefulWidget {
 
 class _SuggestedAccountsScreenState extends State<SuggestedAccountsScreen> {
   final SocialSuggestionService _suggestionService = SocialSuggestionService();
-  final FollowService _followService = FollowService();
 
   List<UserProfile> _suggestions = [];
   bool _loading = true;
-  bool _hasMore = true;
 
   @override
   void initState() {
@@ -43,7 +35,6 @@ class _SuggestedAccountsScreenState extends State<SuggestedAccountsScreen> {
   }
 
   Future<void> _load() async {
-    if (_loading) return;
     setState(() => _loading = true);
 
     try {
@@ -52,7 +43,6 @@ class _SuggestedAccountsScreenState extends State<SuggestedAccountsScreen> {
       setState(() {
         _suggestions = suggestions;
         _loading = false;
-        _hasMore = suggestions.length >= 20;
       });
     } catch (e) {
       if (!mounted) return;
@@ -69,7 +59,7 @@ class _SuggestedAccountsScreenState extends State<SuggestedAccountsScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    if (_isLoading) {
+    if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -132,13 +122,10 @@ class _SuggestedAccountRow extends StatefulWidget {
 }
 
 class _SuggestedAccountRowState extends State<_SuggestedAccountRow> {
-  final FollowService _followService = FollowService();
   final SellerVerificationService _verificationService = SellerVerificationService();
 
   SellerVerification? _verification;
   bool _isLoading = true;
-  bool _isFollowing = false;
-  bool _isMutating = false;
 
   @override
   void initState() {
@@ -148,41 +135,18 @@ class _SuggestedAccountRowState extends State<_SuggestedAccountRow> {
 
   Future<void> _load() async {
     final verification = await _verificationService.resolve(widget.profile.uid);
-    final isFollowing = await _followService.isFollowing(widget.profile.uid);
     if (!mounted) return;
     setState(() {
       _verification = verification;
-      _isFollowing = isFollowing;
       _isLoading = false;
     });
-  }
-
-  Future<void> _toggleFollow() async {
-    if (_isMutating) return;
-    setState(() => _isMutating = true);
-    try {
-      if (_isFollowing) {
-        await _followService.unfollow(widget.profile.uid);
-      } else {
-        await _followService.follow(widget.profile.uid);
-      }
-      if (!mounted) return;
-      widget.onFollowed();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-    } finally {
-      if (mounted) setState(() => _isMutating = false);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    if (_isLoading || _verification == null) {
+    if (_isLoading) {
       return const ListTile(
         leading: CircleAvatar(radius: 24),
         title: Text('Loading...'),
@@ -190,7 +154,7 @@ class _SuggestedAccountRowState extends State<_SuggestedAccountRow> {
       );
     }
 
-    final isBlueTick = _verification!.isBlueTickActive;
+    final isBlueTick = _verification?.isBlueTickActive == true;
 
     return ListTile(
       leading: CircleAvatar(
@@ -222,10 +186,8 @@ class _SuggestedAccountRowState extends State<_SuggestedAccountRow> {
         '@${widget.profile.username}',
         style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
       ),
-      trailing: _isMutating
-          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-          : FollowButton(
-              sellerId: widget.profile.uid,
+      trailing: FollowButton(
+              targetUserId: widget.profile.uid,
               size: FollowButtonSize.small,
               onStatusChanged: widget.onFollowed,
             ),

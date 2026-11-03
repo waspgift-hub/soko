@@ -48,32 +48,62 @@ const server = app.listen(PORT, () => {
 });
 
 // Graceful shutdown
+let shuttingDown = false;
 const shutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`[API] ${signal} received. Starting graceful shutdown...`);
-  
-  server.close(async () => {
+
+  try {
+    // Stop accepting new work first: close idle keep-alive sockets immediately
+    // so in-flight handlers drain against a still-open listening socket.
+    server.closeAllConnections?.();
+    await new Promise((resolve) => {
+      server.close(() => resolve());
+      // Safety: if the close callback never fires, don't hang forever.
+      setTimeout(resolve, 5000).unref();
+    });
+
+    // Stop background workers BEFORE tearing down shared state so a worker
+    // never outlives the Redis handle it may still be touching during drain.
+    try {
+      if (config.finance.workerInProcess) {
+        const { closeFinanceWorker } = require('./services/finance-runner');
+        await closeFinanceWorker();
+      }
+    } catch (_) {}
+    try {
+      if (process.env.NOTIFICATION_WORKER_IN_PROCESS !== 'false') {
+        const { closeNotificationWorker } = require('./services/notification-worker');
+        await closeNotificationWorker();
+      }
+    } catch (_) {}
+
     console.log('[API] HTTP server closed');
-    
-    // Close Redis (Firestore/firebase-admin owns its own pooled connection,
-    // so there is no database handle left to tear down here).
+
     const { redis } = require('./config/redis');
     if (redis) {
       await redis.quit();
       console.log('[API] Redis connection closed');
     }
-    
+  } finally {
     process.exit(0);
-  });
-  
-  // Force shutdown after 30s
-  setTimeout(() => {
+  }
+};
+
+let forceShutdownTimer = null;
+const armForceShutdown = () => {
+  if (forceShutdownTimer) return;
+  forceShutdownTimer = setTimeout(() => {
     console.error('[API] Forced shutdown after timeout');
     process.exit(1);
   }, 30000);
+  forceShutdownTimer.unref?.();
 };
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => { armForceShutdown(); shutdown('SIGTERM'); });
+process.on('SIGINT', () => { armForceShutdown(); shutdown('SIGINT'); });
+process.on('SIGQUIT', () => { armForceShutdown(); shutdown('SIGQUIT'); });
 
 // Catch uncaught exceptions
 process.on('uncaughtException', (err) => {

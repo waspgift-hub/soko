@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,9 +11,10 @@ import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/user_profile.dart';
+import '../../models/seller_verification.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 import '../../widgets/ads/ad_slot.dart';
-import '../../widgets/ads/ad_manager.dart';
+import '../../widgets/social/follow_button.dart';
 
 /// Follower or following list screen.
 ///
@@ -141,7 +144,6 @@ class _FollowerFollowingScreenState extends State<FollowerFollowingScreen> {
                   },
                   separatorBuilder: (_, _) => const Divider(height: 1),
                 ),
-              ),
     );
   }
 }
@@ -260,7 +262,7 @@ class _UserRowState extends State<_UserRow> {
       trailing: _isMutating
           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
           : FollowButton(
-              sellerId: widget.uid,
+              targetUserId: widget.uid,
               size: FollowButtonSize.small,
               onStatusChanged: widget.onFollowChanged,
             ),

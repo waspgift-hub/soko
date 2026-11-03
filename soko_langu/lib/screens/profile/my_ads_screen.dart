@@ -9,6 +9,8 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/product_card.dart';
+import '../../widgets/ds/ds.dart';
+import '../../theme/app_colors.dart';
 
 class MyAdsScreen extends StatefulWidget {
   const MyAdsScreen({super.key});
@@ -160,6 +162,20 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
           children: [
             Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12), decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.onSurfaceVariant.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2))),
             ListTile(
+              leading: Icon(Icons.rocket_launch_outlined, color: Theme.of(ctx).colorScheme.primary),
+              title: Text(
+                context.tr('boost_product', 'Boost Tangazo'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(ctx).colorScheme.primary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push(AppRoutes.boostProduct, extra: product);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: Text(context.tr('edit')),
               onTap: () { Navigator.pop(ctx); _editProduct(product); },
@@ -218,21 +234,12 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                 final products = snapshot.data ?? [];
                 _maybeSweep(products);
                 if (products.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.sell_outlined, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
-                        const SizedBox(height: 16),
-                        Text(context.tr('no_ads'), style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16)),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () => context.push(AppRoutes.addProduct),
-                          icon: const Icon(Icons.add),
-                          label: Text(context.tr('sell_product')),
-                        ),
-                      ],
-                    ),
+                  return OneUIEmptyState(
+                    title: context.tr('no_ads', 'Huna Matangazo Bado'),
+                    message: context.tr('no_ads_subtitle', 'Bado hujaweka bidhaa yoyote sokoni. Chapisha bidhaa yako ya kwanza leo uanze kuuza!'),
+                    icon: Icons.storefront_outlined,
+                    actionLabel: context.tr('sell_product', 'Chapisha Bidhaa'),
+                    onAction: () => context.push(AppRoutes.addProduct),
                   );
                 }
                 return GridView.builder(

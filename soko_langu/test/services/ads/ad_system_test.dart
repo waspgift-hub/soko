@@ -317,7 +317,6 @@ void main() {
         AdScreen.chat,
         AdScreen.profile,
         AdScreen.notifications,
-        AdScreen.music,
         AdScreen.aiAssistant,
       ]) {
         expect(interstitialCapableScreens.contains(screen), isFalse,

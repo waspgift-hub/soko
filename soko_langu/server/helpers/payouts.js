@@ -1,6 +1,6 @@
 const clickpesaPayout = require('../clickpesa').clickpesaPayout;
 
-module.exports = function ({ admin, db }) {
+module.exports = function ({ commerceStore }) {
   function generatePayoutReference(prefix = 'po') {
     return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
   }
@@ -10,7 +10,7 @@ module.exports = function ({ admin, db }) {
 
   async function createPayoutRecord({ userId, phone, amount, fee, netAmount, source, type, metadata }) {
     const payoutId = generatePayoutReference();
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = commerceStore.serverTimestamp;
     const record = {
       payoutId,
       userId,
@@ -27,17 +27,17 @@ module.exports = function ({ admin, db }) {
       updatedAt: now,
       metadata: metadata || {},
     };
-    await db.collection('payouts').doc(payoutId).set(record);
+    await commerceStore.setDocument('payouts', payoutId, record);
     return payoutId;
   }
 
   async function updatePayoutStatus(payoutId, status, extra = {}) {
-    if (!db || !payoutId) return;
-    const updates = { status, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...extra };
+    if (!payoutId) return;
+    const updates = { status, updatedAt: commerceStore.serverTimestamp, ...extra };
     if (status === PAYOUT_STATUSES.SUCCESS || status === PAYOUT_STATUSES.FAILED) {
-      updates.completedAt = admin.firestore.FieldValue.serverTimestamp();
+      updates.completedAt = commerceStore.serverTimestamp;
     }
-    await db.collection('payouts').doc(payoutId).update(updates);
+    await commerceStore.updateDocument('payouts', payoutId, updates);
   }
 
   async function processPayout({ payoutId, userId, phone, amount, fee, netAmount, source, type, metadata }) {
@@ -46,8 +46,8 @@ module.exports = function ({ admin, db }) {
     }
     await updatePayoutStatus(payoutId, PAYOUT_STATUSES.PROCESSING);
 
-    if (type === 'seller_withdrawal' && db) {
-      await db.collection('transactions').doc(payoutId).set({
+    if (type === 'seller_withdrawal') {
+      await commerceStore.setDocument('transactions', payoutId, {
         type: 'seller_withdrawal',
         userId,
         userPhone: phone,
@@ -58,7 +58,7 @@ module.exports = function ({ admin, db }) {
         paymentMethod: 'ClickPesa',
         source: source || '',
         metadata: metadata || {},
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
     }
 
@@ -68,10 +68,6 @@ module.exports = function ({ admin, db }) {
       orderReference: payoutId,
     });
 
-    // ClickPesa accepted the request — leave the payout in PROCESSING. The
-    // provider's payout webhook is the source of truth and transitions it to
-    // SUCCESS or FAILED. Marking SUCCESS here would falsely report money sent
-    // before the provider actually disburses it.
     const clickpesaRef = result.id || result.orderReference || '';
     await updatePayoutStatus(payoutId, PAYOUT_STATUSES.PROCESSING, { clickpesaReference: clickpesaRef });
 
@@ -79,16 +75,15 @@ module.exports = function ({ admin, db }) {
   }
 
   async function retryFailedPayout(payoutId) {
-    const doc = await db.collection('payouts').doc(payoutId).get();
-    if (!doc.exists) throw new Error('Payout not found');
-    const payout = doc.data();
+    const payout = await commerceStore.getDocument('payouts', payoutId);
+    if (!payout) throw new Error('Payout not found');
     if (payout.status !== PAYOUT_STATUSES.FAILED) throw new Error(`Cannot retry payout with status: ${payout.status}`);
     if (payout.retryCount >= payout.maxRetries) throw new Error('Max retries reached');
 
-    await db.collection('payouts').doc(payoutId).update({
-      retryCount: admin.firestore.FieldValue.increment(1),
+    await commerceStore.updateDocument('payouts', payoutId, {
+      retryCount: commerceStore.increment(1),
       failureReason: '',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: commerceStore.serverTimestamp,
     });
     return processPayout({
       payoutId, userId: payout.userId, phone: payout.userPhone,
@@ -98,9 +93,8 @@ module.exports = function ({ admin, db }) {
   }
 
   async function auditLog({ userId, type, amount, balanceBefore, balanceAfter, reason, relatedId, metadata }) {
-    if (!db) return;
     try {
-      await db.collection('audit_log').add({
+      await commerceStore.addDocument('audit_log', {
         userId,
         type,
         amount,
@@ -110,7 +104,7 @@ module.exports = function ({ admin, db }) {
         relatedId: relatedId || '',
         metadata: metadata || {},
         ip: '',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: commerceStore.serverTimestamp,
       });
     } catch (e) {
       console.error('Audit log error:', e);

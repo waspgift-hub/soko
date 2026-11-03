@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// Centralized text style definitions for the Soko Vibe design system.
+///
+/// Prefer these semantic tokens over ad-hoc [TextStyle] constructors.
+/// Fonts are bundled locally (Inter, Space Grotesk, JetBrains Mono).
 class AppTypography {
   AppTypography._();
 
@@ -7,7 +11,7 @@ class AppTypography {
   static const String _spaceGrotesk = 'Space Grotesk';
   static const String _jetBrainsMono = 'JetBrains Mono';
 
-  // Semantic font size scale (base values, respect text scaling)
+  // Semantic font size scale (base values; respect system text scaling)
   static const double _displayLargeSize = 34;
   static const double _displayMediumSize = 28;
   static const double _headlineLargeSize = 24;
@@ -22,6 +26,7 @@ class AppTypography {
   static const double _labelMediumSize = 11;
   static const double _labelSmallSize = 10;
 
+  /// Applies the design-system type scale onto a Material [TextTheme].
   static TextTheme apply(TextTheme base, ColorScheme scheme) {
     return base.copyWith(
       displayLarge: TextStyle(
@@ -119,7 +124,6 @@ class AppTypography {
     );
   }
 
-  // Semantic typography tokens — use these instead of raw TextStyle constructors
   // Display headings
   static TextStyle displayLarge(Color color) => TextStyle(
         fontFamily: _spaceGrotesk,

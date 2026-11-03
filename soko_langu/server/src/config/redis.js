@@ -58,14 +58,50 @@ async function assertRedisReady(operation) {
   throw error;
 }
 
+function isBenignConnectError(error) {
+  return /already connecting|already connected/i.test(String(error && error.message));
+}
+
 async function connectRedis() {
   try {
     const client = getRedis();
+    const status = client.status;
+    if (status === 'ready' || status === 'connect' || status === 'connecting') {
+      return client;
+    }
     await client.connect();
+    await logEvictionPolicy(client);
     return client;
   } catch (error) {
+    if (isBenignConnectError(error)) {
+      return getRedis();
+    }
     console.error('[Redis] Connection failed:', error.message);
     return null;
+  }
+}
+
+let evictionLogged = false;
+async function logEvictionPolicy(client) {
+  if (evictionLogged || !client) return;
+  evictionLogged = true;
+  try {
+    const reply = await client.config('GET', 'maxmemory-policy');
+    const policy = Array.isArray(reply) ? reply[1] : reply;
+    if (!policy) return;
+    if (String(policy).toLowerCase() === 'noeviction') {
+      console.log('[Redis] maxmemory-policy=noeviction');
+      return;
+    }
+    // BullMQ also warns about allkeys-lru. This instance holds finance locks
+    // and job hashes as well as TTL cache keys. Changing the policy remotely
+    // is an operator decision: noeviction protects queues but can OOM if
+    // cache keys have no TTL. Do not CONFIG SET from the app.
+    console.warn(
+      `[Redis] maxmemory-policy=${policy}. Queue/lock keys can be evicted under LRU. Request a dedicated Redis or noeviction after reviewing cache TTLs.`,
+    );
+  } catch (e) {
+    console.warn('[Redis] could not read maxmemory-policy:', e.message);
   }
 }
 
@@ -286,5 +322,6 @@ module.exports = {
   isContended,
   releaseLock,
   deleteByPattern,
+  isBenignConnectError,
   __setLockImpl,
 };

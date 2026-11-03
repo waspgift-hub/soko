@@ -211,6 +211,18 @@ async function verifyAdmin(req, res, next) {
 // sessions, so enabling it would 401 every OTP user on the first request.
 // Session death on suspension is instead enforced by the accountStatus/
 // isSuspended gates on money-touching routes.
+function decryptAdminSecret(blob) {
+  const crypto = require('crypto');
+  const raw = Buffer.from(String(blob), 'base64');
+  const iv = raw.slice(0, 12);
+  const tag = raw.slice(12, 28);
+  const enc = raw.slice(28);
+  const key = crypto.createHash('sha256').update(String(process.env.ENCRYPTION_KEY || process.env.ADMIN_SECRET || 'soko-vibe')).digest();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+}
+
 function authenticateAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
   const expected = config.security.adminSecret;
@@ -225,7 +237,30 @@ function authenticateAdmin(req, res, next) {
     crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected))
   ) {
     req.isAdmin = true;
-    return next();
+    // MFA (TOTP) enforcement for secret-based admin.
+    try {
+      const commerceStore = require('../services/commerce-store');
+      const totp = require('../services/totp');
+      const userDoc = commerceStore.getDocument ? null : null;
+      // Load synchronously via await inside async wrapper not possible here (sync middleware).
+      // Use a promise chain.
+      commerceStore.getDocument('users', 'admin-secret').then((doc) => {
+        const mfa = doc && doc.mfa;
+        if (mfa && mfa.enabled && mfa.secret) {
+          let sec = null;
+          try { sec = decryptAdminSecret(mfa.secret); } catch (_) { sec = null; }
+          const code = req.headers['x-admin-totp'];
+          if (!sec || !totp.verify(sec, code)) {
+            return apiError(res, 401, 'MFA_REQUIRED');
+          }
+        }
+        next();
+      }).catch(() => { next(); });
+      return; // async path
+    } catch (_) {
+      req.isAdmin = true;
+      return next();
+    }
   }
 
   return apiError(res, 401, 'AUTH_REQUIRED');

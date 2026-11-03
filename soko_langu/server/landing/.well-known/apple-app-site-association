@@ -7,6 +7,7 @@
         "comment": "Soko Vibe — bundle com.sokolangu.app (iOS Team ID placeholder, update when Apple Developer Team ID is known)",
         "paths": [
           "/product/*",
+          "/p/*",
           "/seller/*",
           "/profile/*",
           "/order/*",
@@ -20,6 +21,7 @@
         "appIDs": ["344682929526.com.sokolangu.app"],
         "components": [
           { "/": "/product/*" },
+          { "/": "/p/*" },
           { "/": "/seller/*" },
           { "/": "/profile/*" },
           { "/": "/order/*" },

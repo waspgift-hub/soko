@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -44,17 +44,14 @@ router.post('/generate-delivery-otp', async function (req, res) {
     var orderId = req.body.orderId;
     if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
     var locals = req.app.locals;
-    var admin = locals.admin;
-    var db = locals.db;
+    var commerceStore = locals.commerceStore;
     var requireUser = locals.requireUser;
     var sendOneSignalNotification = locals.sendOneSignalNotification;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
     var auth = await requireUser(req, res);
     if (!auth.ok) return;
-    var txDoc = await db.collection('transactions').doc(orderId).get();
-    var orderDoc = await db.collection('orders').doc(orderId).get();
-    var tx = txDoc.exists ? txDoc.data() : null;
-    var order = orderDoc.exists ? orderDoc.data() : null;
+    var tx = await commerceStore.getDocument('transactions', orderId);
+    var order = await commerceStore.getDocument('orders', orderId);
     if (!tx && !order) return res.status(404).json({ error: 'Order not found' });
     var sellerId = (tx && tx.sellerId) || (order && order.sellerId);
     if (sellerId !== auth.uid) return res.status(403).json({ error: 'Only the seller can generate delivery OTP' });
@@ -72,20 +69,20 @@ router.post('/generate-delivery-otp', async function (req, res) {
       deliveryOtpHash: hashed,
       deliveryOtpAttempts: 0,
       deliveryOtpLockedUntil: null,
-      deliveryOtpGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+      deliveryOtpGeneratedAt: commerceStore.serverTimestamp,
       deliveryOtpBuyerVisible: plaintext,
     };
-    if (txDoc.exists) await txDoc.ref.update(otpData);
-    if (orderDoc.exists) await orderDoc.ref.update(otpData);
+    if (tx) await commerceStore.updateDocument('transactions', orderId, otpData);
+    if (order) await commerceStore.updateDocument('orders', orderId, otpData);
     var productName = (tx && tx.productName) || (order && order.productName) || 'Bidhaa';
     try {
-      await db.collection('notifications').add({
+      await commerceStore.addDocument('notifications', {
         userId: buyerId,
         title: 'Nambari ya Uthibitisho',
         body: 'Nambari ya uthibitisho wa upokeaji wa ' + productName + ' imegenerezwa.',
         isRead: false,
         data: { type: 'delivery_otp_ready', transactionId: orderId },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
     } catch (_) {}
     try {
@@ -105,8 +102,7 @@ router.post('/verify-delivery', async function (req, res) {
     if (!orderId || !otp) return res.status(400).json({ error: 'Missing orderId or otp' });
     if (!/^\d{4}$/.test(otp)) return res.status(400).json({ error: 'OTP must be exactly 4 digits' });
     var locals = req.app.locals;
-    var admin = locals.admin;
-    var db = locals.db;
+    var commerceStore = locals.commerceStore;
     var requireUser = locals.requireUser;
     var redis = locals.redis;
     var sendOneSignalNotification = locals.sendOneSignalNotification;
@@ -116,13 +112,11 @@ router.post('/verify-delivery', async function (req, res) {
     var PAYOUT_STATUSES = locals.PAYOUT_STATUSES;
     var auditLog = locals.auditLog;
     var checkSuspended = locals.checkSuspended;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
     var auth = await requireUser(req, res);
     if (!auth.ok) return;
-    var txDoc = await db.collection('transactions').doc(orderId).get();
-    var orderDoc = await db.collection('orders').doc(orderId).get();
-    var tx = txDoc.exists ? txDoc.data() : null;
-    var order = orderDoc.exists ? orderDoc.data() : null;
+    var tx = await commerceStore.getDocument('transactions', orderId);
+    var order = await commerceStore.getDocument('orders', orderId);
     if (!tx && !order) return res.status(404).json({ error: 'Order not found' });
     var sellerId = (tx && tx.sellerId) || (order && order.sellerId);
     if (sellerId !== auth.uid) return res.status(403).json({ error: 'Only the seller can verify delivery OTP' });
@@ -144,14 +138,14 @@ router.post('/verify-delivery', async function (req, res) {
     if (attempts >= OTP_MAX_ATTEMPTS) {
       var lockUntil = new Date(Date.now() + OTP_LOCKOUT_HOURS * 60 * 60 * 1000);
       var lockData = { deliveryOtpLockedUntil: lockUntil, deliveryOtpAttempts: OTP_MAX_ATTEMPTS };
-      if (txDoc.exists) await txDoc.ref.update(lockData);
-      if (orderDoc.exists) await orderDoc.ref.update(lockData);
+      if (tx) await commerceStore.updateDocument('transactions', orderId, lockData);
+      if (order) await commerceStore.updateDocument('orders', orderId, lockData);
       return res.status(423).json({ error: 'Too many failed attempts. OTP locked for 24 hours.' });
     }
     var newAttempts = attempts + 1;
     var attemptUpdate = { deliveryOtpAttempts: newAttempts };
-    if (txDoc.exists) await txDoc.ref.update(attemptUpdate);
-    if (orderDoc.exists) await orderDoc.ref.update(attemptUpdate);
+    if (tx) await commerceStore.updateDocument('transactions', orderId, attemptUpdate);
+    if (order) await commerceStore.updateDocument('orders', orderId, attemptUpdate);
     var valid = await verifyOtp(otp, otpHash);
     if (!valid) {
       var remaining = OTP_MAX_ATTEMPTS - newAttempts;
@@ -170,28 +164,32 @@ router.post('/verify-delivery', async function (req, res) {
       var productName = (tx && tx.productName) || (order && order.productName) || 'Product';
       var buyerId = (tx && tx.buyerId) || (order && order.buyerId);
       var sellerPhone = (tx && tx.sellerPhone) || (order && order.sellerPhone) || '';
-      var ref = txDoc.exists ? txDoc.ref : orderDoc.ref;
-      await ref.update({
+      
+      var targetColl = tx ? 'transactions' : 'orders';
+      await commerceStore.updateDocument(targetColl, orderId, {
         status: 'completed',
         escrowReleased: true,
-        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        escrowReleasedAt: commerceStore.serverTimestamp,
+        completedAt: commerceStore.serverTimestamp,
         confirmedBy: 'otp',
         flowStage: 'wallet_credited',
-        walletCreditedAt: admin.firestore.FieldValue.serverTimestamp(),
-        deliveryOtpVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        walletCreditedAt: commerceStore.serverTimestamp,
+        deliveryOtpVerifiedAt: commerceStore.serverTimestamp,
       });
-      var sellerDoc = await db.collection('users').doc(sellerId).get();
-      var pendingBefore = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
+
+      var seller = await commerceStore.getDocument('users', sellerId);
+      var pendingBefore = seller ? (seller.pendingEscrow || 0) : 0;
       var actualPending = Math.min(sellerReceives, pendingBefore);
-      await db.collection('users').doc(sellerId).update({
-        sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+
+      await commerceStore.updateDocument('users', sellerId, {
+        sellerBalance: commerceStore.increment(sellerReceives),
+        pendingEscrow: commerceStore.increment(-actualPending),
       });
-      await db.collection('revenue_transactions').add({
+
+      await commerceStore.addDocument('revenue_transactions', {
         userId: sellerId, type: 'sale', amount: sellerReceives, orderId: orderId,
         description: 'Escrow released (OTP): ' + productName + ' - TZS ' + sellerReceives,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: commerceStore.serverTimestamp,
       });
       if (auditLog) {
         try {
@@ -203,30 +201,30 @@ router.post('/verify-delivery', async function (req, res) {
       }
       var autoPaidOut = false;
       var payoutRef = '';
-      if (sellerDoc.exists && sellerDoc.data() && sellerDoc.data().autoPayout === true && sellerPhone) {
+      if (seller && seller.autoPayout === true && sellerPhone) {
         var payoutFee = getPayoutFee(sellerReceives);
         if (sellerReceives > payoutFee) {
           var netPayout = sellerReceives - payoutFee;
           payoutRef = generatePayoutReference('otp');
           try {
             await clickpesaPayout({ amount: netPayout, phoneNumber: sellerPhone, orderReference: payoutRef });
-            await db.collection('users').doc(sellerId).update({ sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives) });
-            await db.collection('payouts').doc(payoutRef).set({
+            await commerceStore.updateDocument('users', sellerId, { sellerBalance: commerceStore.increment(-sellerReceives) });
+            await commerceStore.setDocument('payouts', payoutRef, {
               payoutId: payoutRef, userId: sellerId, userPhone: sellerPhone,
               type: 'otp_payout', amount: sellerReceives, fee: payoutFee,
               netAmount: netPayout, status: PAYOUT_STATUSES.PROCESSING,
-              transactionId: orderId, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              transactionId: orderId, createdAt: commerceStore.serverTimestamp,
             });
             autoPaidOut = true;
           } catch (pe) {
             log('DELIVERY-OTP', 'payout failed for ' + orderId + ': ' + pe.message);
             try {
-              await db.collection('payouts').doc(payoutRef).set({
+              await commerceStore.setDocument('payouts', payoutRef, {
                 payoutId: payoutRef, userId: sellerId, userPhone: sellerPhone,
                 type: 'otp_payout', amount: sellerReceives, fee: payoutFee,
                 netAmount: netPayout, status: PAYOUT_STATUSES.FAILED,
                 transactionId: orderId, failureReason: pe.message,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: commerceStore.serverTimestamp,
               });
             } catch (_) {}
           }
@@ -236,22 +234,22 @@ router.post('/verify-delivery', async function (req, res) {
         ? 'Pesa TZS ' + sellerReceives.toLocaleString() + ' zimetolewa kwa ' + sellerPhone + '.'
         : 'Salio lako limeongezeka kwa TZS ' + sellerReceives.toLocaleString() + '.';
       try {
-        await db.collection('notifications').add({
+        await commerceStore.addDocument('notifications', {
           userId: sellerId, title: 'Oda Imekamilika',
           body: productName + ' - ' + sellerMsg,
           isRead: false, data: { type: 'completed', transactionId: orderId },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
       } catch (_) {}
       try {
         await sendOneSignalNotification(sellerId, 'Oda Imekamilika', productName + ' - ' + sellerMsg, { type: 'completed', transactionId: orderId });
       } catch (_) {}
       try {
-        await db.collection('notifications').add({
+        await commerceStore.addDocument('notifications', {
           userId: buyerId, title: 'Uthibitisho Umekubaliwa',
           body: productName + ' umekamilika. Asante kwa ununuzi!',
           isRead: false, data: { type: 'completed', transactionId: orderId },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
       } catch (_) {}
       try {
@@ -274,17 +272,14 @@ router.post('/delivery-arrival', async function (req, res) {
     var orderId = req.body.orderId;
     if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
     var locals = req.app.locals;
-    var admin = locals.admin;
-    var db = locals.db;
+    var commerceStore = locals.commerceStore;
     var requireUser = locals.requireUser;
     var sendOneSignalNotification = locals.sendOneSignalNotification;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
     var auth = await requireUser(req, res);
     if (!auth.ok) return;
-    var txDoc = await db.collection('transactions').doc(orderId).get();
-    var orderDoc = await db.collection('orders').doc(orderId).get();
-    var tx = txDoc.exists ? txDoc.data() : null;
-    var order = orderDoc.exists ? orderDoc.data() : null;
+    var tx = await commerceStore.getDocument('transactions', orderId);
+    var order = await commerceStore.getDocument('orders', orderId);
     if (!tx && !order) return res.status(404).json({ error: 'Order not found' });
     var buyerId = (tx && tx.buyerId) || (order && order.buyerId);
     var sellerId = (tx && tx.sellerId) || (order && order.sellerId);
@@ -294,8 +289,8 @@ router.post('/delivery-arrival', async function (req, res) {
     var isSeller = sellerId === auth.uid;
     var isAdminUser = false;
     try {
-      var actorDoc = await db.collection('users').doc(auth.uid).get();
-      isAdminUser = actorDoc.exists && actorDoc.data().isAdmin === true;
+      var actor = await commerceStore.getDocument('users', auth.uid);
+      isAdminUser = actor && actor.isAdmin === true;
     } catch (_) {}
     if (!isBuyer && !isSeller && !isAdminUser) return res.status(403).json({ error: 'Only the buyer or seller can confirm arrival' });
     var status = (tx && tx.status) || (order && order.status);
@@ -306,23 +301,23 @@ router.post('/delivery-arrival', async function (req, res) {
     var inspectionDeadline = new Date(Date.now() + INSPECTION_MINUTES * 60 * 1000);
     var arrivalData = {
       status: 'delivered',
-      deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+      deliveredAt: commerceStore.serverTimestamp,
       arrivalConfirmedBy: auth.uid,
       inspectionMinutes: INSPECTION_MINUTES,
       inspectionDeadline: inspectionDeadline,
       flowStage: 'inspection_period',
     };
-    if (txDoc.exists) await txDoc.ref.update(arrivalData);
-    if (orderDoc.exists) await orderDoc.ref.update(arrivalData);
+    if (tx) await commerceStore.updateDocument('transactions', orderId, arrivalData);
+    if (order) await commerceStore.updateDocument('orders', orderId, arrivalData);
     var productName = (tx && tx.productName) || (order && order.productName) || 'Bidhaa';
     var counterpartId = isBuyer ? sellerId : buyerId;
     if (counterpartId) {
       try {
-        await db.collection('notifications').add({
+        await commerceStore.addDocument('notifications', {
           userId: counterpartId, title: 'Mzigo Umefika!',
           body: productName + ' umefika. Dirisha la ukaguzi la dakika ' + INSPECTION_MINUTES + ' limefunguliwa.',
           isRead: false, data: { type: 'delivered', transactionId: orderId },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
         });
       } catch (_) {}
       try {
@@ -365,7 +360,7 @@ router.post('/open-dispute', async function (req, res) {
     var disputeInfo = {
       reason: reason || 'Sijapata mzigo',
       evidenceUrls: evidenceUrls || [],
-      raisedAt: admin.firestore.FieldValue.serverTimestamp(),
+      raisedAt: commerceStore.serverTimestamp,
       resolved: false,
       raisedBy: auth.uid,
     };
@@ -379,7 +374,7 @@ router.post('/open-dispute', async function (req, res) {
         userId: sellerId, title: 'Mgogoro Umefunguliwa',
         body: 'Mnunuzi amefungua mgogoro kwa ' + productName + '. Tafadhali wasilisha ushahidi wako.',
         isRead: false, data: { type: 'disputed', transactionId: orderId },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
     } catch (_) {}
     try {
@@ -390,7 +385,7 @@ router.post('/open-dispute', async function (req, res) {
         userId: buyerId, title: 'Mgogoro Umefunguliwa',
         body: 'Tumepokea mgogoro wako kwa ' + productName + '. Admin atakagua na kutoa uamuzi.',
         isRead: false, data: { type: 'disputed', transactionId: orderId },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: commerceStore.serverTimestamp,
       });
     } catch (_) {}
     try {
@@ -440,16 +435,16 @@ router.post('/set-shipping-cost', async function (req, res) {
     });
     var shippingQuote = {
       amount: shippingCost,
-      setAt: admin.firestore.FieldValue.serverTimestamp(),
+      setAt: commerceStore.serverTimestamp,
       setBy: auth.uid,
       verdict: validation.verdict,
       distanceTier: validation.distanceTier,
       reason: validation.reason || null,
       baseline: validation.baseline,
     };
-    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp, shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp, shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: commerceStore.serverTimestamp });
     await batch.commit();
     if (locals.sendOneSignalNotification && data.buyerId) {
       try { await locals.sendOneSignalNotification(data.buyerId, 'Gharama ya usafirishaji: TZS ' + shippingCost, 'Muuzaji ameweka gharama ya usafirishaji'); } catch (e) {}
@@ -495,19 +490,35 @@ router.post('/cron/auto-release', async function (req, res) {
         var productName = tx.productName || 'Product';
         var buyerId = tx.buyerId;
         await doc.ref.update({
+          await commerceStore.updateDocument('transactions', orderId, {
+            status: 'completed', escrowReleased: true,
+            escrowReleasedAt: commerceStore.serverTimestamp,
+            completedAt: commerceStore.serverTimestamp,
+            confirmedBy: confirmedBy,
+            flowStage: 'wallet_credited',
+            walletCreditedAt: commerceStore.serverTimestamp,
+          });
+          await commerceStore.updateDocument('orders', orderId, {
+            status: 'completed', escrowReleased: true,
+            escrowReleasedAt: commerceStore.serverTimestamp,
+            completedAt: commerceStore.serverTimestamp,
+            confirmedBy: confirmedBy,
+            flowStage: 'wallet_credited',
+          });
+
           status: 'completed', escrowReleased: true,
-          escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          escrowReleasedAt: commerceStore.serverTimestamp,
+          completedAt: commerceStore.serverTimestamp,
           confirmedBy: confirmedBy,
           flowStage: 'wallet_credited',
-          walletCreditedAt: admin.firestore.FieldValue.serverTimestamp(),
+          walletCreditedAt: commerceStore.serverTimestamp,
         });
         var orderDoc = await db.collection('orders').doc(orderId).get();
         if (orderDoc.exists) {
           await orderDoc.ref.update({
             status: 'completed', escrowReleased: true,
-            escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            escrowReleasedAt: commerceStore.serverTimestamp,
+            completedAt: commerceStore.serverTimestamp,
             confirmedBy: confirmedBy,
             flowStage: 'wallet_credited',
           });
@@ -516,13 +527,13 @@ router.post('/cron/auto-release', async function (req, res) {
         var pendingBefore = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
         var actualPending = Math.min(sellerReceives, pendingBefore);
         await db.collection('users').doc(sellerId).update({
-          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+          sellerBalance: commerceStore.increment(sellerReceives),
+          pendingEscrow: commerceStore.increment(-actualPending),
         });
         await db.collection('revenue_transactions').add({
           userId: sellerId, type: 'sale', amount: sellerReceives, orderId: orderId,
           description: description + ' ' + productName + ' - TZS ' + sellerReceives,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timestamp: commerceStore.serverTimestamp,
         });
         var sellerPhone = tx.sellerPhone || '';
         if (sellerDoc.exists && sellerDoc.data() && sellerDoc.data().autoPayout === true && sellerPhone) {
@@ -532,12 +543,12 @@ router.post('/cron/auto-release', async function (req, res) {
             var payoutRef = generatePayoutReference('ar');
             try {
               await clickpesaPayout({ amount: netPayout, phoneNumber: sellerPhone, orderReference: payoutRef });
-              await db.collection('users').doc(sellerId).update({ sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives) });
+              await db.collection('users').doc(sellerId).update({ sellerBalance: commerceStore.increment(-sellerReceives) });
               await db.collection('payouts').doc(payoutRef).set({
                 payoutId: payoutRef, userId: sellerId, userPhone: sellerPhone,
                 type: 'auto_release_payout', amount: sellerReceives, fee: payoutFee,
                 netAmount: netPayout, status: PAYOUT_STATUSES.PROCESSING,
-                transactionId: orderId, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                transactionId: orderId, createdAt: commerceStore.serverTimestamp,
               });
             } catch (_) {}
           }
@@ -547,7 +558,7 @@ router.post('/cron/auto-release', async function (req, res) {
             userId: sellerId, title: 'Oda Imekamilika (Otomatiki)',
             body: productName + ' imekamilika automatically.',
             isRead: false, data: { type: 'auto_release', transactionId: orderId },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
         } catch (_) {}
         try {
@@ -558,7 +569,7 @@ router.post('/cron/auto-release', async function (req, res) {
             userId: buyerId, title: 'Oda Imekamilika',
             body: productName + ' imekamilika automatically. Fedha zimetolewa kwa muuzaji.',
             isRead: false, data: { type: 'auto_release', transactionId: orderId },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
         } catch (_) {}
         try {
@@ -577,32 +588,34 @@ router.post('/cron/auto-release', async function (req, res) {
 
     var results = [];
     // Pass 1: dispatched and unconfirmed after 48h.
-    var txSnap = await db.collection('transactions')
-      .where('status', '==', 'dispatched')
-      .where('escrowReleased', '==', false)
-      .where('dispatchedAt', '<=', cutoff)
-      .limit(50)
-      .get();
-    for (var i = 0; i < txSnap.docs.length; i++) {
-      var doc1 = txSnap.docs[i];
-      var tx1 = doc1.data();
+    var txList = await commerceStore.listDocuments('transactions', {
+      where: [
+        { field: 'status', op: '==', value: 'dispatched' },
+        { field: 'escrowReleased', op: '==', value: false },
+        { field: 'dispatchedAt', op: '<=', value: cutoff },
+      ],
+      limit: 50,
+    });
+    for (var i = 0; i < txList.length; i++) {
+      var tx1 = txList[i];
       if (!tx1.shippingCost && !tx1.dispatchProof && !tx1.buyerTransport) continue;
-      var r1 = await finalizeOne(doc1, tx1, 'auto_release_48h', 'Auto-release 48h:');
+      var r1 = await finalizeOne({ id: tx1.id }, tx1, 'auto_release_48h', 'Auto-release 48h:');
       if (r1 && r1.status === 'released') results.push(r1);
     }
     // Pass 2: the 30-min inspection window expired without the buyer raising
-    // an issue — auto-confirm receipt and release to the seller.
+    // an issue � auto-confirm receipt and release to the seller.
     var now = new Date();
-    var inspSnap = await db.collection('transactions')
-      .where('status', '==', 'delivered')
-      .where('escrowReleased', '==', false)
-      .where('inspectionDeadline', '<=', now)
-      .limit(50)
-      .get();
-    for (var j = 0; j < inspSnap.docs.length; j++) {
-      var doc2 = inspSnap.docs[j];
-      var tx2 = doc2.data();
-      var r2 = await finalizeOne(doc2, tx2, 'auto_release_inspection', 'Auto-release (inspection):');
+    var inspList = await commerceStore.listDocuments('transactions', {
+      where: [
+        { field: 'status', op: '==', value: 'delivered' },
+        { field: 'escrowReleased', op: '==', value: false },
+        { field: 'inspectionDeadline', op: '<=', value: now },
+      ],
+      limit: 50,
+    });
+    for (var j = 0; j < inspList.length; j++) {
+      var tx2 = inspList[j];
+      var r2 = await finalizeOne({ id: tx2.id }, tx2, 'auto_release_inspection', 'Auto-release (inspection):');
       if (r2 && r2.status === 'released') results.push(r2);
     }
     res.json({ success: true, processed: results.length, results: results });

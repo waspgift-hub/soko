@@ -1,13 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/follow_service.dart';
+import '../../services/seller_verification_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 import '../../models/user_profile.dart';
+import '../../models/seller_verification.dart';
 
 /// Blocked accounts screen — shows all accounts blocked by the current user.
 ///
@@ -33,7 +37,6 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
   }
 
   Future<void> _load() async {
-    if (_loading) return;
     setState(() => _loading = true);
 
     try {
@@ -84,7 +87,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    if (_isLoading) {
+    if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -116,7 +119,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
         itemBuilder: (context, index) {
           return _BlockedRow(
             uid: _blockedUids[index],
-            onUnblock: _unblock,
+            onUnblock: () => _unblock(_blockedUids[index]),
           );
         },
         separatorBuilder: (_, _) => const Divider(height: 1),
@@ -209,7 +212,7 @@ class _BlockedRowState extends State<_BlockedRow> {
       ),
       trailing: OutlinedButton.icon(
         onPressed: widget.onUnblock,
-        icon: const Icon(Icons.block_unblocked),
+        icon: const Icon(Icons.lock_open_outlined),
         label: const Text('Unblock'),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

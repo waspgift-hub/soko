@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:share_plus/share_plus.dart';
-import '../../extensions/context_tr.dart';
-import '../../services/deep_link_service.dart';
-import '../../services/localization_service.dart';
+import '../../services/share_service.dart';
 import '../../theme/surface_policy.dart';
 import '../../services/product_service.dart';
 import '../ads/blue_tick_badge.dart';
@@ -60,14 +57,12 @@ class CompactProductCard extends StatelessWidget {
     final shareAction = onShare ?? () {
       final resolvedProductId = productId;
       if (resolvedProductId == null || resolvedProductId.isEmpty) return;
-
-      final symbol = LocalizationService.supportedCurrencies[currency]?['symbol'] ?? 'TSh';
-      final shareText =
-          '$title\n'
-          '${context.trParams('share_price_line', {'price': '$symbol ${price.toStringAsFixed(0)}'})}\n'
-          '${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(resolvedProductId)}';
-
-      SharePlus.instance.share(ShareParams(text: shareText));
+      ShareService.instance.shareProduct(
+        productId: resolvedProductId,
+        productName: title,
+        price: price.toDouble(),
+        currency: currency ?? 'TZS',
+      );
     };
     shareAction();
   }

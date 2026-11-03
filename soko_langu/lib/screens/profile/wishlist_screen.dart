@@ -14,6 +14,7 @@ import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/product_cached_image.dart';
 import '../../services/ads/ad_config.dart';
 import '../../widgets/ads/ad_slot.dart';
+import '../../services/share_service.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -180,6 +181,27 @@ class _WishlistCard extends StatelessWidget {
                       child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
                     ),
                   Positioned(top: 6, right: 6, child: _RemoveButton(onTap: onRemove)),
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(999),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () => ShareService.instance.shareProduct(
+                          productId: product.id,
+                          productName: product.name,
+                          price: onSale ? flashSale!.salePrice : product.price,
+                          currency: product.currency ?? 'TZS',
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(Icons.share_outlined, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
                   if (onSale)
                     Positioned(
                       top: 6,

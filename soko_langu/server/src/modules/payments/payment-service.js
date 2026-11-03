@@ -267,6 +267,7 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
           status: normalized.status,
           providerPaymentId: normalized.providerPaymentId,
           failureReason: normalized.raw?.message || normalized.raw?.reason || 'Payment failed',
+          channel: normalized.raw?.channel || '',
         });
         await outbox.markWebhookProcessed(event);
         return { received: true, webhookId };

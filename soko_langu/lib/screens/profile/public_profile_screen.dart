@@ -22,6 +22,7 @@ import '../../widgets/call_seller_button.dart';
 import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 import '../../theme/design_tokens.dart';
+import '../../widgets/ds/ds.dart';
 import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
 import '../../services/ads/ad_config.dart';
@@ -598,34 +599,52 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
 
   Widget _buildActionButtons(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (_isMyProfile) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            Expanded(
+              child: OneUIButton(
+                label: context.tr('edit_profile', 'Hariri Wasifu'),
+                icon: Icons.edit_outlined,
+                primary: false,
+                onPressed: () => context.push(AppRoutes.editProfile),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OneUIButton(
+                label: context.tr('my_ads', 'Matangazo Yangu'),
+                icon: Icons.inventory_2_outlined,
+                primary: true,
+                onPressed: () => context.push(AppRoutes.myAds),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           Expanded(
-            child: ElevatedButton.icon(
+            child: OneUIButton(
+              label: context.tr('chat'),
+              icon: Icons.chat_bubble_outline_rounded,
+              primary: true,
               onPressed: _chatWithSeller,
-              icon: Icon(Icons.chat, color: cs.surface),
-              label: Text(context.tr('chat')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.whatsappGreen,
-                foregroundColor: cs.surface,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: OutlinedButton.icon(
+            child: OneUIButton(
+              label: context.tr('rate_seller'),
+              icon: Icons.thumb_up_alt_outlined,
+              primary: false,
               onPressed: () => _showRateSellerDialog(context),
-              icon: const Icon(Icons.thumb_up_alt_outlined, size: 18),
-              label: Text(context.tr('rate_seller')),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
-              ),
             ),
           ),
         ],

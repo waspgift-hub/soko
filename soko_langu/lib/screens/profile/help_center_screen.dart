@@ -37,8 +37,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 children: [
                   _contactActionTile(
                     icon: Icons.school_outlined,
-                    title: 'Mafunzo ya kutumia Soko Vibe',
-                    subtitle: 'Jifunze utafutaji, kuuza, uthibitishaji na msaada.',
+                    title: context.tr('tutorials_title'),
+                    subtitle: context.tr('tutorials_help_sub'),
                     onTap: () => context.push(AppRoutes.tutorials),
                   ),
                   const SizedBox(height: 12),
@@ -102,6 +102,13 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 title: context.tr('account_verification'),
                 subtitle: context.tr('verification_sub'),
                 children: [
+                  _contactActionTile(
+                    icon: Icons.verified_user_outlined,
+                    title: context.tr('verification_center_title'),
+                    subtitle: context.tr('verification_center_subtitle'),
+                    onTap: () => context.push(AppRoutes.verificationCenter),
+                  ),
+                  const SizedBox(height: 12),
                   _helpTile(
                     title: context.tr('kyc'),
                     content: context.tr('help_kyc'),

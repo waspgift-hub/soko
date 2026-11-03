@@ -56,6 +56,8 @@ router.post('/preferences/get', async (req, res) => {
     defaults['sms_enabled'] = true;
     defaults['district_new_products'] = true;
     defaults['interested_districts'] = [];
+    defaults['daily_reminders'] = false;
+    defaults['personalized_recommendations'] = false;
     const preferences = doc.exists ? { ...defaults, ...doc.data() } : defaults;
     res.json({ preferences });
   } catch (e) {

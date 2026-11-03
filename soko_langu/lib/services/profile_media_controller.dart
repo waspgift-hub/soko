@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show File;
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:video_player/video_player.dart';
@@ -72,6 +73,15 @@ enum ProfileMediaState { idle, loading, playing, paused, completed, error }
 /// Queue repeat behaviour, same three modes Namida offers.
 enum QueueRepeatMode { off, all, one }
 
+/// One entry in the in-memory "Recently Played" history. Powers the Recently
+/// Played shelf without re-scanning the device library.
+class RecentPlay {
+  final String id;
+  final DateTime playedAt;
+
+  const RecentPlay(this.id, this.playedAt);
+}
+
 /// Which engine currently owns playback. Audio and video have separate owners
 /// (just_audio vs video_player) and every transport call must dispatch to the
 /// right one, hence an explicit flag rather than guessing from [current].
@@ -86,6 +96,43 @@ enum _MediaEngine { none, video, audio }
 /// original [VideoPlayerController] path. Both engines feed the same streams,
 /// so widgets never need to know which one is active.
 class ProfileMediaController {
+  ProfileMediaController({/* music preferences removed */}) {
+    _speed = _preferences.speed;
+    _shuffle = _preferences.shuffle;
+    _repeatMode = QueueRepeatMode.values.firstWhere(
+      (m) => m.name == _preferences.repeat,
+      orElse: () => QueueRepeatMode.all,
+    );
+    _favorites.addAll(_preferences.favorites);
+  }
+
+  /// Flips shuffle. Only affects which item [next] picks; the queue order and
+  /// the current track are untouched, so toggling never interrupts playback.
+  Future<void> toggleShuffle() async {
+    _shuffle = !_shuffle;
+    await _preferences.saveShuffle(_shuffle);
+    if (!_disposed) _shuffleStream.add(_shuffle);
+  }
+
+  bool isFavorite(String id) => _favorites.contains(id);
+
+  /// Adds or removes [id] from the persisted favourites collection.
+  Future<void> toggleFavorite(String id) async {
+    if (!_favorites.remove(id)) _favorites.add(id);
+    await _preferences.saveFavorites(_favorites);
+    if (!_disposed) _favoritesStream.add(Set.unmodifiable(_favorites));
+  }
+
+  /// Keeps the history bounded: a shelf of the last hundred plays is enough
+  /// for "recently played", and an unbounded list would grow forever.
+  void _recordPlay(String id) {
+    _recent.insert(0, RecentPlay(id, DateTime.now()));
+    if (_recent.length > _maxRecent) _recent.removeRange(_maxRecent, _recent.length);
+    if (!_disposed) _recentStream.add(List.unmodifiable(_recent));
+  }
+
+  static const int _maxRecent = 100;
+
   List<ProfileMediaItem> _queue = const [];
   int _index = 0;
   VideoPlayerController? _video;
@@ -96,6 +143,12 @@ class ProfileMediaController {
 
   _MediaEngine _engine = _MediaEngine.none;
   ProfileMediaState _currentState = ProfileMediaState.idle;
+
+  /// User playback preferences (speed / shuffle / repeat / sleep) persisted
+  /// on-device so a restart does not reset the player's behaviour.
+  bool _shuffle = false;
+  final Set<String> _favorites = <String>{};
+  final List<RecentPlay> _recent = <RecentPlay>[];
 
   /// Audio-engine mirrors of the streams, kept locally so seekBy and the
   /// toggle button can read them synchronously.
@@ -119,6 +172,9 @@ class ProfileMediaController {
   final _speedStream = StreamController<double>.broadcast();
   final _repeatStream = StreamController<QueueRepeatMode>.broadcast();
   final _sleepStream = StreamController<Duration?>.broadcast();
+  final _shuffleStream = StreamController<bool>.broadcast();
+  final _favoritesStream = StreamController<Set<String>>.broadcast();
+  final _recentStream = StreamController<List<RecentPlay>>.broadcast();
 
   Stream<ProfileMediaState> get stateStream => _state.stream;
   Stream<int> get indexStream => _indexStream.stream;
@@ -128,6 +184,9 @@ class ProfileMediaController {
   Stream<double> get speedStream => _speedStream.stream;
   Stream<QueueRepeatMode> get repeatStream => _repeatStream.stream;
   Stream<Duration?> get sleepStream => _sleepStream.stream;
+  Stream<bool> get shuffleStream => _shuffleStream.stream;
+  Stream<Set<String>> get favoritesStream => _favoritesStream.stream;
+  Stream<List<RecentPlay>> get recentlyPlayedStream => _recentStream.stream;
 
   List<ProfileMediaItem> get queue => List.unmodifiable(_queue);
   int get index => _index;
@@ -140,9 +199,14 @@ class ProfileMediaController {
   bool get isCurrentYouTube => current?.isYouTube ?? false;
   bool get isCurrentAudio => current?.isAudio ?? false;
 
-  /// True when playback is owned by just_audio. Full-screen UI branches on
-  /// this to show the audio player instead of the video inline player.
   bool get isAudioEngine => _engine == _MediaEngine.audio;
+
+  /// Whether the next skip picks a random queue member instead of the
+  /// linear successor. Pure UI state mirrored to the OS only through the
+  /// repeat mode, so shuffle is queue-level rather than engine-level.
+  bool get shuffle => _shuffle;
+  Set<String> get favorites => Set.unmodifiable(_favorites);
+  List<RecentPlay> get recentlyPlayed => List.unmodifiable(_recent);
 
   /// Single playback signal for the UI, valid on both engines. Widgets use it
   /// instead of peeking at `video?.value`, which is null for audio.
@@ -213,6 +277,7 @@ class ProfileMediaController {
     _completionFired = false;
     _error = null;
     final item = _queue[_index];
+    _recordPlay(item.id);
 
     if (_useAudioEngine) {
       _attachAudio();
@@ -328,8 +393,20 @@ class ProfileMediaController {
     }
   }
 
-  Future<void> next() =>
-      playAt(nextIndexForMode(_index, _queue.length, _repeatMode));
+  /// Shuffle picks any other queue member. Repeat-one wins over shuffle: the
+  /// listener asked for the same track again, not a random one.
+  Future<void> next() {
+    if (_shuffle &&
+        _repeatMode != QueueRepeatMode.one &&
+        _queue.length > 1) {
+      final candidates = <int>[
+        for (var i = 0; i < _queue.length; i++)
+          if (i != _index) i,
+      ];
+      return playAt(candidates[Random().nextInt(candidates.length)]);
+    }
+    return playAt(nextIndexForMode(_index, _queue.length, _repeatMode));
+  }
 
   Future<void> previous() => playAt(previousIndex(_index, _queue.length));
 
@@ -364,6 +441,7 @@ class ProfileMediaController {
 
   Future<void> setSpeed(double speed) async {
     _speed = speed;
+    await _preferences.saveSpeed(speed);
     if (_engine == _MediaEngine.audio) {
       await MediaAudioHandler.instance.setSpeed(speed);
     } else {
@@ -380,6 +458,7 @@ class ProfileMediaController {
   Future<void> cycleQueueRepeatMode() async {
     const order = [QueueRepeatMode.all, QueueRepeatMode.one, QueueRepeatMode.off];
     _repeatMode = order[(order.indexOf(_repeatMode) + 1) % order.length];
+    await _preferences.saveRepeat(_repeatMode.name);
     if (_engine == _MediaEngine.audio) {
       await MediaAudioHandler.instance.applyRepeatMode(_audioRepeatMode);
     }
@@ -392,6 +471,10 @@ class ProfileMediaController {
   void setSleepTimer(Duration duration) {
     cancelSleepTimer();
     _sleepEndsAt = DateTime.now().add(duration);
+    unawaited(_preferences.saveSleepEndsAtMs(
+      _sleepEndsAt!.millisecondsSinceEpoch.toDouble(),
+    ));
+    unawaited(_preferences.saveSleepEnabled(true));
     _sleepStream.add(duration);
     _sleepTicker =
         Timer.periodic(const Duration(seconds: 5), (_) {
@@ -402,6 +485,8 @@ class ProfileMediaController {
     });
     _sleepTimer = Timer(duration, () async {
       _sleepEndsAt = null;
+      unawaited(_preferences.saveSleepEndsAtMs(null));
+      unawaited(_preferences.saveSleepEnabled(false));
       _sleepTicker?.cancel();
       _sleepTicker = null;
       if (!_disposed) _sleepStream.add(null);
@@ -416,6 +501,8 @@ class ProfileMediaController {
     _sleepTicker = null;
     if (_sleepEndsAt != null) {
       _sleepEndsAt = null;
+      unawaited(_preferences.saveSleepEndsAtMs(null));
+      unawaited(_preferences.saveSleepEnabled(false));
       if (!_disposed) _sleepStream.add(null);
     }
   }
@@ -568,5 +655,8 @@ class ProfileMediaController {
     await _speedStream.close();
     await _repeatStream.close();
     await _sleepStream.close();
+    await _shuffleStream.close();
+    await _favoritesStream.close();
+    await _recentStream.close();
   }
 }

@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../services/wishlist_service.dart';
 import '../../services/category_service.dart';
-import '../../services/localization_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/product_cached_image.dart';
@@ -18,7 +16,7 @@ import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
-import '../../services/deep_link_service.dart';
+import '../../services/share_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
@@ -192,14 +190,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _shareProduct(Product product) {
-    final price =
-        '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
-    final url = DeepLinkService.productShareUrl(product.id);
-    final text =
-        "$url\n"
-        "${product.name}\n"
-        "${context.trParams('share_price_line', {'price': price})}";
-    SharePlus.instance.share(ShareParams(text: text));
+    ShareService.instance.shareProduct(
+      productId: product.id,
+      productName: product.name,
+      price: product.price,
+      currency: product.currency ?? 'TZS',
+    );
   }
 
   @override
@@ -837,57 +833,80 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 52,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: _chatWithSeller,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.chat, size: 18, color: cs.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        context.tr('chat'),
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.primary),
-                      ),
-                    ],
+        child: currentUser != null && currentUser.uid == sellerId
+            ? Row(
+                children: [
+                  Expanded(
+                    child: OneUIButton(
+                      label: context.tr('edit_product', 'Hariri'),
+                      icon: Icons.edit_outlined,
+                      primary: false,
+                      onPressed: () => context.push(AppRoutes.addProduct, extra: widget.product),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 2,
-              child: DsButton(
-                label: context.tr('buy_now'),
-                icon: Icons.shopping_cart_checkout,
-                loading: _processing,
-                onPressed: () async {
-                  if (currentUser == null) {
-                    context.push(AppRoutes.login);
-                  } else if (currentUser.uid == sellerId) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(context.tr('cannot_buy_own')),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: OneUIButton(
+                      label: context.tr('boost_product', 'Boost Bidhaa'),
+                      icon: Icons.rocket_launch_rounded,
+                      primary: true,
+                      onPressed: () => context.push(AppRoutes.boostProduct, extra: widget.product),
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
                       ),
-                    );
-                  } else {
-                    await _processBuyNow();
-                  }
-                },
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: _chatWithSeller,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_outline_rounded, size: 19, color: cs.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              context.tr('chat'),
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: DsButton(
+                      label: context.tr('buy_now'),
+                      icon: Icons.shopping_cart_checkout,
+                      loading: _processing,
+                      onPressed: () async {
+                        if (currentUser == null) {
+                          context.push(AppRoutes.login);
+                        } else if (currentUser.uid == sellerId) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(context.tr('cannot_buy_own')),
+                            ),
+                          );
+                        } else {
+                          await _processBuyNow();
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1179,7 +1198,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _chatWithSeller() {
-    ChatNavigation.openSellerChat(context, widget.product.sellerId, widget.product.sellerName);
+    ChatNavigation.openSellerChat(
+      context,
+      widget.product.sellerId,
+      widget.product.sellerName,
+      productId: widget.product.id,
+      productName: widget.product.name,
+    );
   }
 
   Widget _buildSellerActions(BuildContext context, ColorScheme cs) {

@@ -22,7 +22,6 @@ enum BannerPlacement {
   notificationsPage,
   wishlistPage,
   flashSalePage,
-  musicFeed,
   chatList,
 }
 

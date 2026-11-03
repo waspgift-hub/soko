@@ -32,6 +32,7 @@ import '../../widgets/ds/ds.dart';
 import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
 import '../../services/ads/ad_config.dart';
+import '../../services/share_service.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -844,10 +845,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           );
         }
         final r = results[i - head.length];
-        // Support tap, doubleTap (quick preview), longPress (share)
         return GestureDetector(
-          onLongPress: () =>
-              _onSuggestionTap(SearchSuggestion(type: r.type, text: r.displayName, id: r.id)),
+          onLongPress: () => _shareSearchResult(r),
           child: _buildResultCard(cs, r),
         );
       },
@@ -1061,6 +1060,23 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
+  void _shareSearchResult(SearchResult r) {
+    if (r.type == 'product' && r.id.isNotEmpty) {
+      ShareService.instance.shareProduct(
+        productId: r.id,
+        productName: r.displayName,
+        price: r.price ?? 0,
+      );
+      return;
+    }
+    if ((r.type == 'seller' || r.type == 'user') && r.id.isNotEmpty) {
+      ShareService.instance.shareSeller(
+        sellerId: r.id,
+        sellerName: r.displayName,
+      );
+    }
+  }
+
   Widget _buildResultCard(ColorScheme cs, SearchResult r) {
     final isProduct = r.type == 'product';
     final isSeller = r.type == 'user' || r.type == 'seller';
@@ -1149,6 +1165,13 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                         // from r.kycApproved, which is a denormalised product
                         // field a seller could previously write directly.
                         BlueTickBadge(sellerId: r.sellerId, size: 14),
+                        if (isProduct || isSeller)
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: context.tr('share'),
+                            icon: const Icon(Icons.share_outlined, size: 18),
+                            onPressed: () => _shareSearchResult(r),
+                          ),
                         if (r.isBoosted)
                           Container(
                             margin: const EdgeInsets.only(left: 4),

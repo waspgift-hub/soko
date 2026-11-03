@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/banner_model.dart';
 import '../../services/banner_service.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/design_tokens.dart';
 import '../../theme/app_typography.dart';
 import '../../extensions/context_tr.dart';
@@ -256,8 +257,8 @@ class _AdminBannerManagementScreenState
               ),
             ),
         ],
-      );
-    }
+      ),
+    );
   }
 
   Widget _buildErrorState(ColorScheme cs) {
@@ -411,7 +412,6 @@ class _AdminBannerManagementScreenState
   Future<void> _duplicateCampaign(BannerCampaign campaign) async {
     try {
       final newCampaign = campaign.copyWith(
-        id: '',
         title: '${campaign.title} (Copy)',
         status: BannerStatus.draft,
         createdAt: DateTime.now(),
@@ -703,6 +703,7 @@ class _AdminBannerManagementScreenState
                 ),
               ),
             ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -1157,20 +1158,21 @@ class _BannerPreviewDialog extends StatelessWidget {
                     const SizedBox(height: Ds.sp3),
 
                     // Campaign details
-                    _buildDetailRow('Type', campaign.type.name),
-                    _buildDetailRow('Placement', campaign.placement.name),
-                    _buildDetailRow('Status', campaign.status.name),
-                    _buildDetailRow('Audience', campaign.targetAudience.name),
-                    _buildDetailRow('Priority', campaign.priority.toString()),
+                    _buildDetailRow(context, 'Type', campaign.type.name),
+                    _buildDetailRow(context, 'Placement', campaign.placement.name),
+                    _buildDetailRow(context, 'Status', campaign.status.name),
+                    _buildDetailRow(context, 'Audience', campaign.targetAudience.name),
+                    _buildDetailRow(context, 'Priority', campaign.priority.toString()),
                     _buildDetailRow(
+                        context,
                         'Schedule',
                         '${_formatDate(campaign.startDate)} - ${_formatDate(campaign.endDate)}'),
                     if (campaign.impressionLimit != null)
-                      _buildDetailRow('Impression Limit', campaign.impressionLimit.toString()),
+                      _buildDetailRow(context, 'Impression Limit', campaign.impressionLimit.toString()),
                     if (campaign.clickLimit != null)
-                      _buildDetailRow('Click Limit', campaign.clickLimit.toString()),
+                      _buildDetailRow(context, 'Click Limit', campaign.clickLimit.toString()),
                     if (campaign.sponsorName != null)
-                      _buildDetailRow('Sponsor', campaign.sponsorName!),
+                      _buildDetailRow(context, 'Sponsor', campaign.sponsorName!),
                   ],
                 ),
               ),
@@ -1228,7 +1230,7 @@ class _BannerPreviewDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(

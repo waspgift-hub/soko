@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart' as url;
 import '../../extensions/context_tr.dart';
+import '../../services/app_update_service.dart';
 
 /// Official Soko Vibe public links, in one place.
 ///
@@ -37,6 +39,43 @@ const String youTubeChannelUrl =
 /// exposes no @handle, so any handle-shaped string here would be a guess that
 /// could point somewhere else one day. The channel name is the honest label.
 const String youTubeChannelLabel = 'Soko Vibe — YouTube';
+
+Future<void> _checkForUpdates(BuildContext context) async {
+  final remote = await AppUpdateService.instance.fetch();
+  if (!context.mounted) return;
+  final published = remote?.published == true;
+  final notes = (remote?.releaseNotes ?? '').trim();
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(
+        published ? context.tr('update_available') : context.tr('update_not_published'),
+      ),
+      content: Text(
+        published
+            ? (notes.isEmpty ? context.tr('update_available') : notes)
+            : context.tr('no_store_listing'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.tr('ok')),
+        ),
+        if (published)
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              url.launchUrl(
+                Uri.parse('https://www.sokovibe.co.tz/support'),
+                mode: url.LaunchMode.externalApplication,
+              );
+            },
+            child: Text(context.tr('update_now')),
+          ),
+      ],
+    ),
+  );
+}
 
 class AboutAppScreen extends StatelessWidget {
   const AboutAppScreen({super.key});
@@ -101,12 +140,27 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // Version
-              _buildInfoCard(
-                context,
-                icon: Icons.info_outline,
-                title: context.tr('version_label'),
-                value: context.tr('version'),
+              FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snap) {
+                  final label = snap.hasData
+                      ? '${snap.data!.version} (${snap.data!.buildNumber})'
+                      : '…';
+                  return Column(
+                    children: [
+                      _buildInfoCard(
+                        context,
+                        icon: Icons.info_outline,
+                        title: context.tr('version_label'),
+                        value: label,
+                      ),
+                      TextButton(
+                        onPressed: () => _checkForUpdates(context),
+                        child: Text(context.tr('check_for_updates')),
+                      ),
+                    ],
+                  );
+                },
               ),
 
               const SizedBox(height: 12),

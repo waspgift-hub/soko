@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/banner_model.dart';
 import '../services/seller_verification_service.dart';
@@ -125,12 +126,8 @@ class BannerService {
     if (user == null) return;
 
     try {
-      // Update impression count in campaign
-      await _firestore.collection('banner_campaigns').doc(bannerId).update({
-        'impressionCount': FieldValue.increment(1),
-      });
-
-      // Log impression event
+      // Clients must not mutate campaign counters — only append their own
+      // impression event. Aggregates stay server/admin-owned.
       await _firestore.collection('banner_impressions').add(
         BannerImpressionEvent(
           bannerId: bannerId,
@@ -153,12 +150,8 @@ class BannerService {
     if (user == null) return;
 
     try {
-      // Update click count in campaign
-      await _firestore.collection('banner_campaigns').doc(bannerId).update({
-        'clickCount': FieldValue.increment(1),
-      });
-
-      // Log click event
+      // Clients must not mutate campaign counters — only append their own
+      // click event. Aggregates stay server/admin-owned.
       await _firestore.collection('banner_clicks').add(
         BannerClickEvent(
           bannerId: bannerId,

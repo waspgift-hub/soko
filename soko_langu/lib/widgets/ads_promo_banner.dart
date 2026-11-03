@@ -115,7 +115,7 @@ class AdsPromoBanner extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         context.tr('boost_product'),
-                        style: Ds.labelLarge(cs.primary).copyWith(
+                        style: Ds.labelLg(cs.primary).copyWith(
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.1,
                         ),

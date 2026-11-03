@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -38,7 +40,6 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
   }
 
   Future<void> _load() async {
-    if (_loading) return;
     setState(() => _loading = true);
 
     try {
@@ -66,7 +67,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
   Future<void> _approve(String requesterId) async {
     setState(() => _isMutating = true);
     try {
-      await _followService.approveRequest(requesterId);
+      await _followService.acceptRequest(requesterId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Follow request approved')),
@@ -105,7 +106,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    if (_isLoading) {
+    if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -158,8 +159,8 @@ class _RequestTile extends StatefulWidget {
   });
 
   final FollowRequest request;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
+  final Future<void> Function(String requesterId) onApprove;
+  final Future<void> Function(String requesterId) onReject;
 
   @override
   State<_RequestTile> createState() => _RequestTileState();
@@ -251,7 +252,7 @@ class _RequestTileState extends State<_RequestTile> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ElevatedButton(
-                  onPressed: () => _handleAction(() => _widget.onApprove(widget.request.requesterId)),
+                  onPressed: () => _handleAction(() => widget.onApprove(widget.request.requesterId)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: cs.primary,
                     foregroundColor: cs.surface,
@@ -261,7 +262,7 @@ class _RequestTileState extends State<_RequestTile> {
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton(
-                  onPressed: () => _handleAction(() => _widget.onReject(widget.request.requesterId)),
+                  onPressed: () => _handleAction(() => widget.onReject(widget.request.requesterId)),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: cs.onSurfaceVariant),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -270,8 +271,6 @@ class _RequestTileState extends State<_RequestTile> {
                 ),
               ],
             ),
-        ),
-      );
-    }
+    );
   }
 }

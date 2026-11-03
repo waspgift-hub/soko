@@ -410,6 +410,7 @@ service cloud.firestore {
     // ─── CHAT ROOMS ─────────────────────────────────────────
     match /chat_rooms/{roomId} {
       allow read: if isSignedIn() && (
+        resource == null ||
         resource.data.participants.hasAny([request.auth.uid]) ||
         isAdmin()
       );

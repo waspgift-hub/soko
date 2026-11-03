@@ -81,8 +81,6 @@ class AppRoutes {
   static const String verifyEmail = '/verify-email';
   static const String otpVerification = '/otp-verification';
   static const String mfaEnrollment = '/mfa-enrollment';
-  static const String music = '/music';
-  static const String nowPlaying = '/music/now-playing';
 
   // Social / verification routes
   static const String followers = '/followers';
@@ -97,4 +95,6 @@ class AppRoutes {
   static const String order = '/order';
   static const String otp = '/otp';
   static const String userSearch = '/user-search';
-}
+  static const String oneUiHome = '/oneui/home';
+  static const String oneUiShell = '/oneui/shell';
+  static const String oneUiRegister = '/oneui/register';

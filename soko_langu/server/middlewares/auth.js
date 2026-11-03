@@ -19,7 +19,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
-module.exports = function ({ admin, db }) {
+module.exports = function ({ commerceStore }) {
   function otpPhoneRateLimit(req, res, next) {
     const phone = (req.body?.phone || '').replace(/\D/g, '');
     if (!phone) return next();
@@ -72,10 +72,10 @@ module.exports = function ({ admin, db }) {
     const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
     if (authHeader.startsWith('Bearer ')) {
       try {
-        const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
-        if (db) {
-          const userDoc = await db.collection('users').doc(decoded.uid).get();
-          if (userDoc.exists && userDoc.data().isAdmin === true) {
+        const decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+        if (commerceStore) {
+          const userDoc = await commerceStore.getDocument('users', decoded.uid);
+          if (userDoc && userDoc.isAdmin === true) {
             return { ok: true, uid: decoded.uid };
           }
         }

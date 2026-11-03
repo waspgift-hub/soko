@@ -3,7 +3,7 @@
 // userId is the Firebase UID (opaque), so the row exists even before the
 // Postgres users backfill and while the app-admin panel still reads Firestore.
 const { getStore } = require('../../config/database');
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 const config = require('../../config');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');
 const { clickpesaCollect, clickpesaCreateBillPayOrder, calcGatewayFee } = require('../../../clickpesa');
@@ -405,9 +405,7 @@ async function notifyUser(row, title, body) {
 // Keep users/{uid}.kyc + products.sellerKycApproved in sync so the legacy
 // admin panel and Firestore rules still see decisions made on Postgres.
 async function mirrorToFirestore(row) {
-  const store = getFirebaseFirestore();
-  if (!store) return;
-  await store.collection('users').doc(row.userId).set({
+  await commerceStore.upsertDocument('users', row.userId, {
     kyc: {
       fullName: row.fullName,
       firstName: row.firstName || '',
@@ -432,7 +430,7 @@ async function mirrorToFirestore(row) {
       reviewedAt: row.reviewedAt || null,
       revokedAt: row.revokedAt || null,
     },
-  }, { merge: true });
+  });
   if (row.status === 'approved') {
     await updateProductsKycFlag(row.userId, true);
   } else if (row.status === 'revoked' || row.status === 'rejected') {
@@ -542,16 +540,16 @@ async function verifyContactOtp({ userId, channel, value, otp }) {
 }
 
 async function updateProductsKycFlag(sellerId, approved) {
-  const store = getFirebaseFirestore();
-  if (!store || !sellerId) return;
-  const snap = await store.collection('products').where('sellerId', '==', sellerId).get();
-  const batch = store.batch();
-  let count = 0;
-  snap.forEach((doc) => {
-    batch.update(doc.ref, { sellerKycApproved: approved });
-    count++;
-  });
-  if (count > 0) await batch.commit();
+  if (!sellerId) return;
+  const products = await commerceStore.listDocuments('products', { where: { sellerId } });
+  if (products.length === 0) return;
+  
+  const updates = products.map(p => ({
+    id: p.id,
+    updates: { sellerKycApproved: approved }
+  }));
+  
+  await commerceStore.batchUpdate('products', updates);
 }
 
 module.exports = {

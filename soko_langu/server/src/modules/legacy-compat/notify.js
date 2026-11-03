@@ -4,7 +4,7 @@
 const axios = require('axios');
 const { randomUUID } = require('crypto');
 const config = require('../../config');
-const { getFirebaseFirestore } = require('../../config/firebase');
+const commerceStore = require('../../services/commerce-store');
 const { createBreaker } = require('../../utils/circuit-breaker');
 
 // OneSignal outages are common enough that we should not hammer them: after 3
@@ -45,25 +45,22 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
 
 async function notifyAdmins(title, body, data = {}) {
   try {
-    const store = getFirebaseFirestore();
-    if (!store) return;
-    const admin = require('firebase-admin');
-    const snap = await store.collection('users').where('isAdmin', '==', true).get();
+    const admins = await commerceStore.listDocuments('users', { where: { isAdmin: true } });
     const promises = [];
-    snap.forEach((doc) => {
-      const uid = doc.id;
+    for (const adminUser of admins) {
+      const uid = adminUser.id;
       promises.push(
-        store.collection('notifications').add({
+        commerceStore.addDocument('notifications', {
           userId: uid,
           title,
           body,
           isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: commerceStore.serverTimestamp,
           data,
         })
       );
       promises.push(sendOneSignalNotification(uid, title, body, data));
-    });
+    }
     await Promise.allSettled(promises);
   } catch (e) {
     console.error('[OS-COMPAT] notifyAdmins failed:', e.message);

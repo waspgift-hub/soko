@@ -132,8 +132,7 @@ async function provisionLegacySeller(userId) {
       select: { id: true, sellerName: true },
     }),
   ]);
-  if (!legacy) return null; // no listings, so this is not a seller account
-  const storeName = (legacy.sellerName || user?.displayName || 'My Store').trim().slice(0, 100);
+  const storeName = (legacy?.sellerName || user?.displayName || 'My Store').trim().slice(0, 100);
   const slugBase = storeName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

@@ -2,9 +2,9 @@ const express = require('express');
 const { getPayoutFee, clickpesaBalance } = require('../clickpesa');
 const payoutHelpers = require('../helpers/payouts');
 
-module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmin, sendOneSignalNotification, webhookIpWhitelist, verifyWebhook }) {
+module.exports = function ({ commerceStore, requireUser, requireAdmin, isOwnerOrAdmin, sendOneSignalNotification, webhookIpWhitelist, verifyWebhook }) {
   const router = express.Router();
-  const { generatePayoutReference, PAYOUT_STATUSES, processPayout, retryFailedPayout, updatePayoutStatus, auditLog } = payoutHelpers({ admin, db });
+  const { generatePayoutReference, PAYOUT_STATUSES, processPayout, retryFailedPayout, updatePayoutStatus, auditLog } = payoutHelpers({ commerceStore });
 
   // RETIRED on wallet cutover (OWNERSHIP_MAP §6 item 3): seller money now lives
   // in the Postgres wallet and withdrawals go through POST /api/v1/wallet/
@@ -27,7 +27,7 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
       if (!amount || !phone) {
         return res.status(400).json({ error: 'Missing amount or phone' });
       }
-      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
 
       if (auth.uid === 'admin-secret') {
         if (!userId) userId = 'admin-secret';
@@ -36,35 +36,39 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
         if (auth.uid !== userId) {
           return res.status(403).json({ error: 'Token does not match userId' });
         }
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-        const user = userDoc.data();
+        const user = await commerceStore.getDocument('users', userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
         if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
         if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
       }
 
-      const revSnap = await db.collection('revenue_transactions').get();
-      let totalCommissions = 0;
-      let totalBoostRevenue = 0;
-      revSnap.docs.forEach(doc => {
-        const d = doc.data();
-        if (d.type === 'boost') {
-          totalBoostRevenue += (d.sokoLanguCommission || 0);
-        } else {
-          totalCommissions += (d.sokoLanguCommission || 0);
-        }
-      });
-      const totalAdminBalance = totalCommissions + totalBoostRevenue;
+      // Page through revenue_transactions instead of loading the whole
+      // collection into memory (scalability). Sum platform revenue by type.
+      let totalCommissions = 0, totalBoostRevenue = 0, totalKycRevenue = 0, totalOtherRevenue = 0;
+      const PAGE = 500;
+      for (let i = 0; i < 200; i++) {
+        const batch = await commerceStore.listDocuments('revenue_transactions', { limit: PAGE, offset: i * PAGE });
+        if (!batch || batch.length === 0) break;
+        batch.forEach(d => {
+          const amt = Number(d.sokoLanguCommission || d.amount || 0) || 0;
+          const type = String(d.type || '').toLowerCase();
+          if (type === 'boost') totalBoostRevenue += amt;
+          else if (type === 'kyc_fee') totalKycRevenue += amt;
+          else if (type === 'sale') { /* seller earnings, not platform revenue */ }
+          else if (type === 'profanity_seizure') totalOtherRevenue += amt;
+          else totalCommissions += amt;
+        });
+        if (batch.length < PAGE) break;
+      }
+      const totalPlatformRevenue = totalCommissions + totalBoostRevenue + totalKycRevenue + totalOtherRevenue;
+      const totalAdminBalance = totalPlatformRevenue;
 
-      const withdrawnSnap = await db.collection('admin_withdrawals')
-        .where('userId', '==', userId)
-        .get();
+      const withdrawnDocs = await commerceStore.listDocuments('admin_withdrawals', { userId });
       let totalWithdrawn = 0;
-      withdrawnSnap.docs.forEach(doc => {
-        const d = doc.data();
+      withdrawnDocs.forEach(d => {
         if (d.status === 'completed') totalWithdrawn += (d.netAmount || d.amount || 0);
       });
-      const availableBalance = totalAdminBalance - totalWithdrawn;
+      const availableBalance = totalPlatformRevenue - totalWithdrawn;
 
       if (amount > availableBalance) {
         return res.status(400).json({ error: `Insufficient admin balance. Available: TZS ${availableBalance.toLocaleString()}` });
@@ -78,42 +82,28 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
 
       let payoutId;
       try {
-        const payout = await processPayout({
+        const result = await processPayout({
           userId, phone, amount, fee: payoutFee, netAmount,
-          source: `admin_withdraw_${Date.now()}`,
+          source: 'admin_panel',
           type: 'admin_withdrawal',
+          metadata: { adminUid: auth.uid },
         });
-        payoutId = payout.payoutId;
-      } catch (payoutErr) {
-        return res.status(502).json({ error: `Payout failed: ${payoutErr.message}` });
+        payoutId = result.payoutId;
+        await auditLog({
+          userId,
+          type: 'withdrawal',
+          amount,
+          balanceBefore: availableBalance,
+          balanceAfter: availableBalance - amount,
+          reason: 'Admin payout',
+          relatedId: payoutId,
+        });
+        res.status(200).json({ success: true, payoutId });
+      } catch (e) {
+        console.error('Payout processing error:', e);
+        res.status(500).json({ error: 'Failed to process payout' });
       }
 
-      await db.collection('admin_withdrawals').add({
-        userId,
-        amount,
-        fee: payoutFee,
-        netAmount,
-        phone,
-        payoutId,
-        status: 'completed',
-        paymentMethod: 'ClickPesa',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      await auditLog({
-        userId, type: 'admin_withdraw', amount: -amount,
-        reason: `Admin ad revenue withdrawal: TZS ${netAmount} to ${phone}`,
-        relatedId: payoutId,
-        metadata: { phone, netAmount, fee: payoutFee, payoutId },
-      });
-
-      res.json({
-        success: true,
-        netAmount,
-        fee: payoutFee,
-        payoutId,
-        message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
-      });
     } catch (e) {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -255,15 +245,15 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
         return res.status(200).json({ received: false });
       }
 
-      if (!db) return res.status(200).json({ received: false });
+      if (!commerceStore) return res.status(200).json({ received: false });
 
-      const payoutDoc = await db.collection('payouts').doc(payoutRef).get();
-      if (!payoutDoc.exists) {
+      const payoutDoc = await commerceStore.getDocument('payouts', payoutRef);
+      if (!payoutDoc) {
         console.warn(`ClickPesa payout webhook: payout ${payoutRef} not found`);
         return res.status(200).json({ received: false });
       }
 
-      const payout = payoutDoc.data();
+      const payout = payoutDoc;
       if (payout.status === PAYOUT_STATUSES.SUCCESS || payout.status === PAYOUT_STATUSES.FAILED) {
         return res.status(200).json({ received: true });
       }
@@ -274,21 +264,21 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
         await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: clickpesaTxId });
 
         try {
-          await db.collection('transactions').doc(payoutRef).update({
+          await commerceStore.updateDocument('transactions', payoutRef, {
             status: 'completed',
             clickpesaReference: clickpesaTxId,
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            completedAt: commerceStore.serverTimestamp,
           });
         } catch (_) {}
 
         if (payout.metadata?.sellerId) {
           const sellerId = payout.metadata.sellerId;
-          await db.collection('notifications').add({
+          await commerceStore.addDocument('notifications', {
             userId: sellerId,
             title: 'Payout imefanikiwa!',
             body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
             isRead: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: commerceStore.serverTimestamp,
           });
           try {
             await sendOneSignalNotification(sellerId, 'Payout imefanikiwa!', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`, { type: 'withdrawal', status: 'completed' });
@@ -301,22 +291,22 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
         });
 
         try {
-          await db.collection('transactions').doc(payoutRef).update({
+          await commerceStore.updateDocument('transactions', payoutRef, {
             status: 'failed',
             failureReason: payload.message || payload.error || 'payout failed',
             clickpesaReference: clickpesaTxId,
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            completedAt: commerceStore.serverTimestamp,
           });
         } catch (_) {}
 
         if (payout.userId && payout.amount) {
           try {
-            await db.runTransaction(async (tx) => {
-              const userRef = db.collection('users').doc(payout.userId);
+            await commerceStore.runTransaction(async (tx, store) => {
+              const userRef = store.collection('users').doc(payout.userId);
               const userSnap = await tx.get(userRef);
               if (!userSnap.exists) return;
               tx.update(userRef, {
-                sellerBalance: admin.firestore.FieldValue.increment(payout.amount),
+                sellerBalance: commerceStore.increment(payout.amount),
               });
             });
             console.log(`ClickPesa payout reversed: ${payoutRef} — TZS ${payout.amount} returned to ${payout.userId}`);
@@ -327,12 +317,12 @@ module.exports = function ({ admin, db, requireUser, requireAdmin, isOwnerOrAdmi
 
         if (payout.userId) {
           try {
-            await db.collection('notifications').add({
+            await commerceStore.addDocument('notifications', {
               userId: payout.userId,
               title: '❌ Utoaji wa Pesa Umeshindwa',
               body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
               isRead: false,
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              createdAt: commerceStore.serverTimestamp,
               data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
             });
             await sendOneSignalNotification(payout.userId, '❌ Utoaji wa Pesa Umeshindwa', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`, { type: 'withdrawal', status: 'failed', payoutId: payoutRef });

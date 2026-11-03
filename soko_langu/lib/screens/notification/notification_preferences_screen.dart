@@ -24,6 +24,8 @@ class _NotificationPreferencesScreenState
   bool _loading = true;
   bool _saving = false;
   bool _smsEnabled = false;
+  bool _dailyReminders = false;
+  bool _personalized = false;
   bool _districtEnabled = true;
   List<String> _interestedDistricts = [];
   String? _districtPicker;
@@ -83,6 +85,8 @@ class _NotificationPreferencesScreenState
       setState(() {
         _preferences = prefs;
         _smsEnabled = prefs['sms_enabled'] as bool? ?? true;
+        _dailyReminders = prefs['daily_reminders'] as bool? ?? false;
+        _personalized = prefs['personalized_recommendations'] as bool? ?? false;
         _districtEnabled = prefs['district_new_products'] as bool? ?? true;
         _interestedDistricts = List<String>.from(
           (prefs['interested_districts'] as List? ?? const []).map(
@@ -101,6 +105,8 @@ class _NotificationPreferencesScreenState
     setState(() {
       _preferences = next;
       _smsEnabled = next['sms_enabled'] as bool? ?? true;
+      _dailyReminders = next['daily_reminders'] as bool? ?? false;
+      _personalized = next['personalized_recommendations'] as bool? ?? false;
       _districtEnabled = next['district_new_products'] as bool? ?? true;
       _interestedDistricts = List<String>.from(
         (next['interested_districts'] as List? ?? const []).map(
@@ -220,6 +226,44 @@ class _NotificationPreferencesScreenState
               _channelIcons[i],
               masterOn,
             ),
+          const SizedBox(height: 24),
+          _buildSectionHeader(context, 'notification_marketing'),
+          const SizedBox(height: 8),
+          GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: SwitchListTile(
+              title: Text(context.tr('daily_reminders')),
+              subtitle: Text(
+                context.tr('daily_reminders_hint'),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              value: _dailyReminders,
+              onChanged: (value) {
+                final next = Map<String, dynamic>.from(_preferences!);
+                next['daily_reminders'] = value;
+                _save(next);
+              },
+              secondary: Icon(Icons.wb_sunny_outlined, color: cs.primary),
+            ),
+          ),
+          const SizedBox(height: 8),
+          GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: SwitchListTile(
+              title: Text(context.tr('personalized_recommendations')),
+              subtitle: Text(
+                context.tr('personalized_recommendations_hint'),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              value: _personalized,
+              onChanged: (value) {
+                final next = Map<String, dynamic>.from(_preferences!);
+                next['personalized_recommendations'] = value;
+                _save(next);
+              },
+              secondary: Icon(Icons.recommend_outlined, color: cs.primary),
+            ),
+          ),
           const SizedBox(height: 24),
           _buildSectionHeader(context, 'sms_notifications'),
           const SizedBox(height: 8),

@@ -109,6 +109,7 @@ function rateLimit(options = {}) {
     res.setHeader('X-RateLimit-Reset', Math.ceil((Date.now() + ttl) / 1000));
 
     if (current > max) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil(ttl / 1000))));
       return jsonError(res, { status: 429, code: 'RATE_LIMITED', message });
     }
 

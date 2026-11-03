@@ -1,7 +1,8 @@
-// Firestore-native Trust Passport: computes the same indicator model as the
+﻿// Firestore-native Trust Passport: computes the same indicator model as the
 // Postgres trust-passport module but from the Firestore orders the legacy
 // compat engine actually uses, so seller UIDs resolve correctly.
 const { Router } = require('express');
+const commerceStore = require('../../services/commerce-store');
 
 const COMPLETED_FAMILY = ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'];
 const TRANSIT_FAMILY = ['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted'];
@@ -16,20 +17,20 @@ function rateOf(count, total) {
   return total > 0 ? count / total : 0;
 }
 
-async function collectSellerDocs(db, sellerId) {
+async function collectSellerDocs(sellerId) {
   const seen = new Map();
-  const consume = (snap) => {
-    snap.forEach((docSnap) => {
-      const docs = docSnap.data();
-      if (!docs) return;
-      const id = docSnap.id;
+  const consume = (docs) => {
+    docs.forEach((doc) => {
+      const data = doc;
+      if (!data) return;
+      const id = doc.id;
       const existing = seen.get(id);
-      if (!existing) seen.set(id, docs);
+      if (!existing) seen.set(id, data);
     });
   };
   const [tx, orders] = await Promise.all([
-    db.collection('transactions').where('sellerId', '==', sellerId).limit(300).get(),
-    db.collection('orders').where('sellerId', '==', sellerId).limit(300).get(),
+    commerceStore.listDocuments('transactions', { where: [{ field: 'sellerId', op: '==', value: sellerId }], limit: 300 }),
+    commerceStore.listDocuments('orders', { where: [{ field: 'sellerId', op: '==', value: sellerId }], limit: 300 }),
   ]);
   consume(tx);
   consume(orders);
@@ -43,8 +44,7 @@ router.get('/trust/passport/:sellerId', async function (req, res) {
   try {
     const locals = req.app.locals;
     const admin = locals.admin;
-    const db = locals.db;
-    if (!db || !admin) return res.status(503).json({ error: 'Database not configured' });
+    if (!admin) return res.status(503).json({ error: 'Database not configured' });
     const sellerId = req.params.sellerId;
     if (!sellerId) return res.status(400).json({ error: 'sellerId required' });
 
@@ -61,13 +61,12 @@ router.get('/trust/passport/:sellerId', async function (req, res) {
       } catch (_) {}
     }
 
-    let userSnap = null;
+    let profile = {};
     try {
-      userSnap = await db.collection('users').doc(sellerId).get();
+      profile = await commerceStore.getDocument('users', sellerId) || {};
     } catch (_) {}
-    const profile = userSnap && userSnap.exists ? userSnap.data() : {};
 
-    const docs = await collectSellerDocs(db, sellerId);
+    const docs = await collectSellerDocs(sellerId);
 
     const totalOrders = docs.length;
     const completedOrders = docs.filter(

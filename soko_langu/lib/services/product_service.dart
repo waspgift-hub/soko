@@ -1229,20 +1229,42 @@ class ProductService {
   }
 
   Stream<List<Product>> getMyProducts() {
+    final user = _auth.currentUser;
+    if (user == null) return Stream.value([]);
+
     if (ApiConfig.kUseProductsApi) {
       // v1 is HTTP, not a stream: the dashboard subscribes via StreamBuilder,
-      // so emit the fetched list once. Errors become an empty list — a broken
-      // seller hub should not throw during the migration window.
+      // so emit the fetched list once. If API returns empty or fails (e.g. during migration
+      // or for products added via Firestore fallback), fall back to Firestore.
       return Stream.fromFuture(() async {
+        List<Product> apiProducts = [];
         try {
-          return await _api.fetchMyProducts();
-        } catch (_) {
+          apiProducts = await _api.fetchMyProducts();
+        } catch (e) {
+          debugPrint('fetchMyProducts error, checking Firestore: $e');
+        }
+        if (apiProducts.isNotEmpty) {
+          return apiProducts;
+        }
+        // Fallback to Firestore so listings published offline or via Firestore fallback appear
+        try {
+          final snapshot = await _db
+              .collection("products")
+              .where("sellerId", isEqualTo: user.uid)
+              .orderBy('createdAt', descending: true)
+              .limit(100)
+              .get();
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .toList();
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        } catch (e) {
+          debugPrint('getMyProducts Firestore fallback error: $e');
           return <Product>[];
         }
       }());
     }
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
 
     return _db
         .collection("products")
@@ -1266,9 +1288,31 @@ class ProductService {
   Stream<List<Product>> getProductsBySeller(String sellerId) {
     if (ApiConfig.kUseProductsApi) {
       return _cachedSellerProducts(sellerId, () async {
+        List<Product> apiProducts = [];
         try {
-          return await _api.fetchSellerProducts(sellerId);
-        } catch (_) {
+          apiProducts = await _api.fetchSellerProducts(sellerId);
+        } catch (e) {
+          debugPrint('fetchSellerProducts error, checking Firestore: $e');
+        }
+        if (apiProducts.isNotEmpty) {
+          return apiProducts;
+        }
+        // Fallback to Firestore so listings published offline or via Firestore fallback appear
+        try {
+          final snapshot = await _db
+              .collection("products")
+              .where("sellerId", isEqualTo: sellerId)
+              .where('isActive', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .limit(50)
+              .get();
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .toList();
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        } catch (e) {
+          debugPrint('getProductsBySeller Firestore fallback error: $e');
           return <Product>[];
         }
       });
