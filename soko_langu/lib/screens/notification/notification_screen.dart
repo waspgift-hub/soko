@@ -3,10 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/notification_service.dart';
+import '../../services/notification_lang.dart';
+import '../../services/notification_api.dart';
+import '../../services/api_config.dart';
+import '../../models/notification_item.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/google_loading.dart';
+import '../../main.dart' show AppConfig;
+import '../../widgets/ds/ds.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/soko_widgets.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -17,15 +24,23 @@ class NotificationScreen extends StatefulWidget {
 
 class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notifService = NotificationService();
+  final NotificationApiClient _api = NotificationApiClient();
+  DateTime? _lastTileTapAt;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
+        backgroundColor: cs.surface,
         appBar: AppBar(title: Text(context.tr('notifications'))),
         body: Center(child: Text(context.tr('login_required'))),
       );
+    }
+
+    if (ApiConfig.kUseNotificationsApi) {
+      return _buildV1Body(cs);
     }
 
     return StreamBuilder<QuerySnapshot>(
@@ -35,26 +50,49 @@ class _NotificationScreenState extends State<NotificationScreen> {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snap) {
-        if (snap.hasError) return _buildErrorScaffold();
-        if (!snap.hasData) return _buildLoadingScaffold();
+        if (snap.hasError) return _buildErrorScaffold(cs);
+        if (!snap.hasData) return _buildLoadingScaffold(cs);
 
         final docs = snap.data!.docs;
-        final unreadCount = docs.where((d) => !(d['isRead'] as bool)).length;
+        // Snapshot `[]` throws for fields absent from a doc; legacy rows
+        // predate isRead, so read through the Map which defaults to null.
+        final unreadCount =
+            docs.where((d) => ((d.data() as Map)['isRead'] as bool?) != true).length;
 
         return Scaffold(
+          backgroundColor: cs.surface,
           appBar: AppBar(
             title: Text(context.tr('notifications')),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => context.push(AppRoutes.notificationPreferences),
+              ),
               if (unreadCount > 0)
                 TextButton(
                   onPressed: () => _markAllRead(),
                   child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
                 ),
+              if (docs.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  tooltip: context.tr('clear_all'),
+                  onPressed: () => _deleteAll(docs),
+                ),
             ],
           ),
-          body: docs.isEmpty
-              ? _emptyState(context)
-              : _buildNotificationList(docs),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+              ),
+            ),
+            child: docs.isEmpty
+                ? _emptyState(context)
+                : _buildNotificationList(cs, docs),
+          ),
           bottomNavigationBar: const AdBanner(),
         );
       },
@@ -62,37 +100,174 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Widget _emptyState(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.notifications_none, size: 64,
-              color: cs.onSurfaceVariant),
-          const SizedBox(height: 16),
-          Text(
-            context.tr('no_notifications'),
-            style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
-          ),
-        ],
-      ),
+    return SokoVibeEmptyState(
+      icon: Icons.notifications_none,
+      title: context.tr('no_notifications'),
     );
   }
 
   Future<void> _markAllRead() async {
-    await _notifService.markAllAsRead();
+    if (ApiConfig.kUseNotificationsApi) {
+      await _api.markAllRead();
+    } else {
+      await _notifService.markAllAsRead();
+    }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('mark_all_read'))),
-      );
+      SokoSnackbar.info(context, context.tr('mark_all_read'));
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Batch-deletes every notification and shows how many were removed so the
+  /// user has feedback when swiping-heavy cleanup leaves the list empty.
+  Future<void> _deleteAll(List<QueryDocumentSnapshot> docs) async {
+    final confirmed = await SokoDialog.show(
+      context,
+      variant: SokoDialogVariant.danger,
+      icon: Icons.delete_outline_rounded,
+      title: context.tr('clear_all'),
+      message:
+          '${context.tr('confirm_clear_notifications', 'Delete all notifications?')} '
+          '(${docs.length})',
+      confirmLabel: context.tr('clear_all'),
+      cancelLabel: context.tr('cancel', 'Cancel'),
+    );
+    if (confirmed != true || !mounted) return;
+
+    var deleted = 0;
+    for (final doc in docs) {
+      if (await _notifService.deleteNotification(doc.id)) deleted++;
+    }
+    if (!mounted) return;
+    SokoSnackbar.show(
+      context,
+      message: context.tr(
+        'deleted_notifications_count',
+        '$deleted ${context.tr('notifications_deleted', 'notifications deleted')}',
+      ),
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  /// v1-backed batch delete: the server deletes the whole inbox in one call
+  /// (no count needed, so a generic confirmation + short success message).
+  Future<void> _deleteAllV1() async {
+    final confirmed = await SokoDialog.show(
+      context,
+      variant: SokoDialogVariant.danger,
+      icon: Icons.delete_outline_rounded,
+      title: context.tr('clear_all'),
+      message: context.tr('confirm_clear_notifications', 'Delete all notifications?'),
+      confirmLabel: context.tr('clear_all'),
+      cancelLabel: context.tr('cancel', 'Cancel'),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final deleted = await _api.deleteAll();
+    if (!mounted) return;
+    SokoSnackbar.show(
+      context,
+      message: context.tr(
+        'deleted_notifications_count',
+        '$deleted ${context.tr('notifications_deleted', 'notifications deleted')}',
+      ),
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  /// Opens the destination for a tapped notification. A fast second tap on the
+  /// same tile races the first route transition and leaves duplicate page
+  /// entries whose teardown triggers the framework's element bookkeeping assert
+  /// (_InactiveElements), so re-entrant pushes are ignored for a short window.
+  void _openFromTile(BuildContext context, String type, Map? rawData) {
+    final tappedAt = DateTime.now();
+    if (_lastTileTapAt != null &&
+        tappedAt.difference(_lastTileTapAt!).inMilliseconds < 400) {
+      return;
+    }
+    _lastTileTapAt = tappedAt;
+
+    final senderId = rawData?['senderId'] as String?;
+    final groupId = rawData?['groupId'] as String?;
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    switch (type) {
+      case 'chat':
+        if (senderId != null) {
+          context.push('/chat/$senderId', extra: {'name': rawData?['senderName'] ?? ''});
+        } else {
+          context.push(AppRoutes.chats);
+        }
+        break;
+      case 'group_chat':
+        if (groupId != null) {
+          context.push('/group-chat/$groupId');
+        } else {
+          context.push(AppRoutes.chats);
+        }
+        break;
+      case 'order':
+      case 'sale':
+      case 'payment':
+      case 'escrow_confirm':
+      case 'escrow_release':
+      case 'escrow_auto_release':
+      case 'delivery_confirmed':
+      case 'dispatched':
+      case 'buyer_transport':
+      case 'shipping_quote':
+      case 'disputed':
+      case 'dispute_resolved':
+      case 'failed_retry': {
+        final orderId =
+            (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
+        if (orderId != null && orderId.isNotEmpty) {
+          // Order notifications carry the OTHER party's id: to-buyer
+          // notifications include sellerId, to-seller ones include buyerId.
+          // A seller who got "set the shipping cost for this new order"
+          // (the only to-seller order notice carrying productId) lands on
+          // the quote screen; other seller notices act on order detail.
+          final isNewOrderForSeller = myUid != null &&
+              rawData?['sellerId'] == null &&
+              rawData?['buyerId'] != null &&
+              rawData?['productId'] != null;
+          if (isNewOrderForSeller) {
+            context.push(AppRoutes.sellerQuote);
+          } else {
+            context.push('${AppRoutes.orderDetail}/$orderId');
+          }
+        } else {
+          // myPurchases lists only the buyer's transactions; a seller
+          // notification must land on the seller's orders screen instead.
+          // Order notifications carry the other party's id: to-buyer
+          // notifications include sellerId, to-seller ones include buyerId.
+          final isBuyerRecipient = myUid != null && rawData?['sellerId'] != null;
+          context.push(isBuyerRecipient ? AppRoutes.myPurchases : AppRoutes.sellerOrders);
+        }
+        break;
+      }
+      case 'boost':
+        break;
+      case 'comment':
+      case 'comment_reply': {
+        final pid = rawData?['productId'] as String?;
+        if (pid != null) {
+          context.push('/product/$pid');
+        }
+        break;
+      }
+      case 'flash_sale':
+        context.push(AppRoutes.flashSale);
+        break;
+      case 'product':
+        break;
+      default:
+        break;
     }
   }
 
-  Widget _buildNotificationList(List<QueryDocumentSnapshot> docs) {
+  Widget _buildNotificationList(ColorScheme cs, List<QueryDocumentSnapshot> docs) {
     return ListView.separated(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 20,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
       itemCount: docs.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
@@ -102,159 +277,260 @@ class _NotificationScreenState extends State<NotificationScreen> {
           key: ValueKey(doc.id),
           direction: DismissDirection.endToStart,
           background: Container(
-            color: Theme.of(context).colorScheme.error,
+            color: cs.error,
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 20),
-            child: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.surface),
+            child: Icon(Icons.delete_outline, color: cs.surface),
           ),
           confirmDismiss: (_) async {
             final deleted = await _notifService.deleteNotification(doc.id);
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(deleted
-                      ? context.tr('notification_deleted')
-                      : context.tr('something_wrong')),
-                  duration: const Duration(seconds: 2),
-                ),
+              SokoSnackbar.show(
+                context,
+                message: deleted
+                    ? context.tr('notification_deleted')
+                    : context.tr('something_wrong'),
+                type: deleted ? SokoSnackType.success : SokoSnackType.error,
               );
             }
             return deleted;
           },
-          child: _buildTile(doc.id, data),
+          child: _buildTile(cs, doc.id, data),
         );
       },
     );
   }
 
-  Scaffold _buildLoadingScaffold() {
+  Widget _buildV1NotificationList(ColorScheme cs, List<NotificationItem> items) {
+    return ListView.separated(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Dismissible(
+          key: ValueKey(item.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: cs.error,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            child: Icon(Icons.delete_outline, color: cs.surface),
+          ),
+          confirmDismiss: (_) async {
+            final deleted = await _api.delete(item.id);
+            if (mounted) {
+              SokoSnackbar.show(
+                context,
+                message: deleted
+                    ? context.tr('notification_deleted')
+                    : context.tr('something_wrong'),
+                type: deleted ? SokoSnackType.success : SokoSnackType.error,
+              );
+            }
+            return deleted;
+          },
+          child: _buildV1Tile(cs, item),
+        );
+      },
+    );
+  }
+
+  Widget _buildV1Tile(ColorScheme cs, NotificationItem item) {
+    var title = item.title;
+    var body = item.body;
+    if (item.type != 'chat' && item.type != 'group_chat') {
+      final localized = NotificationLang.localize(
+        AppConfig.maybeOf(context)?.langCode ?? 'sw',
+        title,
+        body,
+      );
+      title = localized.title;
+      body = localized.body;
+    }
+
+    final rawData = {'type': item.type, 'senderId': item.otherUserId, 'senderName': item.otherUserName, 'senderAvatar': item.otherUserImage, 'productId': item.productId, 'image': item.productImage};
+
+    return NotificationCard(
+      item: item,
+      onTap: () {
+        if (!item.isRead) _api.markRead(item.id);
+        _openFromTile(context, item.type, rawData);
+      },
+    );
+  }
+
+  Scaffold _buildLoadingScaffold(ColorScheme cs) {
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(title: Text(context.tr('notifications'))),
-      body: const GoogleLoadingPage(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+          ),
+        ),
+        child: ListView.separated(
+          padding: EdgeInsets.only(top: 16, bottom: MediaQuery.of(context).padding.bottom + 20),
+          itemCount: 8,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (context, _) => const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                DsSkeleton(shape: DsSkeletonShape.circle, width: 40, height: 40),
+                SizedBox(width: 14),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DsSkeleton(width: 180, height: 12),
+                    SizedBox(height: 8),
+                    DsSkeleton(width: double.infinity, height: 10),
+                  ],
+                )),
+              ],
+            ),
+          ),
+        ),
+      ),
       bottomNavigationBar: const AdBanner(),
     );
   }
 
-  Scaffold _buildErrorScaffold() {
+  /// v1-backed notification list (Postgres /api/v1/notifications). The server
+  /// envelope maps into the same tile model as the Firestore docs, so the
+  /// remaining UI (card render, tap routing, swipe delete) is shared.
+  Widget _buildV1Body(ColorScheme cs) {
+    return FutureBuilder<({List<NotificationItem> notifications, int unreadCount})>(
+      future: _api.fetchNotifications(),
+      builder: (context, snap) {
+        if (snap.hasError) return _buildErrorScaffold(cs);
+        if (!snap.hasData) return _buildLoadingScaffold(cs);
+
+        final items = snap.data!.notifications;
+        final unreadCount = snap.data!.unreadCount;
+
+        return Scaffold(
+          backgroundColor: cs.surface,
+          appBar: AppBar(
+            title: Text(context.tr('notifications')),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => context.push(AppRoutes.notificationPreferences),
+              ),
+              if (unreadCount > 0)
+                TextButton(
+                  onPressed: () => _markAllRead(),
+                  child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
+                ),
+              if (items.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  tooltip: context.tr('clear_all'),
+                  onPressed: () => _deleteAllV1(),
+                ),
+            ],
+          ),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+              ),
+            ),
+            child: items.isEmpty
+                ? _emptyState(context)
+                : _buildV1NotificationList(cs, items),
+          ),
+          bottomNavigationBar: const AdBanner(),
+        );
+      },
+    );
+  }
+
+  Scaffold _buildErrorScaffold(ColorScheme cs) {
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(title: Text(context.tr('notifications'))),
-      body: _emptyState(context),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off, size: 64, color: cs.error),
+              const SizedBox(height: 16),
+              Text(context.tr('trouble_connecting'), style: const TextStyle(fontSize: 16), textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => setState(() {}),
+                icon: const Icon(Icons.refresh),
+                label: Text(context.tr('try_again')),
+              ),
+            ],
+          ),
+        ),
+      ),
       bottomNavigationBar: const AdBanner(),
     );
   }
 
-  Widget _buildTile(String docId, Map<String, dynamic> data) {
-    final cs = Theme.of(context).colorScheme;
-    final title = data['title'] as String? ?? '';
-    final body = data['body'] as String? ?? '';
+  Widget _buildTile(ColorScheme cs, String docId, Map<String, dynamic> data) {
+    var title = data['title'] as String? ?? '';
+    var body = data['body'] as String? ?? '';
     final isRead = data['isRead'] as bool? ?? false;
     final rawData = data['data'] is Map ? data['data'] as Map : null;
     final type = rawData?['type'] as String? ?? data['type'] as String? ?? '';
 
-    IconData icon;
-    Color color;
-    switch (type) {
-      case 'chat':
-        icon = Icons.chat; color = Colors.blue;
-      case 'group_chat':
-        icon = Icons.group; color = Colors.teal;
-      case 'order':
-        icon = Icons.shopping_bag; color = Colors.green;
-      case 'boost':
-        icon = Icons.rocket_launch; color = Colors.orange;
-      case 'flash_sale':
-        icon = Icons.flash_on; color = Colors.amber;
-      case 'escrow_release':
-      case 'escrow_auto_release':
-        icon = Icons.account_balance_wallet; color = Colors.indigo;
-      case 'dispatched':
-        icon = Icons.local_shipping; color = Colors.orange;
-      case 'disputed':
-        icon = Icons.gavel; color = Colors.red;
-      case 'failed_retry':
-        icon = Icons.warning_amber; color = Colors.deepOrange;
-      case 'dispute_resolved':
-        icon = Icons.balance; color = Colors.teal;
-      case 'delivery_confirmed':
-        icon = Icons.check_circle; color = Colors.green;
-      case 'price_drop':
-        icon = Icons.trending_down; color = Colors.red;
-      case 'bulk':
-        icon = Icons.campaign; color = Colors.purple;
-      default:
-        icon = Icons.notifications; color = cs.tertiary;
+    // Server stores notification copies as Swahili; localize them here to the
+    // user's in-app language. Chat messages are user-generated text, not
+    // templates, so keep them verbatim.
+    if (type != 'chat' && type != 'group_chat') {
+      final localized = NotificationLang.localize(
+        AppConfig.maybeOf(context)?.langCode ?? 'sw',
+        title,
+        body,
+      );
+      title = localized.title;
+      body = localized.body;
     }
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.1),
-        child: Icon(icon, color: color, size: 22),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold),
-      ),
-      subtitle: Text(
-        body,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-      ),
-      trailing: isRead
-          ? null
-          : Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
+    final rawTimestamp = data['timestamp'];
+    final timestamp = switch (rawTimestamp) {
+      Timestamp t => t.toDate(),
+      DateTime dt => dt,
+      _ => DateTime.now(),
+    };
+
+    final item = NotificationItem(
+      id: docId,
+      type: type,
+      title: title,
+      body: body,
+      timestamp: timestamp,
+      otherUserId: rawData?['senderId'] as String?,
+      otherUserName: rawData?['senderName'] as String?,
+      otherUserImage: rawData?['senderAvatar'] as String?,
+      productId: rawData?['productId'] as String?,
+      productImage: (data['image'] as String?) ?? (rawData?['image'] as String?),
+      isRead: isRead,
+    );
+
+    return NotificationCard(
+      item: item,
       onTap: () {
         if (!isRead) _notifService.markAsRead(docId);
-        final senderId = rawData?['senderId'] as String?;
-        final groupId = rawData?['groupId'] as String?;
-        switch (type) {
-          case 'chat':
-            if (senderId != null) {
-              context.push('/chat/$senderId', extra: {'name': rawData?['senderName'] ?? ''});
-            } else {
-              context.push(AppRoutes.chats);
-            }
-            break;
-          case 'group_chat':
-            if (groupId != null) {
-              context.push('/group-chat/$groupId');
-            } else {
-              context.push(AppRoutes.chats);
-            }
-            break;
-          case 'order':
-          case 'escrow_release':
-          case 'escrow_auto_release':
-          case 'delivery_confirmed':
-          case 'dispatched':
-          case 'disputed':
-          case 'dispute_resolved':
-          case 'failed_retry':
-            context.push(AppRoutes.myPurchases);
-            break;
-          case 'boost':
-            context.push(AppRoutes.notifications);
-            break;
-          case 'flash_sale':
-            context.push(AppRoutes.flashSale);
-            break;
-          case 'price_drop':
-            context.push(AppRoutes.notifications);
-            break;
-          case 'product':
-            context.push(AppRoutes.notifications);
-            break;
-          default:
-            context.push(AppRoutes.notifications);
-        }
+        _openFromTile(context, type, rawData);
       },
     );
   }

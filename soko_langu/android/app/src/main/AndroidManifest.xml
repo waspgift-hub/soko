@@ -9,17 +9,18 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <application
         android:label="Soko Vibe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -51,6 +52,39 @@
                     android:host="sokonimoko-8c171-a8d14.web.app"
                     android:pathPrefix="/magic-link" />
             </intent-filter>
+            <!-- Android App Links: open the app for product/seller deep links.
+                 Both hosts are verified independently; the apex host verifies
+                 only once sokovibe.co.tz serves valid TLS + assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="www.sokovibe.co.tz"
+                    android:pathPrefix="/product" />
+                <data
+                    android:scheme="https"
+                    android:host="www.sokovibe.co.tz"
+                    android:pathPrefix="/seller" />
+                <data
+                    android:scheme="https"
+                    android:host="sokovibe.co.tz"
+                    android:pathPrefix="/product" />
+                <data
+                    android:scheme="https"
+                    android:host="sokovibe.co.tz"
+                    android:pathPrefix="/seller" />
+            </intent-filter>
+            <!-- Deep link for pinned chat shortcuts on home screen -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="shortcut_soko_vibe"
+                    android:host="chat" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
@@ -62,7 +96,7 @@
             android:value="ca-app-pub-3796499857968162~1098626149"/>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="general_notifications_v3" />
+            android:value="general_notifications_v6" />
         <meta-data
             android:name="flutter_notification_icon"
             android:resource="@drawable/ic_notification" />
@@ -70,26 +104,34 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
-        <!-- audio_service notification channel ID for persistent media playback -->
+        <!-- Notification accent color (tints the small icon) -->
         <meta-data
-            android:name="android.media.metadata.NOTIFICATION_CHANNEL_ID"
-            android:value="com.soko_vibe.music" />
-        <service android:name="com.ryanheise.audioservice.AudioService"
-            android:foregroundServiceType="mediaPlayback"
-            android:exported="true"
-            android:stopWithTask="false">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
-            </intent-filter>
-        </service>
-        <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
+            android:name="com.onesignal.NotificationAccentColor.default"
+            android:resource="@color/notification_accent" />
+        <receiver
+            android:name=".SokoVibeWidgetProvider"
+            android:label="Soko Dashboard"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/soko_vibe_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".FlashSalesWidgetProvider"
+            android:label="Flash Sales"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/flash_sales_widget_info" />
         </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
@@ -101,6 +143,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11+ package visibility: lets canLaunchUrl find the dialer.
+             ACTION_DIAL opens the dialer prefilled (no CALL_PHONE permission). -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
         </intent>
     </queries>
 </manifest>

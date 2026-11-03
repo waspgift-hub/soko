@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../extensions/context_tr.dart';
 import '../../notifiers/auth_notifier.dart';
-import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/bottom_nav_bar.dart';
-import '../onboarding/onboarding_screen.dart' as onboarding;
-import 'login_screen.dart';
+import 'profile_setup_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -16,14 +16,53 @@ class AuthGate extends StatelessWidget {
         switch (notifier.status) {
           case AuthStatus.loading:
             return const _LoadingPage();
-          case AuthStatus.onboarding:
-            return const onboarding.OnboardingScreen();
           case AuthStatus.unauthenticated:
-            return const LoginScreen();
+            // Guest read-only mode: browse without an account. Write
+            // actions show an auth wall; protected routes redirect.
+            return const MainScreen();
           case AuthStatus.authenticated:
+            if (notifier.isSuspended) return const _SuspendedPage();
+            if (notifier.needsProfileSetup) {
+              return const ProfileSetupScreen();
+            }
             return const MainScreen();
         }
       },
+    );
+  }
+}
+
+class _SuspendedPage extends StatelessWidget {
+  const _SuspendedPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block, size: 80, color: cs.error),
+              const SizedBox(height: 24),
+              Text(
+                context.tr('account_suspended_title', 'Akaunti Yako Imesimamishwa'),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                context.tr('account_suspended_message', 'Akaunti yako imesitishwa kwa muda. Tafadhali wasiliana na usaidizi kwa maelezo zaidi.'),
+                style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -35,7 +74,7 @@ class _LoadingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      body: const GoogleLoadingPage(),
+      body: const SokoVibeDotLoadingPage(),
     );
   }
 }

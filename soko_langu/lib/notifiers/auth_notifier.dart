@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../repositories/auth_repository.dart';
 import '../services/api_config.dart';
-import '../services/magic_link_service.dart';
+import '../services/meseji_service.dart';
+import '../services/localization_service.dart';
 import '../services/onboarding_service.dart';
 import '../utils/network_error.dart';
 import '../app/app_state.dart' as app_state;
@@ -14,14 +14,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum AuthStatus {
   loading,
-  onboarding,
   unauthenticated,
   authenticated,
 }
 
+enum PhoneOtpState { idle, sending, sent, verifying, verified, error }
 enum EmailOtpState { idle, sending, sent, verifying, verified, error }
-
-enum MagicLinkState { idle, sending, sent, error }
 
 class AuthNotifier extends ChangeNotifier {
   final AuthRepository _authRepo;
@@ -42,19 +40,14 @@ class AuthNotifier extends ChangeNotifier {
   bool _isAdmin = false;
   bool get isAdmin => _isAdmin;
 
+  bool _isSuspended = false;
+  bool get isSuspended => _isSuspended;
+
+  bool _needsProfileSetup = false;
+  bool get needsProfileSetup => _needsProfileSetup;
+
   String? _error;
   String? get error => _error;
-
-  // Email OTP
-  EmailOtpState _emailOtpState = EmailOtpState.idle;
-  EmailOtpState get emailOtpState => _emailOtpState;
-
-  // Magic Link
-  MagicLinkState _magicLinkState = MagicLinkState.idle;
-  MagicLinkState get magicLinkState => _magicLinkState;
-
-  String? _magicLinkEmail;
-  String? get magicLinkEmail => _magicLinkEmail;
 
   StreamSubscription<User?>? _authSub;
 
@@ -62,11 +55,48 @@ class AuthNotifier extends ChangeNotifier {
     try {
       final user = _authRepo.currentUser;
       if (user == null) { _isAdmin = false; return; }
+      // Admin is granted ONLY by the server via the isAdmin flag on the users
+      // document (set through /api/setup-admin or the admin SDK). Never derive
+      // admin from the email address — anyone can register any email.
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      _isAdmin = doc.data()?['isAdmin'] == true;
-    } catch (_) {
+      final data = doc.data();
+      _isAdmin = data?['isAdmin'] == true;
+    } catch (e) {
+      debugPrint('[AUTH] Failed to fetch admin status: $e');
       _isAdmin = false;
     }
+  }
+
+  Future<void> _checkProfileCompleteness() async {
+    try {
+      final user = _authRepo.currentUser;
+      if (user == null) { _needsProfileSetup = false; return; }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (!doc.exists) { _needsProfileSetup = true; return; }
+      final data = doc.data()!;
+      final hasGender = (data['gender'] as String?)?.isNotEmpty == true;
+      final hasDob = (data['dateOfBirth'] as String?)?.isNotEmpty == true;
+      final hasLocation = (data['location'] as String?)?.isNotEmpty == true;
+      _needsProfileSetup = !(hasGender && hasDob && hasLocation);
+    } catch (_) {
+      _needsProfileSetup = false;
+    }
+  }
+
+  Future<void> _checkSuspended() async {
+    try {
+      final user = _authRepo.currentUser;
+      if (user == null) { _isSuspended = false; return; }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      _isSuspended = doc.data()?['isSuspended'] == true;
+    } catch (_) {
+      _isSuspended = false;
+    }
+  }
+
+  Future<void> completeProfileSetup() async {
+    _needsProfileSetup = false;
+    notifyListeners();
   }
 
   void _syncAppState() {
@@ -78,24 +108,18 @@ class AuthNotifier extends ChangeNotifier {
 
   Future<void> initialize() async {
     try {
-      final onboardingSeen = await _onboardingService.isCompleted();
       final currentUser = _authRepo.currentUser;
 
-      // User already logged in but onboarding wasn't marked — fix it
-      if (!onboardingSeen && currentUser != null) {
+      if (currentUser != null) {
         await _onboardingService.markCompleted();
-      }
-
-      if (!onboardingSeen && currentUser == null) {
-        _status = AuthStatus.onboarding;
-        notifyListeners();
-        return;
       }
 
       if (currentUser != null) {
         _user = currentUser;
         _status = AuthStatus.authenticated;
         await _fetchAdminStatus();
+        await _checkSuspended();
+        await _checkProfileCompleteness();
       } else {
         _status = AuthStatus.unauthenticated;
       }
@@ -103,11 +127,17 @@ class AuthNotifier extends ChangeNotifier {
       notifyListeners();
 
       _authSub = _authRepo.authStateChanges.listen((user) async {
+        // Skip if already handled in initialize() — prevents re-fetch of admin status
+        // that could overwrite with false on transient network errors
+        if (_user?.uid == user?.uid && _status == AuthStatus.authenticated) return;
+        if (user == null && _status == AuthStatus.unauthenticated) return;
+
         _user = user;
-        if (user != null && _status != AuthStatus.onboarding) {
+        if (user != null) {
           _status = AuthStatus.authenticated;
           await _fetchAdminStatus();
-        } else if (user == null && _status != AuthStatus.onboarding) {
+          await _checkSuspended();
+        } else {
           _status = AuthStatus.unauthenticated;
           _isAdmin = false;
         }
@@ -119,19 +149,6 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     }
-  }
-
-  Future<void> completeOnboarding(String? phone) async {
-    await _onboardingService.markCompleted();
-    if (phone != null && phone.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('phone_number', phone);
-    }
-
-    final currentUser = _authRepo.currentUser;
-    _status =
-        currentUser != null ? AuthStatus.authenticated : AuthStatus.unauthenticated;
-    notifyListeners();
   }
 
   void _setAuthState(User? user) {
@@ -147,10 +164,12 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -172,10 +191,12 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -189,18 +210,176 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
   }
 
+  // Phone OTP
+  PhoneOtpState _phoneOtpState = PhoneOtpState.idle;
+  PhoneOtpState get phoneOtpState => _phoneOtpState;
+  final MesejiService _mesejiService = MesejiService();
+
   // ---------------------------------------------------------------------------
-  // Email OTP (in-app verification via custom backend API)
+  // Phone OTP (server-verified — client only triggers send + login)
   // ---------------------------------------------------------------------------
+
+  Future<void> sendPhoneOtp(String phone) async {
+    _phoneOtpState = PhoneOtpState.sending;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _mesejiService.sendOtp(phone);
+      _phoneOtpState = PhoneOtpState.sent;
+      notifyListeners();
+    } catch (e) {
+      _error = translateError(e);
+      _phoneOtpState = PhoneOtpState.error;
+      notifyListeners();
+    }
+  }
+
+  /// Server-side OTP verification (used during registration).
+  /// Returns true if valid, false otherwise; sets [_error] on failure.
+  Future<bool> verifyPhoneOtp(String phone, String otp) async {
+    _phoneOtpState = PhoneOtpState.verifying;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await http.post(
+        Uri.parse(ApiConfig.v1('/auth/verify-otp')),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': phone, 'otp': otp}),
+      );
+      final body = jsonDecode(res.body);
+      if (res.statusCode == 200 && body['valid'] == true) {
+        _phoneOtpState = PhoneOtpState.verified;
+        notifyListeners();
+        return true;
+      } else {
+        _error = body['error'] ?? 'auth_otp_invalid';
+        _phoneOtpState = PhoneOtpState.error;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _error = translateError(e);
+      _phoneOtpState = PhoneOtpState.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Returns whether an account already exists for [phone]. Re-throws on
+  /// network/server errors so callers decide how to surface them.
+  Future<bool> checkPhoneExists(String phone) async {
+    final res = await http.post(
+      Uri.parse(ApiConfig.v1('/auth/check-phone')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone}),
+    );
+    final body = jsonDecode(res.body);
+    return body['exists'] == true;
+  }
+
+  /// Returns whether an account already exists for [email]. Re-throws on
+  /// network/server errors so callers decide how to surface them.
+  Future<bool> checkEmailExists(String email) async {
+    if (email.trim().isEmpty) return false;
+    final res = await http.post(
+      Uri.parse(ApiConfig.v1('/auth/check-email')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email.trim()}),
+    );
+    final body = jsonDecode(res.body);
+    return body['exists'] == true;
+  }
+
+  Future<void> loginWithPhone(String phone, String otp) async {
+    _error = null;
+    notifyListeners();
+    try {
+      await _authRepo.loginWithPhone(phone, otp);
+      await _onboardingService.markCompleted();
+      _setAuthState(_authRepo.currentUser);
+      await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
+      _syncAppState();
+      notifyListeners();
+    } catch (e) {
+      _error = translateError(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> loginWithEmailOtp(String email, String otp) async {
+    _error = null;
+    notifyListeners();
+    try {
+      await _authRepo.loginWithEmailOtp(email, otp);
+      await _onboardingService.markCompleted();
+      _setAuthState(_authRepo.currentUser);
+      await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
+      _syncAppState();
+      notifyListeners();
+    } catch (e) {
+      _error = translateError(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> registerWithPhone({
+    required String phone,
+    required String password,
+    required String displayName,
+  }) async {
+    _error = null;
+    notifyListeners();
+    try {
+      await _authRepo.registerWithPhone(
+        phone: phone,
+        password: password,
+        displayName: displayName,
+      );
+      await _onboardingService.markCompleted();
+      _setAuthState(_authRepo.currentUser);
+      await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
+      _syncAppState();
+      notifyListeners();
+    } catch (e) {
+      _error = translateError(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  void resetPhoneOtp() {
+    _phoneOtpState = PhoneOtpState.idle;
+    _error = null;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Email OTP
+  // ---------------------------------------------------------------------------
+
+  EmailOtpState _emailOtpState = EmailOtpState.idle;
+  EmailOtpState get emailOtpState => _emailOtpState;
 
   Future<void> sendEmailOtp(String email) async {
     _emailOtpState = EmailOtpState.sending;
@@ -209,20 +388,23 @@ class AuthNotifier extends ChangeNotifier {
 
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/send-otp'),
+        Uri.parse(ApiConfig.v1('/auth/send-email-otp')),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
+        body: jsonEncode({
+          'email': email,
+          'langCode': await LocalizationService().getLanguage(),
+        }),
       );
-      final body = jsonDecode(res.body);
-      if (res.statusCode == 200 && body['sent'] == true) {
+      if (res.statusCode == 200) {
         _emailOtpState = EmailOtpState.sent;
       } else {
-        _error = body['error'] ?? 'Kushindwa kutuma OTP. Jaribu tena.';
+        final body = jsonDecode(res.body);
+        _error = body['error'] ?? 'auth_otp_send_failed';
         _emailOtpState = EmailOtpState.error;
       }
       notifyListeners();
     } catch (e) {
-      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _error = translateError(e);
       _emailOtpState = EmailOtpState.error;
       notifyListeners();
     }
@@ -235,7 +417,7 @@ class AuthNotifier extends ChangeNotifier {
 
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/verify-otp'),
+        Uri.parse(ApiConfig.v1('/auth/verify-email-otp')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'otp': otp}),
       );
@@ -245,13 +427,13 @@ class AuthNotifier extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _error = body['error'] ?? 'OTP si sahihi. Jaribu tena.';
+        _error = body['error'] ?? 'auth_otp_invalid';
         _emailOtpState = EmailOtpState.error;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _error = translateError(e);
       _emailOtpState = EmailOtpState.error;
       notifyListeners();
       return false;
@@ -265,63 +447,6 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Magic Link (Firebase Passwordless Email Auth)
-  // ---------------------------------------------------------------------------
-
-  Future<void> sendMagicLink(String email) async {
-    _magicLinkState = MagicLinkState.sending;
-    _magicLinkEmail = email;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final settings = AuthRepository.magicLinkSettings();
-      await _authRepo.sendSignInLink(
-        email: email,
-        actionCodeSettings: settings,
-      );
-
-      await MagicLinkService.saveEmail(email);
-
-      _magicLinkState = MagicLinkState.sent;
-      notifyListeners();
-    } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
-      _magicLinkState = MagicLinkState.error;
-      notifyListeners();
-    }
-  }
-
-  Future<void> completeMagicLinkSignIn(String email, String link) async {
-    _error = null;
-    notifyListeners();
-
-    try {
-      final cred = await _authRepo.signInWithEmailLink(
-        email: email,
-        link: link,
-      );
-      _user = cred.user;
-      _status = AuthStatus.authenticated;
-      _magicLinkState = MagicLinkState.idle;
-      _magicLinkEmail = null;
-      await MagicLinkService.clearEmail();
-      notifyListeners();
-    } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
-      _magicLinkState = MagicLinkState.error;
-      notifyListeners();
-    }
-  }
-
-  void resetMagicLink() {
-    _magicLinkState = MagicLinkState.idle;
-    _magicLinkEmail = null;
-    _error = null;
-    notifyListeners();
-  }
-
-  // ---------------------------------------------------------------------------
   // Shared
   // ---------------------------------------------------------------------------
 
@@ -330,6 +455,8 @@ class AuthNotifier extends ChangeNotifier {
     _user = null;
     _status = AuthStatus.unauthenticated;
     _isAdmin = false;
+    _isSuspended = false;
+    _needsProfileSetup = false;
     _syncAppState();
     notifyListeners();
   }

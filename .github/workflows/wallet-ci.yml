@@ -1,0 +1,36 @@
+name: Marketplace Payments CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wallet_worker/**'
+      - 'payment-system/**'
+      - '.github/workflows/wallet-ci.yml'
+  pull_request:
+    paths:
+      - 'wallet_worker/**'
+      - 'payment-system/**'
+      - '.github/workflows/wallet-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mongike-contract:
+    name: Verify Mongike v3 contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert production contract is present
+        run: |
+          grep -q 'https://mongike.com/api/v1' wallet_worker/wrangler.toml
+          grep -q '/payments/mobile-money/tanzania' wallet_worker/wrangler.toml
+          grep -q "'x-api-key'" wallet_worker/src/index.ts
+          grep -q "order_id" wallet_worker/src/index.ts
+          grep -q "buyer_phone" wallet_worker/src/index.ts
+          grep -q "webhook_url" wallet_worker/src/index.ts
+          grep -q "payment_status" wallet_worker/src/index.ts
+          grep -q "COMPLETED" wallet_worker/src/index.ts
+          echo 'Mongike v3 contract checks passed.'

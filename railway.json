@@ -7,6 +7,6 @@
   "deploy": {
     "numReplicas": 1,
     "sleepApplication": false,
-    "startCommand": "node index.js"
+    "startCommand": "node src/index.js"
   }
 }

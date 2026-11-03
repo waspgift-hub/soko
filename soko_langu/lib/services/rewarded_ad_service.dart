@@ -11,16 +11,23 @@ class RewardedAdService {
 
   RewardedAd? _rewardedAd;
   bool _isLoading = false;
+  Completer<bool>? _loadCompleter;
 
   static const String _testAdUnitId = 'ca-app-pub-3940256099942544/5224354917';
   static const String _prodAdUnitId = 'ca-app-pub-3796499857968162/5224354917';
 
   String get _adUnitId => ApiConfig.kAdsTestMode ? _testAdUnitId : _prodAdUnitId;
 
-  Future<void> preload() async {
-    if (kIsWeb) return;
-    if (_isLoading || _rewardedAd != null) return;
+  /// Loads a rewarded ad and resolves only when loading truly finishes.
+  Future<bool> preload() async {
+    if (kIsWeb) return false;
+    if (_rewardedAd != null) return true;
+    if (_isLoading) return _loadCompleter?.future ?? false;
+
     _isLoading = true;
+    final completer = Completer<bool>();
+    _loadCompleter = completer;
+    // RewardedAd.load resolves via callback, not via its returned future.
     await RewardedAd.load(
       adUnitId: _adUnitId,
       request: const AdRequest(),
@@ -28,21 +35,24 @@ class RewardedAdService {
         onAdLoaded: (ad) {
           _rewardedAd = ad;
           _isLoading = false;
+          if (!completer.isCompleted) completer.complete(true);
           debugPrint('RewardedAd: loaded');
         },
         onAdFailedToLoad: (error) {
           debugPrint('RewardedAd: failed - ${error.message}');
           _rewardedAd = null;
           _isLoading = false;
+          if (!completer.isCompleted) completer.complete(false);
         },
       ),
     );
+    return completer.future;
   }
 
   Future<bool> show({required VoidCallback onUserEarned}) async {
     if (_rewardedAd == null) {
-      await preload();
-      return false;
+      final loaded = await preload();
+      if (!loaded || _rewardedAd == null) return false;
     }
 
     final completer = Completer<bool>();

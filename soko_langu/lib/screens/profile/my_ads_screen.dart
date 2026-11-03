@@ -8,8 +8,7 @@ import '../../providers/product_feed_provider.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../utils/responsive.dart';
+import '../../widgets/product_card.dart';
 
 class MyAdsScreen extends StatefulWidget {
   const MyAdsScreen({super.key});
@@ -45,11 +44,8 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
     try {
       await _productService.deleteProduct(product.id);
       if (mounted) {
-        // Remove from the product feed immediately
         context.read<ProductFeedProvider>().removeProduct(product.id);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('product_deleted'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('product_deleted'))));
       }
     } catch (e) {
       if (mounted) {
@@ -64,175 +60,105 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
     await context.push(AppRoutes.addProduct, extra: product);
   }
 
+  void _showOptions(Product product) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12), decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.onSurfaceVariant.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2))),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: Text(context.tr('edit')),
+              onTap: () { Navigator.pop(ctx); _editProduct(product); },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+              title: Text(context.tr('delete'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              onTap: () { Navigator.pop(ctx); _deleteProduct(product); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return Scaffold(body: Center(child: Text(context.tr('login_required'))));
-    }
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnap) {
+        final user = authSnap.data ?? FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          if (authSnap.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: GoogleLoadingPage());
+          }
+          return Scaffold(body: Center(child: Text(context.tr('login_required'))));
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.tr('my_ads')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => context.push(AppRoutes.addProduct),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: StreamBuilder<List<Product>>(
-          stream: _productService.getMyProducts(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const GoogleLoadingPage();
-            }
-            final products = snapshot.data ?? [];
-            if (products.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.sell_outlined,
-                      size: 64,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('no_ads'),
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => context.push(AppRoutes.addProduct),
-                      icon: const Icon(Icons.add),
-                      label: Text(context.tr('sell_product')),
-                    ),
-                  ],
-                ),
-              );
-            }
-            return GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: Responsive.gridColumns(context),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: Responsive.cardAspectRatio(context),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(context.tr('my_ads')),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add),
+                onPressed: () => context.push(AppRoutes.addProduct),
               ),
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                final product = products[index];
-                return GestureDetector(
-                  onTap: () => context.push(
-                    '${AppRoutes.productDetail}/${product.id}',
-                    extra: product,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-                        width: 1.5,
-                      ),
-                    ),
+            ],
+          ),
+          body: SafeArea(
+            child: StreamBuilder<List<Product>>(
+              stream: _productService.getMyProducts(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const GoogleLoadingPage();
+                }
+                final products = snapshot.data ?? [];
+                if (products.isEmpty) {
+                  return Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Expanded(
-                          child: Stack(
-                            children: [
-                              product.images.isNotEmpty
-                                  ? CachedNetworkImage(
-                                      imageUrl: product.images.first,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                    )
-                                  : Container(
-                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                      child: const Center(
-                                        child: Icon(Icons.image),
-                                      ),
-                                    ),
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') _editProduct(product);
-                                    if (value == 'delete') {
-                                      _deleteProduct(product);
-                                    }
-                                  },
-                                  itemBuilder: (ctx) => [
-                                    PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text(context.tr('edit')),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text(context.tr('delete')),
-                                    ),
-                                  ],
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Icon(
-                                      Icons.more_vert,
-                                      color: Theme.of(context).colorScheme.surface,
-                                      size: 18,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                product.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "${context.currencySymbol()}${product.price.toStringAsFixed(0)}",
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
+                        Icon(Icons.sell_outlined, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
+                        const SizedBox(height: 16),
+                        Text(context.tr('no_ads'), style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16)),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => context.push(AppRoutes.addProduct),
+                          icon: const Icon(Icons.add),
+                          label: Text(context.tr('sell_product')),
                         ),
                       ],
                     ),
+                  );
+                }
+                return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 0.68,
                   ),
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
+                    final product = products[index];
+                    return GestureDetector(
+                      onLongPress: () => _showOptions(product),
+                      child: ProductCard(
+                        product: product,
+                        onTap: () => context.push('${AppRoutes.productDetail}/${product.id}', extra: product),
+                      ),
+                    );
+                  },
                 );
               },
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

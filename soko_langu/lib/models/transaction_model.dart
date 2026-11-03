@@ -1,8 +1,25 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Clickpesa USSD Push fee tiers (source: clickpesa.com/pricing)
+const List<(int, int, int)> ussdPushFeeTiers = [
+  (500, 899, 54), (900, 1999, 92), (2000, 2999, 124), (3000, 3999, 230),
+  (4000, 4399, 380), (4400, 8999, 580), (9000, 19999, 920), (20000, 39999, 1150),
+  (40000, 49999, 1572), (50000, 95999, 2136), (96000, 199999, 3240),
+  (200000, 299999, 3660), (300000, 399999, 4080), (400000, 499999, 4340),
+  (500000, 599999, 4820), (600000, 799999, 5230), (800000, 999999, 6146),
+  (1000000, 1999999, 7210), (2000000, 3000000, 7960),
+];
+
+double getUssdPushFee(double amount) {
+  for (final tier in ussdPushFeeTiers) {
+    if (amount >= tier.$1 && amount <= tier.$2) return tier.$3.toDouble();
+  }
+  return 7960.0;
+}
+
 class TransactionFeeBreakdown {
   final double productPrice;
-  static const double platformCommissionPercent = 0.04;
+  static const double platformCommissionPercent = 0.035;
   final double processingFee;
   final double platformFee;
   final double payoutFee;
@@ -11,12 +28,14 @@ class TransactionFeeBreakdown {
   final double sellerReceives;
 
   TransactionFeeBreakdown({required this.productPrice})
-    : processingFee = 0,
+    : processingFee = getUssdPushFee(productPrice),
       platformFee = productPrice * platformCommissionPercent,
       payoutFee = 0,
+      // processingFee is what ClickPesa charges the customer ON TOP of the amount
+      // (not pre-added to what we send), so totalAmount excludes it.
       totalFees = productPrice * platformCommissionPercent,
-      totalAmount = productPrice,
-      sellerReceives = productPrice - (productPrice * platformCommissionPercent);
+      totalAmount = productPrice + (productPrice * platformCommissionPercent),
+      sellerReceives = productPrice;
 
   Map<String, dynamic> toMap() => {
     'productPrice': productPrice,
@@ -32,11 +51,39 @@ class TransactionFeeBreakdown {
 
 enum TransactionStatus {
   pending,
+  awaitingShippingQuote,
+  awaitingPayment,
+  paidEscrowHeld,
+  escrowHold,
+  dispatched,
+  delivered,
   completed,
   failed,
   refunded,
-  escrowHold,
-  delivered,
+  draft,
+  published,
+  addressRequired,
+  pendingShippingFee,
+  shippingFeeSubmitted,
+  shippingFeeReview,
+  quoted,
+  awaitingEscrowPayment,
+  paymentPending,
+  paid,
+  inEscrow,
+  readyToDispatch,
+  inTransit,
+  outForDelivery,
+  deliveryAttempted,
+  inspectionPeriod,
+  otpPending,
+  walletCredited,
+  payoutPending,
+  payoutComplete,
+  disputed,
+  refundPending,
+  cancelled,
+  expired,
 }
 
 class MarketplaceTransaction {
@@ -58,6 +105,26 @@ class MarketplaceTransaction {
   final String paymentMethod;
   final String? transactionReference;
   final DateTime createdAt;
+  final double? shippingCost;
+  final Map<String, dynamic>? deliveryAddress;
+  final String? courierName;
+  final String? driverPhone;
+  final String? receiptImageUrl;
+  final String? trackingNumber;
+  final Map<String, dynamic>? dispatchProof;
+
+  // ── 11 Bus Receipt text fields (zero Firebase Storage) ──
+  final String? passengerName;
+  final String? busName;
+  final String? receiptNumber;
+  final String? departureTime;
+  final String? arrivalTime;
+  final String? originStation;
+  final String? destinationStation;
+  final String? travelDate;
+  final String? travelDay;
+  final double? shippingFare;
+  final String? plateNumber;
 
   MarketplaceTransaction({
     required this.id,
@@ -78,6 +145,24 @@ class MarketplaceTransaction {
     this.paymentMethod = 'ClickPesa',
     this.transactionReference,
     required this.createdAt,
+    this.shippingCost,
+    this.deliveryAddress,
+    this.courierName,
+    this.driverPhone,
+    this.receiptImageUrl,
+    this.trackingNumber,
+    this.dispatchProof,
+    this.passengerName,
+    this.busName,
+    this.receiptNumber,
+    this.departureTime,
+    this.arrivalTime,
+    this.originStation,
+    this.destinationStation,
+    this.travelDate,
+    this.travelDay,
+    this.shippingFare,
+    this.plateNumber,
   });
 
   factory MarketplaceTransaction.fromMap(String id, Map<String, dynamic> data) {
@@ -105,12 +190,30 @@ class MarketplaceTransaction {
       totalAmount: (data['totalAmount'] ?? breakdown.totalAmount).toDouble(),
       sellerReceives: (data['sellerReceives'] ?? breakdown.sellerReceives)
           .toDouble(),
-      status: _parseStatus(data['status'] ?? 'pending'),
+      status: parseStatus(data['status'] ?? 'pending'),
       paymentMethod: data['paymentMethod'] ?? 'ClickPesa',
       transactionReference: data['transactionReference'],
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
+      shippingCost: (data['shippingCost'] as num?)?.toDouble(),
+      deliveryAddress: data['deliveryAddress'] as Map<String, dynamic>?,
+      courierName: data['courierName'] as String?,
+      driverPhone: data['driverPhone'] as String?,
+      receiptImageUrl: data['receiptImageUrl'] as String?,
+      trackingNumber: data['trackingNumber'] as String?,
+      dispatchProof: data['dispatchProof'] as Map<String, dynamic>?,
+      passengerName: data['passengerName'] as String?,
+      busName: data['busName'] as String?,
+      receiptNumber: data['receiptNumber'] as String?,
+      departureTime: data['departureTime'] as String?,
+      arrivalTime: data['arrivalTime'] as String?,
+      originStation: data['originStation'] as String?,
+      destinationStation: data['destinationStation'] as String?,
+      travelDate: data['travelDate'] as String?,
+      travelDay: data['travelDay'] as String?,
+      shippingFare: (data['shippingFare'] as num?)?.toDouble(),
+      plateNumber: data['plateNumber'] as String?,
     );
   }
 
@@ -128,28 +231,175 @@ class MarketplaceTransaction {
     'sokoLanguCommission': sokoLanguCommission,
     'totalAmount': totalAmount,
     'sellerReceives': sellerReceives,
-    'status': status == TransactionStatus.escrowHold
-        ? 'escrow_hold'
-        : status == TransactionStatus.delivered
-        ? 'delivered'
-        : status.toString().split('.').last,
+    'status': _statusToString(status),
     'paymentMethod': paymentMethod,
     'transactionReference': transactionReference,
     'createdAt': FieldValue.serverTimestamp(),
+    if (shippingCost != null) 'shippingCost': shippingCost,
+    if (deliveryAddress != null) 'deliveryAddress': deliveryAddress,
+    if (courierName != null) 'courierName': courierName,
+    if (driverPhone != null) 'driverPhone': driverPhone,
+    if (receiptImageUrl != null) 'receiptImageUrl': receiptImageUrl,
+    if (trackingNumber != null) 'trackingNumber': trackingNumber,
+    if (dispatchProof != null) 'dispatchProof': dispatchProof,
+    if (passengerName != null) 'passengerName': passengerName,
+    if (busName != null) 'busName': busName,
+    if (receiptNumber != null) 'receiptNumber': receiptNumber,
+    if (departureTime != null) 'departureTime': departureTime,
+    if (arrivalTime != null) 'arrivalTime': arrivalTime,
+    if (originStation != null) 'originStation': originStation,
+    if (destinationStation != null) 'destinationStation': destinationStation,
+    if (travelDate != null) 'travelDate': travelDate,
+    if (travelDay != null) 'travelDay': travelDay,
+    if (shippingFare != null) 'shippingFare': shippingFare,
+    if (plateNumber != null) 'plateNumber': plateNumber,
   };
 
-  static TransactionStatus _parseStatus(String status) {
+  static String _statusToString(TransactionStatus s) {
+    switch (s) {
+      case TransactionStatus.pending:
+        return 'pending';
+      case TransactionStatus.draft:
+        return 'draft';
+      case TransactionStatus.published:
+        return 'published';
+      case TransactionStatus.addressRequired:
+        return 'address_required';
+      case TransactionStatus.awaitingShippingQuote:
+        return 'awaiting_shipping_quote';
+      case TransactionStatus.pendingShippingFee:
+        return 'pending_shipping_fee';
+      case TransactionStatus.shippingFeeSubmitted:
+        return 'shipping_fee_submitted';
+      case TransactionStatus.shippingFeeReview:
+        return 'shipping_fee_review';
+      case TransactionStatus.quoted:
+        return 'quoted';
+      case TransactionStatus.awaitingPayment:
+        return 'awaiting_payment';
+      case TransactionStatus.awaitingEscrowPayment:
+        return 'awaiting_escrow_payment';
+      case TransactionStatus.paymentPending:
+        return 'payment_pending';
+      case TransactionStatus.paid:
+        return 'paid';
+      case TransactionStatus.escrowHold:
+        return 'escrow_hold';
+      case TransactionStatus.paidEscrowHeld:
+        return 'paid_escrow_held';
+      case TransactionStatus.inEscrow:
+        return 'in_escrow';
+      case TransactionStatus.readyToDispatch:
+        return 'ready_to_dispatch';
+      case TransactionStatus.dispatched:
+        return 'dispatched';
+      case TransactionStatus.inTransit:
+        return 'in_transit';
+      case TransactionStatus.outForDelivery:
+        return 'out_for_delivery';
+      case TransactionStatus.deliveryAttempted:
+        return 'delivery_attempted';
+      case TransactionStatus.delivered:
+        return 'delivered';
+      case TransactionStatus.inspectionPeriod:
+        return 'inspection_period';
+      case TransactionStatus.otpPending:
+        return 'otp_pending';
+      case TransactionStatus.completed:
+        return 'completed';
+      case TransactionStatus.walletCredited:
+        return 'wallet_credited';
+      case TransactionStatus.payoutPending:
+        return 'payout_pending';
+      case TransactionStatus.payoutComplete:
+        return 'payout_complete';
+      case TransactionStatus.disputed:
+        return 'disputed';
+      case TransactionStatus.refundPending:
+        return 'refund_pending';
+      case TransactionStatus.refunded:
+        return 'refunded';
+      case TransactionStatus.cancelled:
+        return 'cancelled';
+      case TransactionStatus.expired:
+        return 'expired';
+      case TransactionStatus.failed:
+        return 'failed';
+    }
+  }
+
+  static TransactionStatus parseStatus(String status) {
     switch (status) {
-      case 'completed':
-        return TransactionStatus.completed;
-      case 'failed':
-        return TransactionStatus.failed;
-      case 'refunded':
-        return TransactionStatus.refunded;
+      case 'draft':
+        return TransactionStatus.draft;
+      case 'published':
+        return TransactionStatus.published;
+      case 'address_required':
+        return TransactionStatus.addressRequired;
+      case 'awaiting_shipping_quote':
+        return TransactionStatus.awaitingShippingQuote;
+      case 'pending_shipping_fee':
+        return TransactionStatus.pendingShippingFee;
+      case 'shipping_fee_submitted':
+        return TransactionStatus.shippingFeeSubmitted;
+      case 'shipping_fee_review':
+        return TransactionStatus.shippingFeeReview;
+      case 'quoted':
+        return TransactionStatus.quoted;
+      case 'awaiting_payment':
+        return TransactionStatus.awaitingPayment;
+      case 'awaiting_escrow_payment':
+        return TransactionStatus.awaitingEscrowPayment;
+      case 'payment_pending':
+        return TransactionStatus.paymentPending;
+      case 'paid':
+        return TransactionStatus.paid;
       case 'escrow_hold':
         return TransactionStatus.escrowHold;
+      case 'paid_escrow_hold':
+      case 'paid_escrow_held':
+        return TransactionStatus.paidEscrowHeld;
+      case 'in_escrow':
+        return TransactionStatus.inEscrow;
+      case 'ready_to_dispatch':
+        return TransactionStatus.readyToDispatch;
+      case 'dispatched':
+        return TransactionStatus.dispatched;
+      case 'in_transit':
+        return TransactionStatus.inTransit;
+      case 'out_for_delivery':
+        return TransactionStatus.outForDelivery;
+      case 'delivery_attempted':
+        return TransactionStatus.deliveryAttempted;
       case 'delivered':
         return TransactionStatus.delivered;
+      case 'delivery_confirmed':
+      case 'confirmed':
+        return TransactionStatus.delivered;
+      case 'inspection_period':
+        return TransactionStatus.inspectionPeriod;
+      case 'otp_pending':
+        return TransactionStatus.otpPending;
+      case 'completed':
+        return TransactionStatus.completed;
+      case 'wallet_credited':
+        return TransactionStatus.walletCredited;
+      case 'payout_pending':
+        return TransactionStatus.payoutPending;
+      case 'payout_complete':
+        return TransactionStatus.payoutComplete;
+      case 'disputed':
+        return TransactionStatus.disputed;
+      case 'refund_pending':
+        return TransactionStatus.refundPending;
+      case 'refunded':
+        return TransactionStatus.refunded;
+      case 'cancelled':
+        return TransactionStatus.cancelled;
+      case 'expired':
+        return TransactionStatus.expired;
+      case 'failed':
+        return TransactionStatus.failed;
       default:
         return TransactionStatus.pending;
     }
