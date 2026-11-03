@@ -1,4 +1,4 @@
-﻿// Express 4 swallows rejected promises from async route handlers, leaving
+// Express 4 swallows rejected promises from async route handlers, leaving
 // requests hanging until the proxy gives up (504). Patch Layer#handle_request
 // before any route mounts so async rejections reach the error handler below.
 require('./utils/express-async');
@@ -46,25 +46,20 @@ const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
 const notificationRouter = require('./modules/notifications/routes');
 const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
-
+const youtubeRouter = require('./modules/youtube/routes');
+const musicRouter = require('./modules/music/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
-const companyRouter = require('./modules/company/routes');
-const companyHrRouter = require('./modules/company/hr-routes');
-const companyProjectRouter = require('./modules/company/project-routes');
-const companyCalendarRouter = require('./modules/company/calendar-routes');
-const companyFinanceRouter = require('./modules/company/finance-routes');
 const engagementRouter = require('./modules/engagement/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
-const whatsappWebhookRouter = require('./modules/whatsapp/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 const requestId = require('./middleware/requestId');
 const { jsonError } = require('./utils/http');
 
 // BigInt is used for TZS money in DB rows (store Decimal->string->BigInt).
-// Express res.json() cannot serialize BigInt Ã¢â‚¬â€ TZS fits a JS safe integer
+// Express res.json() cannot serialize BigInt â€” TZS fits a JS safe integer
 // (max ~9e15), so serialize to Number before responding.
 BigInt.prototype.toJSON = function toJSON() {
   return Number(this);
@@ -85,7 +80,7 @@ app.set('trust proxy', 1);
 const { loadShedder } = require('./middleware/loadShedder');
 app.use(loadShedder());
 
-// API contract Â§25: one id per request, echoed on every JSON response.
+// API contract §25: one id per request, echoed on every JSON response.
 app.use(requestId);
 
 // Compression
@@ -100,7 +95,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   // Sparse CSP: the API (JSON) is locked down, but the marketing pages, legal
   // pages and the browser admin dashboard pull Firebase/Google, Tailwind,
-  // chart.js, lucide, and Google Fonts from CDNs Ã¢â‚¬â€ those hosts are
+  // chart.js, lucide, and Google Fonts from CDNs â€” those hosts are
   // allow-listed instead of falling back to unsafe-inline-everything.
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.gstatic.com https://www.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: https:; worker-src 'self' blob:");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -108,7 +103,7 @@ app.use((req, res, next) => {
 });
 
 // Usage analytics: count every /api hit for request-rate stats (per min /
-// hour / day / month / year). Fire-and-forget inside the service Ã¢â‚¬â€ it never
+// hour / day / month / year). Fire-and-forget inside the service â€” it never
 // blocks or fails requests, and skips silently when Redis is unreachable.
 const { recordApiHit } = require('./services/activity');
 app.use((req, res, next) => {
@@ -119,7 +114,7 @@ app.use((req, res, next) => {
 // Canonical domain: www.sokovibe.co.tz is the official host. Render redirects
 // the apex (sokovibe.co.tz) to www at the edge before the app; if a request
 // ever reaches the app on the apex (e.g. the edge redirect is removed) we
-// still fold it onto www ourselves Ã¢â‚¬â€ unless SERVE_APEX=1, in which case the
+// still fold it onto www ourselves â€” unless SERVE_APEX=1, in which case the
 // apex serves the SAME landing site directly (canonical/og tags stay www).
 // Other sokovibe.co.tz subdomains are folded onto www too (path + query
 // preserved). The admin subdomain serves the browser panel directly at its
@@ -147,7 +142,7 @@ app.use((req, res, next) => {
     req.url = `${p.startsWith('/admin') ? '' : '/admin'}${p === '/' ? '/' : p}${q}`;
     return next();
   }
-  // api host is dedicated to the API edge worker Ã¢â‚¬â€ never fold onto www.
+  // api host is dedicated to the API edge worker â€” never fold onto www.
   if (host === `api.${DOMAIN}` || host === `www.api.${DOMAIN}`) return next();
   if (host === DOMAIN) {
     if (SERVE_APEX) return next();
@@ -204,13 +199,8 @@ app.use(cors({
   maxAge: 86400,
 }));
 
-// WhatsApp webhooks must see the exact raw bytes: Meta signs the payload with
-// HMAC-SHA256, and re-serialising via express.json would change them. Mounted
-// before the global JSON parser; the router applies express.raw itself.
-app.use('/api/webhooks/whatsapp', whatsappWebhookRouter);
-
 // Body parsing. Image/video bytes never travel in a JSON body anymore (presigned
-// R2 PUT / direct Cloudinary upload), so 1mb is generous for every v1 payload â€”
+// R2 PUT / direct Cloudinary upload), so 1mb is generous for every v1 payload —
 // the old 10mb let an unauthenticated client force a 10mb JSON parse per request.
 app.use(express.json({ limit: '1mb' }));
 
@@ -234,6 +224,7 @@ app.use((req, res, next) => {
 
 // Universal/App Links verification files for the native apps. Served with an
 // explicit JSON content-type because apple-app-site-association has no file
+// extension and express.static would otherwise send application/octet-stream.
 const landingDir = path.join(__dirname, '..', 'landing');
 const wellKnownDir = path.join(landingDir, '.well-known');
 app.get('/.well-known/assetlinks.json', (req, res) => {
@@ -250,7 +241,19 @@ app.get('/.well-known/apple-app-site-association.json', (req, res) => {
 app.use(seoRouter);
 
 // Public marketing/legal pages on clean URLs. Served from the landing dir so
+// their relative asset + translation links resolve (styles.css, i18n.js, index.html).
 const PUBLIC_HTML_PAGES = [
+  ['/privacy-policy', 'privacy.html'],
+  ['/terms-of-service', 'terms.html'],
+  ['/data-deletion', 'deletion.html'],
+  ['/support', 'support.html'],
+  ['/tanzania-marketplace', 'tanzania-marketplace.html'],
+  ['/categories', 'categories.html'],
+  ['/how-soko-vibe-works', 'how-soko-vibe-works.html'],
+  ['/soko-vibe-fees', 'soko-vibe-fees.html'],
+  ['/soko-vibe-escrow', 'soko-vibe-escrow.html'],
+  ['/about', 'about.html'],
+  ['/about/founder', 'about-founder.html'],
 ];
 for (const [route, file] of PUBLIC_HTML_PAGES) {
   app.get(route, (req, res) => {
@@ -260,9 +263,11 @@ for (const [route, file] of PUBLIC_HTML_PAGES) {
   });
 }
 
+// Every page above is also reachable as a raw *.html file through the static
 // mount below, which would publish each document at two URLs and split its
 // ranking signals. Fold the file form onto the clean URL permanently. Built
 // from PUBLIC_HTML_PAGES so a new page cannot reintroduce a duplicate.
+const LEGACY_HTML_REDIRECTS = { '/index.html': '/' };
 for (const [route, file] of PUBLIC_HTML_PAGES) {
   LEGACY_HTML_REDIRECTS[`/${file}`] = route;
 }
@@ -281,7 +286,9 @@ app.use('/shop', (req, res) => {
   res.redirect(301, '/');
 });
 
+app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
   // Old panel URLs redirect to the real panel so nobody lands on a stale page.
+  app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
 
 // The landing page owns the root. HTML is never cached so edits go live
 // immediately; versioned assets (css/js/png/ico/json) cache hard.
@@ -291,8 +298,11 @@ const landingIconNames = new Set([
   'favicon.ico', 'favicon.png', 'favicon-16.png', 'favicon-32.png',
   'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'logo.png',
 ]);
+app.use(express.static(landingDir, {
+  index: 'index.html',
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.html' || filePath.endsWith('manifest.json')) {
       res.setHeader('Cache-Control', 'no-cache');
     } else if (landingIconNames.has(path.basename(filePath))) {
       res.setHeader('Cache-Control', 'no-cache');
@@ -303,7 +313,7 @@ const landingIconNames = new Set([
 }));
 
 // Browsers/bots often request /favicon.ico directly regardless of the <link>
-// tags â€” map the root one to the brand favicon instead of serving a 404.
+// tags — map the root one to the brand favicon instead of serving a 404.
 app.get('/favicon.ico', (req, res) => res.redirect('/assets/favicon.ico'));
 
 // Web fallback routes for deep links (must be before static so /product/:id serves HTML)
@@ -345,15 +355,12 @@ app.use('/api/v1/data-deletion', deletionRequestRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1', sellerAnalyticsRouter);
-
+app.use('/api/v1/youtube', youtubeRouter);
+// Rate limited per user because the lyrics AI fallback spends provider tokens.
+app.use('/api/v1/music', lyricsLimiter, musicRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
-app.use('/api/v1/company', companyRouter);
-app.use('/api/v1/company', companyHrRouter);
-app.use('/api/v1/company', companyProjectRouter);
-app.use('/api/v1/company', companyCalendarRouter);
-app.use('/api/v1/company', companyFinanceRouter);
 app.use('/api/v1', engagementRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
@@ -479,16 +486,5 @@ async function initialize() {
   await connectDatabase();
   await connectRedis();
 }
-
-
-
-
-
-
-// Web dashboards (web only)
-app.use('/company', express.static(path.join(__dirname, '..', 'company'), { index: 'index.html' }));
-app.use('/staff', express.static(path.join(__dirname, '..', 'staff'), { index: 'index.html' }));
-app.get(['/company.html', '/company-os'], (req, res) => res.redirect(301, '/company'));
-app.get(['/staff.html'], (req, res) => res.redirect(301, '/staff'));
 
 module.exports = { app, initialize };
