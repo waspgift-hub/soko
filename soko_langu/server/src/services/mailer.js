@@ -213,8 +213,7 @@ async function sendViaResend(to, subject, html) {
 }
 
 async function sendMail(to, subject, html, recipientOverride) {
-  // Override recipient to gift@sokovibe.co.tz for all emails
-  const recipient = recipientOverride || 'gift@sokovibe.co.tz';
+  const recipient = recipientOverride || to;
   const wrappedHtml = wrapEmailHtml(html);
   const channels = [];
   // Resend first: sokovibe.co.tz is DNS-verified there, so recipients see
