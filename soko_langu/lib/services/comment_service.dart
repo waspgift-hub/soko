@@ -11,11 +11,16 @@ import 'api_config.dart';
 import 'notification_service.dart';
 
 class CommentService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final Firestore _db = Firestore.instance;
   final NotificationService _notif = NotificationService();
 
-  static const Duration _pollInterval = Duration(seconds: 8);
-  static const Duration _maxPollInterval = Duration(seconds: 60);
+  static const Duration _pollInterval = Duration(seconds: 2);
+  static const Duration _maxPollInterval = Duration(seconds: 10);
+
+  // Registry of active poll streams, keyed by productId. Lets addComment /
+  // addReply trigger an immediate fetch so the new comment shows without
+  // waiting for the next poll tick.
+  static final Map<String, List<void Function()>> _activePolls = {};
 
   CollectionReference _commentsRef(String productId) =>
       _db.collection('products').doc(productId).collection('comments');
@@ -57,6 +62,7 @@ class CommentService {
         if (res.statusCode == 201) {
           await _mirrorToFirestore(productId, user, text);
           _notifySeller(productId, user);
+          _triggerPoll(productId);
           return;
         }
       } catch (_) {}
@@ -73,6 +79,7 @@ class CommentService {
     });
 
     _notifySeller(productId, user);
+    _triggerPoll(productId);
   }
 
   // Postgres row is the source; write the Firestore sub-collection copy so the
@@ -114,6 +121,7 @@ class CommentService {
         if (res.statusCode == 201) {
           await _mirrorReplyToFirestore(productId, commentId, user, text);
           _notifyCommentAuthor(productId, commentId, user, text);
+          _triggerPoll(productId);
           return;
         }
       } catch (_) {}
@@ -132,6 +140,7 @@ class CommentService {
     ).doc(commentId).update({'replyCount': FieldValue.increment(1)});
 
     _notifyCommentAuthor(productId, commentId, user, text);
+    _triggerPoll(productId);
   }
 
   Future<void> _mirrorReplyToFirestore(
@@ -319,6 +328,7 @@ class CommentService {
     if (ApiConfig.kUseCommentsApi) {
       return _pollStream<List<ProductComment>>(
         () => _fetchCommentsApi(productId),
+        pollKey: productId,
         fingerprint: (items) => items
             .map(
               (c) =>
@@ -347,6 +357,7 @@ class CommentService {
     if (ApiConfig.kUseCommentsApi) {
       return _pollStream<List<CommentReply>>(
         () => _fetchRepliesApi(commentId),
+        pollKey: productId,
         fingerprint: (items) => items
             .map(
               (r) =>
@@ -378,9 +389,14 @@ class CommentService {
   // receives whole snapshots just like the Firestore `snapshots()`. The delay
   // backs off while responses are unchanged, so an idle product page costs one
   // request per minute instead of one every eight seconds.
+  //
+  // `pollKey` registers the stream so addComment/addReply can fire an
+  // immediate fetch — the new comment shows without waiting for the next
+  // tick, which is what made comments look delayed before.
   Stream<T> _pollStream<T>(
     Future<T?> Function() fetch, {
     String Function(T value)? fingerprint,
+    String? pollKey,
   }) {
     late StreamController<T> controller;
     Timer? timer;
@@ -388,6 +404,7 @@ class CommentService {
     String? lastFingerprint;
 
     void schedule() {
+      timer?.cancel();
       timer = Timer(delay, () async {
         final data = await fetch();
         if (!controller.hasListener) return;
@@ -411,8 +428,16 @@ class CommentService {
       });
     }
 
+    void triggerImmediate() {
+      timer?.cancel();
+      schedule();
+    }
+
     controller = StreamController<T>.broadcast(
       onListen: () async {
+        if (pollKey != null) {
+          _activePolls.putIfAbsent(pollKey, () => []).add(triggerImmediate);
+        }
         final initial = await fetch();
         if (initial != null && controller.hasListener) {
           controller.add(initial);
@@ -424,9 +449,28 @@ class CommentService {
       onCancel: () {
         timer?.cancel();
         timer = null;
+        if (pollKey != null) {
+          final list = _activePolls[pollKey];
+          if (list != null) {
+            list.remove(triggerImmediate);
+            if (list.isEmpty) _activePolls.remove(pollKey);
+          }
+        }
       },
     );
     return controller.stream;
+  }
+
+  /// Fire every active poll for `productId` so a freshly posted comment or
+  /// reply appears immediately instead of after the next tick.
+  void _triggerPoll(String productId) {
+    final list = _activePolls[productId];
+    if (list == null) return;
+    for (final trigger in list) {
+      try {
+        trigger();
+      } catch (_) {}
+    }
   }
 
   Future<List<ProductComment>?> _fetchCommentsApi(String productId) async {

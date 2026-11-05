@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'product_cached_image.dart';
@@ -17,17 +16,14 @@ class FlashSaleBanner extends StatefulWidget {
   State<FlashSaleBanner> createState() => _FlashSaleBannerState();
 }
 
-class _FlashSaleBannerState extends State<FlashSaleBanner> with WidgetsBindingObserver {
+class _FlashSaleBannerState extends State<FlashSaleBanner> {
   late PageController _pageController;
   int _currentPage = 0;
-  Timer? _timer;
-  bool _interacting = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -42,35 +38,8 @@ class _FlashSaleBannerState extends State<FlashSaleBanner> with WidgetsBindingOb
 
   @override
   void dispose() {
-    _timer?.cancel();
     _pageController.dispose();
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) setState(() {});
-  }
-
-  void _startAutoSlide(int itemCount) {
-    _timer?.cancel();
-    if (_interacting || itemCount <= 1) return;
-    // 30s per slide — preserves existing flash-sale readability/timing behavior.
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted || _interacting) return;
-      final nextPage = (_currentPage + 1) % itemCount;
-      final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (reduceMotion) {
-        _pageController.jumpToPage(nextPage);
-      } else {
-        _pageController.animateToPage(
-          nextPage,
-          duration: const Duration(milliseconds: 360),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
   }
 
   @override
@@ -78,7 +47,6 @@ class _FlashSaleBannerState extends State<FlashSaleBanner> with WidgetsBindingOb
     final cs = Theme.of(context).colorScheme;
     final sales = widget.sales;
     if (sales.isEmpty) return _buildPlaceholder(context, cs);
-    _startAutoSlide(sales.length);
     final sale = sales[_currentPage.clamp(0, sales.length - 1)];
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -130,13 +98,9 @@ class _FlashSaleBannerState extends State<FlashSaleBanner> with WidgetsBindingOb
   Widget _buildImagePanel(List<FlashSale> sales, ColorScheme cs, bool reduceMotion) {
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
-        if (n is ScrollStartNotification && n.dragDetails != null) {
-          _interacting = true;
-          _timer?.cancel();
-        } else if (n is ScrollEndNotification) {
-          _interacting = false;
-          _startAutoSlide(sales.length);
-        }
+        // Auto-rotation is owned by the outer BannerRotator; this listener is
+        // left in place only so user swipes on the inner PageView are not
+        // treated as a scroll event bubbling to the feed.
         return false;
       },
       child: Stack(

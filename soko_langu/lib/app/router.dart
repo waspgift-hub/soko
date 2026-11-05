@@ -446,12 +446,14 @@ GoRouter buildRouter() {
         path: '${AppRoutes.chat}/:receiverId',
         pageBuilder: (context, state) {
           final receiverId = state.pathParameters['receiverId']!;
-          final extra = state.extra as Map<String, String>?;
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
           return _premiumPage(ChatPage(
             receiverId: receiverId,
-            receiverName: extra?['name'] ?? '',
-            productName: extra?['productTitle'] ?? extra?['product'] ?? '',
-            productId: extra?['productId'],
+            receiverName: extra['name'] as String? ?? '',
+            productName: extra['productTitle'] as String? ?? extra['product'] as String? ?? '',
+            productId: extra['productId'] as String?,
           ));
         },
       ),
