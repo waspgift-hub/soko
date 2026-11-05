@@ -76,7 +76,7 @@ class _LandingPageState extends State<LandingPage> {
             SliverToBoxAdapter(child: Container(key: _keys['home'], child: HeroSection(onNotify: () => _go('register'), onDiscover: () => _go('about')))),
             SliverToBoxAdapter(child: Container(key: _keys['register'], child: const RegisterSection())),
             SliverToBoxAdapter(child: Container(key: _keys['about'], child: const AboutSection())),
-            SliverToBoxAdapter(child: Container(key: _keys['features'], child: const SizedBox.shrink())),
+            SliverToBoxAdapter(child: Container(key: _keys['features'], child: const FeaturesSection())),
             SliverToBoxAdapter(child: Container(key: _keys['how'], child: const HowSection())),
             const SliverToBoxAdapter(child: EarlySection()),
             SliverToBoxAdapter(child: Container(key: _keys['faq'], child: const FaqSection())),

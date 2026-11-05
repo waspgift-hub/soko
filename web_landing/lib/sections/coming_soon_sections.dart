@@ -228,31 +228,59 @@ class _SuccessState extends StatelessWidget {
 
 class AboutSection extends StatelessWidget {
   const AboutSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: SokoBrand.white,
+      child: ResponsiveContainer(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 72),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          AnimatedReveal(child: SectionHeader(eyebrow: context.str('about_eyebrow'), title: context.str('about_title'), sub: context.str('about_body'))),
+          const SizedBox(height: 14),
+          AnimatedReveal(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: SokoBrand.warning.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: SokoBrand.warning.withValues(alpha: 0.22))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.info_outline, size: 18, color: SokoBrand.warning.withValues(alpha: 0.95)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(context.str('about_note'), style: TextStyle(color: SokoBrand.warning.withValues(alpha: 0.95), fontWeight: FontWeight.w600, fontSize: 13, height: 1.45))),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class FeaturesSection extends StatelessWidget {
+  const FeaturesSection({super.key});
   static const _cards = [('f1_t', 'f1_b', Icons.storefront_outlined), ('f2_t', 'f2_b', Icons.forum_outlined), ('f3_t', 'f3_b', Icons.groups_outlined), ('f4_t', 'f4_b', Icons.phone_iphone_outlined), ('f5_t', 'f5_b', Icons.auto_awesome_outlined), ('f6_t', 'f6_b', Icons.public_outlined)];
 
   @override
   Widget build(BuildContext context) {
     return ResponsiveContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 72),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        AnimatedReveal(child: SectionHeader(eyebrow: context.str('about_eyebrow'), title: context.str('about_title'), sub: context.str('about_body'))),
-        const SizedBox(height: 14),
-        AnimatedReveal(child: Text(context.str('about_note'), style: TextStyle(color: SokoBrand.warning.withValues(alpha: 0.95), fontWeight: FontWeight.w600, fontSize: 13))),
-        const SizedBox(height: 28),
-        LayoutBuilder(builder: (context, c) {
-          final cols = c.maxWidth >= 980 ? 3 : c.maxWidth >= 620 ? 2 : 1;
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _cards.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, crossAxisSpacing: 16, mainAxisSpacing: 16, mainAxisExtent: 170),
-            itemBuilder: (_, i) => AnimatedReveal(
-              delay: Duration(milliseconds: 60 * i),
-              child: _InfoCard(title: context.str(_cards[i].$1), body: context.str(_cards[i].$2), icon: _cards[i].$3),
-            ),
-          );
-        }),
-      ]),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 72),
+      child: LayoutBuilder(builder: (context, c) {
+        final cols = c.maxWidth >= 980 ? 3 : c.maxWidth >= 620 ? 2 : 1;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _cards.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            mainAxisExtent: cols == 1 ? 156 : 176,
+          ),
+          itemBuilder: (_, i) => AnimatedReveal(
+            delay: Duration(milliseconds: 50 * i),
+            child: _InfoCard(title: context.str(_cards[i].$1), body: context.str(_cards[i].$2), icon: _cards[i].$3),
+          ),
+        );
+      }),
     );
   }
 }
@@ -267,12 +295,12 @@ class _InfoCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           Container(width: 42, height: 42, decoration: BoxDecoration(color: SokoBrand.deepGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: SokoBrand.deepGreen)),
           const SizedBox(height: 14),
           Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: SokoBrand.ink)),
           const SizedBox(height: 6),
-          Expanded(child: Text(body, style: const TextStyle(color: SokoBrand.muted, height: 1.5, fontSize: 14))),
+          Flexible(child: Text(body, style: const TextStyle(color: SokoBrand.muted, height: 1.5, fontSize: 14))),
         ]),
       ),
     );
