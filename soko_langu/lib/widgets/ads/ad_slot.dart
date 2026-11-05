@@ -83,6 +83,17 @@ class AdSlot extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    // Only claim screen real estate when there is an actual creative to show.
+    // The previous version reserved 50px unconditionally, leaving a blank
+    // banner-shaped gap in title bars and footers whenever no fill arrived.
+    final creative = manager.bannerWidgetFor(
+      placement,
+      slotKey: placement.id,
+    );
+    if (creative == null) {
+      return const SizedBox.shrink();
+    }
+
     final body = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Center(
@@ -140,8 +151,10 @@ class AdSlot extends StatelessWidget {
   }
 }
 
-/// Reserves the exact banner height and swaps in the creative once loaded, so
-/// the surrounding layout never reflows on fill.
+/// Renders the creative for a placement. The caller is responsible for
+/// checking that a creative exists before mounting this widget; this class
+/// exists so the old `_BannerReserve` skeleton could be removed without
+/// touching every call site.
 class _BannerHost extends StatelessWidget {
   const _BannerHost({required this.placement});
 
@@ -150,42 +163,10 @@ class _BannerHost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final manager = context.watch<AdManager>();
-    final creative = manager.bannerWidgetFor(
+    return manager.bannerWidgetFor(
       placement,
       slotKey: placement.id,
-    );
-    if (creative == null) return const _BannerReserve();
-    return creative;
-  }
-}
-
-/// Neutral skeleton shown while the creative loads.
-///
-/// Deliberately unlabelled and non-interactive. The old implementation rendered
-/// a fake green "Sponsored / View" card on web and on every no-fill failure,
-/// which misrepresented first-party content as advertising and covered real
-/// content for nothing.
-class _BannerReserve extends StatelessWidget {
-  const _BannerReserve();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: const SizedBox.expand(),
-    );
+    ) ?? const SizedBox.shrink();
   }
 }
 

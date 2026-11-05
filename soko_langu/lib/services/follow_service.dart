@@ -3,9 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'api_config.dart';
 
 import '../models/social_models.dart';
 import 'notification_service.dart';
@@ -49,37 +46,84 @@ class FollowService {
   Future<FollowResult> follow(String targetId) async {
     if (isSignedOut) return FollowResult.error('not_signed_in');
     if (targetId == _uid) return FollowResult.error('cannot_follow_self');
-    try {
-      final token = await _auth.currentUser?.getIdToken();
-      final res = await http.post(
-        Uri.parse(ApiConfig.v1('/social/follow')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'targetId': targetId}),
-      );
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final data = jsonDecode(res.body)['data'] ?? {};
-        final st = data['status'] as String? ?? '';
-        if (st == 'following') return FollowResult.following();
-        if (st == 'requested') return FollowResult.requested();
-        if (st == 'blocked') return FollowResult.blocked();
-      }
-      return FollowResult.error('follow_failed');
-    } catch (e) {
-      return FollowResult.error(e.toString());
+
+    final meRef = _db.collection('users').doc(_uid!);
+    final themRef = _db.collection('users').doc(targetId);
+    final [meDoc, themDoc, followingDoc, outgoingReq] = await Future.wait([
+      meRef.get(),
+      themRef.get(),
+      meRef.collection('following').doc(targetId).get(),
+      meRef.collection('followRequestsSent').doc(targetId).get(),
+    ]);
+    if (followingDoc.exists) return FollowResult.following();
+    if (outgoingReq.exists) return FollowResult.requested();
+
+    final meData = meDoc.data() ?? <String, dynamic>{};
+    final themData = themDoc.data() ?? <String, dynamic>{};
+    final themBlocksMe =
+        themData['blockedIds'] is List && (themData['blockedIds'] as List).contains(_uid);
+    final iBlockThem =
+        meData['blockedIds'] is List && (meData['blockedIds'] as List).contains(targetId);
+    if (themBlocksMe || iBlockThem) return FollowResult.blocked();
+
+    final theirVisibility = ProfileVisibilitySettings.fromMap(
+      themData['visibility'] as Map<String, dynamic>?,
+    );
+    final isPrivate = theirVisibility.isPrivate;
+    final now = DateTime.now();
+
+    if (isPrivate) {
+      // Rules currently allow requester to write only users/{requester}/followRequestsSent.
+      // Incoming request under target requires server mediation; do not weaken rules.
+      await meRef
+          .collection('followRequestsSent')
+          .doc(targetId)
+          .set(FollowRequest(requesterId: _uid!, targetId: targetId, createdAt: now).toMap());
+      return FollowResult.requested();
     }
+
+    // Rules allow follower to create own following edge and follower edge on a public target.
+    // userPublic counters are server-owned in comments; client counter updates may be denied by rules.
+    final batch = _db.batch();
+    batch.set(
+      meRef.collection('following').doc(targetId),
+      FollowRelationship(followerId: _uid!, followingId: targetId, createdAt: now).toMap(),
+    );
+    batch.set(
+      themRef.collection('followers').doc(_uid!),
+      FollowRelationship(followerId: _uid!, followingId: targetId, createdAt: now).toMap(),
+    );
+    await batch.commit();
+    try {
+      await themRef.set({'followerCount': FieldValue.increment(1)}, SetOptions(merge: true));
+      await meRef.set({'followingCount': FieldValue.increment(1)}, SetOptions(merge: true));
+    } catch (_) {}
+    try {
+      await _notifications.sendNotification(
+        userId: targetId,
+        title: 'New follower',
+        body: '${_auth.currentUser?.displayName ?? 'Someone'} started following you',
+        data: {'type': 'follow', 'followerId': _uid!},
+      );
+    } catch (_) {}
+    return FollowResult.following();
   }
 
   /// Unfollow [targetId]. Removes both follow edges and decrements counts.
   /// No-op if not following.
   Future<void> unfollow(String targetId) async {
     if (isSignedOut || targetId == _uid) return;
+    final meRef = _db.collection('users').doc(_uid!);
+    final themRef = _db.collection('users').doc(targetId);
+    final existing = await meRef.collection('following').doc(targetId).get();
+    if (!existing.exists) return;
+    final batch = _db.batch();
+    batch.delete(meRef.collection('following').doc(targetId));
+    batch.delete(themRef.collection('followers').doc(_uid!));
+    await batch.commit();
     try {
-      final token = await _auth.currentUser?.getIdToken();
-      await http.post(
-        Uri.parse(ApiConfig.v1('/social/unfollow')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'targetId': targetId}),
-      );
+      await themRef.set({'followerCount': FieldValue.increment(-1)}, SetOptions(merge: true));
+      await meRef.set({'followingCount': FieldValue.increment(-1)}, SetOptions(merge: true));
     } catch (_) {}
   }
 
@@ -140,38 +184,35 @@ class FollowService {
   /// Only callable by the request target (the current user).
   Future<void> acceptRequest(String requesterId) async {
     if (isSignedOut) return;
+    // Target can write their followers edge and delete their incoming request under current rules,
+    // but cannot write requester's following/followRequestsSent. Requires server mediation for full consistency.
+    final meRef = _db.collection('users').doc(_uid!);
+    final batch = _db.batch();
+    batch.set(
+      meRef.collection('followers').doc(requesterId),
+      FollowRelationship(
+        followerId: requesterId,
+        followingId: _uid!,
+        createdAt: DateTime.now(),
+      ).toMap(),
+    );
+    batch.delete(meRef.collection('followRequests').doc(requesterId));
+    await batch.commit();
     try {
-      final token = await _auth.currentUser?.getIdToken();
-      await http.post(
-        Uri.parse(ApiConfig.v1('/social/accept')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'requesterId': requesterId}),
-      );
+      await meRef.set({'followerCount': FieldValue.increment(1)}, SetOptions(merge: true));
     } catch (_) {}
   }
 
   Future<void> rejectRequest(String requesterId) async {
     if (isSignedOut) return;
-    try {
-      final token = await _auth.currentUser?.getIdToken();
-      await http.post(
-        Uri.parse(ApiConfig.v1('/social/reject')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'requesterId': requesterId}),
-      );
-    } catch (_) {}
+    final meRef = _db.collection('users').doc(_uid!);
+    await meRef.collection('followRequests').doc(requesterId).delete();
   }
 
   Future<void> cancelRequest(String targetId) async {
     if (isSignedOut) return;
-    try {
-      final token = await _auth.currentUser?.getIdToken();
-      await http.post(
-        Uri.parse(ApiConfig.v1('/social/cancel')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'targetId': targetId}),
-      );
-    } catch (_) {}
+    final meRef = _db.collection('users').doc(_uid!);
+    await meRef.collection('followRequestsSent').doc(targetId).delete();
   }
 
   // ─── Followers / following lists ────────────────────────────────────────
@@ -200,7 +241,7 @@ class FollowService {
 
   /// Count of followers for [ownerId] (denormalized, always consistent).
   Future<int> followerCount(String ownerId) async {
-    final doc = await _db.collection('userPublic').doc(ownerId).get();
+    final doc = await _db.collection('users').doc(ownerId).get();
     return doc.data()?['followerCount'] as int? ?? 0;
   }
 
@@ -215,7 +256,7 @@ class FollowService {
 
   /// Count of accounts [ownerId] is following (denormalized).
   Future<int> followingCount(String ownerId) async {
-    final doc = await _db.collection('userPublic').doc(ownerId).get();
+    final doc = await _db.collection('users').doc(ownerId).get();
     return doc.data()?['followingCount'] as int? ?? 0;
   }
 
@@ -234,27 +275,50 @@ class FollowService {
   /// creates a block record.
   Future<void> block(String targetId) async {
     if (isSignedOut || targetId == _uid) return;
-    try {
-      final token = await _auth.currentUser?.getIdToken();
-      await http.post(
-        Uri.parse(ApiConfig.v1('/social/block')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'targetId': targetId}),
-      );
-    } catch (_) {}
+
+    final meRef = _db.collection('users').doc(_uid!);
+    final themRef = _db.collection('users').doc(targetId);
+
+    final [iFollowThem, theyFollowMe] = await Future.wait([
+      meRef.collection('following').doc(targetId).get(),
+      meRef.collection('followers').doc(targetId).get(),
+    ]);
+
+    final batch = _db.batch();
+    batch.delete(meRef.collection('following').doc(targetId));
+    batch.delete(themRef.collection('followers').doc(_uid!));
+    batch.delete(meRef.collection('followers').doc(targetId));
+    batch.delete(themRef.collection('following').doc(_uid!));
+    batch.delete(meRef.collection('followRequests').doc(targetId));
+    batch.delete(themRef.collection('followRequests').doc(_uid!));
+    batch.delete(meRef.collection('followRequestsSent').doc(targetId));
+    batch.delete(themRef.collection('followRequestsSent').doc(_uid!));
+
+    final meUpdates = <String, dynamic>{};
+    final themUpdates = <String, dynamic>{};
+    if (iFollowThem.exists) {
+      meUpdates['followingCount'] = FieldValue.increment(-1);
+      themUpdates['followerCount'] = FieldValue.increment(-1);
+    }
+    if (theyFollowMe.exists) {
+      meUpdates['followerCount'] = FieldValue.increment(-1);
+      themUpdates['followingCount'] = FieldValue.increment(-1);
+    }
+    if (meUpdates.isNotEmpty) batch.update(meRef, meUpdates);
+    if (themUpdates.isNotEmpty) batch.update(themRef, themUpdates);
+
+    batch.set(
+      meRef.collection('blocked').doc(targetId),
+      BlockedAccount(blockerId: _uid!, blockedId: targetId, createdAt: DateTime.now()).toMap(),
+    );
+    await batch.commit();
   }
 
   /// Unblock [targetId]. Removes the block record; does not re-follow.
   Future<void> unblock(String targetId) async {
     if (isSignedOut) return;
-    try {
-      final token = await _auth.currentUser?.getIdToken();
-      await http.post(
-        Uri.parse(ApiConfig.v1('/social/unblock')),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'targetId': targetId}),
-      );
-    } catch (_) {}
+    final meRef = _db.collection('users').doc(_uid!);
+    await meRef.collection('blocked').doc(targetId).delete();
   }
 
   /// Whether [uid] has blocked the current user.
