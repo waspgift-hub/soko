@@ -42,7 +42,7 @@ router.post('/moderation/check-text', async (req, res) => {
                 amount: balance,
                 sokoLanguCommission: balance,
                 description: `Balance seized: ${warnings} profanity violations`,
-                timestamp: commerceStore.serverTimestamp,
+                timestamp: commerceStore.serverTimestamp(),
               });
               await commerceStore.updateDocument('users', uid, { balance: 0, sellerBalance: 0 });
             }

@@ -73,6 +73,7 @@ class AdSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final manager = context.watch<AdManager>();
 
     if (!manager.config.isPlacementEnabled(placement)) {
@@ -82,19 +83,35 @@ class AdSlot extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final body = Center(
-      child: SizedBox(
-        width: AdSlotSizing.maxWidthFor(context),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (showLabel) const _AdDisclosure(),
-            SizedBox(
-              height: AdSlotSizing.bannerHeight,
-              child: _BannerHost(placement: placement),
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Center(
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: cs.shadow.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: SizedBox(
+            width: AdSlotSizing.maxWidthFor(context),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showLabel) const _AdDisclosure(),
+                SizedBox(
+                  height: AdSlotSizing.bannerHeight,
+                  child: _BannerHost(placement: placement),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -154,10 +171,18 @@ class _BannerReserve extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return DecoratedBox(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(Ds.rSm),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: const SizedBox.expand(),
     );

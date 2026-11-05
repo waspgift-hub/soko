@@ -220,7 +220,7 @@ async function buildContext({
 async function buildMemoryBlock({ userId, queryTokens, preferences, locale }) {
   const stored = await store.listMemories({ userId });
   if (!stored.length) {
-    const explicit = explicitPreferenceLines(preferences);
+    const explicit = explicitPreferenceLines(preferences, locale);
     return explicit ? { text: explicit, count: 0 } : null;
   }
 
@@ -247,14 +247,14 @@ async function buildMemoryBlock({ userId, queryTokens, preferences, locale }) {
     lines.push(`- ${m.key}: ${m.value} (confidence ${m.confidence.toFixed(2)}, source ${m.source})`);
   }
 
-  const explicit = explicitPreferenceLines(preferences);
+  const explicit = explicitPreferenceLines(preferences, locale);
   if (explicit) lines.push('', explicit);
 
   return { text: lines.join('\n'), count: chosen.length };
 }
 
 /** Preferences the user set by hand, which outrank anything inferred. */
-function explicitPreferenceLines(preferences) {
+function explicitPreferenceLines(preferences, locale) {
   const parts = [];
   if (preferences.preferredLanguage) {
     parts.push(

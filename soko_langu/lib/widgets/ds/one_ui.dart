@@ -1,39 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_typography.dart';
-import 'animated_press.dart';
 
-/// Samsung One UI Inspired Design System Tokens & Components for Soko Vibe.
+/// Samsung One UI-inspired helpers for Soko Vibe.
 ///
-/// Principles:
-/// 1. Viewing Area vs Interaction Area: Large readable headings with comfortable breathing room.
-/// 2. Comfortable 16-24px rounded corners that feel soft, modern, and human.
-/// 3. Minimal clutter: High contrast, purposeful emerald green accents (#00C853 / #009624), no excessive borders.
-/// 4. Thumb-friendly interaction zones for effortless one-handed use.
+/// Uses the app's existing [ColorScheme]/theme as the source of truth so the
+/// Soko Vibe brand identity and dark/light behavior stay consistent.
 class OneUI {
   OneUI._();
 
-  // ─── Radii ────────────────────────────────────────────────────────────────
-  static const double rSm = 12.0;
-  static const double rMd = 16.0;
-  static const double rLg = 20.0;
-  static const double rXl = 24.0;
-  static const double rSheet = 28.0;
-  static const double rFull = 999.0;
+  static const double rSm = 12;
+  static const double rMd = 16;
+  static const double rLg = 20;
+  static const double rXl = 24;
+  static const double rSheet = 28;
+  static const double rFull = 999;
 
-  // ─── Radii Shapes ─────────────────────────────────────────────────────────
   static final BorderRadius brSm = BorderRadius.circular(rSm);
   static final BorderRadius brMd = BorderRadius.circular(rMd);
   static final BorderRadius brLg = BorderRadius.circular(rLg);
   static final BorderRadius brXl = BorderRadius.circular(rXl);
-  static final BorderRadius brSheet = const BorderRadius.vertical(top: Radius.circular(rSheet));
   static final BorderRadius brFull = BorderRadius.circular(rFull);
 
-  // ─── Shadows & Elevation ──────────────────────────────────────────────────
-  static List<BoxShadow> softShadow(BuildContext context, {double opacity = 0.04, double blur = 14}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (isDark) return const [];
+  static List<BoxShadow> softShadow(
+    BuildContext context, {
+    double opacity = 0.05,
+    double blur = 16,
+  }) {
+    if (Theme.of(context).brightness == Brightness.dark) return const [];
     return [
       BoxShadow(
         color: Colors.black.withValues(alpha: opacity),
@@ -43,27 +36,16 @@ class OneUI {
     ];
   }
 
-  static List<BoxShadow> elevatedShadow(BuildContext context, {Color? color}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final shadowColor = color ?? Colors.black;
-    return [
-      BoxShadow(
-        color: shadowColor.withValues(alpha: isDark ? 0.25 : 0.08),
-        blurRadius: 18,
-        offset: const Offset(0, 6),
-      ),
-    ];
-  }
-
-  // ─── Haptics ──────────────────────────────────────────────────────────────
   static void tapFeedback() => HapticFeedback.selectionClick();
-  static void actionFeedback() => HapticFeedback.mediumImpact();
+
+  static Color cardColor(ColorScheme cs) =>
+      cs.brightness == Brightness.dark ? cs.surfaceContainerHigh : cs.surface;
+
+  static Color canvasColor(ColorScheme cs) =>
+      cs.brightness == Brightness.dark ? cs.surface : cs.surfaceContainerLowest;
 }
 
-/// Samsung One UI Viewing Header Widget.
-///
-/// Displays a large, generous title and context area at the top of screens
-/// that provides visual calmness and readability.
+/// Large, readable header inspired by Samsung One UI's viewing area.
 class OneUIViewingHeader extends StatelessWidget {
   const OneUIViewingHeader({
     super.key,
@@ -71,7 +53,7 @@ class OneUIViewingHeader extends StatelessWidget {
     this.subtitle,
     this.action,
     this.leading,
-    this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 12),
+    this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 12),
   });
 
   final String title;
@@ -83,7 +65,7 @@ class OneUIViewingHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
+    final style = Theme.of(context).textTheme;
     return Padding(
       padding: padding,
       child: Column(
@@ -92,34 +74,32 @@ class OneUIViewingHeader extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (leading != null) ...[
-                leading!,
-                const SizedBox(width: 12),
-              ],
+              if (leading case final l?) ...[l, const SizedBox(width: 12)],
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: (style.headlineMedium ?? const TextStyle()).copyWith(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.6,
+                    height: 1.15,
                     color: cs.onSurface,
-                    height: 1.2,
                   ),
                 ),
               ),
-              if (action != null) action!,
+              if (action case final a?) a,
             ],
           ),
-          if (subtitle != null && subtitle!.isNotEmpty) ...[
-            const SizedBox(height: 4),
+          if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
             Text(
               subtitle!,
-              style: TextStyle(
+              style: (style.bodyMedium ?? const TextStyle()).copyWith(
                 fontSize: 14,
-                fontWeight: FontWeight.w400,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.8),
-                height: 1.35,
+                height: 1.4,
+                color: cs.onSurfaceVariant,
               ),
             ),
           ],
@@ -129,10 +109,7 @@ class OneUIViewingHeader extends StatelessWidget {
   }
 }
 
-/// Samsung One UI Grouped Card Container.
-///
-/// Soft, rounded container (20px radius) that groups related controls and info
-/// cleanly without harsh outlines.
+/// Rounded, low-clutter grouped card container.
 class OneUICard extends StatelessWidget {
   const OneUICard({
     super.key,
@@ -156,42 +133,68 @@ class OneUICard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final r = borderRadius ?? OneUI.brLg;
-
-    final cardContent = Container(
+    final decoration = BoxDecoration(
+      color: color ?? OneUI.cardColor(cs),
+      borderRadius: r,
+      border:
+          border ??
+          Border.all(
+            color: cs.outlineVariant.withValues(
+              alpha: cs.brightness == Brightness.dark ? 0.35 : 0.55,
+            ),
+            width: 0.8,
+          ),
+      boxShadow: OneUI.softShadow(context),
+    );
+    Widget content = Container(
       margin: margin,
-      decoration: BoxDecoration(
-        color: color ?? (isDark ? cs.surfaceContainer : cs.surface),
-        borderRadius: r,
-        border: border ?? Border.all(
-          color: isDark ? cs.outlineVariant.withValues(alpha: 0.2) : cs.outlineVariant.withValues(alpha: 0.5),
-          width: 0.8,
-        ),
-        boxShadow: OneUI.softShadow(context),
-      ),
+      decoration: decoration,
       child: ClipRRect(
         borderRadius: r,
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
-
-    if (onTap != null) {
-      return AnimatedPress(
-        onTap: onTap,
-        pressedScale: 0.98,
-        child: cardContent,
-      );
-    }
-
-    return cardContent;
+    if (onTap == null) return content;
+    return _OneUIPressable(onTap: onTap!, reduceMotion: reduceMotion, child: content);
   }
 }
 
-/// Samsung One UI Modern Button.
+class _OneUIPressable extends StatefulWidget {
+  const _OneUIPressable({required this.child, required this.onTap, required this.reduceMotion});
+  final Widget child;
+  final VoidCallback onTap;
+  final bool reduceMotion;
+  @override
+  State<_OneUIPressable> createState() => _OneUIPressableState();
+}
+
+class _OneUIPressableState extends State<_OneUIPressable> {
+  bool _pressed = false;
+  @override
+  Widget build(BuildContext context) {
+    final scale = widget.reduceMotion ? 1.0 : (_pressed ? 0.985 : 1.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: () {
+        OneUI.tapFeedback();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: scale,
+        duration: Duration(milliseconds: widget.reduceMotion ? 0 : 120),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Primary/secondary action button with comfortable touch target.
 class OneUIButton extends StatelessWidget {
   const OneUIButton({
     super.key,
@@ -200,10 +203,8 @@ class OneUIButton extends StatelessWidget {
     this.icon,
     this.loading = false,
     this.primary = true,
-    this.height = 48,
+    this.height = 50,
     this.width,
-    this.backgroundColor,
-    this.foregroundColor,
   });
 
   final String label;
@@ -213,78 +214,60 @@ class OneUIButton extends StatelessWidget {
   final bool primary;
   final double height;
   final double? width;
-  final Color? backgroundColor;
-  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
-
-    final bg = backgroundColor ?? (primary
-        ? cs.primary
-        : (isDark ? cs.surfaceContainerHigh : cs.surfaceContainerLow));
-    final fg = foregroundColor ?? (primary
-        ? cs.onPrimary
-        : cs.onSurface);
-
+    final enabled = onPressed != null && !loading;
+    final bg = primary ? cs.primary : cs.surfaceContainerHighest;
+    final fg = primary ? cs.onPrimary : cs.onSurface;
     return SizedBox(
       height: height,
       width: width,
-      child: Material(
-        color: onPressed == null ? bg.withValues(alpha: 0.5) : bg,
-        borderRadius: OneUI.brMd,
-        elevation: primary && onPressed != null ? 1 : 0,
-        shadowColor: primary ? cs.primary.withValues(alpha: 0.3) : Colors.transparent,
-        child: InkWell(
-          borderRadius: OneUI.brMd,
-          onTap: (onPressed == null || loading) ? null : () {
-            OneUI.tapFeedback();
-            onPressed!();
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Row(
-              mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (loading) ...[
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      valueColor: AlwaysStoppedAnimation<Color>(fg),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                ] else if (icon != null) ...[
-                  Icon(icon, size: 19, color: fg),
-                  const SizedBox(width: 8),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: fg,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+      child: FilledButton(
+        onPressed: enabled
+            ? () {
+                OneUI.tapFeedback();
+                onPressed!();
+              }
+            : null,
+        style: FilledButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
+          disabledBackgroundColor: bg.withValues(alpha: 0.45),
+          disabledForegroundColor: fg.withValues(alpha: 0.55),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: OneUI.brMd),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.1,
           ),
         ),
+        child: loading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(fg),
+                ),
+              )
+            : Row(
+                mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[Icon(icon, size: 19), const SizedBox(width: 8)],
+                  Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
       ),
     );
   }
 }
 
-/// Samsung One UI Soft Input Pill.
+/// Comfortable search field with optional filter action.
 class OneUISearchBar extends StatelessWidget {
   const OneUISearchBar({
     super.key,
@@ -310,17 +293,14 @@ class OneUISearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = cs.brightness == Brightness.dark;
-
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2024) : const Color(0xFFF3F4F6),
-        borderRadius: OneUI.brLg,
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-          width: 0.8,
+        color: cs.surfaceContainerHighest.withValues(
+          alpha: cs.brightness == Brightness.dark ? 0.75 : 1,
         ),
+        borderRadius: OneUI.brLg,
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
       ),
       child: Row(
         children: [
@@ -334,72 +314,39 @@ class OneUISearchBar extends StatelessWidget {
               onTap: onTap,
               onChanged: onChanged,
               onSubmitted: onSubmitted,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
                 hintText: hintText,
-                hintStyle: TextStyle(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
+                hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
-          if (onFilterTap != null) ...[
-            GestureDetector(
-              onTap: () {
+          if (onFilterTap != null)
+            IconButton(
+              onPressed: () {
                 OneUI.tapFeedback();
                 onFilterTap!();
               },
-              child: Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: filterCount > 0
-                      ? cs.primary.withValues(alpha: 0.18)
-                      : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04)),
-                  borderRadius: OneUI.brSm,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.tune_rounded,
-                      size: 16,
-                      color: filterCount > 0 ? cs.primary : cs.onSurfaceVariant,
-                    ),
-                    if (filterCount > 0) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        '$filterCount',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: cs.primary,
-                        ),
-                      ),
-                    ],
-                  ],
+              tooltip: 'Filters',
+              icon: Badge(
+                isLabelVisible: filterCount > 0,
+                label: Text('$filterCount'),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: filterCount > 0 ? cs.primary : cs.onSurfaceVariant,
                 ),
               ),
             ),
-          ] else ...[
-            const SizedBox(width: 8),
-          ],
         ],
       ),
     );
   }
 }
 
-/// Samsung One UI Empty State.
+/// Consistent empty state for lists and discovery surfaces.
 class OneUIEmptyState extends StatelessWidget {
   const OneUIEmptyState({
     super.key,
@@ -419,54 +366,83 @@ class OneUIEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 38, color: cs.primary),
               ),
-              child: Icon(icon, size: 40, color: cs.primary),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: cs.onSurface,
-                letterSpacing: -0.3,
+              const SizedBox(height: 18),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                  letterSpacing: -0.3,
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: TextStyle(
-                fontSize: 14,
-                color: cs.onSurfaceVariant,
-                height: 1.4,
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.45, color: cs.onSurfaceVariant),
               ),
-              textAlign: TextAlign.center,
-            ),
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
-              OneUIButton(
-                label: actionLabel!,
-                onPressed: onAction,
-                primary: true,
-              ),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 22),
+                OneUIButton(label: actionLabel!, onPressed: onAction),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Helper for Samsung-style large title app bars in scroll views.
+SliverAppBar buildOneUISliverAppBar(
+  BuildContext context, {
+  required String title,
+  List<Widget>? actions,
+  Widget? leading,
+  PreferredSizeWidget? bottom,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  return SliverAppBar(
+    pinned: true,
+    expandedHeight: 112,
+    scrolledUnderElevation: 0,
+    backgroundColor: cs.surface,
+    surfaceTintColor: Colors.transparent,
+    leading: leading,
+    actions: actions,
+    bottom: bottom,
+    flexibleSpace: FlexibleSpaceBar(
+      titlePadding: const EdgeInsetsDirectional.only(start: 20, bottom: 14, end: 16),
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: cs.onSurface,
+          fontWeight: FontWeight.w700,
+          fontSize: 20,
+          letterSpacing: -0.4,
+        ),
+      ),
+    ),
+  );
 }

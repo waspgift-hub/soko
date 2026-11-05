@@ -196,12 +196,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
-                      const SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(12, 12, 12, 4),
-                          child: DynamicBanner(),
-                        ),
-                      ),
+                      const SliverToBoxAdapter(child: DynamicBanner()),
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                         sliver: SliverGrid(

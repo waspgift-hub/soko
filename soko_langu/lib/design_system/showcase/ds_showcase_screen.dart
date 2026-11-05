@@ -9,20 +9,18 @@ class DsShowcaseScreen extends StatefulWidget {
 }
 
 class _DsShowcaseScreenState extends State<DsShowcaseScreen> {
-  bool _dark = false;
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: context.ds.scaffoldBg,
+      backgroundColor: Ds.scaffoldBg(context),
       appBar: AppBar(
         title: Text('Soko Vibe Design System', style: Ds.appBarTitle(cs.onSurface)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(Ds.sp4),
         children: [
-          DSSectionHeader(title: 'Colors', subtitle: 'Semantic tokens'),
+          _sectionHeader(context, 'Colors', 'Semantic tokens'),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(Ds.sp4),
@@ -40,7 +38,7 @@ class _DsShowcaseScreenState extends State<DsShowcaseScreen> {
             ),
           ),
           const SizedBox(height: Ds.sp6),
-          DSSectionHeader(title: 'Typography', subtitle: 'One UI scale'),
+          _sectionHeader(context, 'Typography', 'One UI scale'),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(Ds.sp4),
@@ -61,7 +59,7 @@ class _DsShowcaseScreenState extends State<DsShowcaseScreen> {
             ),
           ),
           const SizedBox(height: Ds.sp6),
-          DSSectionHeader(title: 'Buttons', subtitle: 'Variants'),
+          _sectionHeader(context, 'Buttons', 'Variants'),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(Ds.sp4),
@@ -69,31 +67,43 @@ class _DsShowcaseScreenState extends State<DsShowcaseScreen> {
                 spacing: Ds.sp3,
                 runSpacing: Ds.sp3,
                 children: [
-                  DSButton(label: 'Primary', onPressed: () {}),
-                  DSButton(label: 'Secondary', variant: DSButtonVariant.secondary, onPressed: () {}),
-                  DSButton(label: 'Ghost', variant: DSButtonVariant.ghost, onPressed: () {}),
-                  DSButton(label: 'Destructive', variant: DSButtonVariant.destructive, onPressed: () {}),
+                  DsButton(label: 'Primary', onPressed: () {}),
+                  DsButton(label: 'Secondary', variant: DsButtonVariant.secondary, onPressed: () {}),
+                  DsButton(label: 'Ghost', variant: DsButtonVariant.ghost, onPressed: () {}),
+                  DsButton(label: 'Destructive', variant: DsButtonVariant.danger, onPressed: () {}),
                 ],
               ),
             ),
           ),
           const SizedBox(height: Ds.sp6),
-          DSSectionHeader(title: 'Components', subtitle: 'Cards, chips, inputs'),
-          const DSCard(
-            child: Padding(
-              padding: EdgeInsets.all(Ds.sp4),
-              child: Text('Card with consistent radius & spacing'),
-            ),
+          _sectionHeader(context, 'Components', 'Cards, chips, inputs'),
+          const DsCard(
+            child: Text('Card with consistent radius & spacing'),
           ),
           const SizedBox(height: Ds.sp4),
-          Wrap(
+          const Wrap(
             spacing: Ds.sp2,
-            children: const [
-              DSChip(label: 'All'),
-              DSChip(label: 'Verified'),
-              DSChip(label: 'Near Me'),
+            children: [
+              DsChip(label: 'All'),
+              DsChip(label: 'Verified'),
+              DsChip(label: 'Near Me'),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String title, String subtitle) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Ds.sp2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Ds.sectionTitle(cs.onSurface)),
+          const SizedBox(height: Ds.sp1),
+          Text(subtitle, style: Ds.caption(cs.onSurfaceVariant)),
         ],
       ),
     );

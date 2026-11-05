@@ -100,34 +100,15 @@ service cloud.firestore {
       allow read: if true;
       // ONE field is client-writable: the profile-view counter, and only by
       // incrementing it by exactly one. There is deliberately no `create`, so a
-      // caller cannot fabricate a projection, and `affectedKeys()` pins the
-      // update to that single field, so kycApproved / isSeller / accountStatus
-      // stay Admin-SDK-only and a forged verified badge remains impossible.
-      //
-      // Known limit: any signed-in account can call this repeatedly, so the
-      // number is a vanity metric, not an audited count. Counting that has to be
-      // trustworthy belongs behind a rate-limited server endpoint.
+      // caller cannot fabricate a projection. Follower/following counts are
+      // server-owned (admin SDK) and are NOT client-writable.
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profileViews'])
         && request.resource.data.profileViews == resource.data.profileViews + 1;
-      // Follower / following counts are server-owned (updated by the follow
-      // service in a batch with the relationship docs). Clients may not touch
-      // them — otherwise anyone could inflate their own popularity.
+      // Public/private toggle + visibility settings are client-writable by the
+      // OWNER only.
       allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount'])
-        && request.resource.data.followerCount == resource.data.followerCount + 1;
-      allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingCount'])
-        && request.resource.data.followingCount == resource.data.followingCount + 1;
-      allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount'])
-        && request.resource.data.followerCount == resource.data.followerCount - 1;
-      allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingCount'])
-        && request.resource.data.followingCount == resource.data.followingCount - 1;
-      // Public/private toggle + visibility settings are client-writable (their
-      // own profile), but only the listed boolean keys.
-      allow update: if isSignedIn()
+        && request.auth.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'visibility'
         ])
@@ -172,62 +153,66 @@ service cloud.firestore {
 
       // ─── FOLLOWING (who this user follows) ───────────────────
       // Each doc: users/{followerId}/following/{followingId}
-      // The follower writes their own following edge; anyone can read who
-      // someone follows.
       match /following/{followingId} {
-        allow write: if isSignedIn()
+        allow create: if isSignedIn()
           && request.auth.uid == userId
           && request.resource.data.followerId == request.auth.uid
           && request.resource.data.followingId == followingId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
         allow read: if isSignedIn();
       }
 
       // ─── FOLLOWERS (who follows this user) ────────────────────
       // Each doc: users/{followedId}/followers/{followerId}
-      // Two writers:
-      //   * the follower, when they follow a public target (followerId == caller)
-      //   * the target (userId), when they approve a pending follow request
-      //     (followerId != caller, since the target is adding someone else)
       match /followers/{followerId} {
-        allow write: if isSignedIn()
-        && (
-          // Follower writes their own followerId to follow a public target
-          (request.auth.uid == request.resource.data.followerId
-            && get(/databases/$(database)/documents/users/$(userId)).data.visibility.isPrivate == false)
-          // Target approves a pending request (writes a follower edge for another uid)
-          || (request.auth.uid == userId
-            && request.resource.data.followerId != request.auth.uid)
-        );
+        allow create: if isSignedIn()
+          && request.resource.data.followerId == followerId
+          && (
+            // Follower writes their own follower edge to a public target
+            (request.auth.uid == followerId
+              && get(/databases/$(database)/documents/users/$(userId)).data.get('visibility', {}).get('isPrivate', false) == false)
+            // Target approves a pending request (must have a pending request doc)
+            || (request.auth.uid == userId
+              && followerId != request.auth.uid
+              && exists(/databases/$(database)/documents/users/$(userId)/followRequests/$(followerId)))
+          );
+        allow delete: if isSignedIn()
+          && (request.auth.uid == userId || request.auth.uid == followerId);
         allow read: if isSignedIn();
       }
 
       // ─── FOLLOW REQUESTS (pending, private accounts) ────────────
       // Each doc: users/{targetId}/followRequests/{requesterId}
-      // Only the target can read/write their incoming requests.
       match /followRequests/{requesterId} {
         allow read: if isSignedIn() && request.auth.uid == userId;
-        allow write: if isSignedIn()
-          && request.auth.uid == userId
-          && request.resource.data.requesterId != request.auth.uid;
+        allow create: if isSignedIn()
+          && request.auth.uid == requesterId
+          && requesterId != userId
+          && get(/databases/$(database)/documents/users/$(userId)).data.get('visibility', {}).get('isPrivate', false) == true;
+        allow delete: if isSignedIn()
+          && (request.auth.uid == userId || request.auth.uid == requesterId);
       }
 
       // ─── FOLLOW REQUESTS SENT (outgoing) ──────────────────────
       // Each doc: users/{requesterId}/followRequestsSent/{targetId}
-      // Only the sender can read/write their outgoing requests.
       match /followRequestsSent/{targetId} {
         allow read: if isSignedIn() && request.auth.uid == userId;
-        allow write: if isSignedIn()
+        allow create: if isSignedIn()
           && request.auth.uid == userId
-          && request.resource.data.targetId != request.auth.uid;
+          && targetId != request.auth.uid
+          && request.resource.data.targetId == targetId;
+        allow delete: if isSignedIn()
+          && (request.auth.uid == userId || request.auth.uid == targetId);
       }
 
       // ─── BLOCKED ACCOUNTS ─────────────────────────────────────
       // Each doc: users/{blockerId}/blocked/{blockedId}
-      // Only the blocker can write their blocked list.
       match /blocked/{blockedId} {
-        allow write: if isSignedIn()
+        allow create: if isSignedIn()
           && request.auth.uid == userId
-          && request.resource.data.blockerId == request.auth.uid;
+          && request.resource.data.blockerId == request.auth.uid
+          && request.resource.data.blockedId == blockedId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
         allow read: if isSignedIn() && request.auth.uid == userId;
       }
     }

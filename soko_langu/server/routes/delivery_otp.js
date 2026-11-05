@@ -69,7 +69,7 @@ router.post('/generate-delivery-otp', async function (req, res) {
       deliveryOtpHash: hashed,
       deliveryOtpAttempts: 0,
       deliveryOtpLockedUntil: null,
-      deliveryOtpGeneratedAt: commerceStore.serverTimestamp,
+      deliveryOtpGeneratedAt: commerceStore.serverTimestamp(),
       deliveryOtpBuyerVisible: plaintext,
     };
     if (tx) await commerceStore.updateDocument('transactions', orderId, otpData);
@@ -82,7 +82,7 @@ router.post('/generate-delivery-otp', async function (req, res) {
         body: 'Nambari ya uthibitisho wa upokeaji wa ' + productName + ' imegenerezwa.',
         isRead: false,
         data: { type: 'delivery_otp_ready', transactionId: orderId },
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
     } catch (_) {}
     try {
@@ -169,12 +169,12 @@ router.post('/verify-delivery', async function (req, res) {
       await commerceStore.updateDocument(targetColl, orderId, {
         status: 'completed',
         escrowReleased: true,
-        escrowReleasedAt: commerceStore.serverTimestamp,
-        completedAt: commerceStore.serverTimestamp,
+        escrowReleasedAt: commerceStore.serverTimestamp(),
+        completedAt: commerceStore.serverTimestamp(),
         confirmedBy: 'otp',
         flowStage: 'wallet_credited',
-        walletCreditedAt: commerceStore.serverTimestamp,
-        deliveryOtpVerifiedAt: commerceStore.serverTimestamp,
+        walletCreditedAt: commerceStore.serverTimestamp(),
+        deliveryOtpVerifiedAt: commerceStore.serverTimestamp(),
       });
 
       var seller = await commerceStore.getDocument('users', sellerId);
@@ -189,7 +189,7 @@ router.post('/verify-delivery', async function (req, res) {
       await commerceStore.addDocument('revenue_transactions', {
         userId: sellerId, type: 'sale', amount: sellerReceives, orderId: orderId,
         description: 'Escrow released (OTP): ' + productName + ' - TZS ' + sellerReceives,
-        timestamp: commerceStore.serverTimestamp,
+        timestamp: commerceStore.serverTimestamp(),
       });
       if (auditLog) {
         try {
@@ -213,7 +213,7 @@ router.post('/verify-delivery', async function (req, res) {
               payoutId: payoutRef, userId: sellerId, userPhone: sellerPhone,
               type: 'otp_payout', amount: sellerReceives, fee: payoutFee,
               netAmount: netPayout, status: PAYOUT_STATUSES.PROCESSING,
-              transactionId: orderId, createdAt: commerceStore.serverTimestamp,
+              transactionId: orderId, createdAt: commerceStore.serverTimestamp(),
             });
             autoPaidOut = true;
           } catch (pe) {
@@ -224,7 +224,7 @@ router.post('/verify-delivery', async function (req, res) {
                 type: 'otp_payout', amount: sellerReceives, fee: payoutFee,
                 netAmount: netPayout, status: PAYOUT_STATUSES.FAILED,
                 transactionId: orderId, failureReason: pe.message,
-                createdAt: commerceStore.serverTimestamp,
+                createdAt: commerceStore.serverTimestamp(),
               });
             } catch (_) {}
           }
@@ -238,7 +238,7 @@ router.post('/verify-delivery', async function (req, res) {
           userId: sellerId, title: 'Oda Imekamilika',
           body: productName + ' - ' + sellerMsg,
           isRead: false, data: { type: 'completed', transactionId: orderId },
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
       } catch (_) {}
       try {
@@ -249,7 +249,7 @@ router.post('/verify-delivery', async function (req, res) {
           userId: buyerId, title: 'Uthibitisho Umekubaliwa',
           body: productName + ' umekamilika. Asante kwa ununuzi!',
           isRead: false, data: { type: 'completed', transactionId: orderId },
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
       } catch (_) {}
       try {
@@ -301,7 +301,7 @@ router.post('/delivery-arrival', async function (req, res) {
     var inspectionDeadline = new Date(Date.now() + INSPECTION_MINUTES * 60 * 1000);
     var arrivalData = {
       status: 'delivered',
-      deliveredAt: commerceStore.serverTimestamp,
+      deliveredAt: commerceStore.serverTimestamp(),
       arrivalConfirmedBy: auth.uid,
       inspectionMinutes: INSPECTION_MINUTES,
       inspectionDeadline: inspectionDeadline,
@@ -317,7 +317,7 @@ router.post('/delivery-arrival', async function (req, res) {
           userId: counterpartId, title: 'Mzigo Umefika!',
           body: productName + ' umefika. Dirisha la ukaguzi la dakika ' + INSPECTION_MINUTES + ' limefunguliwa.',
           isRead: false, data: { type: 'delivered', transactionId: orderId },
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
       } catch (_) {}
       try {
@@ -340,6 +340,7 @@ router.post('/open-dispute', async function (req, res) {
     var locals = req.app.locals;
     var admin = locals.admin;
     var db = locals.db;
+    var commerceStore = locals.commerceStore;
     var requireUser = locals.requireUser;
     var sendOneSignalNotification = locals.sendOneSignalNotification;
     var notifyAdmins = locals.notifyAdmins;
@@ -360,7 +361,7 @@ router.post('/open-dispute', async function (req, res) {
     var disputeInfo = {
       reason: reason || 'Sijapata mzigo',
       evidenceUrls: evidenceUrls || [],
-      raisedAt: commerceStore.serverTimestamp,
+      raisedAt: commerceStore.serverTimestamp(),
       resolved: false,
       raisedBy: auth.uid,
     };
@@ -374,7 +375,7 @@ router.post('/open-dispute', async function (req, res) {
         userId: sellerId, title: 'Mgogoro Umefunguliwa',
         body: 'Mnunuzi amefungua mgogoro kwa ' + productName + '. Tafadhali wasilisha ushahidi wako.',
         isRead: false, data: { type: 'disputed', transactionId: orderId },
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
     } catch (_) {}
     try {
@@ -385,7 +386,7 @@ router.post('/open-dispute', async function (req, res) {
         userId: buyerId, title: 'Mgogoro Umefunguliwa',
         body: 'Tumepokea mgogoro wako kwa ' + productName + '. Admin atakagua na kutoa uamuzi.',
         isRead: false, data: { type: 'disputed', transactionId: orderId },
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
     } catch (_) {}
     try {
@@ -403,6 +404,7 @@ router.post('/set-shipping-cost', async function (req, res) {
     var locals = req.app.locals;
     var admin = locals.admin;
     var db = locals.db;
+    var commerceStore = locals.commerceStore;
     if (!db || !admin) return res.status(503).json({ error: 'Database not configured' });
     var auth = locals.requireUser ? await locals.requireUser(req) : null;
     if (!auth || !auth.uid) {
@@ -435,16 +437,16 @@ router.post('/set-shipping-cost', async function (req, res) {
     });
     var shippingQuote = {
       amount: shippingCost,
-      setAt: commerceStore.serverTimestamp,
+      setAt: commerceStore.serverTimestamp(),
       setBy: auth.uid,
       verdict: validation.verdict,
       distanceTier: validation.distanceTier,
       reason: validation.reason || null,
       baseline: validation.baseline,
     };
-    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp, shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp, shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: commerceStore.serverTimestamp });
+    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: commerceStore.serverTimestamp() });
     await batch.commit();
     if (locals.sendOneSignalNotification && data.buyerId) {
       try { await locals.sendOneSignalNotification(data.buyerId, 'Gharama ya usafirishaji: TZS ' + shippingCost, 'Muuzaji ameweka gharama ya usafirishaji'); } catch (e) {}
@@ -458,6 +460,7 @@ router.post('/cron/auto-release', async function (req, res) {
     var locals = req.app.locals;
     var admin = locals.admin;
     var db = locals.db;
+    var commerceStore = locals.commerceStore;
     var redis = locals.redis;
     var sendOneSignalNotification = locals.sendOneSignalNotification;
     var clickpesaPayout = locals.clickpesaPayout;
@@ -489,36 +492,27 @@ router.post('/cron/auto-release', async function (req, res) {
         var sellerId = tx.sellerId;
         var productName = tx.productName || 'Product';
         var buyerId = tx.buyerId;
-        await doc.ref.update({
-          await commerceStore.updateDocument('transactions', orderId, {
-            status: 'completed', escrowReleased: true,
-            escrowReleasedAt: commerceStore.serverTimestamp,
-            completedAt: commerceStore.serverTimestamp,
-            confirmedBy: confirmedBy,
-            flowStage: 'wallet_credited',
-            walletCreditedAt: commerceStore.serverTimestamp,
-          });
-          await commerceStore.updateDocument('orders', orderId, {
-            status: 'completed', escrowReleased: true,
-            escrowReleasedAt: commerceStore.serverTimestamp,
-            completedAt: commerceStore.serverTimestamp,
-            confirmedBy: confirmedBy,
-            flowStage: 'wallet_credited',
-          });
-
+        await commerceStore.updateDocument('transactions', orderId, {
           status: 'completed', escrowReleased: true,
-          escrowReleasedAt: commerceStore.serverTimestamp,
-          completedAt: commerceStore.serverTimestamp,
+          escrowReleasedAt: commerceStore.serverTimestamp(),
+          completedAt: commerceStore.serverTimestamp(),
           confirmedBy: confirmedBy,
           flowStage: 'wallet_credited',
-          walletCreditedAt: commerceStore.serverTimestamp,
+          walletCreditedAt: commerceStore.serverTimestamp(),
+        });
+        await commerceStore.updateDocument('orders', orderId, {
+          status: 'completed', escrowReleased: true,
+          escrowReleasedAt: commerceStore.serverTimestamp(),
+          completedAt: commerceStore.serverTimestamp(),
+          confirmedBy: confirmedBy,
+          flowStage: 'wallet_credited',
         });
         var orderDoc = await db.collection('orders').doc(orderId).get();
         if (orderDoc.exists) {
           await orderDoc.ref.update({
             status: 'completed', escrowReleased: true,
-            escrowReleasedAt: commerceStore.serverTimestamp,
-            completedAt: commerceStore.serverTimestamp,
+            escrowReleasedAt: commerceStore.serverTimestamp(),
+            completedAt: commerceStore.serverTimestamp(),
             confirmedBy: confirmedBy,
             flowStage: 'wallet_credited',
           });
@@ -533,7 +527,7 @@ router.post('/cron/auto-release', async function (req, res) {
         await db.collection('revenue_transactions').add({
           userId: sellerId, type: 'sale', amount: sellerReceives, orderId: orderId,
           description: description + ' ' + productName + ' - TZS ' + sellerReceives,
-          timestamp: commerceStore.serverTimestamp,
+          timestamp: commerceStore.serverTimestamp(),
         });
         var sellerPhone = tx.sellerPhone || '';
         if (sellerDoc.exists && sellerDoc.data() && sellerDoc.data().autoPayout === true && sellerPhone) {
@@ -548,7 +542,7 @@ router.post('/cron/auto-release', async function (req, res) {
                 payoutId: payoutRef, userId: sellerId, userPhone: sellerPhone,
                 type: 'auto_release_payout', amount: sellerReceives, fee: payoutFee,
                 netAmount: netPayout, status: PAYOUT_STATUSES.PROCESSING,
-                transactionId: orderId, createdAt: commerceStore.serverTimestamp,
+                transactionId: orderId, createdAt: commerceStore.serverTimestamp(),
               });
             } catch (_) {}
           }
@@ -558,7 +552,7 @@ router.post('/cron/auto-release', async function (req, res) {
             userId: sellerId, title: 'Oda Imekamilika (Otomatiki)',
             body: productName + ' imekamilika automatically.',
             isRead: false, data: { type: 'auto_release', transactionId: orderId },
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
         } catch (_) {}
         try {
@@ -569,7 +563,7 @@ router.post('/cron/auto-release', async function (req, res) {
             userId: buyerId, title: 'Oda Imekamilika',
             body: productName + ' imekamilika automatically. Fedha zimetolewa kwa muuzaji.',
             isRead: false, data: { type: 'auto_release', transactionId: orderId },
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
         } catch (_) {}
         try {

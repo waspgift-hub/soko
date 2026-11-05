@@ -36,8 +36,8 @@ function buildSyncLegacyOrderStatus(db) {
       if (order.shippingFee != null) patch.shippingCost = Number(order.shippingFee);
       if (order.totalAmount != null) patch.totalAmount = Number(order.totalAmount);
       if (order.platformCommission != null) patch.platformFee = Number(order.platformCommission);
-      await commerceStore.updateDocument('orders', order.id, patch, { db });
-      await commerceStore.updateDocument('transactions', order.id, patch, { db });
+      await commerceStore.upsertDocument('orders', order.id, patch, { db });
+      await commerceStore.upsertDocument('transactions', order.id, patch, { db });
     } catch (e) {
       console.error('[SYNC] Firestore status mirror failed:', e.message);
     }

@@ -1,11 +1,23 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const { FieldValue } = require('firebase-admin/firestore');
+const { getFirebaseFirestore } = require('./src/config/firebase');
 const cache = require('./cache');
 const { parseIntent, parseMoney, isHighConfidence } = require('./query-intent');
 
 const router = express.Router();
-const db = admin.firestore();
-const FieldValue = admin.firestore.FieldValue;
+// Resolved at request time so the router can mount before Firebase is configured.
+const db = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      const store = getFirebaseFirestore();
+      if (!store) throw new Error('Firestore is not configured');
+      const value = store[prop];
+      return typeof value === 'function' ? value.bind(store) : value;
+    },
+  }
+);
 
 const SEARCH_INDEX = {
   products: 'search_index_products',

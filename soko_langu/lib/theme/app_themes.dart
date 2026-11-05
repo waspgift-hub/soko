@@ -42,7 +42,7 @@ ThemeData buildLightTheme(Color seed) {
     outlineVariant: Color(0xFFE5E5E5),
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
-    inverseSurface: Color(0xFF0B0B0B),
+    inverseSurface: Color(0xFF000000),
     onInverseSurface: Color(0xFFF7F7F7),
   );
 
@@ -68,14 +68,14 @@ ThemeData buildDarkTheme(Color seed) {
     onError: Color(0xFFFFFFFF),
     errorContainer: Color(0xFF8C1D18),
     onErrorContainer: Color(0xFFFFDAD6),
-    surface: Color(0xFF1C1C1E),
+    surface: Color(0xFF000000),
     onSurface: Color(0xFFFFFFFF),
-    surfaceDim: Color(0xFF0B0B0B),
+    surfaceDim: Color(0xFF000000),
     surfaceBright: Color(0xFF2C2C2E),
     surfaceContainerLowest: Color(0xFF070707),
     surfaceContainerLow: Color(0xFF121212),
     surfaceContainer: Color(0xFF161616),
-    surfaceContainerHigh: Color(0xFF1C1C1E),
+    surfaceContainerHigh: Color(0xFF000000),
     surfaceContainerHighest: Color(0xFF232323),
     onSurfaceVariant: Color(0xFFA7A7A7),
     outline: Color(0xFF38383A),
@@ -83,7 +83,7 @@ ThemeData buildDarkTheme(Color seed) {
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
     inverseSurface: Color(0xFFF7F7F7),
-    onInverseSurface: Color(0xFF0B0B0B),
+    onInverseSurface: Color(0xFF000000),
   );
 
   return _buildTheme(scheme);
@@ -104,9 +104,10 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   // soft-UI element base (Neu.base) is deliberately *not* used here, because a
   // soft-UI canvas would leave the flat 90% looking grey-on-grey and give the
   // soft 10% (CTAs, FAB, nav bar, input wells) nothing to contrast against.
-  // Samsung One UI inspired: soft grey canvas for clean, modern look
-  final flatCanvas = isDark ? const Color(0xFF000000) : const Color(0xFFF7F7F7);
-  final flatFill = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
+  // The flat tokens are the single source of truth so decorated surfaces and
+  // the theme canvas cannot drift apart.
+  final flatCanvas = Neu.canvas(scheme.brightness);
+  final flatFill = Neu.flatFill(scheme.brightness);
   final neuGroove = Neu.grooveColor(scheme.brightness);
 
   // Recessed fill for the soft-UI input wells. The raised element base is

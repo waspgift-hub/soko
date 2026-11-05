@@ -8,6 +8,8 @@ import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/ads/ad_slot.dart';
 import '../../services/ads/ad_config.dart';
+import '../../widgets/banners/campaign_banner_slot.dart';
+import '../../models/banner_model.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/chat_utils.dart';
@@ -21,8 +23,7 @@ class FlashSaleScreen extends StatefulWidget {
   State<FlashSaleScreen> createState() => _FlashSaleScreenState();
 }
 
-class _FlashSaleScreenState extends State<FlashSaleScreen>
-    with WidgetsBindingObserver {
+class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingObserver {
   final FlashSaleService _service = FlashSaleService();
   Timer? _timer;
 
@@ -30,7 +31,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
   //
   // Previously `stream:` was built inline inside build() and keyed on
   // `_refreshKey`, while a 1 Hz timer drove setState. So the screen opened a
-  // fresh Firestore listener — a full re-read of the flash_sales collection —
+  // fresh Firestore listener â€” a full re-read of the flash_sales collection â€”
   // once every second, for as long as it was on screen. That is the single most
   // expensive realtime pattern in the app.
   //
@@ -58,23 +59,25 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
 
   void _subscribe() {
     _sub?.cancel();
-    _sub = _service.getActiveFlashSalesAtNow(_now).listen(
-      (sales) {
-        if (!mounted) return;
-        setState(() {
-          _sales = sales;
-          _loading = false;
-          _error = null;
-        });
-      },
-      onError: (e) {
-        if (!mounted) return;
-        setState(() {
-          _error = e;
-          _loading = false;
-        });
-      },
-    );
+    _sub = _service
+        .getActiveFlashSalesAtNow(_now)
+        .listen(
+          (sales) {
+            if (!mounted) return;
+            setState(() {
+              _sales = sales;
+              _loading = false;
+              _error = null;
+            });
+          },
+          onError: (e) {
+            if (!mounted) return;
+            setState(() {
+              _error = e;
+              _loading = false;
+            });
+          },
+        );
   }
 
   @override
@@ -117,10 +120,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
               const SizedBox(height: 12),
               Text(context.tr('loading_error')),
               const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: _subscribe,
-                child: Text(context.tr('retry', 'Retry')),
-              ),
+              OutlinedButton(onPressed: _subscribe, child: Text(context.tr('retry', 'Retry'))),
             ],
           ),
         ),
@@ -136,11 +136,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.local_fire_department,
-                    size: 64,
-                    color: cs.outline,
-                  ),
+                  Icon(Icons.local_fire_department, size: 64, color: cs.outline),
                   const SizedBox(height: 16),
                   Text(
                     context.tr('no_flash_sales'),
@@ -157,6 +153,9 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
           }
           return CustomScrollView(
             slivers: [
+              const SliverToBoxAdapter(
+                child: CampaignBannerSlot(placement: BannerPlacement.flashSalePage),
+              ),
               _buildHeroBanner(sales.length),
               SliverToBoxAdapter(
                 child: Padding(
@@ -234,10 +233,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: cs.tertiary.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(10),
@@ -265,10 +261,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: cs.tertiary.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(6),
@@ -305,11 +298,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                Icon(
-                                  Icons.local_fire_department,
-                                  color: cs.surface,
-                                  size: 12,
-                                ),
+                                Icon(Icons.local_fire_department, color: cs.surface, size: 12),
                                 const SizedBox(width: 4),
                                 Text(
                                   '$saleCount ${context.tr('deals_live')}',
@@ -382,9 +371,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: cs.tertiary.withValues(alpha: 0.5).withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: cs.tertiary.withValues(alpha: 0.5).withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
             color: cs.primary.withValues(alpha: 0.85).withValues(alpha: 0.06),
@@ -411,33 +398,23 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                 Icon(Icons.timer, color: cs.surface, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  context.tr('duration_format')
+                  context
+                      .tr('duration_format')
                       .replaceAll('{h}', '$hours')
                       .replaceAll('{m}', '$minutes')
                       .replaceAll('{s}', '$secs'),
-                  style: TextStyle(
-                    color: cs.surface,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: cs.surface, fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
                     color: cs.surface.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '-${sale.discountPercent.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      color: cs.surface,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: cs.surface, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -464,10 +441,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                     children: [
                       Text(
                         sale.productName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -513,10 +487,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             const SizedBox(width: 4),
                             Text(
                               sale.location,
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                             ),
                           ],
                         ),
@@ -546,9 +517,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                     style: OutlinedButton.styleFrom(
                       foregroundColor: cs.primary,
                       side: BorderSide(color: cs.primary),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -568,9 +537,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.whatsappGreen,
                       foregroundColor: cs.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),

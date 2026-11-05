@@ -32,7 +32,7 @@ class Neu {
   /// flat 90% read as grey-on-grey and leave the soft 10% with nothing to
   /// contrast against.
   static Color canvas(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF0B0B0B) : const Color(0xFFFFFFFF);
+      b == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFF7F7F7);
 
   /// Flat surface fill. One step off the canvas so a hairline edge reads in
   /// light mode, and so dark-mode cards do not vanish into the canvas.
@@ -82,43 +82,12 @@ class Neu {
       b == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFD5D9E0);
 
   /// Extruded dual shadow scaled by [depth] (0 disables).
-  static List<BoxShadow> raised(double depth, Brightness b) {
-    if (depth <= 0) return const [];
-    return [
-      BoxShadow(
-        color: shade(b),
-        offset: Offset(depth, depth),
-        blurRadius: depth * 2,
-        spreadRadius: depth * 0.25,
-      ),
-      BoxShadow(
-        color: highlight(b),
-        offset: Offset(-depth, -depth),
-        blurRadius: depth * 2,
-        spreadRadius: depth * 0.25,
-      ),
-    ];
-  }
+  static List<BoxShadow> raised(double depth, Brightness b) => const [];
+  static List<BoxShadow> raisedHue(double depth, Color base) => const [];
 
   /// Extruded dual shadow tinted around a colored base (green CTAs, FABs, …
   /// dark tones) instead of the neutral canvas tones.
-  static List<BoxShadow> raisedHue(double depth, Color base) {
-    if (depth <= 0) return const [];
-    return [
-      BoxShadow(
-        color: Color.lerp(base, Colors.black, 0.38)!,
-        offset: Offset(depth, depth),
-        blurRadius: depth * 2,
-        spreadRadius: depth * 0.25,
-      ),
-      BoxShadow(
-        color: Color.lerp(base, Colors.white, 0.55)!,
-        offset: Offset(-depth, -depth),
-        blurRadius: depth * 2,
-        spreadRadius: depth * 0.25,
-      ),
-    ];
-  }
+  static List<BoxShadow> raisedHue(double depth, Color base) => const [];
 
   /// Recessed fill: darker base plus a hairline groove. Pass an [accent]
   /// (e.g. primary green) to recolor the groove for the focused state of

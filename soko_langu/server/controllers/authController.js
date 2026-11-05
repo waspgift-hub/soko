@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const admin = require('firebase-admin');
+const { FieldValue } = require('firebase-admin/firestore');
+const { getFirebaseFirestore } = require('../src/config/firebase');
 const { sendMail } = require('../src/services/mailer');
 const { buildOtpEmail } = require('../src/services/email-templates');
 const { smsSafeForGateway } = require('./notif_lang');
@@ -38,7 +41,16 @@ async function sendSms(phone, message) {
   }
 }
 
-module.exports = function ({ commerceStore }) {
+module.exports = function ({ commerceStore, db: injectedDb } = {}) {
+  function getDb() {
+    if (injectedDb) return injectedDb;
+    try {
+      return getFirebaseFirestore();
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function sendOtp(req, res) {
     try {
       const { phone } = req.body;
@@ -55,7 +67,7 @@ module.exports = function ({ commerceStore }) {
         otpHash: hashed,
         expiresAt,
         used: false,
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
 
       const message = `OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
@@ -64,7 +76,7 @@ module.exports = function ({ commerceStore }) {
 
       await commerceStore.updateDocument('otp_codes', cleanPhone, {
         smsSent: sent,
-        smsAttemptedAt: commerceStore.serverTimestamp,
+        smsAttemptedAt: commerceStore.serverTimestamp(),
       }).catch(() => {});
 
       if (!sent) {
@@ -84,6 +96,8 @@ module.exports = function ({ commerceStore }) {
       const { phone, otp } = req.body;
       if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required' });
       if (!commerceStore) return res.status(503).json({ error: 'Database not configured' });
+      const db = getDb();
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanPhone = phone.replace(/\D/g, '');
       const doc = await db.collection('otp_codes').doc(cleanPhone).get();
@@ -109,6 +123,7 @@ module.exports = function ({ commerceStore }) {
     try {
       const { email, langCode } = req.body;
       if (!email) return res.status(400).json({ error: 'Email is required' });
+      const db = getDb();
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanEmail = email.trim().toLowerCase();
@@ -120,7 +135,7 @@ module.exports = function ({ commerceStore }) {
         otpHash: hashed,
         expiresAt,
         used: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
       const lang = ['sw', 'en'].includes(langCode) ? langCode : 'sw';
@@ -149,6 +164,7 @@ module.exports = function ({ commerceStore }) {
     try {
       const { email, otp } = req.body;
       if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+      const db = getDb();
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanEmail = email.trim().toLowerCase();
@@ -175,6 +191,7 @@ module.exports = function ({ commerceStore }) {
     try {
       const { phone } = req.body;
       if (!phone) return res.status(400).json({ error: 'Phone is required' });
+      const db = getDb();
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanPhone = phone.replace(/\D/g, '');
@@ -194,6 +211,7 @@ module.exports = function ({ commerceStore }) {
     try {
       const { email } = req.body;
       if (!email) return res.status(400).json({ error: 'Email is required' });
+      const db = getDb();
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const snap = await db.collection('users')
@@ -225,6 +243,7 @@ module.exports = function ({ commerceStore }) {
       if (newPassword.length < 8) {
         return res.status(400).json({ error: 'Password must be at least 8 characters' });
       }
+      const db = getDb();
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanPhone = phone.replace(/\D/g, '');
@@ -255,7 +274,7 @@ module.exports = function ({ commerceStore }) {
       const uid = users[0].id;
 
       try {
-        await require('firebase-admin').auth().updateUser(uid, { password: newPassword });
+        await admin.auth().updateUser(uid, { password: newPassword });
       } catch (authErr) {
         return res.status(500).json({ error: 'failed_to_reset_password' });
       }
@@ -298,7 +317,7 @@ module.exports = function ({ commerceStore }) {
       if (users.length === 0) {
         const email = `phone_${cleanPhone}@soko-vibe.com`;
         const password = crypto.randomBytes(24).toString('base64url');
-        const userRecord = await require('firebase-admin').auth().createUser({
+        const userRecord = await admin.auth().createUser({
           email,
           password,
           displayName: `User ${cleanPhone.slice(-4)}`,
@@ -325,13 +344,13 @@ module.exports = function ({ commerceStore }) {
           soldCount: 0,
           isAdmin: false,
           isSuspended: false,
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
       } else {
         uid = users[0].id;
       }
 
-      const token = await require('firebase-admin').auth().createCustomToken(uid);
+      const token = await admin.auth().createCustomToken(uid);
       res.json({ success: true, token });
     } catch (e) {
       console.error('/api/phone-login error:', e.message);

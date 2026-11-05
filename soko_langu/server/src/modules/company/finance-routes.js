@@ -77,4 +77,3 @@ router.post('/payments', rbac.requireCompanyMember, rbac.requirePermission('fina
 });
 
 module.exports = router;
-PY

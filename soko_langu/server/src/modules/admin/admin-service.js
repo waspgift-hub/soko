@@ -1,4 +1,5 @@
 const { getStore } = require('../../config/database');
+const { getFirebaseFirestore } = require('../../config/firebase');
 const commerceStore = require('../../services/commerce-store');
 
 // The app is Firestore-first (products, users, BuyerRequests and legacy orders

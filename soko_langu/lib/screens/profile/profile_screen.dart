@@ -9,6 +9,7 @@ import '../../services/user_service.dart';
 import '../../notifiers/auth_notifier.dart';
 import 'package:provider/provider.dart';
 import '../../services/wishlist_service.dart';
+import '../../services/follow_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/permission_service.dart';
 import '../../widgets/account_switcher_sheet.dart';
@@ -84,38 +85,60 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     try {
       final wishlist = await _wishlistService.getWishlist();
       if (mounted) {
-        setState(() { _wishlistCount = wishlist.length; });
+        setState(() {
+          _wishlistCount = wishlist.length;
+        });
       }
     } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
     if (!mounted) return;
-    setState(() { _isLoading = true; _avatarError = false; });
+    setState(() {
+      _isLoading = true;
+      _avatarError = false;
+    });
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) { if (mounted) setState(() => _isLoading = false); return; }
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     var profile = await _userService.getProfile(user.uid);
-    if (mounted) setState(() { _profile = profile; _isLoading = false; });
+    if (mounted)
+      setState(() {
+        _profile = profile;
+        _isLoading = false;
+      });
     _loadStats(user.uid);
   }
 
   Future<void> _pickImage() async {
-    final granted = await PermissionService.instance.requestWithDialog(context, AppPermission.storage);
+    final granted = await PermissionService.instance.requestWithDialog(
+      context,
+      AppPermission.storage,
+    );
     if (!granted) return;
 
     try {
       final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery, maxWidth: 800, imageQuality: 95,
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        imageQuality: 95,
       );
       if (image != null) {
-        setState(() { _localImagePath = image.path; _avatarError = false; });
+        setState(() {
+          _localImagePath = image.path;
+          _avatarError = false;
+        });
         final oldUrl = _profile?.profileImage ?? '';
         final url = await _userService.uploadProfileImage(image.path);
         await _userService.updateProfileImage(url);
         await _userService.deleteProfileImage(oldUrl);
         await _loadProfile();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('photo_updated'))));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(context.tr('photo_updated'))));
         }
       }
     } catch (e) {
@@ -153,197 +176,276 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
+              colors: [cs.surface, cs.surface],
             ),
           ),
           child: SafeArea(
-          top: false,
-          bottom: false,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
-            child: Column(
-              children: [
-                // Premium header
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
+            top: false,
+            bottom: false,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
+              child: Column(
+                children: [
+                  // Premium header
+                  Container(
+                    width: double.infinity,
+                    color: cs.surface,
+                    padding: EdgeInsets.only(
+                      top: MediaQuery.of(context).padding.top + 24,
+                      bottom: 24,
                     ),
-                  ),
-                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 24, bottom: 24),
-                  child: Column(
-                    children: [
-                      Stack(
-                        children: [
-                          Container(
-                            width: 104, height: 104,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(3),
-                              child: CircleAvatar(
-                                radius: 49,
-                                backgroundColor: cs.surface,
-                                // Empty string (default) or a failed load must
-                                // fall back to the person icon, not a blank ring.
-                                backgroundImage: (imageUrl != null &&
-                                        imageUrl.isNotEmpty &&
-                                        !_avatarError)
-                                    ? (imageUrl.startsWith('http')
-                                        ? NetworkImage(imageUrl) as ImageProvider
-                                        : FileImage(File(imageUrl)))
-                                    : null,
-                                onBackgroundImageError:
-                                    (imageUrl != null && imageUrl.isNotEmpty)
-                                        ? (_, _) {
-                                            if (mounted) {
-                                              setState(() => _avatarError = true);
-                                            }
-                                          }
-                                        : null,
-                                child: (imageUrl == null || imageUrl.isEmpty || _avatarError)
-                                    ? Icon(
-                                        Icons.person_outline_rounded,
-                                        color: cs.primary,
-                                        size: 48,
-                                      )
-                                    : null,
-                              ),
-                            ),
-                          ),
-                          Positioned(bottom: 2, right: 2,
-                            child: Semantics(
-                              button: true,
-                              label: context.tr('change_profile_picture'),
-                              onTap: _pickImage,
-                              child: GestureDetector(
-                                excludeFromSemantics: true,
-                                onTap: _pickImage,
-                                child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: cs.primary,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 8)],
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            Container(
+                              width: 104,
+                              height: 104,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: cs.surfaceContainerHighest,
+                                border: Border.all(
+                                  color: cs.primary.withValues(alpha: 0.35),
+                                  width: 2,
                                 ),
-                                child: Icon(Icons.camera_alt, color: cs.onPrimary, size: 18),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: CircleAvatar(
+                                  radius: 49,
+                                  backgroundColor: cs.surface,
+                                  // Empty string (default) or a failed load must
+                                  // fall back to the person icon, not a blank ring.
+                                  backgroundImage:
+                                      (imageUrl != null && imageUrl.isNotEmpty && !_avatarError)
+                                      ? (imageUrl.startsWith('http')
+                                            ? NetworkImage(imageUrl) as ImageProvider
+                                            : FileImage(File(imageUrl)))
+                                      : null,
+                                  onBackgroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
+                                      ? (_, _) {
+                                          if (mounted) {
+                                            setState(() => _avatarError = true);
+                                          }
+                                        }
+                                      : null,
+                                  child: (imageUrl == null || imageUrl.isEmpty || _avatarError)
+                                      ? Icon(
+                                          Icons.person_outline_rounded,
+                                          color: cs.primary,
+                                          size: 48,
+                                        )
+                                      : null,
+                                ),
                               ),
                             ),
+                            Positioned(
+                              bottom: 2,
+                              right: 2,
+                              child: Semantics(
+                                button: true,
+                                label: context.tr('change_profile_picture'),
+                                onTap: _pickImage,
+                                child: GestureDetector(
+                                  excludeFromSemantics: true,
+                                  onTap: _pickImage,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: cs.primary,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: cs.primary.withValues(alpha: 0.3),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Icon(Icons.camera_alt, color: cs.onPrimary, size: 18),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              _profile?.displayName.isNotEmpty == true ? _profile!.displayName : user?.displayName ?? context.tr('no_name'),
-                              style: TextStyle(fontSize: AppFontSize.xxl, fontWeight: FontWeight.w700, color: cs.onSurface, letterSpacing: -0.3),
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (_profile?.kycApproved == true) ...[
-                            const SizedBox(width: AppInsets.sm),
-                            const VerifiedBadge(size: 16),
                           ],
-                        ],
-                      ),
-                      if (_profile?.bio.isNotEmpty == true)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.xxl, vertical: 6),
-                          child: Text(_profile!.bio, style: TextStyle(color: cs.onSurfaceVariant, fontSize: AppFontSize.md, height: 1.4), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                        )
-                      else
-                        const SizedBox(height: 4),
-                      const SizedBox(height: 6),
-                      Text(user?.email ?? context.tr('no_email'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (_profile?.phone.isNotEmpty == true) ...[
-                        const SizedBox(height: 4),
-                        Text(PhoneUtils.formatForDisplay(_profile!.phone), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm)),
-                      ],
-                      const SizedBox(height: 16),
-                      // Stats — even spacing, soft card
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                          decoration: BoxDecoration(color: cs.surfaceSubtle, borderRadius: BorderRadius.circular(14), border: Border.all(color: cs.hairline)),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: ProfileStat(count: _wishlistCount, label: context.tr('wishlist'), onTap: () => context.push(AppRoutes.wishlist)),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                _profile?.displayName.isNotEmpty == true
+                                    ? _profile!.displayName
+                                    : user?.displayName ?? context.tr('no_name'),
+                                style: TextStyle(
+                                  fontSize: AppFontSize.xxl,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                            ),
+                            if (_profile?.kycApproved == true) ...[
+                              const SizedBox(width: AppInsets.sm),
+                              const VerifiedBadge(size: 16),
                             ],
+                          ],
+                        ),
+                        if (_profile?.bio.isNotEmpty == true)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppInsets.xxl,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              _profile!.bio,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: AppFontSize.md,
+                                height: 1.4,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 4),
+                        const SizedBox(height: 6),
+                        Text(
+                          user?.email ?? context.tr('no_email'),
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                            fontSize: AppFontSize.sm,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (_profile?.phone.isNotEmpty == true) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            PhoneUtils.formatForDisplay(_profile!.phone),
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                              fontSize: AppFontSize.sm,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        // Stats — even spacing, soft card
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceSubtle,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: cs.hairline),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _SocialStat(
+                                    label: context.tr('followers'),
+                                    stream: FollowService().followerCountStream(user!.uid),
+                                    onTap: () => context.push(
+                                      '${AppRoutes.followers}/${user.uid}',
+                                      extra: _profile?.displayName ?? '',
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _SocialStat(
+                                    label: context.tr('following'),
+                                    stream: FollowService().followingCountStream(user.uid),
+                                    onTap: () => context.push(
+                                      '${AppRoutes.following}/${user.uid}',
+                                      extra: _profile?.displayName ?? '',
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: ProfileStat(
+                                    count: _wishlistCount,
+                                    label: context.tr('wishlist'),
+                                    onTap: () => context.push(AppRoutes.wishlist),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
+                          child: OutlinedButton.icon(
+                            onPressed: () => context.push(AppRoutes.followRequests),
+                            icon: const Icon(Icons.person_add_alt_1, size: 18),
+                            label: Text(context.tr('follow_requests')),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(44),
+                              foregroundColor: cs.onSurface,
+                              side: BorderSide(color: cs.hairline),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppInsets.sm),
-                // In-feed banner above the action grid. Previously it sat between
-                // the Settings tile and the Logout button, so an accidental tap
-                // near a destructive control opened an advertiser page instead.
-                // Sensitive controls now keep clear vertical space.
-                const AdSlot(
-                  placement: AdPlacement.profileFooter,
-                  variant: AdSlotVariant.feedGap,
-                ),
-                // Action grid
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  child: _buildActionGrid(cs),
-                ),
-                const SizedBox(height: AppInsets.lg),
-                // Settings
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  child: ProfileMenuTile(
-                    icon: Icons.settings_rounded,
-                    label: context.tr('settings'),
-                    onTap: () => context.push(AppRoutes.settings),
-                    iconColor: cs.primary,
+                  const SizedBox(height: AppInsets.sm),
+                  // In-feed banner above the action grid. Previously it sat between
+                  // the Settings tile and the Logout button, so an accidental tap
+                  // near a destructive control opened an advertiser page instead.
+                  // Sensitive controls now keep clear vertical space.
+                  const AdSlot(
+                    placement: AdPlacement.profileFooter,
+                    variant: AdSlotVariant.feedGap,
                   ),
-                ),
-                const SizedBox(height: AppInsets.lg),
-                // Logout
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        await context.read<AuthNotifier>().logout();
-                      },
-                      icon: const Icon(Icons.logout_rounded, size: 18),
-                      label: Text(context.tr('logout')),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: cs.error,
-                        side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                  // Action grid
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                    child: _buildActionGrid(cs),
+                  ),
+                  const SizedBox(height: AppInsets.lg),
+                  // Settings
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                    child: ProfileMenuTile(
+                      icon: Icons.settings_rounded,
+                      label: context.tr('settings'),
+                      onTap: () => context.push(AppRoutes.settings),
+                      iconColor: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppInsets.lg),
+                  // Logout
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await context.read<AuthNotifier>().logout();
+                        },
+                        icon: const Icon(Icons.logout_rounded, size: 18),
+                        label: Text(context.tr('logout')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.error,
+                          side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: AppInsets.xxl),
-              ],
+                  const SizedBox(height: AppInsets.xxl),
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -353,24 +455,64 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     // could otherwise register the admin email and unlock the panel.
     final isAdmin = context.read<AuthNotifier>().isAdmin;
     final actions = [
-      _ActionItem(Icons.switch_account_rounded, context.tr('accounts'), () => AccountSwitcherSheet.show(context)),
-      _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),
-      _ActionItem(Icons.favorite_rounded, context.tr('wishlist'), () => context.push(AppRoutes.wishlist)),
-      _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
-      _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
-      _ActionItem(Icons.auto_awesome_rounded, context.tr('ai_assistant'), () => context.push(AppRoutes.aiAssistant)),
-      _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
-      _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
+      _ActionItem(
+        Icons.switch_account_rounded,
+        context.tr('accounts'),
+        () => AccountSwitcherSheet.show(context),
+      ),
+      _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async {
+        await context.push(AppRoutes.editProfile);
+        _refreshProfile();
+      }),
+      _ActionItem(
+        Icons.favorite_rounded,
+        context.tr('wishlist'),
+        () => context.push(AppRoutes.wishlist),
+      ),
+      _ActionItem(
+        Icons.shopping_bag_rounded,
+        context.tr('my_ads'),
+        () => context.push(AppRoutes.myAds),
+      ),
+      _ActionItem(
+        Icons.dashboard_rounded,
+        context.tr('dashboard'),
+        () => context.push(AppRoutes.sellerDashboard),
+      ),
+      _ActionItem(
+        Icons.auto_awesome_rounded,
+        context.tr('ai_assistant'),
+        () => context.push(AppRoutes.aiAssistant),
+      ),
+      _ActionItem(
+        Icons.explore_rounded,
+        context.tr('discovery'),
+        () => context.push(AppRoutes.discovery),
+      ),
+      _ActionItem(
+        Icons.receipt_long_rounded,
+        context.tr('my_purchases'),
+        () => context.push(AppRoutes.myPurchases),
+      ),
       _ActionItem(Icons.verified_rounded, context.tr('kyc'), () => context.push(AppRoutes.kyc)),
     ];
     if (isAdmin) {
-      actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
+      actions.add(
+        _ActionItem(
+          Icons.admin_panel_settings_rounded,
+          context.tr('admin_dashboard'),
+          () => context.push(AppRoutes.admin),
+        ),
+      );
     }
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.0,
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.0,
       ),
       itemCount: actions.length,
       itemBuilder: (context, i) {
@@ -379,13 +521,76 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
           onTap: item.onTap,
           padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
           borderColor: cs.primary.withValues(alpha: 0.35),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(item.icon, color: cs.primary, size: 24)),
-            const SizedBox(height: AppInsets.sm),
-            Text(item.label, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurface, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ]),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(item.icon, color: cs.primary, size: 24),
+              ),
+              const SizedBox(height: AppInsets.sm),
+              Text(
+                item.label,
+                style: TextStyle(
+                  fontSize: AppFontSize.sm,
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+}
+
+class _SocialStat extends StatelessWidget {
+  const _SocialStat({required this.label, required this.stream, required this.onTap});
+  final String label;
+  final Stream<int> stream;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: StreamBuilder<int>(
+          stream: stream,
+          builder: (context, snap) {
+            final count = snap.data ?? 0;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: AppFontSize.lg,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurfaceVariant),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -397,7 +602,6 @@ class _ActionItem {
   _ActionItem(this.icon, this.label, this.onTap);
 }
 
-
 class _ProfileSkeleton extends StatefulWidget {
   const _ProfileSkeleton();
 
@@ -405,8 +609,7 @@ class _ProfileSkeleton extends StatefulWidget {
   State<_ProfileSkeleton> createState() => _ProfileSkeletonState();
 }
 
-class _ProfileSkeletonState extends State<_ProfileSkeleton>
-    with SingleTickerProviderStateMixin {
+class _ProfileSkeletonState extends State<_ProfileSkeleton> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _shimmer;
 
@@ -414,9 +617,10 @@ class _ProfileSkeletonState extends State<_ProfileSkeleton>
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
-    _shimmer = Tween<double>(begin: -1.5, end: 2.5).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutSine),
-    );
+    _shimmer = Tween<double>(
+      begin: -1.5,
+      end: 2.5,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutSine));
     _ctrl.repeat();
   }
 

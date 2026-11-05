@@ -6,7 +6,9 @@
 // 2939-2997). The deployed failStalePendingBoosts sweeper only covers stale
 // USSD boosts after ~10min; real-time callbacks (and BillPay/KYC) needed the
 // v1 webhook, which previously routed them to the order path and 404'd.
+const admin = require('firebase-admin');
 const commerceStore = require('../../services/commerce-store');
+const { getFirebaseFirestore } = require('../../config/firebase');
 const { sendOneSignalNotification } = require('../legacy-compat/notify');
 
 const BOOST_TIERS = {
@@ -85,14 +87,16 @@ async function boostSuccess(tx, orderId, providerPaymentId) {
   // Atomic batch: both the transaction and the product-boost state commit
   // together or not at all — the exact "hela imeingia lakini hamna service"
   // bug this prevents in the legacy router.
-  const batch = firestore.batch();
-  batch.update(txDoc.ref, {
+  const db = getFirebaseFirestore();
+  if (!db) return { status: 'COMPLETED_BATCH_FAILED' };
+  const batch = db.batch();
+  batch.update(db.collection('transactions').doc(orderId), {
     status: 'completed',
     clickpesaReference: providerPaymentId || '',
-    completedAt: sessionTimestamp(),
+    completedAt: commerceStore.serverTimestamp(),
   });
   if (tx.productId) {
-    batch.update(firestore.collection('products').doc(tx.productId), {
+    batch.update(db.collection('products').doc(tx.productId), {
       isBoosted: true,
       boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
       boostTier: tier,

@@ -86,6 +86,7 @@ function setupCompat(app) {
   Object.assign(app.locals, {
     admin,
     db,
+    commerceStore: require('../../services/commerce-store'),
     redis,
     cache,
     requireUser,
@@ -103,6 +104,7 @@ function setupCompat(app) {
   const { router: payoutsRouter } = payoutsFactory({
     admin,
     db,
+    commerceStore: require('../../services/commerce-store'),
     requireUser,
     requireAdmin,
     isOwnerOrAdmin,

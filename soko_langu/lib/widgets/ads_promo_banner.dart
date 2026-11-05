@@ -4,124 +4,95 @@ import '../app/routes.dart';
 import '../extensions/context_tr.dart';
 import '../theme/design_tokens.dart';
 import '../theme/responsive_typography.dart';
+import 'banners/soko_banner_theme.dart';
 
-/// Seller-facing promo for Boost: buy a boost package and your listing jumps
-/// to the top of discovery/search for a fixed number of days.
+/// Seller-facing internal promo for Boost (NOT AdMob).
 class AdsPromoBanner extends StatelessWidget {
   const AdsPromoBanner({super.key});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    final isDark = cs.brightness == Brightness.dark;
+    return ResponsiveBanner(
+      minHeight: SokoBannerTheme.minHeight,
+      margin: EdgeInsets.zero,
+      borderRadius: SokoBannerTheme.borderRadius,
       onTap: () => context.push(AppRoutes.boostProduct),
-      child: ResponsiveBanner(
-        minHeight: 180,
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        borderRadius: BorderRadius.circular(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [
-              cs.primary.withValues(alpha: 0.18),
-              cs.primary.withValues(alpha: 0.04),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: cs.primary.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
+      decoration: SokoBannerTheme.surfaceDecoration(
+        context,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+            cs.surfaceContainerLow,
           ],
         ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
             Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 8, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        context.tr('boost_promo_title'),
-                        style: Ds.bannerCta(cs.primary).copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+              flex: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SokoBannerTheme.badge(
+                    context,
+                    context.tr('boost_promo_title'),
+                    icon: Icons.rocket_launch_outlined,
+                  ),
+                  const SizedBox(height: 12),
+                  BannerText(
+                    context.tr('boost_promo_subtitle'),
+                    style: TextStyle(
+                      fontSize: 20,
+                      height: 1.15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.45,
+                      color: cs.onSurface,
                     ),
-                    const SizedBox(height: 10),
-                    BannerText(
-                      context.tr('boost_promo_subtitle'),
-                      style: Ds.bannerTitle(cs.onSurface).copyWith(height: 1.2),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 6),
-                    BannerText(
-                      context.tr('boost_promo_desc'),
-                      style: Ds.bannerSubtitle(cs.onSurfaceVariant),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        context.tr('boost_promo_cta'),
-                        style: Ds.bannerCta(cs.onPrimary).copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 8),
+                  BannerText(
+                    context.tr('boost_promo_desc'),
+                    style: TextStyle(fontSize: 13.5, height: 1.4, color: cs.onSurfaceVariant),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  SokoBannerTheme.ctaPill(context, context.tr('boost_promo_cta')),
+                ],
               ),
             ),
+            const SizedBox(width: 12),
             Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.rocket_launch_rounded,
-                        size: 48,
-                        color: cs.primary,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        context.tr('boost_product'),
-                        style: Ds.labelLg(cs.primary).copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                    ],
-                  ),
+              flex: 4,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 120),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.10)),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.trending_up_rounded, size: 40, color: cs.primary),
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr('boost_product'),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Ds.labelLg(
+                        cs.primary,
+                      ).copyWith(fontWeight: FontWeight.w700, fontSize: 12.5),
+                    ),
+                  ],
                 ),
               ),
             ),

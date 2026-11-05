@@ -6,7 +6,7 @@
 const express = require('express');
 const { requireAdmin } = require('./auth-helpers');
 const { sendOneSignalNotification } = require('./notify');
-const OrderService = require('../modules/orders/order-service');
+const OrderService = require('../orders/order-service');
 
 const commerceStore = require('../../services/commerce-store');
 
@@ -903,7 +903,7 @@ router.post('/kyc/review', async (req, res) => {
 
     await commerceStore.updateDocument('users', userId, {
       'kyc.status': status,
-      'kyc.reviewedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'kyc.reviewedAt': commerceStore.serverTimestamp(),
       'kyc.reviewNotes': notes || '',
       'kyc.approved': approve === true,
     });
@@ -915,7 +915,7 @@ router.post('/kyc/review', async (req, res) => {
         ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
         : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`,
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: commerceStore.serverTimestamp(),
     });
     try {
       await sendOneSignalNotification(
@@ -1059,7 +1059,7 @@ router.post('/kyc/revoke', async (req, res) => {
     await commerceStore.updateDocument('users', userId, {
       'kyc.status': 'revoked',
       'kyc.approved': false,
-      'kyc.revokedAt': commerceStore.serverTimestamp,
+      'kyc.revokedAt': commerceStore.serverTimestamp(),
       'kyc.reviewNotes': reason || 'KYC imefutwa na admin.',
     });
 
@@ -1070,7 +1070,7 @@ router.post('/kyc/revoke', async (req, res) => {
       type: 'kyc_revoked',
       amount: 0,
       reason: `KYC revoked by admin. Reason: ${reason || ''}`,
-      timestamp: commerceStore.serverTimestamp,
+      timestamp: commerceStore.serverTimestamp(),
     });
 
     await commerceStore.addDocument('notifications', {
@@ -1078,7 +1078,7 @@ router.post('/kyc/revoke', async (req, res) => {
       title: 'KYC Imefutwa',
       body: `KYC yako imefutwa na admin. Sababu: ${reason || 'Wasiliana na msaada'}. Tuma tena KYC yako.`,
       isRead: false,
-      createdAt: commerceStore.serverTimestamp,
+      createdAt: commerceStore.serverTimestamp(),
     });
 
     clearAdminCache();
@@ -1124,7 +1124,7 @@ router.post('/kyc/delete', async (req, res) => {
       title: 'KYC Imefutwa',
       body: 'KYC yako imefutwa na admin. Tuma tena KYC yako inapohitajika.',
       isRead: false,
-      createdAt: commerceStore.serverTimestamp,
+      createdAt: commerceStore.serverTimestamp(),
     });
 
     clearAdminCache();
@@ -1242,7 +1242,7 @@ router.post('/mfa/verify', async (req, res) => {
       'mfa.secret': encryptSecret(secret),
       'mfa.enabled': true,
       'mfa.pendingSecret': null,
-      'mfa.enrolledAt': commerceStore.serverTimestamp,
+      'mfa.enrolledAt': commerceStore.serverTimestamp(),
     });
     clearAdminCache();
     res.json({ success: true, message: 'MFA enabled' });

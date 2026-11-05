@@ -1,8 +1,20 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const { getFirebaseFirestore } = require('./src/config/firebase');
 
 const router = express.Router();
-const db = admin.firestore();
+// Resolved at request time so the router can mount before Firebase is configured.
+const db = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      const store = getFirebaseFirestore();
+      if (!store) throw new Error('Firestore is not configured');
+      const value = store[prop];
+      return typeof value === 'function' ? value.bind(store) : value;
+    },
+  }
+);
 
 const NOTIFICATION_CHANNELS = {
   general: { id: 'general_notifications_v6', name: 'Maelezo ya Jumla' },

@@ -203,7 +203,7 @@ async function notifyBoostPaymentFailed(db, tx, reason = '') {
       isRead: false,
       type: 'boost',
       data: { type: 'boost', status: 'failed', productId: tx.productId || '' },
-      createdAt: commerceStore.serverTimestamp,
+      createdAt: commerceStore.serverTimestamp(),
     });
     await sendOneSignalNotification(tx.userId, title, body, { type: 'boost', status: 'failed', productId: tx.productId || '' });
     const user = await commerceStore.getDocument("users", tx.userId);
@@ -296,7 +296,7 @@ async function releaseExpiredEscrows(db) {
       await doc.ref.update({
         status: 'delivered',
         escrowReleased: true,
-        escrowReleasedAt: commerceStore.serverTimestamp,
+        escrowReleasedAt: commerceStore.serverTimestamp(),
         escrowAutoReleased: true,
       });
 
@@ -314,7 +314,7 @@ async function releaseExpiredEscrows(db) {
           title: 'Escrow Imefunguliwa Kiotomatiki',
           body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
           isRead: false,
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
         try {
           await sendOneSignalNotification(sellerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_auto_release', transactionId: doc.id });
@@ -327,7 +327,7 @@ async function releaseExpiredEscrows(db) {
           title: 'Escrow Imefunguliwa Kiotomatiki',
           body: `Muda wa escrow ya ${tx.productName || 'Bidhaa'} umeisha. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda.`,
           isRead: false,
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
         try {
           await sendOneSignalNotification(tx.buyerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`, { type: 'escrow_auto_release', transactionId: doc.id });
@@ -378,9 +378,9 @@ async function boostPaymentSuccess(db, orderId) {
   const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
 
   const batch = db.batch();
-  batch.update(txDoc.ref, {
+  batch.update(db.collection('transactions').doc(orderId), {
     status: 'completed',
-    completedAt: commerceStore.serverTimestamp,
+    completedAt: commerceStore.serverTimestamp(),
   });
   if (tx.productId) {
     batch.update(db.collection('products').doc(tx.productId), {
@@ -436,7 +436,7 @@ async function failStalePendingBoosts(db) {
         await doc.ref.update({
           status: 'failed',
           failureReason: reason,
-          completedAt: commerceStore.serverTimestamp,
+          completedAt: commerceStore.serverTimestamp(),
         });
         await notifyBoostPaymentFailed(db, tx, reason);
         continue;
@@ -447,7 +447,7 @@ async function failStalePendingBoosts(db) {
       await doc.ref.update({
         status: 'failed',
         failureReason: reason,
-        completedAt: commerceStore.serverTimestamp,
+        completedAt: commerceStore.serverTimestamp(),
       });
       await notifyBoostPaymentFailed(db, tx, reason);
     }
@@ -581,7 +581,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         body: body || '',
         data: data || {},
         isRead: false,
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       }, { db });
 
 
@@ -672,7 +672,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           const feeTx = feeSnap.docs[0];
           feeAmount = feeTx.data().amount || 15000;
           feeReference = feeTx.id;
-          feePaidAt = feeTx.data().completedAt || commerceStore.serverTimestamp;
+          feePaidAt = feeTx.data().completedAt || commerceStore.serverTimestamp();
         }
       } catch (_) {}
 
@@ -697,7 +697,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           status,
           approved: false,
           reviewNotes: reason,
-          submittedAt: commerceStore.serverTimestamp,
+          submittedAt: commerceStore.serverTimestamp(),
           reviewedAt: null,
         },
       });
@@ -710,7 +710,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           title: 'KYC Mpya Imewasilishwa',
           body: `${fullName} ametuma KYC yake. Tafadhali kagua.`,
           isRead: false,
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
           data: { type: 'kyc_review', userId },
         }, { db });
 
@@ -723,7 +723,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         title: 'KYC Imewasilishwa',
         body: 'KYC yako imewasilishwa. Subiri ukaguzi wa admin. Utapata taarifa ikikubaliwa.',
         isRead: false,
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
 
       res.json({
@@ -815,7 +815,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         sender_id: senderId,
         receiver_id: receiverId,
         text,
-        timestamp: commerceStore.serverTimestamp,
+        timestamp: commerceStore.serverTimestamp(),
         is_read: false,
         is_delivered: true,
         ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
@@ -829,7 +829,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       // Update room metadata
       await commerceStore.updateDocument('chat_rooms', roomId, {
         last_message: text,
-        last_timestamp: commerceStore.serverTimestamp,
+        last_timestamp: commerceStore.serverTimestamp(),
       });
 
       // Presence-aware delivery: a recipient currently viewing this exact
@@ -885,7 +885,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             type: 'chat',
             data: { senderId, senderName, roomId },
             isRead: false,
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
 
         } catch (_) {}
@@ -933,7 +933,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
               : 'superseded by new boost';
             await doc.ref.update({
               status: 'failed',
-              cancelledAt: commerceStore.serverTimestamp,
+              cancelledAt: commerceStore.serverTimestamp(),
               cancelReason: reason,
             });
           }
@@ -1002,7 +1002,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             clickpesaReference: clickpesaRef,
             status: 'pending',
             paymentMethod: 'BillPay',
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
         }
 
@@ -1026,7 +1026,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             userId: userId || '', buyerId: userId || '', buyerName: userId || '',
             buyerPhone: normalizedPhone, sellerName: 'Soko Vibe',
             status: 'pending', paymentMethod: paymentMethod || 'ussd_push',
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
         }
 
@@ -1047,7 +1047,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
                 status: 'failed',
                 ussdFailed: true,
                 failureReason: reason,
-                completedAt: commerceStore.serverTimestamp,
+                completedAt: commerceStore.serverTimestamp(),
               }).then(() => notifyBoostPaymentFailed(db, tx, reason));
             }).catch(() => {});
           });
@@ -1772,7 +1772,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             body: body || '',
             data: { type: 'system', broadcast: 'true' },
             isRead: false,
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
           notifCount++;
         }
@@ -1905,9 +1905,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         stock: stock || 0,
         soldCount: 0,
         isActive: true,
-        startTime: startTime ? new Date(startTime) : commerceStore.serverTimestamp,
+        startTime: startTime ? new Date(startTime) : commerceStore.serverTimestamp(),
         endTime: endTime ? new Date(endTime) : new Date(Date.now() + 24 * 3600000),
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
 
       res.json({ success: true, flashSaleId: ref.id });
@@ -1966,9 +1966,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           stock: data.stock || 0,
           soldCount,
           isActive: true,
-          startTime: commerceStore.serverTimestamp,
+          startTime: commerceStore.serverTimestamp(),
           endTime: new Date(now.getTime() + 24 * 3600000),
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
         created++;
       }
@@ -2074,7 +2074,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
             type: 'flash_sale',
             data: { type: 'flash_sale', image: productImage || '' },
             isRead: false,
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
           batched++;
         }
@@ -2194,7 +2194,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           totalCharge,
           status: 'pending',
           paymentMethod: 'BillPay',
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
 
         const billResult = await clickpesaCreateBillPayOrder({
@@ -2248,7 +2248,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           totalCharge,
           status: 'pending',
           paymentMethod: 'ClickPesa',
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
         });
 
         // Fire ClickPesa async — return immediately

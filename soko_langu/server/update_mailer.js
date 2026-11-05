@@ -40,7 +40,7 @@ const glassTemplate = `function wrapEmailHtml(html) {
       <p class="subtitle">Soko la mtandaoni - Tanzania</p>
     </div>
     <div class="content">
-      ` + html + `
+      \${html}
     </div>
     <div class="divider"></div>
     <div class="footer">

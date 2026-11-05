@@ -231,6 +231,37 @@ async function openDispute({ orderId, buyerId, reason, db }) {
 
 async function resolveDispute({ orderId, resolution, amount, note, adminId, db }) {
   const store = db || getFirebaseFirestore();
+  const txDoc = await store.collection('transactions').doc(orderId).get();
+  if (!txDoc.exists) throw new Error('ORDER_NOT_FOUND');
+
+  const tx = txDoc.data();
+  const sellerId = tx.sellerId;
+  const buyerId = tx.buyerId;
+
+  if (resolution === 'refund_to_buyer') {
+    // Refund buyer
+    await txDoc.ref.update({
+      status: ORDER_STATES.REFUNDED,
+      'disputeInfo.resolved': true,
+      'disputeInfo.resolution': 'refunded_to_buyer',
+      'disputeInfo.refundedAmount': amount,
+      'disputeInfo.adminNote': note,
+    });
+    
+    // If there was a partial release to seller, we might need to penalize them
+    // (matching the logic in escrow-compat.js)
+  } else if (resolution === 'release_to_seller') {
+    await releaseEscrow({ orderId, sellerId, db: store });
+    await txDoc.ref.update({
+      status: ORDER_STATES.COMPLETED,
+      'disputeInfo.resolved': true,
+      'disputeInfo.resolution': 'released_to_seller',
+      'disputeInfo.adminNote': note,
+    });
+  }
+
+  return { success: true };
+}
 
 async function adminTransfer({ orderId, amount, phone, note, adminId, db }) {
   const store = db || getFirebaseFirestore();
@@ -261,38 +292,6 @@ async function adminTransfer({ orderId, amount, phone, note, adminId, db }) {
     status: 'completed',
     createdAt: new Date(),
   });
-
-  return { success: true };
-}
-
-  const txDoc = await store.collection('transactions').doc(orderId).get();
-  if (!txDoc.exists) throw new Error('ORDER_NOT_FOUND');
-
-  const tx = txDoc.data();
-  const sellerId = tx.sellerId;
-  const buyerId = tx.buyerId;
-
-  if (resolution === 'refund_to_buyer') {
-    // Refund buyer
-    await txDoc.ref.update({
-      status: ORDER_STATES.REFUNDED,
-      'disputeInfo.resolved': true,
-      'disputeInfo.resolution': 'refunded_to_buyer',
-      'disputeInfo.refundedAmount': amount,
-      'disputeInfo.adminNote': note,
-    });
-    
-    // If there was a partial release to seller, we might need to penalize them
-    // (matching the logic in escrow-compat.js)
-  } else if (resolution === 'release_to_seller') {
-    await releaseEscrow({ orderId, sellerId, db: store });
-    await txDoc.ref.update({
-      status: ORDER_STATES.COMPLETED,
-      'disputeInfo.resolved': true,
-      'disputeInfo.resolution': 'released_to_seller',
-      'disputeInfo.adminNote': note,
-    });
-  }
 
   return { success: true };
 }

@@ -61,4 +61,3 @@ async function deleteEvent(id, actorUid) {
 }
 
 module.exports = { listEvents, createEvent, updateEvent, deleteEvent };
-PY

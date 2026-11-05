@@ -34,8 +34,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
   // Both of these were previously constructed inline in build(): the v1 future
   // re-issued an HTTP request on every rebuild, and the Firestore stream
   // re-subscribed (and re-billed a full read) on every rebuild. Because each
-  // completion triggers setState → rebuild, both were self-sustaining loops that
-  // ran until the user navigated away — `_buildV1Body` alone was two HTTP calls
+  // completion triggers setState Ã¢â€ â€™ rebuild, both were self-sustaining loops that
+  // ran until the user navigated away Ã¢â‚¬â€ `_buildV1Body` alone was two HTTP calls
   // per iteration, because fetchUnreadCount is nested inside fetchNotifications.
   late final Future<({List<NotificationItem> notifications, int unreadCount})> _v1Future;
   StreamSubscription<QuerySnapshot>? _fsSub;
@@ -181,7 +181,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       SokoSnackbar.info(context, context.tr('mark_all_read'));
     }
     // Refresh the ONE future this screen reads. The bare `setState(() {})`
-    // used to be relied on to re-trigger the FutureBuilder — which only worked
+    // used to be relied on to re-trigger the FutureBuilder Ã¢â‚¬â€ which only worked
     // because the future was rebuilt in build(), i.e. by re-requesting on every
     // rebuild. Now the refresh is explicit.
     if (ApiConfig.kUseNotificationsApi) _reload();
@@ -483,7 +483,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return FutureBuilder<({List<NotificationItem> notifications, int unreadCount})>(
       // `late final` created in initState, NOT a fresh call here. Constructing
       // the future inside build() meant every rebuild issued a new request, and
-      // every completion called setState, which rebuilt — an unbounded loop.
+      // every completion called setState, which rebuilt Ã¢â‚¬â€ an unbounded loop.
       future: _v1Future,
       builder: (context, snap) {
         if (snap.hasError) return _buildErrorScaffold(cs);

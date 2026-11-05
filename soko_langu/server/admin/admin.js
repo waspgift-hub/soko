@@ -73,6 +73,17 @@ function badge(status) {
   const cls = map[s] || 'mut';
   return '<span class="bdg ' + (s.indexOf('_') > -1 && !map[s] ? 'info' : cls) + '"><span class="dot"></span>' + esc(status) + '</span>';
 }
+const STAFF_ROLES = [
+  { id: 'super_admin', label: 'Super Admin' },
+  { id: 'admin', label: 'Admin' },
+  { id: 'moderator', label: 'Moderator' },
+  { id: 'support', label: 'Support' },
+  { id: 'finance', label: 'Finance' },
+];
+function roleLabel(role) {
+  const r = STAFF_ROLES.find((x) => x.id === role);
+  return r ? r.label : role;
+}
 function fsFlagBadge(v) {
   if (v === null || v === undefined) return '<span class="dim">—</span>';
   return v

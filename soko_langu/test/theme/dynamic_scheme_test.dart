@@ -63,7 +63,7 @@ void main() {
 
       expect(manager.useDynamicColor, isTrue);
       expect(manager.lightTheme.colorScheme.primary,
-          const Color(0xFF00C853));
+          const Color(0xFF1F8F4E));
     });
 
     test('uses the OS scheme once provided', () {

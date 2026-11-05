@@ -29,6 +29,7 @@ const gateway = require('../ai-gateway');
 const { chatWithTools } = require('../tool-loop');
 const store = require('./chat-store');
 const { buildContext } = require('./context-builder');
+const { buildSystemPrompt } = require('./system-prompt');
 const { generateTitle, isUsefulFirstMessage } = require('./title-generator');
 const extractor = require('./memory-extractor');
 const { redactSecrets } = require('./redact');

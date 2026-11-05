@@ -102,12 +102,9 @@ class AppRoutes {
   static const String oneUiShell = '/oneui/shell';
   static const String oneUiRegister = '/oneui/register';
   static const String oneUiLogin = '/oneui/login';
-}
-
-
-
   // Web-only dashboards (no Flutter routes) - use server links
   static const String adminConsoleWeb = '/admin';
   static const String staffWeb = '/staff';
   static const String companyOsWeb = '/company';
+}
 

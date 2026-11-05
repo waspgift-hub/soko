@@ -27,4 +27,3 @@ router.delete('/events/:id', rbac.requireCompanyMember, rbac.requirePermission('
 });
 
 module.exports = router;
-PY

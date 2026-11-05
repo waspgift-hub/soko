@@ -7,18 +7,15 @@ import '../../services/product_service.dart';
 import '../../services/rating_service.dart';
 import '../../models/product_model.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/glass_container.dart'; // ignore: unused_import
 import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
-import '../../utils/phone_utils.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/profile_view_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
-import '../../widgets/call_seller_button.dart';
 import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 import '../../theme/design_tokens.dart';
@@ -27,17 +24,15 @@ import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
 import '../../services/ads/ad_config.dart';
 import '../../services/share_service.dart';
+import '../../widgets/social/follow_button.dart';
+import '../../services/follow_service.dart';
 import 'package:provider/provider.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
   final String userName;
 
-  const PublicProfileScreen({
-    super.key,
-    required this.userId,
-    this.userName = '',
-  });
+  const PublicProfileScreen({super.key, required this.userId, this.userName = ''});
 
   @override
   State<PublicProfileScreen> createState() => _PublicProfileScreenState();
@@ -67,8 +62,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _loadVerification() async {
-    final v =
-        await context.read<SellerVerificationService>().resolve(widget.userId);
+    final v = await context.read<SellerVerificationService>().resolve(widget.userId);
     if (!mounted) return;
     setState(() => _verification = v);
   }
@@ -94,7 +88,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         actions: [
           IconButton(
             tooltip: context.tr('share'),
-                    icon: const Icon(Icons.share_outlined),
+            icon: const Icon(Icons.share_outlined),
             onPressed: () async {
               // Prefer username if available from profile stream; fallback to uid
               final snap = await UserService().getProfile(widget.userId);
@@ -116,26 +110,18 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           if (!_isMyProfile) ...[
             IconButton(
               tooltip: context.tr('send_message'),
-              icon: Icon(
-                Icons.chat,
-                color: Theme.of(context).colorScheme.whatsappGreen,
-              ),
+              icon: Icon(Icons.chat, color: Theme.of(context).colorScheme.whatsappGreen),
               onPressed: _chatWithSeller,
             ),
             IconButton(
               tooltip: context.tr('report_user'),
               icon: Icon(
                 Icons.flag_outlined,
-                color: Theme.of(
-                  context,
-                ).colorScheme.error.withValues(alpha: 0.7),
+                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
               ),
               onPressed: () => context.push(
                 AppRoutes.report,
-                extra: {
-                  'reportedUserId': widget.userId,
-                  'reportedUserName': widget.userName,
-                },
+                extra: {'reportedUserId': widget.userId, 'reportedUserName': widget.userName},
               ),
             ),
           ],
@@ -145,8 +131,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         child: StreamBuilder<UserProfile?>(
           stream: userService.streamProfile(widget.userId),
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting)
-              return const GoogleLoadingPage();
+            if (snap.connectionState == ConnectionState.waiting) return const GoogleLoadingPage();
             final profile = snap.data;
             return CustomScrollView(
               slivers: [
@@ -159,20 +144,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Text(
                       context.tr('products'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
                 StreamBuilder<List<Product>>(
                   stream: productService.getProductsBySeller(widget.userId),
                   builder: (context, snap) {
-                    if (!snap.hasData)
-                      return const SliverFillRemaining(
-                        child: GoogleLoadingPage(),
-                      );
+                    if (!snap.hasData) return const SliverFillRemaining(child: GoogleLoadingPage());
                     final products = snap.data!;
                     if (products.isEmpty) {
                       return SliverFillRemaining(
@@ -183,17 +162,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                               Icon(
                                 Icons.shopping_bag_outlined,
                                 size: 64,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 context.tr('no_products'),
                                 style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -204,13 +179,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     return SliverMainAxisGroup(
                       slivers: [
                         SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: Responsive.gridColumns(context),
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
-                            childAspectRatio:
-                                Responsive.cardAspectRatio(context),
+                            childAspectRatio: Responsive.cardAspectRatio(context),
                           ),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => ProductCard(
@@ -248,197 +221,93 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
-  Color? _hexToColor(String? hex) {
-    if (hex == null || hex.isEmpty) return null;
-    try {
-      final clean = hex.replaceFirst('#', '');
-      if (clean.length != 6) return null;
-      return Color(int.parse('FF$clean', radix: 16));
-    } catch (_) {
-      return null;
-    }
-  }
-
   Widget _buildHeader(BuildContext context, UserProfile? profile) {
     final cs = Theme.of(context).colorScheme;
-    // ignore: unused_local_variable
-    final accentColor = _hexToColor(profile?.shopAccentColor);
+    final name = profile?.displayName.isNotEmpty == true ? profile!.displayName : widget.userName;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: Column(
+        children: [
+          CircleAvatar(
+            radius: 50,
+            backgroundColor: cs.surfaceContainerHighest,
+            backgroundImage: profile?.profileImage.isNotEmpty == true
+                ? NetworkImage(profile!.profileImage)
+                : null,
+            child: profile?.profileImage.isEmpty != false
+                ? Icon(Icons.person_outline_rounded, size: 44, color: cs.onSurfaceVariant)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: cs.primaryContainer,
-                    backgroundImage: profile?.profileImage.isNotEmpty == true
-                        ? NetworkImage(profile!.profileImage)
-                        : null,
-                    child: profile?.profileImage.isEmpty != false
-                        ? Icon(
-                            Icons.person_outline_rounded,
-                            size: 44,
-                            color: cs.onPrimaryContainer,
-                          )
-                        : null,
-                  ),
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: StreamBuilder<bool>(
-                      stream: Stream.value(false),
-                      builder: (context, snap) {
-                        final online = snap.data ?? false;
-                        return Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: online
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.surface,
-                              width: 2,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+              Flexible(
+                child: Text(
+                  name,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    profile?.displayName.isNotEmpty == true
-                        ? profile!.displayName
-                        : widget.userName,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  // Blue Tick from trusted state plus a word-level pill, so the store
-                  // page carries an unmistakable verification statement next to
-                  // the seller's name.
-                  BlueTickBadge(sellerId: widget.userId, size: 16),
-                  const SizedBox(width: 6),
-                  BlueTickPill(verification: _verification),
-                ],
-              ),
-              if (profile?.bio.isNotEmpty == true) ...[
-                const SizedBox(height: 4),
-                Text(
-                  profile!.bio,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 12),
-              if (profile?.location.isNotEmpty == true) ...[
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        profile!.location,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              if (profile?.phone.isNotEmpty == true) ...[
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.phone,
-                      size: 16,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        PhoneUtils.formatForDisplay(profile!.phone),
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              if (profile?.phone.isNotEmpty == true) ...[
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: 220,
-                  child: CallSellerButton(phone: profile!.phone, iconOnly: true),
-                ),
-              ],
-              const SizedBox(height: 12),
-              _buildStats(context, profile),
+              const SizedBox(width: 6),
+              BlueTickBadge(sellerId: widget.userId, size: 16),
+              const SizedBox(width: 6),
+              BlueTickPill(verification: _verification),
             ],
           ),
-      );
+          if (profile?.bio.isNotEmpty == true) ...[
+            const SizedBox(height: 4),
+            Text(
+              profile!.bio,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (!_isMyProfile) ...[
+            const SizedBox(height: 12),
+            SizedBox(width: 180, child: FollowButton(targetUserId: widget.userId)),
+          ],
+          const SizedBox(height: 12),
+          _buildStats(context, profile),
+        ],
+      ),
+    );
   }
 
   Widget _buildStats(BuildContext context, UserProfile? profile) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _statItem(
-            context,
-            context.tr('products'),
-            StreamBuilder<List<Product>>(
+          Expanded(
+            child: _statTap(
+              context,
+              stream: FollowService().followerCountStream(widget.userId),
+              label: context.tr('followers'),
+              onTap: () =>
+                  context.push('${AppRoutes.followers}/${widget.userId}', extra: widget.userName),
+            ),
+          ),
+          Expanded(
+            child: _statTap(
+              context,
+              stream: FollowService().followingCountStream(widget.userId),
+              label: context.tr('following'),
+              onTap: () =>
+                  context.push('${AppRoutes.following}/${widget.userId}', extra: widget.userName),
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<List<Product>>(
               stream: ProductService().getProductsBySeller(widget.userId),
-              builder: (context, snap) {
-                final count = snap.data?.length ?? 0;
-                return Text(
-                  '$count',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                );
-              },
+              builder: (context, snap) =>
+                  _statValue(context, '${snap.data?.length ?? 0}', context.tr('products')),
             ),
           ),
         ],
@@ -446,17 +315,31 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
-  Widget _statItem(BuildContext context, String label, Widget valueWidget) {
+  Widget _statTap(
+    BuildContext context, {
+    required Stream<int> stream,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: StreamBuilder<int>(
+        stream: stream,
+        builder: (context, snap) => _statValue(context, '${snap.data ?? 0}', label),
+      ),
+    );
+  }
+
+  Widget _statValue(BuildContext context, String value, String label) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        valueWidget,
         Text(
-          label,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontSize: 13,
-          ),
+          value,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: cs.onSurface),
         ),
+        Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
       ],
     );
   }
@@ -484,7 +367,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                   const SizedBox(width: 6),
                   Text(
                     context.tr('no_ratings_yet'),
-                    style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -598,7 +484,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Widget _buildActionButtons(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     if (_isMyProfile) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -655,15 +540,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   void _showRateSellerDialog(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('please_log_in_first'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('please_log_in_first'))));
       return;
     }
     if (user.uid == widget.userId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('cannot_rate_self'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('cannot_rate_self'))));
       return;
     }
     showDialog(
@@ -723,15 +608,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         comment: '',
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('rating_submitted'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('rating_submitted'))));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${context.tr('imeshindwa')}: $e')));
       }
     }
   }

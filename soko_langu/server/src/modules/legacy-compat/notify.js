@@ -55,7 +55,7 @@ async function notifyAdmins(title, body, data = {}) {
           title,
           body,
           isRead: false,
-          createdAt: commerceStore.serverTimestamp,
+          createdAt: commerceStore.serverTimestamp(),
           data,
         })
       );

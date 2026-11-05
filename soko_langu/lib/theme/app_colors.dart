@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 extension AppColorScheme on ColorScheme {
   /// Canvas behind everything (scaffold).
   Color get bgCanvas =>
-      brightness == Brightness.dark ? const Color(0xFF0B0B0B) : const Color(0xFFFFFFFF);
+      brightness == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 
   /// Subtle tonal surface (grouped cards, sheet headers, section fills).
   Color get surfaceSubtle =>
@@ -64,7 +64,7 @@ extension AppColorScheme on ColorScheme {
       : const Color(0xFF6B6B6B);
 
   Color get surfaceDark => brightness == Brightness.dark
-      ? const Color(0xFF0B0B0B)
+      ? const Color(0xFF000000)
       : const Color(0xFFFAFAFA);
 
   Color get surfaceLight => brightness == Brightness.dark

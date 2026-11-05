@@ -8,6 +8,7 @@ const adminService = require('./admin-service');
 const settingsService = require('./settings-service');
 const activity = require('../../services/activity');
 const { getStore } = require('../../config/database');
+const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const { sendMail } = require('../../services/mailer');
 const { publicPayload, normalizeRelease } = require('../config/app-release');

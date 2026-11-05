@@ -259,4 +259,3 @@ module.exports = {
   listJournals, createJournal, postJournal, reverseJournal,
   recordPayment, listPayments,
 };
-PY

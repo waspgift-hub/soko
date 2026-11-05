@@ -78,7 +78,6 @@ function buildPublicProjection(uid, doc) {
     usernameLower: String(username).toLowerCase(),
     bio: doc.bio || '',
     avatarUrl: doc.avatarUrl || '',
-    location: p.location || '',
     mood: p.mood || '',
     // Coarse badge flag only — never the KYC payload itself.
     kycApproved: Boolean(doc.kyc && doc.kyc.approved),

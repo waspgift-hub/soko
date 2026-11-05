@@ -43,7 +43,7 @@ async function resolveReferrerIdScan(code) {
 
 async function applyReferral({ userId, code }) {
   const store = getStore();
-  const referrerId = await resolveReferrerId(code);
+  const referrerId = await resolveReferrerIdScan(code);
   if (referrerId === userId) throw httpError(400, 'SELF_REFERRAL_NOT_ALLOWED');
   const existing = await store.referral.findFirst({ where: { referredId: userId } });
   if (existing) throw httpError(409, 'ALREADY_REFERRED');

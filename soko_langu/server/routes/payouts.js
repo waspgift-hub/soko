@@ -2,7 +2,7 @@ const express = require('express');
 const { getPayoutFee, clickpesaBalance } = require('../clickpesa');
 const payoutHelpers = require('../helpers/payouts');
 
-module.exports = function ({ commerceStore, requireUser, requireAdmin, isOwnerOrAdmin, sendOneSignalNotification, webhookIpWhitelist, verifyWebhook }) {
+module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwnerOrAdmin, sendOneSignalNotification, webhookIpWhitelist, verifyWebhook }) {
   const router = express.Router();
   const { generatePayoutReference, PAYOUT_STATUSES, processPayout, retryFailedPayout, updatePayoutStatus, auditLog } = payoutHelpers({ commerceStore });
 
@@ -267,7 +267,7 @@ module.exports = function ({ commerceStore, requireUser, requireAdmin, isOwnerOr
           await commerceStore.updateDocument('transactions', payoutRef, {
             status: 'completed',
             clickpesaReference: clickpesaTxId,
-            completedAt: commerceStore.serverTimestamp,
+            completedAt: commerceStore.serverTimestamp(),
           });
         } catch (_) {}
 
@@ -278,7 +278,7 @@ module.exports = function ({ commerceStore, requireUser, requireAdmin, isOwnerOr
             title: 'Payout imefanikiwa!',
             body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
             isRead: false,
-            createdAt: commerceStore.serverTimestamp,
+            createdAt: commerceStore.serverTimestamp(),
           });
           try {
             await sendOneSignalNotification(sellerId, 'Payout imefanikiwa!', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`, { type: 'withdrawal', status: 'completed' });
@@ -295,7 +295,7 @@ module.exports = function ({ commerceStore, requireUser, requireAdmin, isOwnerOr
             status: 'failed',
             failureReason: payload.message || payload.error || 'payout failed',
             clickpesaReference: clickpesaTxId,
-            completedAt: commerceStore.serverTimestamp,
+            completedAt: commerceStore.serverTimestamp(),
           });
         } catch (_) {}
 
@@ -322,7 +322,7 @@ module.exports = function ({ commerceStore, requireUser, requireAdmin, isOwnerOr
               title: '❌ Utoaji wa Pesa Umeshindwa',
               body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
               isRead: false,
-              createdAt: commerceStore.serverTimestamp,
+              createdAt: commerceStore.serverTimestamp(),
               data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
             });
             await sendOneSignalNotification(payout.userId, '❌ Utoaji wa Pesa Umeshindwa', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`, { type: 'withdrawal', status: 'failed', payoutId: payoutRef });

@@ -3,6 +3,7 @@
 // userId is the Firebase UID (opaque), so the row exists even before the
 // Postgres users backfill and while the app-admin panel still reads Firestore.
 const { getStore } = require('../../config/database');
+const { getFirebaseFirestore } = require('../../config/firebase');
 const commerceStore = require('../../services/commerce-store');
 const config = require('../../config');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');

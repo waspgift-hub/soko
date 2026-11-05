@@ -132,7 +132,10 @@ async function provisionLegacySeller(userId) {
       select: { id: true, sellerName: true },
     }),
   ]);
-  const storeName = (legacy?.sellerName || user?.displayName || 'My Store').trim().slice(0, 100);
+  // No legacy listing means this is not a lapsed seller, just a user who has
+  // never sold; provisioning a store for them would fake a seller account.
+  if (!legacy) return null;
+  const storeName = (legacy.sellerName || user?.displayName || 'My Store').trim().slice(0, 100);
   const slugBase = storeName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

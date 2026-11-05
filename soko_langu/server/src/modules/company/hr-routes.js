@@ -50,4 +50,3 @@ router.post('/leave/:id/decision', rbac.requireCompanyMember, rbac.requirePermis
 });
 
 module.exports = router;
-PY

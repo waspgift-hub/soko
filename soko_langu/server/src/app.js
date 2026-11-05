@@ -46,12 +46,11 @@ const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
 const notificationRouter = require('./modules/notifications/routes');
 const sellerAnalyticsRouter = require('./modules/seller-analytics/routes');
-const youtubeRouter = require('./modules/youtube/routes');
-const musicRouter = require('./modules/music/routes');
 const reviewRouter = require('./modules/reviews/routes');
 const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
 const engagementRouter = require('./modules/engagement/routes');
+const socialRouter = require('./modules/social/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
@@ -324,7 +323,7 @@ app.use('/', fallbackRouter);
 // Per-IP ceilings for the whole v1 surface (trust proxy is 1 hop, so req.ip is
 // the real client behind the Cloudflare worker). Admin gets a wider own limiter
 // so an auth/crawler loop against one endpoint can't exhaust the general one.
-const { generalLimiter, adminLimiter, aiLimiter, lyricsLimiter } = require('./middleware/rateLimiter');
+const { generalLimiter, adminLimiter, aiLimiter } = require('./middleware/rateLimiter');
 app.use('/api/v1', generalLimiter);
 app.use('/api/v1/admin', adminLimiter);
 app.use('/health', healthRouter);
@@ -355,13 +354,11 @@ app.use('/api/v1/data-deletion', deletionRequestRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1', sellerAnalyticsRouter);
-app.use('/api/v1/youtube', youtubeRouter);
-// Rate limited per user because the lyrics AI fallback spends provider tokens.
-app.use('/api/v1/music', lyricsLimiter, musicRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1', commentsRouter);
   app.use('/api/v1/kyc', kycRouter);
 app.use('/api/v1', engagementRouter);
+app.use('/api/v1/social', socialRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat; both mount

@@ -10,7 +10,7 @@ module.exports = function ({ commerceStore }) {
 
   async function createPayoutRecord({ userId, phone, amount, fee, netAmount, source, type, metadata }) {
     const payoutId = generatePayoutReference();
-    const now = commerceStore.serverTimestamp;
+    const now = commerceStore.serverTimestamp();
     const record = {
       payoutId,
       userId,
@@ -33,9 +33,9 @@ module.exports = function ({ commerceStore }) {
 
   async function updatePayoutStatus(payoutId, status, extra = {}) {
     if (!payoutId) return;
-    const updates = { status, updatedAt: commerceStore.serverTimestamp, ...extra };
+    const updates = { status, updatedAt: commerceStore.serverTimestamp(), ...extra };
     if (status === PAYOUT_STATUSES.SUCCESS || status === PAYOUT_STATUSES.FAILED) {
-      updates.completedAt = commerceStore.serverTimestamp;
+      updates.completedAt = commerceStore.serverTimestamp();
     }
     await commerceStore.updateDocument('payouts', payoutId, updates);
   }
@@ -58,7 +58,7 @@ module.exports = function ({ commerceStore }) {
         paymentMethod: 'ClickPesa',
         source: source || '',
         metadata: metadata || {},
-        createdAt: commerceStore.serverTimestamp,
+        createdAt: commerceStore.serverTimestamp(),
       });
     }
 
@@ -83,7 +83,7 @@ module.exports = function ({ commerceStore }) {
     await commerceStore.updateDocument('payouts', payoutId, {
       retryCount: commerceStore.increment(1),
       failureReason: '',
-      updatedAt: commerceStore.serverTimestamp,
+      updatedAt: commerceStore.serverTimestamp(),
     });
     return processPayout({
       payoutId, userId: payout.userId, phone: payout.userPhone,
@@ -104,7 +104,7 @@ module.exports = function ({ commerceStore }) {
         relatedId: relatedId || '',
         metadata: metadata || {},
         ip: '',
-        timestamp: commerceStore.serverTimestamp,
+        timestamp: commerceStore.serverTimestamp(),
       });
     } catch (e) {
       console.error('Audit log error:', e);

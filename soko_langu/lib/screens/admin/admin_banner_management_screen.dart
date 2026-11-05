@@ -11,18 +11,17 @@ import '../../theme/app_colors.dart';
 import '../../theme/design_tokens.dart';
 import '../../theme/app_typography.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/banners/campaign_banner_card.dart';
 
 /// Admin screen for managing banner campaigns.
 class AdminBannerManagementScreen extends StatefulWidget {
   const AdminBannerManagementScreen({super.key});
 
   @override
-  State<AdminBannerManagementScreen> createState() =>
-      _AdminBannerManagementScreenState();
+  State<AdminBannerManagementScreen> createState() => _AdminBannerManagementScreenState();
 }
 
-class _AdminBannerManagementScreenState
-    extends State<AdminBannerManagementScreen> {
+class _AdminBannerManagementScreenState extends State<AdminBannerManagementScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
@@ -82,10 +81,8 @@ class _AdminBannerManagementScreenState
       }
       if (_dateRangeFilter != null) {
         query = query
-            .where('startDate',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(_dateRangeFilter!.start))
-            .where('startDate',
-                isLessThanOrEqualTo: Timestamp.fromDate(_dateRangeFilter!.end));
+            .where('startDate', isGreaterThanOrEqualTo: Timestamp.fromDate(_dateRangeFilter!.start))
+            .where('startDate', isLessThanOrEqualTo: Timestamp.fromDate(_dateRangeFilter!.end));
       }
 
       if (loadMore && _lastDoc != null) {
@@ -95,9 +92,12 @@ class _AdminBannerManagementScreenState
       final snapshot = await query.get();
       final newCampaigns = snapshot.docs
           .map(BannerCampaign.fromFirestore)
-          .where((c) => _searchQuery.isEmpty ||
-              c.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              c.mainText.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .where(
+            (c) =>
+                _searchQuery.isEmpty ||
+                c.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                c.mainText.toLowerCase().contains(_searchQuery.toLowerCase()),
+          )
           .toList();
 
       if (mounted) {
@@ -158,10 +158,10 @@ class _AdminBannerManagementScreenState
               child: _loading && _campaigns.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? _buildErrorState(cs)
-                      : _campaigns.isEmpty
-                          ? _buildEmptyState(cs)
-                          : _buildCampaignList(cs),
+                  ? _buildErrorState(cs)
+                  : _campaigns.isEmpty
+                  ? _buildEmptyState(cs)
+                  : _buildCampaignList(cs),
             ),
           ],
         ),
@@ -185,8 +185,7 @@ class _AdminBannerManagementScreenState
               hintText: context.tr('search_banners'),
               prefixIcon: const Icon(Icons.search, size: 20),
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
             onChanged: _onSearchChanged,
           ),
@@ -203,12 +202,14 @@ class _AdminBannerManagementScreenState
                 selected: _typeFilter == null,
                 onSelected: (v) => setState(() => _typeFilter = v),
               ),
-              ...BannerType.values.map((type) => _FilterChip<BannerType?>(
-                    label: type.name,
-                    value: type,
-                    selected: _typeFilter == type,
-                    onSelected: (v) => setState(() => _typeFilter = v),
-                  )),
+              ...BannerType.values.map(
+                (type) => _FilterChip<BannerType?>(
+                  label: type.name,
+                  value: type,
+                  selected: _typeFilter == type,
+                  onSelected: (v) => setState(() => _typeFilter = v),
+                ),
+              ),
               const SizedBox(width: Ds.sp3),
               _FilterChip<BannerPlacement?>(
                 label: 'All Placements',
@@ -216,12 +217,14 @@ class _AdminBannerManagementScreenState
                 selected: _placementFilter == null,
                 onSelected: (v) => setState(() => _placementFilter = v),
               ),
-              ...BannerPlacement.values.map((p) => _FilterChip<BannerPlacement?>(
-                    label: p.name,
-                    value: p,
-                    selected: _placementFilter == p,
-                    onSelected: (v) => setState(() => _placementFilter = v),
-                  )),
+              ...BannerPlacement.values.map(
+                (p) => _FilterChip<BannerPlacement?>(
+                  label: p.name,
+                  value: p,
+                  selected: _placementFilter == p,
+                  onSelected: (v) => setState(() => _placementFilter = v),
+                ),
+              ),
               const SizedBox(width: Ds.sp3),
               _FilterChip<BannerStatus?>(
                 label: 'All Status',
@@ -229,12 +232,14 @@ class _AdminBannerManagementScreenState
                 selected: _statusFilter == null,
                 onSelected: (v) => setState(() => _statusFilter = v),
               ),
-              ...BannerStatus.values.map((s) => _FilterChip<BannerStatus?>(
-                    label: s.name,
-                    value: s,
-                    selected: _statusFilter == s,
-                    onSelected: (v) => setState(() => _statusFilter = v),
-                  )),
+              ...BannerStatus.values.map(
+                (s) => _FilterChip<BannerStatus?>(
+                  label: s.name,
+                  value: s,
+                  selected: _statusFilter == s,
+                  onSelected: (v) => setState(() => _statusFilter = v),
+                ),
+              ),
             ],
           ),
 
@@ -270,16 +275,9 @@ class _AdminBannerManagementScreenState
           children: [
             Icon(Icons.error_outline, color: cs.error, size: 48),
             const SizedBox(height: Ds.sp3),
-            Text(
-              _error!,
-              style: Ds.bodyMd(cs.error),
-              textAlign: TextAlign.center,
-            ),
+            Text(_error!, style: Ds.bodyMd(cs.error), textAlign: TextAlign.center),
             const SizedBox(height: Ds.sp3),
-            FilledButton(
-              onPressed: _loadCampaigns,
-              child: const Text('Retry'),
-            ),
+            FilledButton(onPressed: _loadCampaigns, child: const Text('Retry')),
           ],
         ),
       ),
@@ -295,10 +293,7 @@ class _AdminBannerManagementScreenState
           children: [
             Icon(Icons.campaign_outlined, color: cs.onSurfaceVariant, size: 48),
             const SizedBox(height: Ds.sp3),
-            Text(
-              'No banner campaigns found',
-              style: Ds.bodyMd(cs.onSurfaceVariant),
-            ),
+            Text('No banner campaigns found', style: Ds.bodyMd(cs.onSurfaceVariant)),
             const SizedBox(height: Ds.sp2),
             Text(
               'Create your first banner campaign to get started',
@@ -320,8 +315,7 @@ class _AdminBannerManagementScreenState
   Widget _buildCampaignList(ColorScheme cs) {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.pixels >=
-                notification.metrics.maxScrollExtent - 200 &&
+        if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 200 &&
             _hasMore &&
             !_loading) {
           _loadCampaigns(loadMore: true);
@@ -335,10 +329,7 @@ class _AdminBannerManagementScreenState
         itemBuilder: (context, index) {
           if (index >= _campaigns.length) {
             return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(Ds.sp3),
-                child: CircularProgressIndicator(),
-              ),
+              child: Padding(padding: EdgeInsets.all(Ds.sp3), child: CircularProgressIndicator()),
             );
           }
           return _CampaignTile(
@@ -371,10 +362,7 @@ class _AdminBannerManagementScreenState
         title: const Text('Delete Campaign'),
         content: Text('Delete "${campaign.title}"? This cannot be undone.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -391,20 +379,13 @@ class _AdminBannerManagementScreenState
 
   Future<void> _deleteCampaign(BannerCampaign campaign) async {
     try {
-      await _firestore
-          .collection('banner_campaigns')
-          .doc(campaign.id)
-          .delete();
+      await _firestore.collection('banner_campaigns').doc(campaign.id).delete();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Campaign deleted')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Campaign deleted')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
       }
     }
   }
@@ -419,19 +400,17 @@ class _AdminBannerManagementScreenState
         impressionCount: 0,
         clickCount: 0,
       );
-      await _firestore
-          .collection('banner_campaigns')
-          .add(newCampaign.toFirestore());
+      await _firestore.collection('banner_campaigns').add(newCampaign.toFirestore());
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Campaign duplicated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Campaign duplicated')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to duplicate: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to duplicate: $e')));
       }
     }
   }
@@ -447,8 +426,7 @@ class _AdminBannerManagementScreenState
     final ctaLabelCtrl = TextEditingController(text: campaign?.ctaLabel);
     final imageUrlCtrl = TextEditingController(text: campaign?.imageUrl);
     final videoUrlCtrl = TextEditingController(text: campaign?.videoUrl);
-    final destinationValueCtrl =
-        TextEditingController(text: campaign?.destinationValue);
+    final destinationValueCtrl = TextEditingController(text: campaign?.destinationValue);
     final sponsorNameCtrl = TextEditingController(text: campaign?.sponsorName);
     final sponsorInfoCtrl = TextEditingController(text: campaign?.sponsorInfo);
 
@@ -460,8 +438,7 @@ class _AdminBannerManagementScreenState
     BannerAudience selectedAudience = campaign?.targetAudience ?? BannerAudience.allUsers;
     int priority = campaign?.priority ?? 0;
     DateTime startDate = campaign?.startDate ?? DateTime.now();
-    DateTime endDate = campaign?.endDate ??
-        DateTime.now().add(const Duration(days: 30));
+    DateTime endDate = campaign?.endDate ?? DateTime.now().add(const Duration(days: 30));
     int? impressionLimit = campaign?.impressionLimit;
     int? clickLimit = campaign?.clickLimit;
     List<String> deviceTargeting = List.from(campaign?.deviceTargeting ?? []);
@@ -499,8 +476,7 @@ class _AdminBannerManagementScreenState
                     ),
                     TextFormField(
                       controller: ctaLabelCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'CTA Label *'),
+                      decoration: const InputDecoration(labelText: 'CTA Label *'),
                       validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                     ),
                     const SizedBox(height: Ds.sp3),
@@ -511,10 +487,7 @@ class _AdminBannerManagementScreenState
                       value: selectedType,
                       decoration: const InputDecoration(labelText: 'Type'),
                       items: BannerType.values
-                          .map((t) => DropdownMenuItem(
-                                value: t,
-                                child: Text(t.name),
-                              ))
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t.name)))
                           .toList(),
                       onChanged: (v) => setDialogState(() => selectedType = v!),
                     ),
@@ -522,10 +495,7 @@ class _AdminBannerManagementScreenState
                       value: selectedPlacement,
                       decoration: const InputDecoration(labelText: 'Placement'),
                       items: BannerPlacement.values
-                          .map((p) => DropdownMenuItem(
-                                value: p,
-                                child: Text(p.name),
-                              ))
+                          .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
                           .toList(),
                       onChanged: (v) => setDialogState(() => selectedPlacement = v!),
                     ),
@@ -533,10 +503,7 @@ class _AdminBannerManagementScreenState
                       value: selectedStatus,
                       decoration: const InputDecoration(labelText: 'Status'),
                       items: BannerStatus.values
-                          .map((s) => DropdownMenuItem(
-                                value: s,
-                                child: Text(s.name),
-                              ))
+                          .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
                           .toList(),
                       onChanged: (v) => setDialogState(() => selectedStatus = v!),
                     ),
@@ -548,17 +515,13 @@ class _AdminBannerManagementScreenState
                       value: selectedDestType,
                       decoration: const InputDecoration(labelText: 'Destination Type'),
                       items: BannerDestinationType.values
-                          .map((d) => DropdownMenuItem(
-                                value: d,
-                                child: Text(d.name),
-                              ))
+                          .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
                           .toList(),
                       onChanged: (v) => setDialogState(() => selectedDestType = v!),
                     ),
                     TextFormField(
                       controller: destinationValueCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Destination Value (ID/URL)'),
+                      decoration: const InputDecoration(labelText: 'Destination Value (ID/URL)'),
                       validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                     ),
                     const SizedBox(height: Ds.sp3),
@@ -567,13 +530,11 @@ class _AdminBannerManagementScreenState
                     _sectionTitle('Media (Optional)'),
                     TextFormField(
                       controller: imageUrlCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Image URL (https://...)'),
+                      decoration: const InputDecoration(labelText: 'Image URL (https://...)'),
                     ),
                     TextFormField(
                       controller: videoUrlCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Video URL (https://...)'),
+                      decoration: const InputDecoration(labelText: 'Video URL (https://...)'),
                     ),
                     const SizedBox(height: Ds.sp3),
 
@@ -583,10 +544,7 @@ class _AdminBannerManagementScreenState
                       value: selectedAudience,
                       decoration: const InputDecoration(labelText: 'Target Audience'),
                       items: BannerAudience.values
-                          .map((a) => DropdownMenuItem(
-                                value: a,
-                                child: Text(a.name),
-                              ))
+                          .map((a) => DropdownMenuItem(value: a, child: Text(a.name)))
                           .toList(),
                       onChanged: (v) => setDialogState(() => selectedAudience = v!),
                     ),
@@ -606,8 +564,7 @@ class _AdminBannerManagementScreenState
                               }
                             },
                             child: InputDecorator(
-                              decoration: const InputDecoration(
-                                  labelText: 'Start Date'),
+                              decoration: const InputDecoration(labelText: 'Start Date'),
                               child: Text(_formatDate(startDate)),
                             ),
                           ),
@@ -627,8 +584,7 @@ class _AdminBannerManagementScreenState
                               }
                             },
                             child: InputDecorator(
-                              decoration: const InputDecoration(
-                                  labelText: 'End Date'),
+                              decoration: const InputDecoration(labelText: 'End Date'),
                               child: Text(_formatDate(endDate)),
                             ),
                           ),
@@ -639,8 +595,7 @@ class _AdminBannerManagementScreenState
                       initialValue: priority.toString(),
                       decoration: const InputDecoration(labelText: 'Priority'),
                       keyboardType: TextInputType.number,
-                      onChanged: (v) =>
-                          setDialogState(() => priority = int.tryParse(v) ?? 0),
+                      onChanged: (v) => setDialogState(() => priority = int.tryParse(v) ?? 0),
                     ),
                     const SizedBox(height: Ds.sp3),
 
@@ -650,15 +605,13 @@ class _AdminBannerManagementScreenState
                       initialValue: impressionLimit?.toString(),
                       decoration: const InputDecoration(labelText: 'Impression Limit'),
                       keyboardType: TextInputType.number,
-                      onChanged: (v) =>
-                          setDialogState(() => impressionLimit = int.tryParse(v)),
+                      onChanged: (v) => setDialogState(() => impressionLimit = int.tryParse(v)),
                     ),
                     TextFormField(
                       initialValue: clickLimit?.toString(),
                       decoration: const InputDecoration(labelText: 'Click Limit'),
                       keyboardType: TextInputType.number,
-                      onChanged: (v) =>
-                          setDialogState(() => clickLimit = int.tryParse(v)),
+                      onChanged: (v) => setDialogState(() => clickLimit = int.tryParse(v)),
                     ),
                     const SizedBox(height: Ds.sp3),
 
@@ -688,14 +641,14 @@ class _AdminBannerManagementScreenState
                       _sectionTitle('Sponsor Information'),
                       TextFormField(
                         controller: sponsorNameCtrl,
-                        decoration:
-                            const InputDecoration(labelText: 'Sponsor Name *'),
+                        decoration: const InputDecoration(labelText: 'Sponsor Name *'),
                         validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                       ),
                       TextFormField(
                         controller: sponsorInfoCtrl,
                         decoration: const InputDecoration(
-                            labelText: 'Sponsor Info / Campaign Reference'),
+                          labelText: 'Sponsor Info / Campaign Reference',
+                        ),
                         maxLines: 2,
                       ),
                     ],
@@ -705,10 +658,7 @@ class _AdminBannerManagementScreenState
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             FilledButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
@@ -733,10 +683,8 @@ class _AdminBannerManagementScreenState
                   status: selectedStatus,
                   impressionLimit: impressionLimit,
                   clickLimit: clickLimit,
-                  sponsorName:
-                      selectedType == BannerType.sponsoredAd ? sponsorNameCtrl.text : null,
-                  sponsorInfo:
-                      selectedType == BannerType.sponsoredAd ? sponsorInfoCtrl.text : null,
+                  sponsorName: selectedType == BannerType.sponsoredAd ? sponsorNameCtrl.text : null,
+                  sponsorInfo: selectedType == BannerType.sponsoredAd ? sponsorInfoCtrl.text : null,
                   createdAt: campaign?.createdAt ?? DateTime.now(),
                   updatedAt: DateTime.now(),
                   createdBy: 'admin', // TODO: get actual admin ID
@@ -749,23 +697,19 @@ class _AdminBannerManagementScreenState
                         .doc(campaign.id)
                         .update(newCampaign.toFirestore());
                   } else {
-                    await _firestore
-                        .collection('banner_campaigns')
-                        .add(newCampaign.toFirestore());
+                    await _firestore.collection('banner_campaigns').add(newCampaign.toFirestore());
                   }
                   if (mounted) {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              isEditing ? 'Campaign updated' : 'Campaign created')),
+                      SnackBar(content: Text(isEditing ? 'Campaign updated' : 'Campaign created')),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to save: $e')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
                   }
                 }
               },
@@ -784,8 +728,9 @@ class _AdminBannerManagementScreenState
         alignment: Alignment.centerLeft,
         child: Text(
           title,
-          style: Ds.labelMd(Theme.of(context).colorScheme.onSurfaceVariant)
-              .copyWith(fontWeight: FontWeight.w700),
+          style: Ds.labelMd(
+            Theme.of(context).colorScheme.onSurfaceVariant,
+          ).copyWith(fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -862,9 +807,9 @@ class _CampaignTile extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 campaign.title,
-                                style: Ds.bodyMd(cs.onSurface).copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: Ds.bodyMd(
+                                  cs.onSurface,
+                                ).copyWith(fontWeight: FontWeight.w600),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -884,12 +829,9 @@ class _CampaignTile extends StatelessWidget {
                           spacing: Ds.sp1,
                           runSpacing: Ds.sp1,
                           children: [
-                            _InfoChip(
-                                label: campaign.type.name, color: cs.primary),
-                            _InfoChip(
-                                label: campaign.placement.name, color: cs.secondary),
-                            _InfoChip(
-                                label: campaign.targetAudience.name, color: cs.tertiary),
+                            _InfoChip(label: campaign.type.name, color: cs.primary),
+                            _InfoChip(label: campaign.placement.name, color: cs.secondary),
+                            _InfoChip(label: campaign.targetAudience.name, color: cs.tertiary),
                           ],
                         ),
                       ],
@@ -916,11 +858,7 @@ class _CampaignTile extends StatelessWidget {
                       const PopupMenuItem(
                         value: 'edit',
                         child: Row(
-                          children: [
-                            Icon(Icons.edit, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
+                          children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Edit')],
                         ),
                       ),
                       const PopupMenuItem(
@@ -1038,17 +976,10 @@ class _StatusBadge extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12)),
       child: Text(
         status.name.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textColor),
       ),
     );
   }
@@ -1070,189 +1001,125 @@ class _InfoChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: color,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: color),
       ),
     );
   }
 }
 
-class _BannerPreviewDialog extends StatelessWidget {
+class _BannerPreviewDialog extends StatefulWidget {
   const _BannerPreviewDialog({required this.campaign});
-
   final BannerCampaign campaign;
+  @override
+  State<_BannerPreviewDialog> createState() => _BannerPreviewDialogState();
+}
+
+class _BannerPreviewDialogState extends State<_BannerPreviewDialog> {
+  String _device = 'mobile';
+  bool _dark = false;
+
+  double get _maxWidth => switch (_device) {
+    'tablet' => 760,
+    'desktop' => 1100,
+    _ => 430,
+  };
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
+    final campaign = widget.campaign;
+    final previewTheme = _dark
+        ? ThemeData.dark(useMaterial3: true)
+        : ThemeData.light(useMaterial3: true);
     return Dialog(
+      insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(Ds.sp3),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(Ds.rLg)),
-              ),
-              child: Row(
+        constraints: const BoxConstraints(maxWidth: 1160, maxHeight: 760),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Preview: ${campaign.title}',
-                      style: Ds.bodyMd(cs.onPrimaryContainer).copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: Text('Live banner preview', style: Ds.sectionTitle(cs.onSurface)),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
-            ),
-
-            // Preview content
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(Ds.sp3),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Device selector tabs
-                    DefaultTabController(
-                      length: 3,
-                      child: Column(
-                        children: [
-                          TabBar(
-                            tabs: const [
-                              Tab(text: 'Mobile'),
-                              Tab(text: 'Tablet'),
-                              Tab(text: 'Desktop'),
-                            ],
-                            labelStyle: Ds.labelMd(cs.onSurface),
-                            unselectedLabelStyle: Ds.labelMd(cs.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: Ds.sp3),
-                          SizedBox(
-                            height: 400,
-                            child: TabBarView(
-                              children: [
-                                _buildPreviewForDevice(context, 375),
-                                _buildPreviewForDevice(context, 768),
-                                _buildPreviewForDevice(context, 1200),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: Ds.sp3),
-
-                    // Campaign details
-                    _buildDetailRow(context, 'Type', campaign.type.name),
-                    _buildDetailRow(context, 'Placement', campaign.placement.name),
-                    _buildDetailRow(context, 'Status', campaign.status.name),
-                    _buildDetailRow(context, 'Audience', campaign.targetAudience.name),
-                    _buildDetailRow(context, 'Priority', campaign.priority.toString()),
-                    _buildDetailRow(
-                        context,
-                        'Schedule',
-                        '${_formatDate(campaign.startDate)} - ${_formatDate(campaign.endDate)}'),
-                    if (campaign.impressionLimit != null)
-                      _buildDetailRow(context, 'Impression Limit', campaign.impressionLimit.toString()),
-                    if (campaign.clickLimit != null)
-                      _buildDetailRow(context, 'Click Limit', campaign.clickLimit.toString()),
-                    if (campaign.sponsorName != null)
-                      _buildDetailRow(context, 'Sponsor', campaign.sponsorName!),
-                  ],
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Mobile'),
+                    selected: _device == 'mobile',
+                    onSelected: (_) => setState(() => _device = 'mobile'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Tablet'),
+                    selected: _device == 'tablet',
+                    onSelected: (_) => setState(() => _device = 'tablet'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Desktop'),
+                    selected: _device == 'desktop',
+                    onSelected: (_) => setState(() => _device = 'desktop'),
+                  ),
+                  FilterChip(
+                    label: const Text('Dark'),
+                    selected: _dark,
+                    onSelected: (v) => setState(() => _dark = v),
+                  ),
+                ],
               ),
-            ),
-
-            // Close button
-            Padding(
-              padding: const EdgeInsets.all(Ds.sp3),
-              child: FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreviewForDevice(BuildContext context, double width) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: width),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(Ds.sp3),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${width.toInt()}px width',
-                  style: Ds.caption(Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: Ds.sp3),
-                // This would ideally render the actual banner widget
-                Container(
-                  height: 180,
+              const SizedBox(height: 12),
+              Expanded(
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(Ds.rLg),
+                    color: cs.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: cs.hairline),
                   ),
                   child: Center(
-                    child: Text(
-                      'Banner Preview\n(${campaign.type.name})',
-                      style: Ds.bodyMd(Theme.of(context).colorScheme.onSurfaceVariant),
-                      textAlign: TextAlign.center,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        constraints: BoxConstraints(maxWidth: _maxWidth),
+                        child: Theme(
+                          data: previewTheme,
+                          child: Material(
+                            color: previewTheme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: CampaignBannerCard(
+                                campaign: campaign,
+                                onImpressionRecorded: () {},
+                                onTap: () {},
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Preview uses current banner rendering. Impressions/clicks not recorded. Analytics shown in admin lists reflect stored campaign/event data only.',
+                style: Ds.caption(cs.onSurfaceVariant),
+              ),
+            ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildDetailRow(BuildContext context, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: Ds.caption(Theme.of(context).colorScheme.onSurfaceVariant)
-                  .copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            child: Text(value, style: Ds.bodySm(Theme.of(context).colorScheme.onSurface)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }

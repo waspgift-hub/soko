@@ -63,7 +63,7 @@ class UserProfile {
       mood: data['mood'] ?? '',
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
-      profileImage: data['profileImage'] ?? '',
+      profileImage: data['profileImage'] ?? data['avatarUrl'] ?? '',
       paymentNumbers: Map<String, String>.from(data['paymentNumbers'] ?? {}),
       shopBanner: data['shopBanner'] ?? '',
       shopBannerColor: data['shopBannerColor'] ?? '',
@@ -307,13 +307,20 @@ class UserService {
   }
 
   Stream<UserProfile?> streamProfile(String uid) {
+    final self = uid == _auth.currentUser?.uid;
+    if (self) {
+      return _db
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .map((doc) => doc.exists ? UserProfile.fromMap(uid, doc.data()!) : null);
+    }
+    // Other users: only public projection, no PII.
     return _db
-        .collection('users')
+        .collection('userPublic')
         .doc(uid)
         .snapshots()
-        .map(
-          (doc) => doc.exists ? UserProfile.fromMap(uid, doc.data()!) : null,
-        );
+        .map((doc) => doc.exists ? UserProfile.fromMap(uid, doc.data()!) : null);
   }
 
   Future<void> saveProfile(UserProfile profile) async {

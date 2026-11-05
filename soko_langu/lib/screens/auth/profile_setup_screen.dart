@@ -36,9 +36,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
     if (_dob == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.tr('select_dob'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('select_dob'))));
       return;
     }
     setState(() => _saving = true);
@@ -55,11 +53,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       await context.read<AuthNotifier>().completeProfileSetup();
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e')),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -82,11 +78,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 const SizedBox(height: 16),
                 Text(
                   context.tr('complete_profile'),
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: cs.onSurface,
-                  ),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
@@ -103,23 +95,21 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? context.tr('enter_name')
-                      : null,
+                  validator: (v) => v == null || v.trim().isEmpty ? context.tr('enter_name') : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: const ['Male', 'Female', 'Other'].contains(_gender)
-                      ? _gender
-                      : null,
+                  value: const ['Male', 'Female', 'Other'].contains(_gender) ? _gender : null,
                   decoration: InputDecoration(
                     labelText: context.tr('gender'),
                     prefixIcon: Icon(Icons.wc),
                     border: OutlineInputBorder(),
                   ),
-                  items: ['Male', 'Female', 'Other']
-                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                      .toList(),
+                  items: [
+                    'Male',
+                    'Female',
+                    'Other',
+                  ].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                   onChanged: (v) => setState(() => _gender = v),
                 ),
                 const SizedBox(height: 16),
@@ -129,9 +119,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       context: context,
                       initialDate: DateTime(2000),
                       firstDate: DateTime(1940),
-                      lastDate: DateTime.now().subtract(
-                        const Duration(days: 365 * 13),
-                      ),
+                      lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
                     );
                     if (picked != null) setState(() => _dob = picked);
                   },
@@ -156,9 +144,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     prefixIcon: Icon(Icons.location_on),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? context.tr('enter_location')
-                      : null,
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? context.tr('enter_location') : null,
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
@@ -168,22 +155,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.primary,
                       foregroundColor: cs.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     child: _saving
-                        ? const SokoVibeThreeDotLoader(
-                            size: 22,
-                            dotSize: 5.5,
-                            color: Colors.white,
-                          )
+                        ? SokoVibeThreeDotLoader(size: 22, dotSize: 5.5, color: cs.onPrimary)
                         : Text(
                             context.tr('save_and_continue'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                   ),
                 ),

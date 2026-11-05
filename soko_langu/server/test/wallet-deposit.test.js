@@ -13,6 +13,7 @@ const express = require('express');
 const UID = 'walletOwner1';
 
 const FIREBASE_ADMIN = require.resolve('firebase-admin');
+const FIREBASE_ADMIN_FIRESTORE = require.resolve('firebase-admin/firestore');
 const CONFIG = require.resolve('../src/config');
 const CONFIG_FIREBASE = require.resolve('../src/config/firebase');
 const NOTIFY = require.resolve('../src/modules/legacy-compat/notify');
@@ -125,6 +126,7 @@ function installStubs() {
     require.cache[path] = { id: path, filename: path, loaded: true, exports };
   };
   stub(FIREBASE_ADMIN, fakeAdmin);
+  stub(FIREBASE_ADMIN_FIRESTORE, { FieldValue: fakeAdmin.firestore.FieldValue });
   stub(CONFIG, {
     nodeEnv: 'test',
     clickpesa: { collectionWebhookUrl: WEBHOOK_URL },

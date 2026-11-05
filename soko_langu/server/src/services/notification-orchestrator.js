@@ -234,7 +234,7 @@ class UserPreferences {
 
   static async load(userId) {
     // Load from Firestore
-    const db = require('../../config/firebase').getFirebaseFirestore();
+    const db = require('../config/firebase').getFirebaseFirestore();
     const doc = await db
       .collection('user_notification_preferences')
       .doc(userId)
@@ -250,7 +250,7 @@ class UserPreferences {
   }
 
   async save() {
-    const db = require('../../config/firebase').getFirebaseFirestore();
+    const db = require('../config/firebase').getFirebaseFirestore();
     await db
       .collection('user_notification_preferences')
       .doc(this.userId)
@@ -284,7 +284,7 @@ class UserPreferences {
     const channelDef = cat.channels[channel];
     if (channelDef === undefined) return true; // Default allow
 
-    return channelPref && channelDef ? channelPref : true;
+    return channelDef;
   }
 }
 
@@ -305,7 +305,7 @@ class DeduplicationStore {
     this.seenEvents.set(key, { sentAt: now, notificationId });
 
     // Persist to Firestore with TTL
-    const db = require('../../config/firebase').getFirebaseFirestore();
+    const db = require('../config/firebase').getFirebaseFirestore();
     await db
       .collection('notification_dedup')
       .doc(key)
@@ -329,7 +329,7 @@ class DeduplicationStore {
     if (!memoryResult) return false; // Recently sent
 
     // Check Firestore with TTL
-    const db = require('../../config/firebase').getFirebaseFirestore();
+    const db = require('../config/firebase').getFirebaseFirestore();
     const doc = await db.collection('notification_dedup').doc(key).get();
 
     if (doc.exists) {
@@ -354,7 +354,7 @@ class RateLimiter {
 
   // Check if user is within rate limit for a category
   check({ userId, category, windowMinutes }) {
-    const now = DateTime.now().millisecondsSinceEpoch;
+    const now = Date.now();
     if (!this.cache.has(userId)) {
       this.cache.set(userId, []);
     }
@@ -451,9 +451,20 @@ const orderTemplates = {
   },
   en: {
     created: 'Your order #{{orderId}} has been placed. Set the shipping cost now.',
-    shipped: '${m[1]} has been shipped. Confirm receipt once you receive the goods.',
+    shipped: 'Your order has been shipped. Confirm receipt once you receive the goods.',
     delivered: 'You have received your order. Thank you for buying on Soko Vibe.',
     completed: 'Your order has been completed. Thank you for buying on Soko Vibe.',
+  },
+};
+
+const kycTemplates = {
+  sw: {
+    approved: 'KYC yako imekubaliwa. Sasa unaweza kuuza bidhaa.',
+    rejected: 'KYC yako imekataliwa. Sababu: {{reason}}',
+  },
+  en: {
+    approved: 'Your KYC has been approved. You can now sell products.',
+    rejected: 'Your KYC was rejected. Reason: {{reason}}',
   },
 };
 
@@ -486,7 +497,7 @@ class NotificationOrchestrator {
     // 1. Build the notification event from the catalogue
     const event = this.buildEvent(eventType, eventData);
     if (!event) {
-      debugPrint(`[Orchestrator] Unknown event type: ${eventType}`);
+      console.log(`[Orchestrator] Unknown event type: ${eventType}`);
       return { success: false, error: 'unknown_event_type' };
     }
 
@@ -499,7 +510,7 @@ class NotificationOrchestrator {
       eventId: event.id,
     });
     if (!dedupOk) {
-      debugPrint(`[Orchestrator] Duplicate event suppressed: ${event.id}`);
+      console.log(`[Orchestrator] Duplicate event suppressed: ${event.id}`);
       return {
         success: false,
         suppressed: true,
@@ -514,7 +525,7 @@ class NotificationOrchestrator {
       windowMinutes: this.rateWindow(event.category),
     });
     if (!rateOk) {
-      debugPrint(`[Orchestrator] Rate limit exceeded for ${userId}`);
+      console.log(`[Orchestrator] Rate limit exceeded for ${userId}`);
       return {
         success: false,
         suppressed: true,
@@ -526,7 +537,7 @@ class NotificationOrchestrator {
     const channels = selectChannels(event.category, prefs, event.isTransactional);
 
     if (channels.length === 0) {
-      debugPrint(`[Orchestrator] No channels allowed for ${event.category}`);
+      console.log(`[Orchestrator] No channels allowed for ${event.category}`);
       return {
         success: false,
         suppressed: true,
@@ -570,7 +581,7 @@ class NotificationOrchestrator {
           };
         }
       } catch (err) {
-        debugPrint(`[Orchestrator] Channel ${channel} failed: ${err.message}`);
+        console.log(`[Orchestrator] Channel ${channel} failed: ${err.message}`);
         continue; // Try next channel
       }
     }

@@ -53,7 +53,7 @@ test('syncLegacyOrderStatus updates existing mirror docs with the legacy status'
       return {
         doc(id) {
           return {
-            async get() { return { exists: true }; },
+            async get() { return { exists: true, data: () => ({}), id }; },
             async set(data, opts) { writes.push({ name, id, data, opts }); },
           };
         },
@@ -78,7 +78,7 @@ test('syncLegacyOrderStatus also mirrors the server-locked money fields', async 
       return {
         doc(id) {
           return {
-            async get() { return { exists: true }; },
+            async get() { return { exists: true, data: () => ({}), id }; },
             async set(data, opts) { writes.push({ name, id, data, opts }); },
           };
         },

@@ -8,6 +8,7 @@ import '../extensions/context_tr.dart';
 import '../app/routes.dart';
 import '../theme/design_tokens.dart';
 import '../theme/responsive_typography.dart';
+import 'banners/soko_banner_theme.dart';
 
 class DynamicBanner extends StatefulWidget {
   const DynamicBanner({super.key});
@@ -17,10 +18,6 @@ class DynamicBanner extends StatefulWidget {
 }
 
 class _DynamicBannerState extends State<DynamicBanner> {
-  // Built once, not per build. `getFeaturedProducts()` is
-  // `Stream.fromFuture(_api.fetchProducts(...))`, so an inline `stream:` meant a
-  // fresh HTTP request to the products API on every rebuild of this banner —
-  // and a new ProductService instance to hold it.
   late final Stream<List<Product>> _featured;
 
   @override
@@ -34,7 +31,10 @@ class _DynamicBannerState extends State<DynamicBanner> {
     return StreamBuilder<List<Product>>(
       stream: _featured,
       builder: (context, snap) {
-        final products = snap.data ?? [];
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const _BannerSkeleton();
+        }
+        final products = snap.data ?? const <Product>[];
         if (products.isEmpty) return const EarnMoneyBanner();
         return _AdsCarousel(products: products);
       },
@@ -42,8 +42,28 @@ class _DynamicBannerState extends State<DynamicBanner> {
   }
 }
 
-// Single banner that cycles every boosted product inside it, mirroring the
-// flash-sale banner so ads never stack as one banner per product.
+class _BannerSkeleton extends StatelessWidget {
+  const _BannerSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ResponsiveBanner(
+      minHeight: SokoBannerTheme.minHeight,
+      margin: EdgeInsets.zero,
+      borderRadius: SokoBannerTheme.borderRadius,
+      decoration: SokoBannerTheme.surfaceDecoration(context),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: SokoBannerTheme.borderRadius,
+          gradient: LinearGradient(
+            colors: [cs.surfaceContainerHighest.withValues(alpha: 0.35), cs.surfaceContainerLow],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AdsCarousel extends StatefulWidget {
   final List<Product> products;
   const _AdsCarousel({required this.products});
@@ -56,6 +76,7 @@ class _AdsCarouselState extends State<_AdsCarousel> {
   late PageController _pageController;
   int _currentPage = 0;
   Timer? _timer;
+  bool _interacting = false;
 
   @override
   void initState() {
@@ -85,16 +106,20 @@ class _AdsCarouselState extends State<_AdsCarousel> {
 
   void _startAutoSlide(int itemCount) {
     _timer?.cancel();
-    if (itemCount <= 1) return;
-    // 30s per slide so every ad gets a full read, same as flash sales.
+    if (_interacting || itemCount <= 1) return;
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted) return;
+      if (!mounted || _interacting) return;
       final nextPage = (_currentPage + 1) % itemCount;
-      _pageController.animateToPage(
-        nextPage,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+      final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _pageController.jumpToPage(nextPage);
+      } else {
+        _pageController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+        );
+      }
     });
   }
 
@@ -102,182 +127,168 @@ class _AdsCarouselState extends State<_AdsCarousel> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final products = widget.products;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final current = products[_currentPage.clamp(0, products.length - 1)];
 
     return ResponsiveBanner(
-      minHeight: 180,
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => context.push(
-        '${AppRoutes.productDetail}/${products[_currentPage].id}',
-        extra: products[_currentPage],
-      ),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: _buildImagePanel(cs)),
-          Expanded(flex: 1, child: _buildInfoPanel()),
-        ],
+      minHeight: SokoBannerTheme.minHeight,
+      margin: EdgeInsets.zero,
+      borderRadius: SokoBannerTheme.borderRadius,
+      onTap: () => context.push('${AppRoutes.productDetail}/${current.id}', extra: current),
+      decoration: SokoBannerTheme.surfaceDecoration(context),
+      child: ClipRRect(
+        borderRadius: SokoBannerTheme.borderRadius,
+        child: Row(
+          children: [
+            Expanded(flex: 11, child: _buildImagePanel(cs, products, reduceMotion)),
+            Expanded(flex: 9, child: _buildInfoPanel(context, cs, current, products.length)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildImagePanel(ColorScheme cs) {
-    final products = widget.products;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        PageView.builder(
-          controller: _pageController,
-          onPageChanged: (page) => setState(() => _currentPage = page),
-          itemCount: products.length,
-          itemBuilder: (context, index) {
-            final p = products[index];
-            return p.images.isNotEmpty
-                ? ProductCachedImage(url: p.images.first, fit: BoxFit.cover)
-                : _imagePlaceholder(cs);
-          },
-        ),
-        if (products.length > 1)
+  Widget _buildImagePanel(ColorScheme cs, List<Product> products, bool reduceMotion) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n is ScrollStartNotification && n.dragDetails != null) {
+          _interacting = true;
+          _timer?.cancel();
+        } else if (n is ScrollEndNotification) {
+          _interacting = false;
+          _startAutoSlide(products.length);
+        }
+        return false;
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: (page) => setState(() => _currentPage = page),
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final p = products[index];
+              return p.images.isNotEmpty
+                  ? ProductCachedImage(url: p.images.first, fit: BoxFit.cover)
+                  : Container(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                      child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant, size: 34),
+                    );
+            },
+          ),
           Positioned(
-            bottom: 8,
             left: 0,
             right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: () {
-                final total = products.length;
-                final win = total > 10 ? 10 : total;
-                final active = total > 10
-                    ? (_currentPage % win)
-                    : _currentPage;
-                return [
-                  for (var i = 0; i < win; i++)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      width: active == i ? 14 : 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: active == i
-                            ? Colors.white
-                            : Colors.white54,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                ];
-              }(),
+            bottom: 0,
+            height: 56,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Colors.black.withValues(alpha: 0.28), Colors.transparent],
+                ),
+              ),
             ),
           ),
-      ],
+          if (products.length > 1)
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(products.length > 8 ? 8 : products.length, (i) {
+                  final active = (products.length > 8 ? _currentPage % 8 : _currentPage) == i;
+                  return AnimatedContainer(
+                    duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    width: active ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: active ? Colors.white : Colors.white.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildInfoPanel() {
-    final p = widget.products[_currentPage.clamp(0, widget.products.length - 1)];
+  Widget _buildInfoPanel(BuildContext context, ColorScheme cs, Product p, int count) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF121212), Color(0xFF3D3D3D)],
-        ),
+        color: cs.surface,
+        border: Border(left: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.35))),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.bolt, color: Colors.white, size: 12),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: BannerText(
-                  context.tr('boost_product'),
-                  style: Ds.badge(Colors.white).copyWith(fontSize: 9, letterSpacing: 0.8),
-                  maxLines: 1,
-                ),
-              ),
-            ],
+          SokoBannerTheme.badge(
+            context,
+            context.tr('featured_products'),
+            icon: Icons.auto_awesome_outlined,
           ),
-          const Spacer(),
-          BannerText(
-            context.formatPrice(p.price),
-            style: Ds.priceLarge(Colors.white).copyWith(height: 1),
-            maxLines: 1,
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           BannerText(
             p.name,
-            style: Ds.caption(Colors.white).copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-              height: 1.3,
+            style: TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+              color: cs.onSurface,
+              letterSpacing: -0.2,
             ),
             maxLines: 2,
           ),
           const SizedBox(height: 6),
+          Text(
+            context.formatPrice(p.price),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Ds.priceLarge(cs.primary).copyWith(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.star, color: Colors.white, size: 10),
-              const SizedBox(width: 2),
-              BannerText(
-                p.rating.toStringAsFixed(1),
-                style: Ds.caption(Colors.white).copyWith(fontSize: 10),
-                maxLines: 1,
-              ),
-              const SizedBox(width: 2),
+              Icon(Icons.star_rounded, size: 15, color: cs.tertiary),
+              const SizedBox(width: 3),
               Flexible(
-                child: BannerText(
-                  ' · ${p.soldCount} ${context.tr('sold')}',
-                  style: Ds.caption(Colors.white70).copyWith(fontSize: 9),
+                child: Text(
+                  '${p.rating.toStringAsFixed(1)} · ${p.soldCount} ${context.tr('sold')}',
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
           ),
           const Spacer(),
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 9),
-              const SizedBox(width: 2),
-              Flexible(
-                child: BannerText(
-                  '${widget.products.length} ${context.tr('featured_products')}',
-                  style: Ds.caption(Colors.white70).copyWith(fontSize: 8),
+              Expanded(
+                child: Text(
+                  '$count ${context.tr('featured_products')}',
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
                 ),
               ),
+              Icon(Icons.arrow_forward_rounded, size: 16, color: cs.primary),
             ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _imagePlaceholder(ColorScheme cs) {
-    return Container(
-      color: cs.surfaceContainerLow,
-      child: Icon(Icons.image, color: cs.onSurfaceVariant, size: 32),
     );
   }
 }
@@ -288,105 +299,83 @@ class EarnMoneyBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    final isDark = cs.brightness == Brightness.dark;
+    return ResponsiveBanner(
+      minHeight: SokoBannerTheme.minHeight,
+      margin: EdgeInsets.zero,
+      borderRadius: SokoBannerTheme.borderRadius,
       onTap: () => context.push(AppRoutes.addProduct),
-      child: ResponsiveBanner(
-        minHeight: 180,
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        borderRadius: BorderRadius.circular(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [
-              cs.primary.withValues(alpha: 0.12),
-              cs.primary.withValues(alpha: 0.03),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: cs.primary.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
+      decoration: SokoBannerTheme.surfaceDecoration(
+        context,
+        gradient: LinearGradient(
+          colors: [
+            cs.primary.withValues(alpha: isDark ? 0.16 : 0.09),
+            cs.surfaceContainerLow,
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
             Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 8, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        context.tr('earn_money_title'),
-                        style: Ds.bannerCta(cs.primary).copyWith(fontSize: 10),
-                      ),
+              flex: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SokoBannerTheme.badge(
+                    context,
+                    context.tr('earn_money_title'),
+                    icon: Icons.storefront_outlined,
+                  ),
+                  const SizedBox(height: 12),
+                  BannerText(
+                    context.tr('earn_money_subtitle'),
+                    style: TextStyle(
+                      fontSize: 20,
+                      height: 1.15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.45,
+                      color: cs.onSurface,
                     ),
-                    const SizedBox(height: 10),
-                    BannerText(
-                      context.tr('earn_money_subtitle'),
-                      style: Ds.bannerTitle(cs.onSurface).copyWith(height: 1.15),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 6),
-                    BannerText(
-                      context.tr('earn_money_desc'),
-                      style: Ds.bannerSubtitle(cs.onSurfaceVariant),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        context.tr('start_selling'),
-                        style: Ds.bannerCta(cs.surface).copyWith(fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 8),
+                  BannerText(
+                    context.tr('earn_money_desc'),
+                    style: TextStyle(fontSize: 13.5, height: 1.4, color: cs.onSurfaceVariant),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  SokoBannerTheme.ctaPill(context, context.tr('start_selling')),
+                ],
               ),
             ),
+            const SizedBox(width: 12),
             Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.monetization_on_rounded,
-                        size: 48,
-                        color: cs.primary,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '+${context.currencySymbol()}',
-                        style: Ds.labelLg(cs.primary).copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
+              flex: 4,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 120),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.10)),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.sell_outlined, size: 38, color: cs.primary),
+                    const SizedBox(height: 8),
+                    Text(
+                      '+${context.currencySymbol()}',
+                      style: Ds.labelLg(
+                        cs.primary,
+                      ).copyWith(fontWeight: FontWeight.w800, fontSize: 18),
+                    ),
+                  ],
                 ),
               ),
             ),

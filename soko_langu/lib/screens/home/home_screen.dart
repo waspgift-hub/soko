@@ -16,11 +16,9 @@ import '../../widgets/banner_rotator.dart';
 import '../../widgets/marketplace/category_card.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/premium_widgets.dart';
-import '../../widgets/animated_gradient_line.dart';
 import '../../widgets/recently_viewed_row.dart';
 import '../../widgets/trending_carousel.dart';
 import '../../widgets/ds/ds.dart';
-import '../../theme/app_typography.dart';
 import '../../theme/app_colors.dart';
 
 import '../../extensions/context_tr.dart';
@@ -376,21 +374,25 @@ class _HomeScreenState extends State<HomeScreen>
       child: AnimatedPress(
         onTap: () => _onBrandTap(brand),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          margin: const EdgeInsets.only(right: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
-            color: isSelected ? cs.primary : cs.surface,
+            color: isSelected ? cs.primary : cs.surfaceContainerHighest.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: isSelected ? cs.primary : cs.outlineVariant),
+            border: Border.all(
+              color: isSelected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.45),
+            ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? cs.onPrimary : cs.onSurface,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               fontSize: 13,
+              letterSpacing: -0.1,
             ),
           ),
         ),
@@ -442,140 +444,123 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
-        titleSpacing: 18,
+        titleSpacing: 20,
+        toolbarHeight: 64,
         title: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                color: cs.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.35)),
               ),
               alignment: Alignment.center,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 child: Image.asset(
                   'assets/app_icon.png',
                   height: 32,
                   width: 32,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) =>
-                      Icon(Icons.storefront_rounded, size: 24, color: cs.primary),
+                      Icon(Icons.storefront_rounded, size: 22, color: cs.primary),
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Soko Vibe',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  context.tr('explore_market', 'Soko Huria la Tanzania'),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          // Currency pill
-          GestureDetector(
-            onTap: () => _showCurrencyPicker(context),
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.brightness == Brightness.dark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.black.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.payments_outlined, size: 15, color: cs.primary),
-                  const SizedBox(width: 4),
                   Text(
-                    AppConfig.of(context).currencyCode,
+                    'Soko Vibe',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: 21,
                       fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                      height: 1.1,
                       color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    context.tr('explore_market', 'Soko Huria la Tanzania'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-          // Notification bell
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications_outlined, color: cs.onSurface, size: 23),
-                tooltip: context.tr('notifications'),
-                onPressed: () {
-                  if (GoRouterState.of(context).matchedLocation == AppRoutes.notifications) {
-                    return;
-                  }
-                  context.push(AppRoutes.notifications);
-                },
-              ),
-              if (_unreadCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      '$_unreadCount',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: cs.surface,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+          ],
+        ),
+        actions: [
+          Semantics(
+            button: true,
+            label: context.tr('select_currency'),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => _showCurrencyPicker(context),
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(
+                    alpha: cs.brightness == Brightness.dark ? 0.55 : 0.85,
                   ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.35)),
                 ),
-            ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.payments_outlined, size: 16, color: cs.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      AppConfig.of(context).currencyCode,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+          IconButton(
+            icon: Badge(
+              isLabelVisible: _unreadCount > 0,
+              label: Text(_unreadCount > 99 ? '99+' : '$_unreadCount'),
+              child: Icon(Icons.notifications_none_rounded, color: cs.onSurface, size: 25),
+            ),
+            tooltip: context.tr('notifications'),
+            onPressed: () {
+              if (GoRouterState.of(context).matchedLocation == AppRoutes.notifications) {
+                return;
+              }
+              context.push(AppRoutes.notifications);
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -599,9 +584,12 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(height: 8),
                       // Samsung One UI Inspired Search Bar
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                         child: OneUISearchBar(
-                          hintText: context.tr('search_products_users_hint', 'Tafuta bidhaa, maduka, au huduma...'),
+                          hintText: context.tr(
+                            'search_products_users_hint',
+                            'Tafuta bidhaa, maduka, au huduma...',
+                          ),
                           controller: _searchCtrl,
                           readOnly: true,
                           onTap: () => context.push(AppRoutes.search),
@@ -609,13 +597,13 @@ class _HomeScreenState extends State<HomeScreen>
                           onFilterTap: _showFilterSheet,
                         ),
                       ),
-                      // Brand chips
                       SizedBox(
-                        height: 44,
-                        child: ListView.builder(
+                        height: 42,
+                        child: ListView.separated(
                           scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
                           itemCount: 1 + _brands.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
                           itemBuilder: (context, index) {
                             if (index == 0) return _brandChip(context.tr('all'), null);
                             return _brandChip(_brands[index - 1], _brands[index - 1]);
@@ -854,6 +842,7 @@ class _HomeScreenState extends State<HomeScreen>
     final cs = Theme.of(context).colorScheme;
     final provider = context.watch<ProductFeedProvider>();
     final slivers = <Widget>[
+      SliverToBoxAdapter(child: SizedBox(height: 16)),
       SliverToBoxAdapter(
         child: SectionHeader(
           title: context.tr('latest_products'),

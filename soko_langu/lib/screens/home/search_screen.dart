@@ -495,44 +495,61 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    // Universal: support any screen width, text scale and orientation.
-    // Scaffold handles inset; body is wrapped to dismiss keyboard on tap
-    // and to keep content within safe area on notched/rounded devices.
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return Scaffold(
+      backgroundColor: cs.surface,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
         titleSpacing: 0,
-        // AppBar title must be flexible to avoid overflow on small screens
-        // or at large textScale (accessibility). Use LayoutBuilder for width.
+        toolbarHeight: 68,
         title: LayoutBuilder(builder: (context, constraints) => _buildSearchField(cs, constraints)),
         bottom: _hasSearched
             ? TabBar(
                 controller: _tabCtrl,
                 isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                dividerColor: cs.outlineVariant.withValues(alpha: 0.35),
                 labelColor: cs.primary,
                 unselectedLabelColor: cs.onSurfaceVariant,
                 indicatorColor: cs.primary,
-                // Allow tab text to scale with user setting without overflow
-                labelStyle: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
-                unselectedLabelStyle: TextStyle(fontSize: Responsive.scaleFont(context, 13)),
+                indicatorSize: TabBarIndicatorSize.label,
+                labelStyle: TextStyle(
+                  fontSize: Responsive.scaleFont(context, 13.5),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontSize: Responsive.scaleFont(context, 13.5),
+                  fontWeight: FontWeight.w500,
+                ),
                 tabs: _tabs.map((t) => Tab(text: context.tr(t))).toList(),
               )
             : _isListening
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(32),
+                preferredSize: const Size.fromHeight(36),
                 child: Container(
-                  color: cs.error.withValues(alpha: 0.1),
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.errorContainer.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SokoVibeThreeDotLoader(size: 14, dotSize: 3.5, color: cs.error),
+                      Icon(Icons.mic_rounded, size: 16, color: cs.error),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
                           context.tr('listening'),
                           style: TextStyle(
-                            color: cs.error,
+                            color: cs.onErrorContainer,
                             fontSize: Responsive.scaleFont(context, 13),
+                            fontWeight: FontWeight.w600,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -546,27 +563,32 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       body: GestureDetector(
         onTap: () => _focusNode.unfocus(),
         behavior: HitTestBehavior.translucent,
-        // Pan to dismiss keyboard on drag
-        onPanDown: (_) => _focusNode.unfocus(),
-        child: SafeArea(bottom: true, top: false, child: _buildBody(cs)),
+        child: SafeArea(
+          bottom: true,
+          top: false,
+          child: AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+            child: KeyedSubtree(
+              key: ValueKey('$_loading|$_hasSearched|$_searchFailed|$_selectedTab'),
+              child: _buildBody(cs),
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildSearchField(ColorScheme cs, BoxConstraints constraints) {
-    // Universal height: scales with screen width and textScale, never fixed
-    // to avoid clipping on foldables, tablets or large-font accessibility.
     final width = constraints.maxWidth;
     final isSmall = width < 360;
     final isTablet = Responsive.isTablet;
-    final fieldHeight = isTablet ? 52.0 : (isSmall ? 40.0 : 44.0);
-    // Respect system textScale but keep field usable at huge scales
+    final fieldHeight = isTablet ? 52.0 : 46.0;
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-    final iconSize = (isSmall ? 18.0 : 20.0) * scale.clamp(0.85, 1.3);
+    final iconSize = (isSmall ? 19.0 : 21.0) * scale.clamp(0.85, 1.3);
     return SizedBox(
       height: fieldHeight,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: isSmall ? 4 : 8),
+        padding: EdgeInsetsDirectional.only(end: isSmall ? 4 : 8),
         child: SokoSearchBar(
           controller: _searchCtrl,
           focusNode: _focusNode,
@@ -574,11 +596,12 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           onSubmitted: (q) => _performSearch(query: q),
           onClear: _clearField,
           trailing: [
-            // All gestures: tap, longPress (show tooltip), doubleTap to clear
             IconButton(
-              icon: _isListening
-                  ? Icon(Icons.mic, size: iconSize, color: cs.error)
-                  : Icon(Icons.mic_none, size: iconSize, color: cs.onSurfaceVariant),
+              icon: Icon(
+                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                size: iconSize,
+                color: _isListening ? cs.error : cs.onSurfaceVariant,
+              ),
               tooltip: _isListening ? context.tr('stop') : context.tr('voice'),
               onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
               visualDensity: VisualDensity.compact,
@@ -589,7 +612,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               ),
             ),
             IconButton(
-              icon: Icon(Icons.qr_code_scanner, size: iconSize, color: cs.onSurfaceVariant),
+              icon: Icon(Icons.qr_code_scanner_rounded, size: iconSize, color: cs.onSurfaceVariant),
               tooltip: context.tr('scan_barcode_qr'),
               onPressed: _openBarcodeScanner,
               visualDensity: VisualDensity.compact,
@@ -641,36 +664,45 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  /// A failed search previously fell through to the discovery panel, which
-  /// looks like results for the query. Surface the failure with a retry instead.
   Widget _buildSearchError(ColorScheme cs) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppInsets.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off, size: 48, color: cs.onSurfaceVariant),
-            const SizedBox(height: 12),
-            Text(
-              context.tr('search_failed_title'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              context.tr('search_failed_body'),
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 20),
-            DsButton(
-              label: context.tr('retry'),
-              icon: Icons.refresh_rounded,
-              height: 48,
-              onPressed: _performSearch,
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.cloud_off_rounded, size: 34, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                context.tr('search_failed_title'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: cs.onSurface),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                context.tr('search_failed_body'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.4, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 20),
+              DsButton(
+                label: context.tr('retry'),
+                icon: Icons.refresh_rounded,
+                height: 48,
+                onPressed: _performSearch,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1070,10 +1102,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       return;
     }
     if ((r.type == 'seller' || r.type == 'user') && r.id.isNotEmpty) {
-      ShareService.instance.shareSeller(
-        sellerId: r.id,
-        sellerName: r.displayName,
-      );
+      ShareService.instance.shareSeller(sellerId: r.id, sellerName: r.displayName);
     }
   }
 
@@ -1484,20 +1513,27 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         _mostRatedSellers.isNotEmpty ||
         _discoveryProducts.isNotEmpty;
 
-    // Universal: responsive padding and heights adapt to tablet/phone and textScale
-    final pad = Responsive.isTablet ? 20.0 : (Responsive.isSmallPhone ? 8.0 : 12.0);
-    // Scale horizontal card heights with width; ensures no clipping on large-font
-    final productCarouselHeight = Responsive.isTablet
-        ? 240.0
-        : (Responsive.isSmallPhone ? 190.0 : 210.0);
-    final sellerCarouselHeight = Responsive.isTablet
-        ? 170.0
-        : (Responsive.isSmallPhone ? 135.0 : 150.0);
+    final pad = Responsive.isTablet ? 20.0 : 16.0;
+    final productCarouselHeight = Responsive.isTablet ? 232.0 : 208.0;
+    final sellerCarouselHeight = Responsive.isTablet ? 164.0 : 148.0;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: EdgeInsets.all(pad),
+      padding: EdgeInsets.fromLTRB(pad, 8, pad, 24),
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Text(
+            context.tr('discover'),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.6,
+              color: cs.onSurface,
+              height: 1.1,
+            ),
+          ),
+        ),
         if (_mostRatedProducts.isNotEmpty) ...[
           _buildSectionHeader(cs, Icons.star_rounded, context.tr('most_rated_products')),
           const SizedBox(height: 8),

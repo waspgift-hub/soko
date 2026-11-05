@@ -7,6 +7,7 @@ import '../extensions/context_tr.dart';
 import '../app/routes.dart';
 import '../theme/design_tokens.dart';
 import '../theme/responsive_typography.dart';
+import 'banners/soko_banner_theme.dart';
 
 class FlashSaleBanner extends StatefulWidget {
   final List<FlashSale> sales;
@@ -16,11 +17,11 @@ class FlashSaleBanner extends StatefulWidget {
   State<FlashSaleBanner> createState() => _FlashSaleBannerState();
 }
 
-class _FlashSaleBannerState extends State<FlashSaleBanner>
-    with WidgetsBindingObserver {
+class _FlashSaleBannerState extends State<FlashSaleBanner> with WidgetsBindingObserver {
   late PageController _pageController;
   int _currentPage = 0;
   Timer? _timer;
+  bool _interacting = false;
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
     final newLength = widget.sales.length;
     if (newLength < old.sales.length && _currentPage >= newLength && newLength > 0) {
       _currentPage = 0;
+      if (_pageController.hasClients) _pageController.jumpToPage(0);
     }
   }
 
@@ -48,24 +50,26 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
-      setState(() {});
-    }
+    if (state == AppLifecycleState.resumed && mounted) setState(() {});
   }
 
   void _startAutoSlide(int itemCount) {
     _timer?.cancel();
-    if (itemCount <= 1) return;
-    // 30s per slide so every active flash-sale deal gets a full read before
-    // the next one advances; 8s felt rushed with many sales on screen.
+    if (_interacting || itemCount <= 1) return;
+    // 30s per slide — preserves existing flash-sale readability/timing behavior.
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted) return;
+      if (!mounted || _interacting) return;
       final nextPage = (_currentPage + 1) % itemCount;
-      _pageController.animateToPage(
-        nextPage,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+      final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _pageController.jumpToPage(nextPage);
+      } else {
+        _pageController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+        );
+      }
     });
   }
 
@@ -73,237 +77,200 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final sales = widget.sales;
-
-    if (sales.isEmpty) {
-      return _buildPlaceholder(cs);
-    }
-
+    if (sales.isEmpty) return _buildPlaceholder(context, cs);
     _startAutoSlide(sales.length);
+    final sale = sales[_currentPage.clamp(0, sales.length - 1)];
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return ResponsiveBanner(
-      minHeight: 180,
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      borderRadius: BorderRadius.circular(20),
+      minHeight: SokoBannerTheme.minHeight,
+      margin: EdgeInsets.zero,
+      borderRadius: SokoBannerTheme.borderRadius,
       onTap: () => context.push(AppRoutes.flashSale),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Product image dominates 75% of the banner (guideline 1.2);
-          // sale info is the remaining 25%.
-          Expanded(flex: 3, child: _buildImagePanel(sales, cs)),
-          Expanded(flex: 1, child: _buildInfoPanel(sales, cs)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder(ColorScheme cs) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      constraints: const BoxConstraints(minHeight: 180),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [cs.primary.withValues(alpha: 0.05), cs.surfaceContainerLow],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      decoration: SokoBannerTheme.surfaceDecoration(context),
+      child: ClipRRect(
+        borderRadius: SokoBannerTheme.borderRadius,
+        child: Row(
           children: [
-            Icon(Icons.local_fire_department,
-                color: cs.primary.withValues(alpha: 0.5), size: 32),
-            const SizedBox(height: 8),
-            Text(
-              context.tr('flash_deals'),
-              style: Ds.bodyMd(cs.onSurfaceVariant.withValues(alpha: 0.6)).copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              context.tr('no_active_deals'),
-              style: Ds.caption(cs.onSurfaceVariant.withValues(alpha: 0.4)),
-            ),
+            Expanded(flex: 11, child: _buildImagePanel(sales, cs, reduceMotion)),
+            Expanded(flex: 9, child: _buildInfoPanel(context, cs, sale, sales.length)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildImagePanel(List<FlashSale> sales, ColorScheme cs) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        PageView.builder(
-          controller: _pageController,
-          onPageChanged: (page) => setState(() => _currentPage = page),
-          itemCount: sales.length,
-          itemBuilder: (context, index) {
-            final sale = sales[index];
-            return sale.productImage.isNotEmpty
-                ? ProductCachedImage(
-                    url: sale.productImage,
-                    fit: BoxFit.cover,
-                  )
-                : const _ImagePlaceholder();
-          },
-        ),
-        // Soft edge gradient so the discount/text stays readable on photos.
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.3),
-                    Colors.transparent,
-                    Colors.transparent,
-                  ],
-                ),
+  Widget _buildPlaceholder(BuildContext context, ColorScheme cs) {
+    return ResponsiveBanner(
+      minHeight: SokoBannerTheme.minHeight,
+      margin: EdgeInsets.zero,
+      borderRadius: SokoBannerTheme.borderRadius,
+      decoration: SokoBannerTheme.surfaceDecoration(context),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.local_offer_outlined, color: cs.primary.withValues(alpha: 0.7), size: 30),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('flash_deals'),
+                style: Ds.bodyMd(cs.onSurfaceVariant).copyWith(fontWeight: FontWeight.w700),
               ),
-            ),
+              const SizedBox(height: 4),
+              Text(context.tr('no_active_deals'), style: Ds.caption(cs.onSurfaceVariant)),
+            ],
           ),
         ),
-        if (sales.length > 1)
-          Positioned(
-            bottom: 8,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: () {
-                // Render at most 10 dots even when there are thousands of
-                // sales; active dot reflects the current page relative window.
-                final total = sales.length;
-                final win = total > 10 ? 10 : total;
-                final active = total > 10
-                    ? (_currentPage % win)
-                    : _currentPage;
-                return [
-                  for (var i = 0; i < win; i++)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      width: active == i ? 14 : 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: active == i
-                            ? Colors.white
-                            : Colors.white54,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                ];
-              }(),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
-  Widget _buildInfoPanel(List<FlashSale> sales, ColorScheme cs) {
-    final sale = sales[_currentPage.clamp(0, sales.length - 1).toInt()];
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF121212), Color(0xFF404040)],
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildImagePanel(List<FlashSale> sales, ColorScheme cs, bool reduceMotion) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n is ScrollStartNotification && n.dragDetails != null) {
+          _interacting = true;
+          _timer?.cancel();
+        } else if (n is ScrollEndNotification) {
+          _interacting = false;
+          _startAutoSlide(sales.length);
+        }
+        return false;
+      },
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.local_fire_department,
-                    color: Colors.white, size: 12),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: BannerText(
-                  context.tr('flash'),
-                  style: Ds.badge(Colors.white).copyWith(fontSize: 9),
-                  maxLines: 1,
-                ),
-              ),
-            ],
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: (page) => setState(() => _currentPage = page),
+            itemCount: sales.length,
+            itemBuilder: (context, index) {
+              final sale = sales[index];
+              return sale.productImage.isNotEmpty
+                  ? ProductCachedImage(url: sale.productImage, fit: BoxFit.cover)
+                  : Container(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                      child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant, size: 34),
+                    );
+            },
           ),
-          const Spacer(),
-          BannerText(
-            '-${sale.discountPercent.toStringAsFixed(0)}%',
-            style: Ds.priceLarge(Colors.white).copyWith(height: 1),
-            maxLines: 1,
-          ),
-          const SizedBox(height: 6),
-          BannerText(
-            sale.productName,
-            style: Ds.caption(Colors.white).copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-              height: 1.3,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 56,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Colors.black.withValues(alpha: 0.28), Colors.transparent],
+                ),
+              ),
             ),
-            maxLines: 2,
           ),
-          const SizedBox(height: 6),
-          BannerText(
-            context.formatPrice(sale.salePrice),
-            style: Ds.price(Colors.white).copyWith(fontSize: 11),
-            maxLines: 1,
-          ),
-          const Spacer(),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 9),
-              const SizedBox(width: 2),
-              Flexible(
-                child: BannerText(
-                  '${sales.length} ${context.tr('deals')}',
-                  style: Ds.caption(Colors.white70).copyWith(fontSize: 8),
-                  maxLines: 1,
-                ),
+          if (sales.length > 1)
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(sales.length > 8 ? 8 : sales.length, (i) {
+                  final active = (sales.length > 8 ? _currentPage % 8 : _currentPage) == i;
+                  return AnimatedContainer(
+                    duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    width: active ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: active ? Colors.white : Colors.white.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  );
+                }),
               ),
-            ],
-          ),
+            ),
         ],
       ),
     );
   }
-}
 
-class _ImagePlaceholder extends StatelessWidget {
-  const _ImagePlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildInfoPanel(BuildContext context, ColorScheme cs, FlashSale sale, int count) {
     return Container(
-      color: const Color(0xFFE5E5E5),
-      child: Center(
-        child: Icon(Icons.image, color: Colors.black.withValues(alpha: 0.2), size: 36),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(left: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.35))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SokoBannerTheme.badge(context, context.tr('flash_deals'), icon: Icons.bolt_rounded),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: cs.errorContainer.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '-${sale.discountPercent.toStringAsFixed(0)}%',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: cs.onErrorContainer,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          BannerText(
+            sale.productName,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+              color: cs.onSurface,
+              letterSpacing: -0.2,
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context.formatPrice(sale.salePrice),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Ds.priceLarge(cs.primary).copyWith(fontSize: 16.5, fontWeight: FontWeight.w800),
+          ),
+          if (sale.originalPrice > sale.salePrice)
+            Text(
+              context.formatPrice(sale.originalPrice),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+                decoration: TextDecoration.lineThrough,
+              ),
+            ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$count ${context.tr('deals')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+                ),
+              ),
+              SokoBannerTheme.ctaPill(context, context.tr('shop_now')),
+            ],
+          ),
+        ],
       ),
     );
   }

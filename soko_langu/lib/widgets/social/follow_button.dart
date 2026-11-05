@@ -1,26 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../services/follow_service.dart';
-import '../../services/seller_verification_service.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
 
-/// Follow / unfollow button for a seller or user profile.
-///
-/// Button state is driven by [FollowService]. The Blue Tick badge beside the
-/// button shows whether the target seller has a verified badge (KYC approved +
-/// Blue Tick active).
-///
-/// States:
-/// * [following] — unfollow when tapped
-/// * [requested] — awaiting approval from a private account; tapping cancels
-/// * [blocked] — either account blocked the other; not tappable
-/// * [not_following] — follow when tapped (or request for private accounts)
-///
-/// Disabled while a network call is in flight.
+/// Follow / unfollow button for a user profile.
 class FollowButton extends StatefulWidget {
   const FollowButton({
     super.key,
@@ -29,12 +12,8 @@ class FollowButton extends StatefulWidget {
     this.onStatusChanged,
   });
 
-  /// uid of the target user to follow / unfollow.
   final String targetUserId;
-
   final FollowButtonSize size;
-
-  /// Optional callback fired whenever the followed state changes.
   final VoidCallback? onStatusChanged;
 
   @override
@@ -53,23 +32,34 @@ class _FollowButtonState extends State<FollowButton> {
     _refresh();
   }
 
+  @override
+  void didUpdateWidget(covariant FollowButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.targetUserId != widget.targetUserId) _refresh();
+  }
+
   Future<void> _refresh() async {
     if (widget.targetUserId.isEmpty) return;
     setState(() => _isLoading = true);
     try {
-      final following = await FollowService().isFollowing(widget.targetUserId);
-      final blockedBy = await FollowService().isBlockedBy(widget.targetUserId);
-      final hasBlocked = await FollowService().hasBlocked(widget.targetUserId);
+      final service = FollowService();
+      final following = await service.isFollowing(widget.targetUserId);
+      final blockedBy = await service.isBlockedBy(widget.targetUserId);
+      final hasBlocked = await service.hasBlocked(widget.targetUserId);
+      var result = FollowResult.following();
+      if (hasBlocked || blockedBy) {
+        result = FollowResult.blocked();
+      } else if (following) {
+        result = FollowResult.following();
+      } else {
+        final requested = await service.hasPendingFollowRequest(widget.targetUserId);
+        result = requested ? FollowResult.requested() : FollowResult.error('not_following');
+      }
       if (!mounted) return;
-      setState(() {
-        if (hasBlocked || blockedBy) {
-          _result = FollowResult.blocked();
-        } else if (following) {
-          _result = FollowResult.following();
-        } else {
-          _result = FollowResult.requested();
-        }
-      });
+      setState(() => _result = result);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _result = FollowResult.error('load_failed'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -79,38 +69,21 @@ class _FollowButtonState extends State<FollowButton> {
     if (_isLoading || widget.targetUserId.isEmpty) return;
     setState(() => _isLoading = true);
     try {
-      final currentlyFollowing = _result?.isFollowing == true;
-      if (currentlyFollowing) {
-        await FollowService().unfollow(widget.targetUserId);
+      final service = FollowService();
+      if (_result?.isFollowing == true) {
+        await service.unfollow(widget.targetUserId);
+      } else if (_result?.isRequested == true) {
+        await service.cancelRequest(widget.targetUserId);
       } else {
-        await FollowService().follow(widget.targetUserId);
+        await service.follow(widget.targetUserId);
       }
       if (!mounted) return;
-      setState(() => _result = null);
       await _refresh();
+      widget.onStatusChanged?.call();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _cancelRequest() async {
-    if (_isLoading) return;
-    setState(() => _isLoading = true);
-    try {
-      await FollowService().cancelRequest(widget.targetUserId);
-      if (!mounted) return;
-      setState(() => _result = null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
       await _refresh();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -119,10 +92,7 @@ class _FollowButtonState extends State<FollowButton> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    if (_isLoading) {
-      return _LoadingButton(size: widget.size);
-    }
+    if (_isLoading) return _LoadingButton(size: widget.size);
     if (widget.targetUserId.isEmpty) return const SizedBox.shrink();
 
     final blocked = _result?.isBlocked == true;
@@ -138,7 +108,6 @@ class _FollowButtonState extends State<FollowButton> {
         size: widget.size,
       );
     }
-
     if (requested) {
       return _OutlinedButton(
         label: context.tr('requested'),
@@ -146,36 +115,36 @@ class _FollowButtonState extends State<FollowButton> {
         color: cs.onSurfaceVariant,
         enabled: true,
         size: widget.size,
-        onTap: _cancelRequest,
+        onTap: _toggle,
       );
     }
-
     if (following) {
       return _FilledButton(
         label: context.tr('following'),
         icon: Icons.person_remove,
         color: cs.primary,
+        foregroundColor: cs.onPrimary,
         size: widget.size,
         onTap: _toggle,
       );
     }
-
     return _FilledButton(
       label: context.tr('follow'),
       icon: Icons.person_add,
       color: cs.primary,
+      foregroundColor: cs.onPrimary,
       size: widget.size,
       onTap: _toggle,
     );
   }
 }
 
-/// Filled (solid) primary button.
 class _FilledButton extends StatelessWidget {
   const _FilledButton({
     required this.label,
     required this.icon,
     required this.color,
+    required this.foregroundColor,
     required this.size,
     this.onTap,
   });
@@ -183,23 +152,23 @@ class _FilledButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
+  final Color foregroundColor;
   final FollowButtonSize size;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return _BaseButton(
-      child: _ButtonContent(label: label, icon: icon, color: color, size: size),
       enabled: onTap != null,
       size: size,
       backgroundColor: color,
-      foregroundColor: Theme.of(context).colorScheme.surface,
+      foregroundColor: foregroundColor,
       onTap: onTap,
+      child: _ButtonContent(label: label, icon: icon, color: foregroundColor, size: size),
     );
   }
 }
 
-/// Outlined (transparent fill) button.
 class _OutlinedButton extends StatelessWidget {
   const _OutlinedButton({
     required this.label,
@@ -220,18 +189,17 @@ class _OutlinedButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _BaseButton(
-      child: _ButtonContent(label: label, icon: icon, color: color, size: size),
       enabled: enabled,
       size: size,
       backgroundColor: Colors.transparent,
       foregroundColor: color,
       borderColor: color,
       onTap: onTap,
+      child: _ButtonContent(label: label, icon: icon, color: color, size: size),
     );
   }
 }
 
-/// Base button rendering.
 class _BaseButton extends StatelessWidget {
   const _BaseButton({
     required this.child,
@@ -289,7 +257,6 @@ class _BaseButton extends StatelessWidget {
   }
 }
 
-/// Button content: icon + label.
 class _ButtonContent extends StatelessWidget {
   const _ButtonContent({
     required this.label,
@@ -307,7 +274,6 @@ class _ButtonContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final iconSize = size == FollowButtonSize.small ? 14.0 : 16.0;
     final fontSize = size == FollowButtonSize.small ? 11.0 : 13.0;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -317,11 +283,7 @@ class _ButtonContent extends StatelessWidget {
         Flexible(
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
+            style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, color: color),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -330,34 +292,23 @@ class _ButtonContent extends StatelessWidget {
   }
 }
 
-/// Loading placeholder shown while the follow state is being resolved.
 class _LoadingButton extends StatelessWidget {
   const _LoadingButton({required this.size});
-
   final FollowButtonSize size;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveSize = _sizeFor(size);
+    final h = switch (size) {
+      FollowButtonSize.small => 32.0,
+      FollowButtonSize.medium => 40.0,
+      FollowButtonSize.large => 48.0,
+    };
     return SizedBox(
-      height: effectiveSize,
-      width: effectiveSize,
-      child: SizedBox(
-        width: 16,
-        height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      height: h,
+      width: h,
+      child: const Center(
+        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
       ),
     );
-  }
-
-  double _sizeFor(FollowButtonSize s) {
-    switch (s) {
-      case FollowButtonSize.small:
-        return 32.0;
-      case FollowButtonSize.medium:
-        return 40.0;
-      case FollowButtonSize.large:
-        return 48.0;
-    }
   }
 }

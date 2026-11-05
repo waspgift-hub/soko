@@ -18,6 +18,7 @@
 // writes on mirrored docs).
 const { Router } = require('express');
 const commerceStore = require('../../services/commerce-store');
+const { getFirebaseFirestore } = require('../../config/firebase');
 const { getStore } = require('../../config/database');
 const { optionalAuth } = require('../../middleware/auth');
 const paymentService = require('../payments/payment-service');

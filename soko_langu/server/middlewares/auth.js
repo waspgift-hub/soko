@@ -1,4 +1,5 @@
 const { verifyAdminSecret } = require('./security');
+const { getFirebaseAuth } = require('../src/config/firebase');
 
 const otpPhoneHits = new Map();
 const OTP_PHONE_WINDOW = 15 * 60 * 1000;
@@ -56,7 +57,7 @@ module.exports = function ({ commerceStore }) {
       return { ok: false };
     }
     try {
-      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      const decoded = await getFirebaseAuth().verifyIdToken(authHeader.slice(7));
       return { ok: true, uid: decoded.uid };
     } catch (_) {
       res.status(403).json({ error: 'Invalid token' });
