@@ -1,308 +1,68 @@
-﻿<!DOCTYPE html>
-<html lang="sw">
+<!DOCTYPE html>
+<html lang="en">
 <head>
+  <base href="/">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="doc_title">Soko Vibe | Soko la Mtandaoni la Tanzania</title>
-  <meta name="description" content="Soko Vibe ni soko la mtandaoni la Tanzania. Nunua na uza bidhaa mpya na za mitumba kwa malipo yanayolindwa.">
-  <meta name="theme-color" content="#000000">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soko Vibe — A Tanzanian Digital Marketplace</title>
+  <meta name="description" content="Soko Vibe is a Tanzanian digital marketplace under development. Register your email to get launch updates and early announcements.">
+  <meta name="theme-color" content="#008069">
+  <meta name="robots" content="index, follow">
+  <meta name="geo.region" content="TZ">
+  <meta name="geo.placename" content="Tanzania">
   <link rel="canonical" href="https://www.sokovibe.co.tz/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Soko Vibe | Soko la Mtandaoni la Tanzania">
-  <meta property="og:description" content="Nunua na uza bidhaa mpya na za mitumba kwa malipo yanayolindwa.">
+  <meta property="og:site_name" content="Soko Vibe">
   <meta property="og:url" content="https://www.sokovibe.co.tz/">
-  <meta property="og:image" content="https://www.sokovibe.co.tz/assets/icon-512.png?v=2">
+  <meta property="og:locale" content="en_TZ">
+  <meta property="og:title" content="Soko Vibe — A Tanzanian Digital Marketplace">
+  <meta property="og:description" content="A modern Tanzanian digital marketplace under development. Join the early access list for launch updates.">
+  <meta property="og:image" content="https://www.sokovibe.co.tz/icons/Icon-512.png">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico?v=2">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=2">
-  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png?v=2">
-  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=2">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=SamsungSharpSans:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/site.css">
-  <style>
-    .waitlist-section { padding: 72px 0; background: linear-gradient(180deg, #f7f8fa 0%, #ffffff 100%); }
-    .waitlist-card { max-width: 640px; margin: 0 auto; background: #fff; border: 1px solid #e8eaed; border-radius: 20px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,.06); }
-    .waitlist-card h2 { font-size: 1.75rem; margin: 0 0 8px; }
-    .waitlist-card p.sub { color: #5f6368; margin: 0 0 20px; }
-    .waitlist-row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .waitlist-row input { flex: 1 1 180px; min-width: 0; padding: 14px 16px; border: 1px solid #d0d5dd; border-radius: 12px; font: inherit; }
-    .waitlist-row button { padding: 14px 22px; border: 0; border-radius: 12px; background: #111; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
-    .waitlist-row button:disabled { opacity: .6; cursor: default; }
-    .waitlist-msg { margin-top: 12px; font-size: .95rem; }
-    .waitlist-msg.ok { color: #137333; }
-    .waitlist-msg.err { color: #c5221f; }
-    .waitlist-done { display: none; text-align: center; padding: 8px 0; }
-    .waitlist-done.show { display: block; }
-    .waitlist-form.hide { display: none; }
-  </style>
+  <meta name="twitter:title" content="Soko Vibe — A Tanzanian Digital Marketplace">
+  <meta name="twitter:description" content="A Tanzanian digital marketplace under development. Register for launch updates.">
+  <meta name="twitter:image" content="https://www.sokovibe.co.tz/icons/Icon-512.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://www.sokovibe.co.tz/#org",
+        "name": "Soko Vibe",
+        "url": "https://www.sokovibe.co.tz/",
+        "logo": "https://www.sokovibe.co.tz/icons/Icon-512.png",
+        "email": "support@sokovibe.co.tz",
+        "areaServed": "TZ",
+        "address": {
+          "@type": "PostalAddress",
+          "addressCountry": "TZ"
+        }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.sokovibe.co.tz/#site",
+        "url": "https://www.sokovibe.co.tz/",
+        "name": "Soko Vibe",
+        "description": "A Tanzanian digital marketplace under development.",
+        "inLanguage": ["en", "sw"],
+        "publisher": { "@id": "https://www.sokovibe.co.tz/#org" }
+      }
+    ]
+  }
+  </script>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Soko Vibe">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <header class="site-header">
-    <div class="nav-container">
-      <div class="nav-left">
-        <a class="brand" href="/">
-          <span class="brand-text">Soko Vibe</span>
-        </a>
-        <nav class="main-nav" aria-label="Main navigation">
-          <ul class="nav-list">
-            <li class="nav-item"><a href="/categories" class="nav-link">Kategoria</a></li>
-            <li class="nav-item"><a href="/how-soko-vibe-works" class="nav-link">Jinsi inavyofanya kazi</a></li>
-            <li class="nav-item"><a href="/tanzania-marketplace" class="nav-link">Soko la Tanzania</a></li>
-            <li class="nav-item"><a href="/about" class="nav-link">Kuhusu</a></li>
-          </ul>
-        </nav>
-      </div>
-      <div class="nav-right">
-        <button class="icon-btn" aria-label="Tafuta">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        </button>
-        <button class="icon-btn" aria-label="Menyu" id="menuBtn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-        <a class="btn btn-primary" href="https://play.google.com/store" target="_blank" rel="noopener">Pakua App</a>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <section class="hero">
-      <div class="hero-container">
-        <div class="hero-content">
-          <h1 class="hero-title">Nunua na uza kwa<br>imani kamili</h1>
-          <p class="hero-subtitle">Soko la mtandaoni linaloaminika la Tanzania. Malipo yanayolindwa, wauzaji waliothibitishwa, usafirishaji nchi nzima.</p>
-          <div class="hero-actions">
-            <a class="btn btn-large btn-primary" href="#explore">Anza kununua</a>
-            <a class="btn btn-large btn-secondary" href="/how-soko-vibe-works">Jinsi inavyofanya kazi</a>
-          </div>
-        </div>
-      </div>
-      <div class="hero-media">
-        <div class="hero-gradient"></div>
-      </div>
-    </section>
-
-    <section class="section" id="explore">
-      <div class="container">
-        <header class="section-header">
-          <h2 class="section-title">Vikundi vinavyovuma</h2>
-          <a class="section-link" href="/categories">Ona yote ›</a>
-        </header>
-        <div class="category-grid">
-          <a class="category-card" href="/categories/elektroniki">
-            <div class="category-image category-electronics"></div>
-            <div class="category-info">
-              <h3 class="category-name">Elektroniki</h3>
-              <p class="category-count">Simu, kompyuta na zaidi</p>
-            </div>
-          </a>
-          <a class="category-card" href="/categories/mavazi">
-            <div class="category-image category-fashion"></div>
-            <div class="category-info">
-              <h3 class="category-name">Mavazi na Viatu</h3>
-              <p class="category-count">Mavazi mapya na ya mitumba</p>
-            </div>
-          </a>
-          <a class="category-card" href="/categories/nyumba">
-            <div class="category-image category-home"></div>
-            <div class="category-info">
-              <h3 class="category-name">Nyumba na Bustani</h3>
-              <p class="category-count">Samani, vifaa na mapambo</p>
-            </div>
-          </a>
-          <a class="category-card" href="/categories/magari">
-            <div class="category-image category-auto"></div>
-            <div class="category-info">
-              <h3 class="category-name">Magari na Baiskeli</h3>
-              <p class="category-count">Magari, pikipiki na zaidi</p>
-            </div>
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <section class="section section-dark">
-      <div class="container">
-        <div class="feature-split">
-          <div class="feature-content">
-            <h2 class="feature-title">Malipo yanayolindwa na escrow</h2>
-            <p class="feature-text">Fedha zako zinasimama salama hadi uthibitishe kuwa umepokea bidhaa yako. Kisha tu zinatolewa kwa muuzaji.</p>
-            <ul class="feature-list">
-              <li>Malipo kupitia M-Pesa, Tigo Pesa, Airtel Money</li>
-              <li>Ulinzi kamili wa mnunuzi</li>
-              <li>Kusuluhisha migogoro kwa haki</li>
-            </ul>
-            <a class="btn btn-large btn-white" href="/how-soko-vibe-works">Jifunze zaidi</a>
-          </div>
-          <div class="feature-media">
-            <div class="feature-visual"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="container">
-        <header class="section-header">
-          <h2 class="section-title">Kwa nini uchague Soko Vibe</h2>
-        </header>
-        <div class="benefits-grid">
-          <article class="benefit-card">
-            <div class="benefit-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <h3 class="benefit-title">Ulinzi wa mnunuzi</h3>
-            <p class="benefit-text">Kila ununuzi unalindwa na mfumo wa escrow</p>
-          </article>
-          <article class="benefit-card">
-            <div class="benefit-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-            </div>
-            <h3 class="benefit-title">Mazungumzo ya moja kwa moja</h3>
-            <p class="benefit-text">Ongea na muuzaji moja kwa moja ndani ya app</p>
-          </article>
-          <article class="benefit-card">
-            <div class="benefit-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/></svg>
-            </div>
-            <h3 class="benefit-title">Usafirishaji nchi nzima</h3>
-            <p class="benefit-text">Pata bidhaa yako popote nchini Tanzania</p>
-          </article>
-          <article class="benefit-card">
-            <div class="benefit-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
-            </div>
-            <h3 class="benefit-title">Wauzaji waliothibitishwa</h3>
-            <p class="benefit-text">Uthibitishaji wa utambulisho kwa uaminifu zaidi</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="waitlist-section" id="waitlist">
-      <div class="container">
-        <div class="waitlist-card">
-          <h2>Pata taarifa za Soko Vibe</h2>
-          <p class="sub">Weka barua pepe yako ili upate taarifa za uzinduzi, masasisho, na viungo rasmi vya app.</p>
-          <form id="svWaitlistForm" class="waitlist-form" novalidate>
-            <div class="waitlist-row">
-              <input id="svWlName" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Jina (si lazima)">
-              <input id="svWlEmail" type="email" name="email" maxlength="120" autocomplete="email" required placeholder="Barua pepe">
-              <button id="svWlBtn" type="submit">Nipe taarifa</button>
-            </div>
-            <div id="svWlMsg" class="waitlist-msg" role="status" aria-live="polite"></div>
-          </form>
-          <div id="svWlDone" class="waitlist-done" aria-live="polite">
-            <h3 style="margin:0 0 6px;">Asante!</h3>
-            <p style="margin:0;color:#5f6368;">Barua pepe yako imesajiliwa. Tutakujulisha taarifa muhimu za Soko Vibe.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="cta-section">
-      <div class="container">
-        <div class="cta-content">
-          <h2 class="cta-title">Anza kununua au kuuza leo</h2>
-          <p class="cta-text">Jiunge na maelfu ya Watanzania kwenye soko linaloaminika zaidi</p>
-          <div class="cta-actions">
-            <a class="btn btn-large btn-primary" href="https://play.google.com/store" target="_blank" rel="noopener">Pakua kwa Android</a>
-            <a class="btn btn-large btn-secondary" href="mailto:support@sokovibe.co.tz">Wasiliana nasi</a>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-top">
-        <div class="footer-brand">
-          <span class="brand-text">Soko Vibe</span>
-          <p class="footer-tagline">Soko la mtandaoni la Tanzania linaloaminika</p>
-        </div>
-        <div class="footer-nav">
-          <div class="footer-column">
-            <h4 class="footer-heading">Soko</h4>
-            <ul class="footer-list">
-              <li><a href="/categories">Kategoria</a></li>
-              <li><a href="/tanzania-marketplace">Soko la Tanzania</a></li>
-              <li><a href="/how-soko-vibe-works">Jinsi inavyofanya kazi</a></li>
-            </ul>
-          </div>
-          <div class="footer-column">
-            <h4 class="footer-heading">Kampuni</h4>
-            <ul class="footer-list">
-              <li><a href="/about">Kuhusu sisi</a></li>
-              <li><a href="/about-founder">Mwanzilishi</a></li>
-              <li><a href="mailto:support@sokovibe.co.tz">Wasiliana</a></li>
-            </ul>
-          </div>
-          <div class="footer-column">
-            <h4 class="footer-heading">Kisheria</h4>
-            <ul class="footer-list">
-              <li><a href="/privacy.html">Sera ya Faragha</a></li>
-              <li><a href="/terms.html">Masharti ya Huduma</a></li>
-            </ul>
-          </div>
-          <div class="footer-column">
-            <h4 class="footer-heading">Msaada</h4>
-            <ul class="footer-list">
-              <li><a href="/support.html">Kituo cha Msaada</a></li>
-              <li><a href="mailto:support@sokovibe.co.tz">support@sokovibe.co.tz</a></li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <p class="footer-copyright">© <span id="year"></span> Soko Vibe Limited. Haki zote zimehifadhiwa.</p>
-        <div class="footer-lang">
-          <span>Kiswahili</span>
-        </div>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script>
-    (function () {
-      var firebaseConfig = {
-        apiKey: 'AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s',
-        authDomain: 'sokonimoko-8c171-a8d14.firebaseapp.com',
-        projectId: 'sokonimoko-8c171-a8d14',
-        storageBucket: 'sokonimoko-8c171-a8d14.appspot.com',
-        appId: '1:344682929526:web:5d3732578d6f012ac26e57'
-      };
-      var db = null;
-      try { if (!firebase.apps.length) firebase.initializeApp(firebaseConfig); db = firebase.firestore(); } catch (e) {}
-      var form = document.getElementById('svWaitlistForm');
-      var msg = document.getElementById('svWlMsg');
-      var done = document.getElementById('svWlDone');
-      var btn = document.getElementById('svWlBtn');
-      function setMsg(text, cls) { msg.textContent = text || ''; msg.className = 'waitlist-msg' + (cls ? ' ' + cls : ''); }
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var email = (document.getElementById('svWlEmail').value || '').trim().toLowerCase();
-        var name = (document.getElementById('svWlName').value || '').trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { setMsg('Weka barua pepe sahihi.', 'err'); return; }
-        if (!db) { setMsg('Huduma haijapatikana sasa. Jaribu tena baadaye.', 'err'); return; }
-        btn.disabled = true; setMsg('Inahifadhi...', '');
-        var payload = { email: email, createdAt: firebase.firestore.FieldValue.serverTimestamp(), lang: 'sw', source: 'server_landing' };
-        if (name) payload.name = name;
-        db.collection('landing_waitlist').doc(email).set(payload).then(function () {
-          form.classList.add('hide'); done.classList.add('show'); setMsg('', '');
-        }).catch(function (err) {
-          var dup = err && /permission-denied/i.test(String(err.code || err.message || ''));
-          setMsg(dup ? 'Barua pepe hii tayari imesajiliwa. Asante!' : 'Imeshindikana kuhifadhi. Jaribu tena.', dup ? 'ok' : 'err');
-        }).finally(function () { btn.disabled = false; });
-      });
-    })();
-  </script>
+  <noscript>Soko Vibe is under development. Contact support@sokovibe.co.tz for updates.</noscript>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
