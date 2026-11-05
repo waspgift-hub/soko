@@ -86,15 +86,16 @@ class SokoWebTheme {
       extensions: const [
         SokoPrices(mono: mono),
       ],
-      cardTheme: CardThemeData(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        color: SokoBrand.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: SokoBrand.line),
-        ),
-      ),
+       cardTheme: CardThemeData(
+         elevation: 2,
+         shadowColor: Colors.black.withValues(alpha: 0.06),
+         margin: EdgeInsets.zero,
+         color: SokoBrand.white,
+         shape: RoundedRectangleBorder(
+           borderRadius: BorderRadius.circular(24),
+           side: const BorderSide(color: SokoBrand.line),
+         ),
+       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: const Color(0xFFF4F5F4),
