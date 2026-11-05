@@ -83,44 +83,50 @@ router.post(
     }),
   }),
   async (req, res) => {
-    if (isSpam(req.body)) {
-      return res.json({ success: true, data: { status: 'ok' } });
-    }
+    try {
+      if (isSpam(req.body)) {
+        return res.json({ success: true, data: { status: 'ok' } });
+      }
 
-    const email = normalizeEmail(req.body.email);
-    if (!isValidEmail(email)) {
-      return jsonError(res, { status: 400, code: 'INVALID_EMAIL', message: 'Please enter a valid email address.' });
-    }
+      const email = normalizeEmail(req.body.email);
+      if (!isValidEmail(email)) {
+        return jsonError(res, { status: 400, code: 'INVALID_EMAIL', message: 'Please enter a valid email address.' });
+      }
 
-    const name = String(req.body.name || '').trim().slice(0, 120);
-    const lang = String(req.body.lang || 'en').trim().slice(0, 12);
-    const source = String(req.body.source || 'web_launch').trim().slice(0, 64);
-    const existing = await commerceStore.getDocument(WAITLIST_COLLECTION, email);
+      const name = String(req.body.name || '').trim().slice(0, 120);
+      const lang = String(req.body.lang || 'en').trim().slice(0, 12);
+      const source = String(req.body.source || 'web_launch').trim().slice(0, 64);
+      const existing = await commerceStore.getDocument(WAITLIST_COLLECTION, email);
 
-    if (existing) {
-      await commerceStore.upsertDocument(WAITLIST_COLLECTION, email, {
+      if (existing) {
+        const prevCount = Number(existing.duplicateSignupCount || 0);
+        await commerceStore.upsertDocument(WAITLIST_COLLECTION, email, {
+          email,
+          name: name || existing.name || '',
+          lang: lang || existing.lang || 'en',
+          source: existing.source || source,
+          updatedAt: commerceStore.serverTimestamp(),
+          duplicateSignupCount: prevCount + 1,
+          lastDuplicateAt: commerceStore.serverTimestamp(),
+        });
+        return res.json({ success: true, data: { status: 'duplicate', message: "You're already on the list!" } });
+      }
+
+      await commerceStore.setDocument(WAITLIST_COLLECTION, email, {
         email,
-        name: name || existing.name || '',
-        lang: lang || existing.lang || 'en',
-        source: existing.source || source,
+        name,
+        lang,
+        source,
+        createdAt: commerceStore.serverTimestamp(),
         updatedAt: commerceStore.serverTimestamp(),
-        duplicateSignupCount: commerceStore.increment(1),
-        lastDuplicateAt: commerceStore.serverTimestamp(),
+        duplicateSignupCount: 0,
       });
-      return res.json({ success: true, data: { status: 'duplicate', message: "You're already on the list!" } });
+
+      return res.status(201).json({ success: true, data: { status: 'subscribed', message: "You're on the list!" } });
+    } catch (err) {
+      console.error('[launch:subscribe] failed:', err && err.message ? err.message : err);
+      return jsonError(res, { status: 500, code: 'LAUNCH_SUBSCRIBE_FAILED', message: 'Unable to save your email right now. Please try again.' });
     }
-
-    await commerceStore.setDocument(WAITLIST_COLLECTION, email, {
-      email,
-      name,
-      lang,
-      source,
-      createdAt: commerceStore.serverTimestamp(),
-      updatedAt: commerceStore.serverTimestamp(),
-      duplicateSignupCount: 0,
-    });
-
-    return res.status(201).json({ success: true, data: { status: 'subscribed', message: "You're on the list!" } });
   },
 );
 
