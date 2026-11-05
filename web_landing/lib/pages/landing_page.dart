@@ -1,18 +1,9 @@
 import 'package:flutter/material.dart';
 import '../localization/app_strings.dart';
-import '../sections/ai_delivery_section.dart';
-import '../sections/app_faq_final_footer.dart';
-import '../sections/boost_security_section.dart';
-import '../sections/buyers_sellers_section.dart';
-import '../sections/escrow_section.dart';
-import '../sections/hero_section.dart';
+import '../sections/coming_soon_sections.dart';
 import '../sections/site_nav.dart';
-import '../sections/trust_bar.dart';
-import '../sections/why_section.dart';
 import '../theme/app_colors.dart';
 
-/// Assembles every section; owns the scroll controller, section anchors,
-/// and the locale state shared by the whole page.
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
 
@@ -26,11 +17,13 @@ class _LandingPageState extends State<LandingPage> {
   bool _scrolled = false;
 
   final _keys = <String, GlobalKey>{
+    'home': GlobalKey(),
+    'about': GlobalKey(),
+    'features': GlobalKey(),
+    'register': GlobalKey(),
     'how': GlobalKey(),
-    'security': GlobalKey(),
-    'sellers': GlobalKey(),
-    'boost': GlobalKey(),
     'faq': GlobalKey(),
+    'contact': GlobalKey(),
   };
 
   @override
@@ -43,6 +36,7 @@ class _LandingPageState extends State<LandingPage> {
   @override
   void dispose() {
     _strings.removeListener(_onLocale);
+    _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
   }
@@ -58,10 +52,9 @@ class _LandingPageState extends State<LandingPage> {
     if (ctx != null) {
       Scrollable.ensureVisible(
         ctx,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 600),
+        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 550),
         curve: Curves.easeInOutCubic,
+        alignment: 0.05,
       );
     }
   }
@@ -76,47 +69,18 @@ class _LandingPageState extends State<LandingPage> {
           slivers: [
             SliverAppBar(
               pinned: true,
-              toolbarHeight: 68,
+              toolbarHeight: 72,
               backgroundColor: SokoBrand.white,
-              flexibleSpace: SiteNav(
-                scrolled: _scrolled,
-                onNavigate: _go,
-                strings: _strings,
-              ),
+              flexibleSpace: SiteNav(scrolled: _scrolled, onNavigate: _go, strings: _strings, onNotify: () => _go('register')),
             ),
-            const SliverToBoxAdapter(child: HeroSection()),
-            const SliverToBoxAdapter(child: TrustBar()),
-            SliverToBoxAdapter(
-              child:
-                  Container(key: _keys['how'], child: const WhySection()),
-            ),
-            const SliverToBoxAdapter(child: EscrowSection()),
-            const SliverToBoxAdapter(child: BuyersSection()),
-            SliverToBoxAdapter(
-              child: Container(
-                  key: _keys['sellers'],
-                  child: const SellersSection()),
-            ),
-            const SliverToBoxAdapter(child: AiSearchSection()),
-            const SliverToBoxAdapter(child: DeliverySection()),
-            SliverToBoxAdapter(
-              child: Container(
-                  key: _keys['boost'], child: const BoostSection()),
-            ),
-            SliverToBoxAdapter(
-              child: Container(
-                  key: _keys['security'],
-                  child: const SecuritySection()),
-            ),
-            const SliverToBoxAdapter(child: AppSection()),
-            SliverToBoxAdapter(
-              child:
-                  Container(key: _keys['faq'], child: const FaqSection()),
-            ),
-            SliverToBoxAdapter(
-              child: FinalCtaSection(onServices: () => _go('how')),
-            ),
-            SliverToBoxAdapter(child: SiteFooter(onNavigate: _go)),
+            SliverToBoxAdapter(child: Container(key: _keys['home'], child: HeroSection(onNotify: () => _go('register'), onDiscover: () => _go('about')))),
+            SliverToBoxAdapter(child: Container(key: _keys['register'], child: const RegisterSection())),
+            SliverToBoxAdapter(child: Container(key: _keys['about'], child: const AboutSection())),
+            SliverToBoxAdapter(child: Container(key: _keys['features'], child: const SizedBox.shrink())),
+            SliverToBoxAdapter(child: Container(key: _keys['how'], child: const HowSection())),
+            const SliverToBoxAdapter(child: EarlySection()),
+            SliverToBoxAdapter(child: Container(key: _keys['faq'], child: const FaqSection())),
+            SliverToBoxAdapter(child: Container(key: _keys['contact'], child: const SiteFooter())),
           ],
         ),
       ),

@@ -31,6 +31,7 @@ const agentRouter = require('./modules/agent/routes');
 const subscriptionRouter = require('./modules/subscriptions/routes');
 const sharingRouter = require('./modules/sharing/routes');
 const trustRouter = require('./modules/trust/routes');
+const launchRouter = require('./modules/launch/routes');
 const adminRouter = require('./modules/admin/routes');
 // KYC identity documents. Mounted BEFORE the general admin router so its own
 // gate (secret OR database-verified admin role) is the one that runs; the
@@ -343,6 +344,7 @@ app.use('/api/v1/feed', feedRouter);
 app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/share', sharingRouter);
 app.use('/api/v1/trust', trustRouter);
+app.use('/api/v1/launch', launchRouter);
 app.use('/api/v1/admin/kyc', adminKycRouter);
 app.use('/api/v1/admin', adsAdminRouter);
 app.use('/api/v1/admin', adminRouter);
