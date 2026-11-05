@@ -22,6 +22,22 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=SamsungSharpSans:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/site.css">
+  <style>
+    .waitlist-section { padding: 72px 0; background: linear-gradient(180deg, #f7f8fa 0%, #ffffff 100%); }
+    .waitlist-card { max-width: 640px; margin: 0 auto; background: #fff; border: 1px solid #e8eaed; border-radius: 20px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,.06); }
+    .waitlist-card h2 { font-size: 1.75rem; margin: 0 0 8px; }
+    .waitlist-card p.sub { color: #5f6368; margin: 0 0 20px; }
+    .waitlist-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .waitlist-row input { flex: 1 1 180px; min-width: 0; padding: 14px 16px; border: 1px solid #d0d5dd; border-radius: 12px; font: inherit; }
+    .waitlist-row button { padding: 14px 22px; border: 0; border-radius: 12px; background: #111; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    .waitlist-row button:disabled { opacity: .6; cursor: default; }
+    .waitlist-msg { margin-top: 12px; font-size: .95rem; }
+    .waitlist-msg.ok { color: #137333; }
+    .waitlist-msg.err { color: #c5221f; }
+    .waitlist-done { display: none; text-align: center; padding: 8px 0; }
+    .waitlist-done.show { display: block; }
+    .waitlist-form.hide { display: none; }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -165,6 +181,27 @@
       </div>
     </section>
 
+    <section class="waitlist-section" id="waitlist">
+      <div class="container">
+        <div class="waitlist-card">
+          <h2>Pata taarifa za Soko Vibe</h2>
+          <p class="sub">Weka barua pepe yako ili upate taarifa za uzinduzi, masasisho, na viungo rasmi vya app.</p>
+          <form id="svWaitlistForm" class="waitlist-form" novalidate>
+            <div class="waitlist-row">
+              <input id="svWlName" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Jina (si lazima)">
+              <input id="svWlEmail" type="email" name="email" maxlength="120" autocomplete="email" required placeholder="Barua pepe">
+              <button id="svWlBtn" type="submit">Nipe taarifa</button>
+            </div>
+            <div id="svWlMsg" class="waitlist-msg" role="status" aria-live="polite"></div>
+          </form>
+          <div id="svWlDone" class="waitlist-done" aria-live="polite">
+            <h3 style="margin:0 0 6px;">Asante!</h3>
+            <p style="margin:0;color:#5f6368;">Barua pepe yako imesajiliwa. Tutakujulisha taarifa muhimu za Soko Vibe.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="cta-section">
       <div class="container">
         <div class="cta-content">
@@ -230,6 +267,42 @@
 
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+    (function () {
+      var firebaseConfig = {
+        apiKey: 'AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s',
+        authDomain: 'sokonimoko-8c171-a8d14.firebaseapp.com',
+        projectId: 'sokonimoko-8c171-a8d14',
+        storageBucket: 'sokonimoko-8c171-a8d14.appspot.com',
+        appId: '1:344682929526:web:5d3732578d6f012ac26e57'
+      };
+      var db = null;
+      try { if (!firebase.apps.length) firebase.initializeApp(firebaseConfig); db = firebase.firestore(); } catch (e) {}
+      var form = document.getElementById('svWaitlistForm');
+      var msg = document.getElementById('svWlMsg');
+      var done = document.getElementById('svWlDone');
+      var btn = document.getElementById('svWlBtn');
+      function setMsg(text, cls) { msg.textContent = text || ''; msg.className = 'waitlist-msg' + (cls ? ' ' + cls : ''); }
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var email = (document.getElementById('svWlEmail').value || '').trim().toLowerCase();
+        var name = (document.getElementById('svWlName').value || '').trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { setMsg('Weka barua pepe sahihi.', 'err'); return; }
+        if (!db) { setMsg('Huduma haijapatikana sasa. Jaribu tena baadaye.', 'err'); return; }
+        btn.disabled = true; setMsg('Inahifadhi...', '');
+        var payload = { email: email, createdAt: firebase.firestore.FieldValue.serverTimestamp(), lang: 'sw', source: 'server_landing' };
+        if (name) payload.name = name;
+        db.collection('landing_waitlist').doc(email).set(payload).then(function () {
+          form.classList.add('hide'); done.classList.add('show'); setMsg('', '');
+        }).catch(function (err) {
+          var dup = err && /permission-denied/i.test(String(err.code || err.message || ''));
+          setMsg(dup ? 'Barua pepe hii tayari imesajiliwa. Asante!' : 'Imeshindikana kuhifadhi. Jaribu tena.', dup ? 'ok' : 'err');
+        }).finally(function () { btn.disabled = false; });
+      });
+    })();
   </script>
 </body>
 </html>
