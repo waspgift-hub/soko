@@ -53,20 +53,48 @@ class LaunchApi {
       final data = body['data'] is Map<String, dynamic>
           ? body['data'] as Map<String, dynamic>
           : <String, dynamic>{};
-      final message = (data['message'] ?? body['message'] ?? body['error'] ?? '').toString();
+      final message =
+          (data['message'] ?? body['message'] ?? body['error'] ?? '')
+              .toString();
       final duplicate = data['status'] == 'duplicate';
-      if (response.statusCode >= 200 && response.statusCode < 300 && body['success'] == true) {
-        return LaunchSubscribeResult(ok: true, duplicate: duplicate, message: message);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          body['success'] == true) {
+        return LaunchSubscribeResult(
+          ok: true,
+          duplicate: duplicate,
+          message: message,
+        );
       }
       if (response.statusCode == 429) {
-        return const LaunchSubscribeResult(ok: false, duplicate: false, message: 'Too many requests. Please try again later.');
+        return const LaunchSubscribeResult(
+          ok: false,
+          duplicate: false,
+          message: 'Too many requests. Please try again later.',
+        );
       }
       if (response.statusCode == 400) {
-        return LaunchSubscribeResult(ok: false, duplicate: false, message: message.isNotEmpty ? message : 'Please enter a valid email address.');
+        return LaunchSubscribeResult(
+          ok: false,
+          duplicate: false,
+          message: message.isNotEmpty
+              ? message
+              : 'Please enter a valid email address.',
+        );
       }
-      return LaunchSubscribeResult(ok: false, duplicate: false, message: message.isNotEmpty ? message : 'Something went wrong. Please try again.');
+      return LaunchSubscribeResult(
+        ok: false,
+        duplicate: false,
+        message: message.isNotEmpty
+            ? message
+            : 'Something went wrong. Please try again.',
+      );
     } catch (_) {
-      return const LaunchSubscribeResult(ok: false, duplicate: false, message: 'Unable to connect right now. Please try again.');
+      return const LaunchSubscribeResult(
+        ok: false,
+        duplicate: false,
+        message: 'Unable to connect right now. Please try again.',
+      );
     }
   }
 }

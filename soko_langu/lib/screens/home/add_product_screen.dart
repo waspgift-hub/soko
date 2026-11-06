@@ -610,11 +610,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
 
-    // Onyesho la bidhaa kabla ya kuchapisha. Picha zilizochaguliwa bado ziko
-    // ndani ya simu, hivyo preview inaonyesha haraka bila kupakia chochote.
-    final confirmed = await _confirmPreview(parsedPrice);
-    if (!confirmed || !mounted) return;
-
     await _publish(parsedPrice);
   }
 

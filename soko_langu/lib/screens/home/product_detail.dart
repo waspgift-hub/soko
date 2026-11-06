@@ -27,10 +27,8 @@ import '../../widgets/ds/ds.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../widgets/soko_vibe_watermark.dart';
 import '../../widgets/product_video_player.dart';
-import '../../services/ads/ad_config.dart';
 import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
-import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 
 // ignore: unused_element
@@ -90,49 +88,46 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         .resolve(widget.product.sellerId)
         .asStream()
         .listen((verification) {
-      if (mounted) {
-        setState(() {
-          _sellerVerification = verification;
+          if (mounted) {
+            setState(() {
+              _sellerVerification = verification;
+            });
+          }
         });
-      }
-    });
   }
 
   String _lastDisplay = '';
 
   void _loadFlashSale() {
-    _flashStreamSub = _flashSaleService
-        .streamFlashSaleByProductId(widget.product.id)
-        .listen((sale) {
+    _flashStreamSub = _flashSaleService.streamFlashSaleByProductId(widget.product.id).listen((
+      sale,
+    ) {
+      if (!mounted) return;
+      setState(() {
+        _flashSale = sale;
+        _lastDisplay = '';
+      });
+      if (sale != null) {
+        _flashTimer?.cancel();
+        _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (!mounted) return;
-          setState(() {
-            _flashSale = sale;
-            _lastDisplay = '';
-          });
-          if (sale != null) {
-            _flashTimer?.cancel();
-            _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-              if (!mounted) return;
-              final display = sale.remainingTime.isNegative
-                  ? ''
-                  : _fmtDuration(sale.remainingTime);
-              if (display != _lastDisplay) {
-                _lastDisplay = display;
-                setState(() {});
-              }
-            });
-          } else {
-            _flashTimer?.cancel();
+          final display = sale.remainingTime.isNegative ? '' : _fmtDuration(sale.remainingTime);
+          if (display != _lastDisplay) {
+            _lastDisplay = display;
+            setState(() {});
           }
         });
+      } else {
+        _flashTimer?.cancel();
+      }
+    });
   }
 
   Future<void> _loadSellerProfile() async {
     final profile = await _userService.getProfile(widget.product.sellerId);
     // Trusted verification snapshot, resolved independently of the profile read
     // so a revocation is reflected even if the profile cache is stale.
-    final verification =
-        await SellerVerificationService().resolve(widget.product.sellerId);
+    final verification = await SellerVerificationService().resolve(widget.product.sellerId);
     if (!mounted) return;
     setState(() {
       _sellerProfile = profile;
@@ -162,9 +157,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _isFav
-                ? context.tr('added_to_wishlist')
-                : context.tr('removed_from_wishlist'),
+            _isFav ? context.tr('added_to_wishlist') : context.tr('removed_from_wishlist'),
           ),
         ),
       );
@@ -173,8 +166,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!wasFav) {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null && currentUser.uid != widget.product.sellerId) {
-        final userName =
-            currentUser.displayName ?? currentUser.email ?? context.tr('unknown_user');
+        final userName = currentUser.displayName ?? currentUser.email ?? context.tr('unknown_user');
         await NotificationService().sendNotification(
           userId: widget.product.sellerId,
           title: context.tr('like_notification_title').replaceAll('{user}', userName),
@@ -190,11 +182,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _shareProduct(Product product) {
+    final currentUser = FirebaseAuth.instance.currentUser;
     ShareService.instance.shareProduct(
       productId: product.id,
       productName: product.name,
       price: product.price,
       currency: product.currency ?? 'TZS',
+      ref: currentUser?.uid,
     );
   }
 
@@ -223,10 +217,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
           if (currentUser != null && currentUser.uid != sellerId)
             IconButton(
-              icon: Icon(
-                Icons.flag_outlined,
-                color: cs.error.withValues(alpha: 0.7),
-              ),
+              icon: Icon(Icons.flag_outlined, color: cs.error.withValues(alpha: 0.7)),
               tooltip: context.tr('report_user'),
               onPressed: () => context.push(
                 AppRoutes.report,
@@ -243,9 +234,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).padding.bottom + 20,
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -254,10 +243,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   builder: (context) {
                     final videoUrl = product.videoUrl ?? '';
                     final hasVideo = videoUrl.isNotEmpty;
-                    final slideCount =
-                        product.images.length + (hasVideo ? 1 : 0);
-                    final onVideoSlide =
-                        hasVideo && _currentImageIndex == product.images.length;
+                    final slideCount = product.images.length + (hasVideo ? 1 : 0);
+                    final onVideoSlide = hasVideo && _currentImageIndex == product.images.length;
                     return SizedBox(
                       width: double.infinity,
                       height: MediaQuery.of(context).size.width,
@@ -278,35 +265,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   return ProductVideoPlayer(
                                     url: videoUrl,
                                     autoPlay: true,
-                                    height:
-                                        MediaQuery.of(context).size.width,
+                                    height: MediaQuery.of(context).size.width,
                                   );
                                 }
                                 final imageUrl = product.images[index];
                                 return Semantics(
                                   button: true,
                                   label: context.tr('view_full_image'),
-                                  onTap: () => _showFullScreenImage(
-                                    context,
-                                    product.images,
-                                    index,
-                                  ),
+                                  onTap: () => _showFullScreenImage(context, product.images, index),
                                   child: GestureDetector(
                                     excludeFromSemantics: true,
-                                    onTap: () => _showFullScreenImage(
-                                      context,
-                                      product.images,
-                                      index,
-                                    ),
+                                    onTap: () =>
+                                        _showFullScreenImage(context, product.images, index),
                                     child: ProductCachedImage(
                                       url: imageUrl,
                                       // low-res Cloudinary preview while full quality loads;
                                       // R2 has no on-the-fly variants yet, so those keep shimmer
-                                      placeholderUrl:
-                                          imageUrl.contains('cloudinary.com')
-                                              ? getThumbnailUrl(imageUrl,
-                                                  width: 80)
-                                              : null,
+                                      placeholderUrl: imageUrl.contains('cloudinary.com')
+                                          ? getThumbnailUrl(imageUrl, width: 80)
+                                          : null,
                                       fit: BoxFit.cover,
                                     ),
                                   ),
@@ -345,21 +322,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 children: List.generate(
                                   slideCount,
                                   (index) => AnimatedContainer(
-                                    duration:
-                                        const Duration(milliseconds: 200),
-                                    margin: const EdgeInsets.symmetric(
-                                        horizontal: 3),
-                                    width: _currentImageIndex == index
-                                        ? 24
-                                        : 6,
+                                    duration: const Duration(milliseconds: 200),
+                                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                                    width: _currentImageIndex == index ? 24 : 6,
                                     height: 6,
                                     decoration: BoxDecoration(
-                                      borderRadius:
-                                          BorderRadius.circular(3),
+                                      borderRadius: BorderRadius.circular(3),
                                       color: _currentImageIndex == index
                                           ? Colors.white
-                                          : Colors.white
-                                              .withValues(alpha: 0.5),
+                                          : Colors.white.withValues(alpha: 0.5),
                                     ),
                                   ),
                                 ),
@@ -370,16 +341,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             top: 12,
                             right: 12,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
                                 color: Colors.black.withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   width: 0.5,
                                 ),
                               ),
@@ -387,19 +354,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    onVideoSlide
-                                        ? Icons.videocam
-                                        : Icons.photo_library,
+                                    onVideoSlide ? Icons.videocam : Icons.photo_library,
                                     size: 12,
-                                    color: Colors.white
-                                        .withValues(alpha: 0.8),
+                                    color: Colors.white.withValues(alpha: 0.8),
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${_currentImageIndex + 1}/$slideCount',
                                     style: TextStyle(
-                                      color: Colors.white
-                                          .withValues(alpha: 0.9),
+                                      color: Colors.white.withValues(alpha: 0.9),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -414,20 +377,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               top: 12,
                               left: 12,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color:
-                                      Colors.black.withValues(alpha: 0.4),
+                                  color: Colors.black.withValues(alpha: 0.4),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Icon(
                                   Icons.fullscreen,
                                   size: 14,
-                                  color:
-                                      Colors.white.withValues(alpha: 0.8),
+                                  color: Colors.white.withValues(alpha: 0.8),
                                 ),
                               ),
                             ),
@@ -437,13 +395,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               top: 12,
                               left: 12,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color:
-                                      Colors.black.withValues(alpha: 0.4),
+                                  color: Colors.black.withValues(alpha: 0.4),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
@@ -452,15 +406,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     Icon(
                                       Icons.videocam,
                                       size: 14,
-                                      color: Colors.white
-                                          .withValues(alpha: 0.8),
+                                      color: Colors.white.withValues(alpha: 0.8),
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
                                       'Video',
                                       style: TextStyle(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.9),
+                                        color: Colors.white.withValues(alpha: 0.9),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -474,9 +426,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             Positioned(
                               bottom: 18,
                               left: 12,
-                              child: IgnorePointer(
-                                child: SokoVibeWatermark(compact: false),
-                              ),
+                              child: IgnorePointer(child: SokoVibeWatermark(compact: false)),
                             ),
                         ],
                       ),
@@ -491,16 +441,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.image,
-                          size: 48,
-                          color: cs.onSurfaceVariant
-                              .withValues(alpha: 0.3)),
-                      const SizedBox(height: 8),
-                      Text(
-                        context.tr('no_images'),
-                        style:
-                            TextStyle(color: cs.onSurfaceVariant),
+                      Icon(
+                        Icons.image,
+                        size: 48,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.3),
                       ),
+                      const SizedBox(height: 8),
+                      Text(context.tr('no_images'), style: TextStyle(color: cs.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -539,10 +486,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: cs.error,
                               borderRadius: BorderRadius.circular(10),
@@ -564,10 +508,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ? context.tr('expired')
                             : context
                                   .tr('flash_sale_ends_in')
-                                  .replaceAll(
-                                    '{0}',
-                                    _fmtDuration(_flashSale!.remainingTime),
-                                  ),
+                                  .replaceAll('{0}', _fmtDuration(_flashSale!.remainingTime)),
                         style: TextStyle(
                           color: cs.error,
                           fontSize: 13,
@@ -576,18 +517,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                       Text(
                         '${context.tr('ends')} ${_fmtDate(_flashSale!.endTime)}',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
                       ),
                     ] else ...[
                       Text(
                         context.formatPrice(product.price),
-                        style: AppTypography.amount(cs.primary).copyWith(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: AppTypography.amount(
+                          cs.primary,
+                        ).copyWith(fontSize: 24, fontWeight: FontWeight.w700),
                       ),
                       if (_selectedVariantId != null)
                         Text(
@@ -603,16 +540,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           const SizedBox(width: 4),
                           Text(
                             "${product.rating.toStringAsFixed(1)} (${product.reviewCount} ${context.tr('reviews_count')})",
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.6),
-                            ),
+                            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             "${product.soldCount} ${context.tr('sold')}",
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.6),
-                            ),
+                            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
                           ),
                         ],
                       ),
@@ -643,22 +576,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildDetailRow(
-                      context.tr('category'),
-                      _getCategoryDisplay(product.category),
-                    ),
-                    if (product.brand != null)
-                      _buildDetailRow(context.tr('brand'), product.brand!),
+                    _buildDetailRow(context.tr('category'), _getCategoryDisplay(product.category)),
+                    if (product.brand != null) _buildDetailRow(context.tr('brand'), product.brand!),
                     _buildDetailRow(context.tr('condition'), product.condition),
-                    _buildDetailRow(
-                      context.tr('stock'),
-                      "${product.stock} ${context.tr('units')}",
-                    ),
+                    _buildDetailRow(context.tr('stock'), "${product.stock} ${context.tr('units')}"),
                     if (product.isWholesale)
-                      _buildDetailRow(
-                        context.tr('wholesale'),
-                        context.tr('available'),
-                      ),
+                      _buildDetailRow(context.tr('wholesale'), context.tr('available')),
                     const SizedBox(height: 16),
                     _buildProtectionCard(context, cs),
                     if (product.variants.isNotEmpty) ...[
@@ -713,16 +636,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       if (_selectedVariantId != null) ...[
                         _buildDetailRow(
                           context.tr('selected'),
-                          product.variants
-                              .firstWhere((v) => v.id == _selectedVariantId)
-                              .value,
+                          product.variants.firstWhere((v) => v.id == _selectedVariantId).value,
                         ),
                         _buildDetailRow(
                           context.tr('price_adjustment'),
                           context.formatPrice(
-                            _getSelectedVariant()?.priceAdjustment
-                                    ?.toDouble() ??
-                                0,
+                            _getSelectedVariant()?.priceAdjustment?.toDouble() ?? 0,
                           ),
                         ),
                       ],
@@ -736,7 +655,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           context.push(AppRoutes.login);
                         } else if (sellerId.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text(context.tr('seller_unknown_error'))),
+                            SnackBar(content: Text(context.tr('seller_unknown_error'))),
                           );
                         } else {
                           context.push(
@@ -751,79 +670,55 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           CircleAvatar(
                             radius: 24,
                             backgroundColor: cs.primaryContainer,
-                            backgroundImage:
-                                _sellerProfile?.profileImage.isNotEmpty == true
-                                    ? NetworkImage(_sellerProfile!.profileImage)
-                                    : null,
+                            backgroundImage: _sellerProfile?.profileImage.isNotEmpty == true
+                                ? NetworkImage(_sellerProfile!.profileImage)
+                                : null,
                             child: _sellerProfile?.profileImage.isNotEmpty == true
                                 ? null
                                 : Icon(Icons.person, color: cs.surface),
                           ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                product.sellerName,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
-                                                  color: cs.onSurface,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            // Blue Tick from trusted state, plus the word-level pill used on
-                                            // store pages so verification is
-                                            // unambiguous.
-                                            BlueTickBadge(
-                                              sellerId: product.sellerId,
-                                              size: 14,
-                                            ),
-                                            const SizedBox(width: 5),
-                                            BlueTickPill(
-                                              verification: _sellerVerification,
-                                              compact: true,
-                                            ),
-                                          ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        product.sellerName,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: cs.onSurface,
                                         ),
-                                        const SizedBox(height: 12),
-                                        _buildSellerActions(context, cs),
-                                        ],
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
+                                    // Blue Tick from trusted state, plus the word-level pill used on
+                                    // store pages so verification is
+                                    // unambiguous.
+                                    BlueTickBadge(sellerId: product.sellerId, size: 14),
+                                    const SizedBox(width: 5),
+                                    BlueTickPill(verification: _sellerVerification, compact: true),
                                   ],
                                 ),
-                              ),
-                    const SizedBox(height: 20),
-                    // In-feed banner, deliberately placed above the reviews block
-                    // rather than at the end of the scroll view. The old
-                    // placement was the last child of the scroll view, which put
-                    // a 320x50 clickable ad directly above the pinned
-                    // Chat/Buy bar — a mis-tap opened an advertiser landing page
-                    // instead of buying, which is both a UX hazard and an AdMob
-                    // "ads adjacent to purchase controls" policy risk.
-                    const AdSlot(
-                      placement: AdPlacement.productDetailReviews,
-                      variant: AdSlotVariant.feedGap,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ReviewSection(
-                        productId: product.id,
-                        productName: product.name,
+                                const SizedBox(height: 12),
+                                _buildSellerActions(context, cs),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const Divider(height: 32),
-                    CommentSection(
-                      productId: product.id,
-                      sellerId: product.sellerId,
+                    const SizedBox(height: 20),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ReviewSection(productId: product.id, productName: product.name),
                     ),
+                    const Divider(height: 32),
+                    CommentSection(productId: product.id, sellerId: product.sellerId),
                   ],
                 ),
               ),
@@ -876,7 +771,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             const SizedBox(width: 6),
                             Text(
                               context.tr('chat'),
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.primary),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: cs.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -894,11 +793,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         if (currentUser == null) {
                           context.push(AppRoutes.login);
                         } else if (currentUser.uid == sellerId) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(context.tr('cannot_buy_own')),
-                            ),
-                          );
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(context.tr('cannot_buy_own'))));
                         } else {
                           await _processBuyNow();
                         }
@@ -911,9 +808,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Map<String, List<ProductVariant>> _groupVariants(
-    List<ProductVariant> variants,
-  ) {
+  Map<String, List<ProductVariant>> _groupVariants(List<ProductVariant> variants) {
     final map = <String, List<ProductVariant>>{};
     for (var v in variants) {
       map.putIfAbsent(v.name, () => []).add(v);
@@ -978,21 +873,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void _onQtyLimit(bool atMin) {
     final msg = atMin
         ? context
-            .tr('minimum_order_x', 'Minimum order is {0}')
-            .replaceAll('{0}', '$_minQty ${widget.product.unit}')
+              .tr('minimum_order_x', 'Minimum order is {0}')
+              .replaceAll('{0}', '$_minQty ${widget.product.unit}')
         : context
-            .tr('only_x_left', 'Only {0} left')
-            .replaceAll('{0}', '$_maxQty ${widget.product.unit}');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+              .tr('only_x_left', 'Only {0} left')
+              .replaceAll('{0}', '$_maxQty ${widget.product.unit}');
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   ProductVariant? _getSelectedVariant() {
     if (_selectedVariantId == null) return null;
-    final variants = widget.product.variants.where(
-      (v) => v.id == _selectedVariantId,
-    );
+    final variants = widget.product.variants.where((v) => v.id == _selectedVariantId);
     return variants.isNotEmpty ? variants.first : null;
   }
 
@@ -1007,15 +898,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DsEscrowShield(
-              label: 'Buyer Protection', compact: true),
+          const DsEscrowShield(label: 'Buyer Protection', compact: true),
           const SizedBox(height: 10),
-          _protectionStep(
-              cs, '1', 'Pay securely through Soko Vibe'),
-          _protectionStep(
-              cs, '2', 'Money is held safely until you receive'),
-          _protectionStep(
-              cs, '3', 'Confirm delivery to release payment'),
+          _protectionStep(cs, '1', 'Pay securely through Soko Vibe'),
+          _protectionStep(cs, '2', 'Money is held safely until you receive'),
+          _protectionStep(cs, '3', 'Confirm delivery to release payment'),
         ],
       ),
     );
@@ -1030,19 +917,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             width: 20,
             height: 20,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: cs.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Text(n,
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 11)),
+            decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+            child: Text(n, style: const TextStyle(color: Colors.white, fontSize: 11)),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    fontSize: 13, color: cs.onSurface)),
+            child: Text(text, style: TextStyle(fontSize: 13, color: cs.onSurface)),
           ),
         ],
       ),
@@ -1054,12 +934,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final stock = _availableStock;
     final tiers = List<WholesaleTier>.from(p.wholesaleTiers)
       ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
-    final baseUnit = p.price +
-        (_getSelectedVariant()?.priceAdjustment ?? 0);
+    final baseUnit = p.price + (_getSelectedVariant()?.priceAdjustment ?? 0);
     final unit = _unitPrice;
     final subtotal = unit * _quantity;
-    final saved =
-        baseUnit > unit ? (baseUnit - unit) * _quantity : 0.0;
+    final saved = baseUnit > unit ? (baseUnit - unit) * _quantity : 0.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1067,8 +945,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           children: [
             Text(
               '${context.tr('quantity', 'Quantity')}${p.unit.isNotEmpty ? ' (${p.unit})' : ''}',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 14),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
             const Spacer(),
             DsStockIndicator(stock: stock),
@@ -1091,21 +968,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 children: [
                   Text(
                     '$_quantity × ${context.formatPrice(unit)}',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: cs.onSurfaceVariant),
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                   ),
-                  Text(
-                    context.formatPrice(subtotal),
-                    style: AppTypography.amount(cs.primary),
-                  ),
+                  Text(context.formatPrice(subtotal), style: AppTypography.amount(cs.primary)),
                   if (saved > 0)
                     Text(
                       '${context.tr('you_save', 'You save')} ${context.formatPrice(saved)}',
                       style: TextStyle(
-                          fontSize: 12,
-                          color: cs.tertiary,
-                          fontWeight: FontWeight.w600),
+                        fontSize: 12,
+                        color: cs.tertiary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                 ],
               ),
@@ -1119,20 +992,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               context
                   .tr('minimum_order_x', 'Minimum order is {0}')
                   .replaceAll('{0}', '${p.minOrder} ${p.unit}'),
-              style: TextStyle(
-                  fontSize: 12, color: cs.onSurfaceVariant),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ),
         if (tiers.isNotEmpty) ...[
           const SizedBox(height: 8),
-          ...tiers.map((t) => Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '${t.minQuantity}+ : ${context.formatPrice(t.pricePerUnit)} / ${p.unit}',
-                  style: TextStyle(
-                      fontSize: 12, color: cs.onSurfaceVariant),
-                ),
-              )),
+          ...tiers.map(
+            (t) => Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '${t.minQuantity}+ : ${context.formatPrice(t.pricePerUnit)} / ${p.unit}',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -1145,11 +1018,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         children: [
           Text(
             "$label: ",
-            style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
           ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
@@ -1157,21 +1026,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  void _showFullScreenImage(
-    BuildContext context,
-    List<String> images,
-    int initialIndex,
-  ) {
+  void _showFullScreenImage(BuildContext context, List<String> images, int initialIndex) {
     final cs = Theme.of(context).colorScheme;
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
         barrierColor: cs.onSurface,
         pageBuilder: (context, animation, secondaryAnimation) {
-          return _FullScreenImageViewer(
-            images: images,
-            initialIndex: initialIndex,
-          );
+          return _FullScreenImageViewer(images: images, initialIndex: initialIndex);
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -1183,18 +1045,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _processBuyNow() async {
     if (!mounted) return;
     if (_availableStock <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('out_of_stock', 'Out of stock'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('out_of_stock', 'Out of stock'))));
       return;
     }
     _clampQuantity();
-    context.push(AppRoutes.checkout, extra: {
-      'product': widget.product,
-      'quantity': _quantity,
-      'variantId': _selectedVariantId,
-      'unitPrice': _unitPrice,
-    });
+    context.push(
+      AppRoutes.checkout,
+      extra: {
+        'product': widget.product,
+        'quantity': _quantity,
+        'variantId': _selectedVariantId,
+        'unitPrice': _unitPrice,
+      },
+    );
   }
 
   void _chatWithSeller() {
@@ -1219,14 +1084,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       if (isGuest) {
         context.push(AppRoutes.login);
       } else if (sellerId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('seller_unknown_error'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('seller_unknown_error'))));
       } else {
-        context.push(
-          '${AppRoutes.publicProfile}/$sellerId',
-          extra: product.sellerName,
-        );
+        context.push('${AppRoutes.publicProfile}/$sellerId', extra: product.sellerName);
       }
     }
 
@@ -1249,10 +1111,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ),
         const SizedBox(width: 8),
-        CallSellerButton(
-          phone: _sellerProfile?.phone ?? '',
-          iconOnly: true,
-        ),
+        CallSellerButton(phone: _sellerProfile?.phone ?? '', iconOnly: true),
         const SizedBox(width: 8),
         Expanded(
           child: SizedBox(
@@ -1293,10 +1152,7 @@ class _FullScreenImageViewer extends StatefulWidget {
   final List<String> images;
   final int initialIndex;
 
-  const _FullScreenImageViewer({
-    required this.images,
-    required this.initialIndex,
-  });
+  const _FullScreenImageViewer({required this.images, required this.initialIndex});
 
   @override
   State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
@@ -1349,10 +1205,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   minScale: 1.0,
                   maxScale: 5.0,
                   child: Center(
-                    child: ProductCachedImage(
-                      url: widget.images[index],
-                      fit: BoxFit.contain,
-                    ),
+                    child: ProductCachedImage(url: widget.images[index], fit: BoxFit.contain),
                   ),
                 ),
               );
@@ -1384,9 +1237,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
           Positioned(
             bottom: 16,
             left: 12,
-            child: IgnorePointer(
-              child: SokoVibeWatermark(compact: false),
-            ),
+            child: IgnorePointer(child: SokoVibeWatermark(compact: false)),
           ),
         ],
       ),

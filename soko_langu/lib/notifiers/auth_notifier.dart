@@ -13,24 +13,19 @@ import '../utils/network_error.dart';
 import '../app/app_state.dart' as app_state;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum AuthStatus {
-  loading,
-  unauthenticated,
-  authenticated,
-}
+enum AuthStatus { loading, unauthenticated, authenticated }
 
 enum PhoneOtpState { idle, sending, sent, verifying, verified, error }
+
 enum EmailOtpState { idle, sending, sent, verifying, verified, error }
 
 class AuthNotifier extends ChangeNotifier {
   final AuthRepository _authRepo;
   final OnboardingService _onboardingService;
 
-  AuthNotifier({
-    required AuthRepository authRepo,
-    required OnboardingService onboardingService,
-  })  : _authRepo = authRepo,
-        _onboardingService = onboardingService;
+  AuthNotifier({required AuthRepository authRepo, required OnboardingService onboardingService})
+    : _authRepo = authRepo,
+      _onboardingService = onboardingService;
 
   AuthStatus _status = AuthStatus.loading;
   AuthStatus get status => _status;
@@ -63,7 +58,10 @@ class AuthNotifier extends ChangeNotifier {
   Future<void> _fetchAdminStatus() async {
     try {
       final user = _authRepo.currentUser;
-      if (user == null) { _isAdmin = false; return; }
+      if (user == null) {
+        _isAdmin = false;
+        return;
+      }
       // Admin is granted ONLY by the server via the isAdmin flag on the users
       // document (set through /api/setup-admin or the admin SDK). Never derive
       // admin from the email address — anyone can register any email.
@@ -79,9 +77,15 @@ class AuthNotifier extends ChangeNotifier {
   Future<void> _checkProfileCompleteness() async {
     try {
       final user = _authRepo.currentUser;
-      if (user == null) { _needsProfileSetup = false; return; }
+      if (user == null) {
+        _needsProfileSetup = false;
+        return;
+      }
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (!doc.exists) { _needsProfileSetup = true; return; }
+      if (!doc.exists) {
+        _needsProfileSetup = true;
+        return;
+      }
       final data = doc.data()!;
       final hasGender = (data['gender'] as String?)?.isNotEmpty == true;
       final hasDob = (data['dateOfBirth'] as String?)?.isNotEmpty == true;
@@ -95,7 +99,10 @@ class AuthNotifier extends ChangeNotifier {
   Future<void> _checkSuspended() async {
     try {
       final user = _authRepo.currentUser;
-      if (user == null) { _isSuspended = false; return; }
+      if (user == null) {
+        _isSuspended = false;
+        return;
+      }
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       _isSuspended = doc.data()?['isSuspended'] == true;
     } catch (_) {
@@ -199,6 +206,8 @@ class AuthNotifier extends ChangeNotifier {
       await _safely(loadMfaState);
       _syncAppState();
       notifyListeners();
+    } on MfaSignInRequired {
+      rethrow;
     } catch (e) {
       _error = translateError(e);
       notifyListeners();
@@ -214,11 +223,7 @@ class AuthNotifier extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      await _authRepo.register(
-        email: email,
-        password: password,
-        displayName: displayName,
-      );
+      await _authRepo.register(email: email, password: password, displayName: displayName);
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
@@ -239,6 +244,28 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
     try {
       await _authRepo.signInWithGoogle();
+      await _onboardingService.markCompleted();
+      _setAuthState(_authRepo.currentUser);
+      await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
+      await _safely(loadMfaState);
+      _syncAppState();
+      notifyListeners();
+    } on MfaSignInRequired {
+      rethrow;
+    } catch (e) {
+      _error = translateError(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> resolveMfaSignIn(MultiFactorResolver resolver, String totpCode) async {
+    _error = null;
+    notifyListeners();
+    try {
+      await _authRepo.resolveMfaSignIn(resolver, totpCode);
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
@@ -384,11 +411,7 @@ class AuthNotifier extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      await _authRepo.registerWithPhone(
-        phone: phone,
-        password: password,
-        displayName: displayName,
-      );
+      await _authRepo.registerWithPhone(phone: phone, password: password, displayName: displayName);
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
@@ -426,10 +449,7 @@ class AuthNotifier extends ChangeNotifier {
       final res = await http.post(
         Uri.parse(ApiConfig.v1('/auth/send-email-otp')),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'langCode': await LocalizationService().getLanguage(),
-        }),
+        body: jsonEncode({'email': email, 'langCode': await LocalizationService().getLanguage()}),
       );
       if (res.statusCode == 200) {
         _emailOtpState = EmailOtpState.sent;
@@ -535,7 +555,7 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
-/// Completes TOTP enrollment with a code from the authenticator app.
+  /// Completes TOTP enrollment with a code from the authenticator app.
   Future<void> completeMfaEnrollment(String totpCode) async {
     if (_pendingMfaEnrollment == null) {
       throw MfaError.enrollmentFailed('No pending enrollment');
@@ -547,12 +567,9 @@ class AuthNotifier extends ChangeNotifier {
 
     try {
       final secret = _pendingMfaEnrollment!.secret;
-      await _authRepo.completeMfaEnrollment(
-        secret: secret,
-        totpCode: totpCode,
-      );
+      await _authRepo.completeMfaEnrollment(secret: secret, totpCode: totpCode);
       _mfaEnrolled = true;
-_mfaEnrollmentInProgress = false;
+      _mfaEnrollmentInProgress = false;
       _pendingMfaEnrollment = null;
       notifyListeners();
     } on MfaError catch (e) {

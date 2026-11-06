@@ -25,8 +25,6 @@ import '../../widgets/order_status_config.dart';
 import 'package:go_router/go_router.dart';
 import '../../widgets/product_cached_image.dart';
 import '../../widgets/raise_dispute_dialog.dart';
-import '../../widgets/ads/ad_slot.dart';
-import '../../services/ads/ad_config.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
   const MyPurchasesScreen({super.key});
@@ -1047,16 +1045,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                       childCount: docs.length,
                     ),
                   ),
-                // Footer placement after the last order card. Deliberately after the list and
-                // never pinned: an order list carries Pay / Confirm delivery /
-                // Dispute / Cancel controls, and an ad must never sit adjacent
-                // to a money or dispute action.
-                const SliverToBoxAdapter(
-                  child: AdSlot(
-                    placement: AdPlacement.ordersFooter,
-                    variant: AdSlotVariant.feedGap,
-                  ),
-                ),
+
                 SliverToBoxAdapter(
                   child: SizedBox(height: _isSelectionMode && _selectedIds.isNotEmpty ? 80 : 32),
                 ),

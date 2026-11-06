@@ -17,8 +17,6 @@ import '../../widgets/dynamic_banner.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
-import '../../widgets/ads/ad_slot.dart';
-import '../../services/ads/ad_config.dart';
 
 /// Discovery marketplace: product cards in a 2-column grid, tabs filter the
 /// same products stream. Follow controls live on the profile of each seller.
@@ -133,12 +131,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
         return list;
       case FeedTab.forYou:
         final list = List<Product>.from(all);
-        list.sort((a, b) {
-          if (a.isBoosted != b.isBoosted) {
-            return a.isBoosted ? -1 : 1;
-          }
-          return b.viewCount.compareTo(a.viewCount);
-        });
+        list.shuffle();
         return list;
     }
   }
@@ -169,16 +162,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
       ),
       body: Column(
         children: [
-          // Sticky header with precise spacing — prevents cramped chips
-          Container(
-            color: Theme.of(context).colorScheme.surface,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: FeedTabs(selected: _tab, onSelect: (t) => setState(() => _tab = t)),
-          ),
-          Container(
-            height: 1,
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.08),
-          ),
           Expanded(
             child: StreamBuilder<List<Product>>(
               stream: _productStream,
@@ -222,15 +205,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
                           ),
                         ),
                       ),
-                      // Footer placement only. Discovery already leads with a
-                      // first-party DynamicBanner, so a second in-feed ad here
-                      // would make the screen feel ad-heavy.
-                      const SliverToBoxAdapter(
-                        child: AdSlot(
-                          placement: AdPlacement.homeFeedFooter,
-                          variant: AdSlotVariant.feedGap,
-                        ),
-                      ),
+
                     ],
                   ),
                 );

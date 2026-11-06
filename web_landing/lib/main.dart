@@ -13,7 +13,7 @@ class SokoVibeWebApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Soko Vibe — Coming Soon',
+      title: 'Soko Vibe — Soko la Tanzania, Hivi Karibuni',
       theme: SokoWebTheme.light(),
       home: const LandingPage(),
     );

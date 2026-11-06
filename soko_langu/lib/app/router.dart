@@ -1,6 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'app_transitions.dart';
 import '../services/ads/ad_manager.dart';
 import '../services/ads/ad_route_observer.dart';
@@ -59,6 +59,7 @@ import '../screens/profile/contact_discovery_screen.dart';
 import '../screens/verification/verification_center_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
 import '../screens/auth/otp_verification_screen.dart';
+import '../screens/auth/mfa_challenge_screen.dart';
 import '../screens/auth/mfa_enrollment_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
@@ -148,7 +149,6 @@ final List<String> _adminOnlyRoutes = [
   AppRoutes.adminBroadcast,
 ];
 
-
 /// Reads key:value pairs (attributes preset) from a query param.
 Map<String, Set<String>>? _queryAttrMap(GoRouterState state) {
   final raw = state.uri.queryParameters['attrs'];
@@ -169,11 +169,7 @@ Map<String, Set<String>>? _queryAttrMap(GoRouterState state) {
 Set<String>? _queryBrandSet(GoRouterState state, String key) {
   final raw = state.uri.queryParameters[key];
   if (raw == null || raw.isEmpty) return null;
-  final out = raw
-      .split(',')
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
-      .toSet();
+  final out = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
   return out.isEmpty ? null : out;
 }
 
@@ -202,8 +198,7 @@ OtpVerificationRequest? _requestFromMap(Map<String, dynamic> extra) {
       channel: channel,
       otpLength: (extra['otpLength'] as int?) ?? 6,
       langCode: extra['langCode'] as String? ?? 'sw',
-      onVerify: extra['onVerify'] as Future<OtpVerificationResult> Function(
-              String)?,
+      onVerify: extra['onVerify'] as Future<OtpVerificationResult> Function(String)?,
       onResend: extra['onResend'] as Future<OtpVerificationResult> Function()?,
       allowDestinationEdit: extra['allowDestinationEdit'] as bool? ?? false,
       allowResend: extra['allowResend'] as bool? ?? true,
@@ -262,13 +257,10 @@ GoRouter buildRouter() {
           AppRoutes.otpVerification,
           AppRoutes.verifyEmail,
         };
-        final exempt = onboardingExempt.any(
-          (r) => location == r || location.startsWith('$r/'),
-        );
+        final exempt = onboardingExempt.any((r) => location == r || location.startsWith('$r/'));
         if (!exempt) return AppRoutes.onboarding;
       }
-      if (app_state.appStateNotifier.hasCompletedOnboarding &&
-          location == AppRoutes.onboarding) {
+      if (app_state.appStateNotifier.hasCompletedOnboarding && location == AppRoutes.onboarding) {
         return AppRoutes.home;
       }
 
@@ -303,11 +295,13 @@ GoRouter buildRouter() {
           final extra = state.extra is Map<String, dynamic>
               ? state.extra as Map<String, dynamic>
               : <String, dynamic>{};
-          return _premiumPage(RegisterScreen(
-            initialPhone: extra['phone'] as String?,
-            displayPhone: extra['displayPhone'] as String?,
-            otpVerified: extra['otpVerified'] == true,
-          ));
+          return _premiumPage(
+            RegisterScreen(
+              initialPhone: extra['phone'] as String?,
+              displayPhone: extra['displayPhone'] as String?,
+              otpVerified: extra['otpVerified'] == true,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -321,8 +315,8 @@ GoRouter buildRouter() {
           final email = extra is Map<String, dynamic>
               ? extra['email'] as String?
               : extra is String
-                  ? extra
-                  : null;
+              ? extra
+              : null;
           return _premiumPage(VerifyEmailScreen(email: email));
         },
       ),
@@ -333,8 +327,8 @@ GoRouter buildRouter() {
           final request = extra is OtpVerificationRequest
               ? extra
               : extra is Map<String, dynamic>
-                  ? _requestFromMap(extra)
-                  : null;
+              ? _requestFromMap(extra)
+              : null;
           if (request == null) {
             return _premiumPage(const _MissingRouteData());
           }
@@ -343,8 +337,22 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.mfaEnrollment,
-        pageBuilder: (context, state) =>
-            _premiumPage(const MfaEnrollmentScreen()),
+        pageBuilder: (context, state) => _premiumPage(const MfaEnrollmentScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.mfaChallenge,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Map<String, dynamic> && extra['resolver'] is MultiFactorResolver) {
+            return _premiumPage(
+              MfaChallengeScreen(
+                resolver: extra['resolver'] as MultiFactorResolver,
+                email: extra['email'] as String?,
+              ),
+            );
+          }
+          return _premiumPage(const _MissingRouteData());
+        },
       ),
       GoRoute(
         path: AppRoutes.accountSelection,
@@ -356,8 +364,7 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.contactDiscovery,
-        pageBuilder: (context, state) =>
-            _premiumPage(const ContactDiscoveryScreen()),
+        pageBuilder: (context, state) => _premiumPage(const ContactDiscoveryScreen()),
       ),
       GoRoute(
         path: AppRoutes.tutorials,
@@ -436,10 +443,12 @@ GoRouter buildRouter() {
           final extra = state.extra as Map<String, dynamic>? ?? const {};
           final productId = extra['productId'] as String? ?? '';
           if (productId.isEmpty) return _premiumPage(const _MissingRouteData());
-          return _premiumPage(ProductReviewsScreen(
-            productId: productId,
-            productName: extra['productName'] as String? ?? '',
-          ));
+          return _premiumPage(
+            ProductReviewsScreen(
+              productId: productId,
+              productName: extra['productName'] as String? ?? '',
+            ),
+          );
         },
       ),
       GoRoute(
@@ -449,12 +458,14 @@ GoRouter buildRouter() {
           final extra = state.extra is Map<String, dynamic>
               ? state.extra as Map<String, dynamic>
               : <String, dynamic>{};
-          return _premiumPage(ChatPage(
-            receiverId: receiverId,
-            receiverName: extra['name'] as String? ?? '',
-            productName: extra['productTitle'] as String? ?? extra['product'] as String? ?? '',
-            productId: extra['productId'] as String?,
-          ));
+          return _premiumPage(
+            ChatPage(
+              receiverId: receiverId,
+              receiverName: extra['name'] as String? ?? '',
+              productName: extra['productTitle'] as String? ?? extra['product'] as String? ?? '',
+              productId: extra['productId'] as String?,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -478,7 +489,9 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) {
           final userId = state.pathParameters['userId']!;
           final name = state.extra as String? ?? '';
-          return _premiumPage(FollowerFollowingScreen(userId: userId, userName: name, isFollowers: true));
+          return _premiumPage(
+            FollowerFollowingScreen(userId: userId, userName: name, isFollowers: true),
+          );
         },
       ),
       GoRoute(
@@ -486,7 +499,9 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) {
           final userId = state.pathParameters['userId']!;
           final name = state.extra as String? ?? '';
-          return _premiumPage(FollowerFollowingScreen(userId: userId, userName: name, isFollowers: false));
+          return _premiumPage(
+            FollowerFollowingScreen(userId: userId, userName: name, isFollowers: false),
+          );
         },
       ),
       GoRoute(
@@ -511,8 +526,7 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.artworkPack,
-        pageBuilder: (context, state) =>
-            _premiumPage(const ArtworkPackScreen(allowDismiss: true)),
+        pageBuilder: (context, state) => _premiumPage(const ArtworkPackScreen(allowDismiss: true)),
       ),
       GoRoute(
         path: AppRoutes.sellerDashboard,
@@ -535,9 +549,9 @@ GoRouter buildRouter() {
           // before the screen is built — the previous code cast a null
           // `extra` into a non-nullable `Category` and threw at page build.
           final extra = state.extra;
-          final resolved = extra is Category ? extra : _resolveCategorySync(
-            state.pathParameters['name'] ?? '',
-          );
+          final resolved = extra is Category
+              ? extra
+              : _resolveCategorySync(state.pathParameters['name'] ?? '');
 
           if (resolved != null) {
             return _premiumPage(
@@ -609,10 +623,12 @@ GoRouter buildRouter() {
             final media = extra['sharedMedia'];
             final paths = media is List ? media.map((e) => e.toString()).toList() : <String>[];
             final product = extra['product'];
-            return _premiumPage(AddProductScreen(
-              product: product is Product ? product : null,
-              initialMediaPaths: paths,
-            ));
+            return _premiumPage(
+              AddProductScreen(
+                product: product is Product ? product : null,
+                initialMediaPaths: paths,
+              ),
+            );
           }
           // legacy: extra is Product directly or map with product key
           if (extra is Map && extra['product'] is Product) {
@@ -638,8 +654,7 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.adminAdsConfig,
-        pageBuilder: (context, state) =>
-            _premiumPage(const AdminAdsConfigScreen()),
+        pageBuilder: (context, state) => _premiumPage(const AdminAdsConfigScreen()),
       ),
       GoRoute(
         path: AppRoutes.adminBroadcast,
@@ -658,13 +673,13 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.aiAssistant,
-         pageBuilder: (context, state) => _premiumPage(const AiAssistantScreen()),
-       ),
-       GoRoute(
-          path: AppRoutes.aiSettings,
-          pageBuilder: (context, state) => _premiumPage(const AiSettingsScreen()),
-        ),
-       GoRoute(
+        pageBuilder: (context, state) => _premiumPage(const AiAssistantScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.aiSettings,
+        pageBuilder: (context, state) => _premiumPage(const AiSettingsScreen()),
+      ),
+      GoRoute(
         path: AppRoutes.agent,
         pageBuilder: (context, state) => _premiumPage(const AgentScreen()),
       ),
@@ -704,12 +719,14 @@ GoRouter buildRouter() {
           if (product == null) {
             return _premiumPage(const _MissingRouteData());
           }
-          return _premiumPage(CheckoutScreen(
-            product: product,
-            quantity: quantity,
-            variantId: variantId,
-            unitPrice: unitPrice,
-          ));
+          return _premiumPage(
+            CheckoutScreen(
+              product: product,
+              quantity: quantity,
+              variantId: variantId,
+              unitPrice: unitPrice,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -755,8 +772,7 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.verificationCenter,
-        pageBuilder: (context, state) =>
-            _premiumPage(const VerificationCenterScreen()),
+        pageBuilder: (context, state) => _premiumPage(const VerificationCenterScreen()),
       ),
       GoRoute(
         path: AppRoutes.report,
@@ -764,12 +780,14 @@ GoRouter buildRouter() {
           final extra = state.extra is Map<String, dynamic>
               ? state.extra as Map<String, dynamic>
               : <String, dynamic>{};
-          return _premiumPage(ReportScreen(
-            reportedUserId: extra['reportedUserId'] as String? ?? '',
-            reportedUserName: extra['reportedUserName'] as String? ?? '',
-            productId: extra['productId'] as String?,
-            productName: extra['productName'] as String?,
-          ));
+          return _premiumPage(
+            ReportScreen(
+              reportedUserId: extra['reportedUserId'] as String? ?? '',
+              reportedUserName: extra['reportedUserName'] as String? ?? '',
+              productId: extra['productId'] as String?,
+              productName: extra['productName'] as String?,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -798,10 +816,12 @@ GoRouter buildRouter() {
           final extra = state.extra is Map<String, dynamic>
               ? state.extra as Map<String, dynamic>
               : const {};
-          return _premiumPage(BoostProductScreen(
-            productId: extra['productId'] as String? ?? '',
-            product: extra['product'] as dynamic,
-          ));
+          return _premiumPage(
+            BoostProductScreen(
+              productId: extra['productId'] as String? ?? '',
+              product: extra['product'] as dynamic,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -867,8 +887,7 @@ class _UsernameAwareProfile extends StatefulWidget {
 }
 
 class _UsernameAwareProfileState extends State<_UsernameAwareProfile> {
-  late final Future<String?> _uidFuture =
-      UsernameService.instance.resolveToUid(widget.raw);
+  late final Future<String?> _uidFuture = UsernameService.instance.resolveToUid(widget.raw);
 
   @override
   Widget build(BuildContext context) {
@@ -909,7 +928,10 @@ class _MissingRouteData extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                context.tr('missing_product_hint', 'Bidhaa haikupatikana. Rudi dukani kuchagua tena.'),
+                context.tr(
+                  'missing_product_hint',
+                  'Bidhaa haikupatikana. Rudi dukani kuchagua tena.',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
@@ -992,9 +1014,7 @@ class _CategoryProductsLoaderState extends State<_CategoryProductsLoader> {
           );
         }
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
         return const _MissingCategoryData();
       },
@@ -1018,19 +1038,12 @@ class _MissingCategoryData extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.category_outlined,
-                size: 48,
-                color: cs.onSurfaceVariant,
-              ),
+              Icon(Icons.category_outlined, size: 48, color: cs.onSurfaceVariant),
               const SizedBox(height: 16),
               Text(
                 context.tr('loading_error'),
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1039,10 +1052,7 @@ class _MissingCategoryData extends StatelessWidget {
                   '-category haikupatikana. Rudi dukani kuchagua tena.',
                 ),
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -1093,9 +1103,7 @@ class _ProductDetailLoaderState extends State<_ProductDetailLoader> {
         final product = snapshot.data;
         if (product != null) return ProductDetailPage(product: product);
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
         return const _MissingRouteData();
       },

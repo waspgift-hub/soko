@@ -1,1 +1,6 @@
-/* /index.html 200
+# Static legal/support pages are served from their folders; SPA handles app shell.
+/privacy-policy    /privacy-policy/    301
+/terms-of-service  /terms-of-service/  301
+/cookie-policy     /cookie-policy/     301
+/contact           /contact/           301
+/*                 /index.html         200

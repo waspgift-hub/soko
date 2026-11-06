@@ -44,7 +44,8 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        // Chat shortcut route
+        handleIntent(intent)
+        // Chat/profile shortcut route
         intent.getStringExtra("route")?.let { route ->
             flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
                 MethodChannel(messenger, "soko_lang/navigate").invokeMethod("navigate", route)
@@ -160,9 +161,12 @@ class MainActivity : AudioServiceActivity() {
             "soko_lang/shortcut",
         ).setMethodCallHandler { call, result ->
             if (call.method == "pinShortcut") {
-                val receiverId = call.argument<String>("receiverId") ?: ""
-                val receiverName = call.argument<String>("receiverName") ?: "Chat"
-                val success = pinShortcutToHomeScreen(receiverId, receiverName)
+                val receiverId = call.argument<String>("receiverId") ?: call.argument<String>("id") ?: ""
+                val receiverName = call.argument<String>("receiverName") ?: call.argument<String>("label") ?: "Soko Vibe"
+                val route = call.argument<String>("route")
+                val type = call.argument<String>("type") ?: "chat"
+                val iconPath = call.argument<String>("iconPath")
+                val success = pinShortcutToHomeScreen(receiverId, receiverName, route, type, iconPath)
                 result.success(success)
             } else {
                 result.notImplemented()
@@ -216,8 +220,12 @@ class MainActivity : AudioServiceActivity() {
         val uri = intent?.data ?: return
         if (uri.scheme == "shortcut_soko_vibe" && uri.host == "chat") {
             val receiverId = uri.lastPathSegment ?: return
-            val receiverName = uri.getQueryParameter("name") ?: ""
             pendingRoute = "/chat/$receiverId"
+            return
+        }
+        if (uri.scheme == "shortcut_soko_vibe" && uri.host == "profile") {
+            val userId = uri.lastPathSegment ?: return
+            pendingRoute = "/public-profile/$userId"
         }
     }
 
@@ -299,27 +307,52 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
-    private fun pinShortcutToHomeScreen(receiverId: String, receiverName: String): Boolean {
+    private fun pinShortcutToHomeScreen(
+        receiverId: String,
+        receiverName: String,
+        routeArg: String? = null,
+        type: String = "chat",
+        iconPath: String? = null,
+    ): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
         return try {
             val shortcutManager = getSystemService(android.content.pm.ShortcutManager::class.java)
             if (!shortcutManager.isRequestPinShortcutSupported) return false
+            val host = if (type == "profile") "profile" else "chat"
+            val route = routeArg ?: if (host == "profile") "/public-profile/$receiverId" else "/chat/$receiverId"
             val intent = Intent(this, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
-                data = android.net.Uri.parse("shortcut_soko_vibe://chat/$receiverId?name=${android.net.Uri.encode(receiverName)}")
-                putExtra("route", "/chat/$receiverId")
+                data = android.net.Uri.parse(
+                    "shortcut_soko_vibe://$host/$receiverId?name=${android.net.Uri.encode(receiverName)}"
+                )
+                putExtra("route", route)
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
-            val appIcon = ContextCompat.getDrawable(this, R.mipmap.ic_launcher)
-            val bitmap = Bitmap.createBitmap(108, 108, Bitmap.Config.ARGB_8888).also { bmp ->
-                val canvas = Canvas(bmp)
-                appIcon?.setBounds(0, 0, 108, 108)
-                appIcon?.draw(canvas)
+            val icon = if (!iconPath.isNullOrBlank()) {
+                val bmp = android.graphics.BitmapFactory.decodeFile(iconPath)
+                if (bmp != null) Icon.createWithAdaptiveBitmap(bmp)
+                else {
+                    val appIcon = ContextCompat.getDrawable(this, R.mipmap.ic_launcher)
+                    val fallback = Bitmap.createBitmap(108, 108, Bitmap.Config.ARGB_8888).also { b ->
+                        val canvas = Canvas(b)
+                        appIcon?.setBounds(0, 0, 108, 108)
+                        appIcon?.draw(canvas)
+                    }
+                    Icon.createWithBitmap(fallback)
+                }
+            } else {
+                val appIcon = ContextCompat.getDrawable(this, R.mipmap.ic_launcher)
+                val bitmap = Bitmap.createBitmap(108, 108, Bitmap.Config.ARGB_8888).also { bmp ->
+                    val canvas = Canvas(bmp)
+                    appIcon?.setBounds(0, 0, 108, 108)
+                    appIcon?.draw(canvas)
+                }
+                Icon.createWithBitmap(bitmap)
             }
-            val shortcut = android.content.pm.ShortcutInfo.Builder(this, "chat_$receiverId")
+            val shortcut = android.content.pm.ShortcutInfo.Builder(this, "${host}_$receiverId")
                 .setShortLabel(receiverName.take(10))
                 .setLongLabel(receiverName.take(25))
-                .setIcon(Icon.createWithBitmap(bitmap))
+                .setIcon(icon)
                 .setIntent(intent)
                 .build()
             shortcutManager.requestPinShortcut(shortcut, null)

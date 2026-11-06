@@ -416,18 +416,6 @@ trailing: Switch(
                 onTap: () => _showCurrencyPicker(context, config),
               ),
               const Divider(),
-              _buildTile(
-                icon: Icons.pin,
-                title: context.tr('set_pin'),
-                subtitle: _pinConfigured ? context.tr('pin_enabled') : null,
-                onTap: _showPinSetupDialog,
-              ),
-              if (_pinConfigured)
-                _buildTile(
-                  icon: Icons.lock_open,
-                  title: context.tr('remove_pin'),
-                  onTap: _confirmRemovePin,
-                ),
               const Divider(),
               // MFA (Two-Factor Authentication)
               Consumer<AuthNotifier>(
@@ -457,11 +445,6 @@ trailing: Switch(
               const Divider(),
               _buildSectionTitle(context.tr('account')),
               _buildTile(
-                icon: Icons.person,
-                title: context.tr('edit_profile'),
-                onTap: () => context.push(AppRoutes.editProfile),
-              ),
-              _buildTile(
                 icon: Icons.devices_other,
                 title: context.tr('logout_all_devices'),
                 subtitle: context.tr('logout_all_devices_body'),
@@ -485,51 +468,9 @@ trailing: Switch(
               const Divider(),
               _buildSectionTitle(context.tr('support')),
               _buildTile(
-                icon: Icons.help,
-                title: context.tr('help'),
-                onTap: () => context.push(AppRoutes.help),
-              ),
-              _buildTile(
-                icon: Icons.school_outlined,
-                title: context.tr('tutorials_title'),
-                onTap: () => context.push(AppRoutes.tutorials),
-              ),
-              _buildTile(
-                icon: Icons.verified_user_outlined,
-                title: context.tr('verification_center_title'),
-                onTap: () => context.push(AppRoutes.verificationCenter),
-              ),
-              _buildTile(
                 icon: Icons.person_search_outlined,
                 title: context.tr('contact_discovery_title'),
                 onTap: () => context.push(AppRoutes.contactDiscovery),
-              ),
-              _buildTile(
-                icon: Icons.image_outlined,
-                title: context.tr('artwork_pack_manage'),
-                subtitle: context.tr('artwork_pack_manage_body'),
-                onTap: () => context.push(AppRoutes.artworkPack),
-              ),
-              _buildTile(
-                icon: Icons.route_outlined,
-                title: context.tr('how_it_works'),
-                onTap: () => context.push(AppRoutes.orderFlow),
-              ),
-              _buildTile(
-                icon: Icons.info,
-                title: context.tr('about'),
-                subtitle: context.tr('version'),
-                onTap: () => context.push(AppRoutes.about),
-              ),
-              _buildTile(
-                icon: Icons.privacy_tip_outlined,
-                title: context.tr('privacy_policy'),
-                onTap: () => context.push(AppRoutes.privacyPolicy),
-              ),
-              _buildTile(
-                icon: Icons.article_outlined,
-                title: context.tr('terms_of_service'),
-                onTap: () => context.push(AppRoutes.termsOfService),
               ),
               const SizedBox(height: 30),
               Padding(

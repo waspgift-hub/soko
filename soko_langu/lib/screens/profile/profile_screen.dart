@@ -18,8 +18,6 @@ import '../../widgets/premium_widgets.dart';
 import '../../widgets/soko_widgets.dart';
 import '../../app/routes.dart';
 import '../../utils/phone_utils.dart';
-import '../../services/ads/ad_config.dart';
-import '../../widgets/ads/ad_slot.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -395,21 +393,12 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppInsets.sm),
-                  // In-feed banner above the action grid. Previously it sat between
-                  // the Settings tile and the Logout button, so an accidental tap
-                  // near a destructive control opened an advertiser page instead.
-                  // Sensitive controls now keep clear vertical space.
-                  const AdSlot(
-                    placement: AdPlacement.profileFooter,
-                    variant: AdSlotVariant.feedGap,
-                  ),
                   // Action grid
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                     child: _buildActionGrid(cs),
                   ),
-                  const SizedBox(height: AppInsets.lg),
+                  const SizedBox(height: AppInsets.sm),
                   // Settings
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
@@ -420,7 +409,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                       iconColor: cs.primary,
                     ),
                   ),
-                  const SizedBox(height: AppInsets.lg),
+                  const SizedBox(height: AppInsets.sm),
                   // Logout
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
@@ -440,7 +429,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                  const SizedBox(height: AppInsets.xxl),
+                  const SizedBox(height: AppInsets.lg),
                 ],
               ),
             ),

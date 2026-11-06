@@ -6,8 +6,6 @@ import '../../services/flash_sale_service.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/ads/ad_slot.dart';
-import '../../services/ads/ad_config.dart';
 import '../../widgets/banners/campaign_banner_slot.dart';
 import '../../models/banner_model.dart';
 import '../../app/routes.dart';
@@ -198,10 +196,6 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
             ],
           );
         },
-      ),
-      bottomNavigationBar: const AdSlot(
-        placement: AdPlacement.flashSaleFooter,
-        variant: AdSlotVariant.pinnedFooter,
       ),
     );
   }

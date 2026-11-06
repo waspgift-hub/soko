@@ -11,14 +11,17 @@ class ShareService {
   static final ShareService instance = ShareService._();
 
   /// Share a product. Generates localized text but uses the canonical URL.
+  /// [ref] (sharer/user id) is carried in the deep link so the app can
+  /// preserve context when opened from WhatsApp/other channels.
   Future<void> shareProduct({
     required String productId,
     required String productName,
     required double price,
     String currency = 'TZS',
     String? locale,
+    String? ref,
   }) async {
-    final url = DeepLinkParser.productUrl(productId);
+    final url = DeepLinkParser.productUrl(productId, ref: ref);
     final priceStr = _formatPrice(price, currency);
     // Swahili default, English fallback already handled by caller if needed
     final text = '$productName - $priceStr\nInapatikana Soko Vibe.\n$url';
@@ -26,10 +29,7 @@ class ShareService {
     _track('product_shared');
   }
 
-  Future<void> shareSeller({
-    required String sellerId,
-    required String sellerName,
-  }) async {
+  Future<void> shareSeller({required String sellerId, required String sellerName}) async {
     final url = DeepLinkParser.sellerUrl(sellerId);
     final text = 'Angalia bidhaa za $sellerName kwenye Soko Vibe.\n$url';
     await _share(text);

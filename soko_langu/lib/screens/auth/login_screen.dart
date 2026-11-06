@@ -12,8 +12,8 @@ import '../../models/otp_verification_models.dart';
 import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
-import '../../screens/auth/otp_verification_screen.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/network_error.dart';
 import '../../utils/rate_limiter.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/auth/auth_text_field.dart';
@@ -109,6 +109,12 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       await _saveAccount('email');
       if (mounted) context.go(AppRoutes.home);
+    } on MfaSignInRequired catch (e) {
+      if (!mounted) return;
+      context.push(
+        AppRoutes.mfaChallenge,
+        extra: {'resolver': e.resolver, 'email': e.email ?? _emailController.text.trim()},
+      );
     } catch (e) {
       if (mounted) _showError(context.trError(e));
     } finally {
@@ -138,35 +144,38 @@ class _LoginScreenState extends State<LoginScreen> {
       _startResendCountdown();
       HapticFeedback.mediumImpact();
       if (mounted) {
-        context.pushNamed(AppRoutes.otpVerification, extra: OtpVerificationRequest(
-          purpose: OtpPurpose.emailLogin,
-          destination: email,
-          maskedDestination: _maskEmail(email),
-          channel: OtpChannel.email,
-          otpLength: 6,
-          langCode: 'sw',
-          onVerify: (otp) async {
-            try {
-              await context.read<AuthNotifier>().loginWithEmailOtp(email, otp);
-              await _saveAccount('otp');
-              if (mounted) context.go(AppRoutes.home);
+        context.pushNamed(
+          AppRoutes.otpVerification,
+          extra: OtpVerificationRequest(
+            purpose: OtpPurpose.emailLogin,
+            destination: email,
+            maskedDestination: _maskEmail(email),
+            channel: OtpChannel.email,
+            otpLength: 6,
+            langCode: 'sw',
+            onVerify: (otp) async {
+              try {
+                await context.read<AuthNotifier>().loginWithEmailOtp(email, otp);
+                await _saveAccount('otp');
+                if (mounted) context.go(AppRoutes.home);
+                return const OtpVerificationResult.success();
+              } catch (e) {
+                return OtpVerificationResult.failure(
+                  errorCode: 'auth_otp_invalid',
+                  userMessage: context.trError(e, feature: 'auth', screen: 'login_otp_verify'),
+                );
+              }
+            },
+            onResend: () async {
+              await context.read<AuthNotifier>().sendEmailOtp(email);
               return const OtpVerificationResult.success();
-            } catch (e) {
-              return OtpVerificationResult.failure(
-                errorCode: 'auth_otp_invalid',
-                userMessage: context.trError(e, feature: 'auth', screen: 'login_otp_verify'),
-              );
-            }
-          },
-          onResend: () async {
-            await context.read<AuthNotifier>().sendEmailOtp(email);
-            return const OtpVerificationResult.success();
-          },
-          allowDestinationEdit: false,
-          allowResend: true,
-          headingOverride: context.tr('login_with_otp'),
-          subtitleOverride: _tParams('enter_code_sent', {'0': _maskEmail(email)}),
-        ));
+            },
+            allowDestinationEdit: false,
+            allowResend: true,
+            headingOverride: context.tr('login_with_otp'),
+            subtitleOverride: _tParams('enter_code_sent', {'0': _maskEmail(email)}),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) _showError(context.trError(e, feature: 'auth', screen: 'login_otp'));
@@ -181,8 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return '${email[0]}***@${email.substring(at + 1)}';
   }
 
-  String _tParams(String key, Map<String, String> params) =>
-      context.trParams(key, params);
+  String _tParams(String key, Map<String, String> params) => context.trParams(key, params);
 
   @override
   Widget build(BuildContext context) {
@@ -236,13 +244,13 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               _MethodSwitcher(
                 method: _method,
-                  onChange: (m) {
-                    setState(() {
-                      _method = m;
-                      _otpSent = false;
-                    });
-                    HapticFeedback.selectionClick();
-                  },
+                onChange: (m) {
+                  setState(() {
+                    _method = m;
+                    _otpSent = false;
+                  });
+                  HapticFeedback.selectionClick();
+                },
               ),
               const SizedBox(height: 24),
               Form(
@@ -380,6 +388,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AuthNotifier>().signInWithGoogle();
       await _saveAccount('google');
       if (mounted) context.go(AppRoutes.home);
+    } on MfaSignInRequired catch (e) {
+      if (!mounted) return;
+      context.push(AppRoutes.mfaChallenge, extra: {'resolver': e.resolver, 'email': e.email});
     } catch (e) {
       if (mounted) _showError(context.trError(e));
     } finally {

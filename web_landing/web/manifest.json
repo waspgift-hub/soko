@@ -1,11 +1,11 @@
 {
   "name": "Soko Vibe",
   "short_name": "Soko Vibe",
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0B141A",
   "theme_color": "#008069",
-  "description": "Soko Vibe — A Tanzanian Digital Marketplace (Coming Soon)",
+  "description": "Soko Vibe — Soko la Tanzania, Hivi Karibuni (inaendelezwa)",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [

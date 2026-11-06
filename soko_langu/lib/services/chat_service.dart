@@ -115,13 +115,14 @@ Stream<List<ChatRoom>> getRooms() {
     return _db
         .collection('chat_rooms')
         .where('participants', arrayContains: userId)
-        .orderBy('last_timestamp', descending: true)
         .limit(50)
         .snapshots()
         .map((snap) {
       final rooms = snap.docs
           .map((doc) => ChatRoom.fromMap(doc.id, doc.data()))
           .toList();
+      rooms.sort((a, b) => (b.lastTimestamp?.millisecondsSinceEpoch ?? 0)
+          .compareTo(a.lastTimestamp?.millisecondsSinceEpoch ?? 0));
       unawaited(LocalCacheService.cacheRooms(rooms));
       return rooms;
     });
@@ -191,57 +192,65 @@ Stream<List<ChatRoom>> getRooms() {
     if (user == null) return null;
     final roomId = roomIdFor(user.uid, receiverId);
 
-    final idToken = await user.getIdToken();
-    final body = <String, dynamic>{
-      'senderId': user.uid,
-      'receiverId': receiverId,
-      'roomId': roomId,
-      'text': content,
-      'productId': ?productId,
-      'productName': ?productName,
-      'replyTo': ?replyTo,
-      'replyToContent': ?replyToContent,
-      'replyToSender': ?replyToSender,
-      'clientMessageId': clientMessageId ?? const Uuid().v4(),
-    };
-
-    try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/chat/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $idToken',
-        },
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final messageId = data['messageId'] as String? ?? '';
-
-        unawaited(LocalCacheService.cacheSingleMessage(roomId, Message(
-          id: messageId,
-          senderId: user.uid,
-          receiverId: receiverId,
-          content: content,
-          timestamp: DateTime.now(),
-          isRead: false,
-          isDelivered: true,
-          productId: productId,
-          productName: productName,
-          replyTo: replyTo,
-          replyToContent: replyToContent,
-          replyToSender: replyToSender,
-        )));
-        return messageId;
-      } else {
-        if (kDebugMode) debugPrint('ChatService: send failed: ${response.statusCode} ${response.body}');
-        return null;
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('ChatService: send error: $e');
-      return null;
+    // Ensure room exists
+    final roomRef = _db.collection('chat_rooms').doc(roomId);
+    final existing = await roomRef.get();
+    if (!existing.exists) {
+      await roomRef.set({
+        'participants': [user.uid, receiverId],
+        'last_message': '',
+        'last_timestamp': FieldValue.serverTimestamp(),
+        'unread_counts': {user.uid: 0, receiverId: 0},
+        'unread_count_buyer': 0,
+        'unread_count_seller': 0,
+        'product_id': ?productId,
+        'product_title': ?productName,
+      });
     }
+
+    final msgId = clientMessageId ?? const Uuid().v4();
+    final msgRef = roomRef.collection('messages').doc(msgId);
+    await msgRef.set({
+      'sender_id': user.uid,
+      'senderId': user.uid,
+      'receiver_id': receiverId,
+      'receiverId': receiverId,
+      'content': content,
+      'text': content,
+      'timestamp': FieldValue.serverTimestamp(),
+      'is_read': false,
+      'isRead': false,
+      'is_delivered': true,
+      'isDelivered': true,
+      'product_id': ?productId,
+      'product_name': ?productName,
+      'reply_to': ?replyTo,
+      'reply_to_content': ?replyToContent,
+      'reply_to_sender': ?replyToSender,
+      'client_message_id': msgId,
+    });
+
+    await roomRef.update({
+      'last_message': content,
+      'last_timestamp': FieldValue.serverTimestamp(),
+      'unread_counts.$receiverId': FieldValue.increment(1),
+    });
+
+    unawaited(LocalCacheService.cacheSingleMessage(roomId, Message(
+      id: msgId,
+      senderId: user.uid,
+      receiverId: receiverId,
+      content: content,
+      timestamp: DateTime.now(),
+      isRead: false,
+      isDelivered: true,
+      productId: productId,
+      productName: productName,
+      replyTo: replyTo,
+      replyToContent: replyToContent,
+      replyToSender: replyToSender,
+    )));
+    return msgId;
   }
 
   /// Mark all unread incoming messages as read in Firestore.

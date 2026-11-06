@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
@@ -55,7 +57,23 @@ class _ContactDiscoveryScreenState extends State<ContactDiscoveryScreen> {
     });
     try {
       if (value) {
-        final phone = FirebaseAuth.instance.currentUser?.phoneNumber;
+        final status = await Permission.contacts.request();
+        if (!status.isGranted) {
+          setState(() {
+            _error = context.tr('contact_permission_denied');
+            _saving = false;
+          });
+          return;
+        }
+        String? phone = FirebaseAuth.instance.currentUser?.phoneNumber;
+        if (phone == null || phone.isEmpty) {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid != null) {
+            final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+            final data = snap.data();
+            phone = (data?['phone'] ?? data?['phoneNumber'] ?? data?['phoneNumberE164'])?.toString();
+          }
+        }
         if (phone == null || phone.isEmpty) {
           setState(() {
             _error = context.tr('contact_discovery_need_phone');

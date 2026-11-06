@@ -89,7 +89,7 @@ class OneUIViewingHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              if (action case final a?) a,
+              ?action,
             ],
           ),
           if (subtitle != null && subtitle!.trim().isNotEmpty) ...[

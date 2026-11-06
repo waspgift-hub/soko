@@ -16,16 +16,15 @@ import '../../services/profile_view_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
-import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
-import '../../theme/design_tokens.dart';
 import '../../widgets/ds/ds.dart';
 import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
-import '../../services/ads/ad_config.dart';
 import '../../services/share_service.dart';
+import '../../services/shortcut_service.dart';
 import '../../widgets/social/follow_button.dart';
 import '../../services/follow_service.dart';
+import '../../utils/network_error.dart';
 import 'package:provider/provider.dart';
 
 class PublicProfileScreen extends StatefulWidget {
@@ -77,6 +76,35 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     ChatNavigation.openSellerChat(context, widget.userId, widget.userName);
   }
 
+  Future<void> _addProfileShortcut() async {
+    try {
+      final snap = await UserService().getProfile(widget.userId);
+      final iconUrl = (snap?.profileImage ?? '').trim();
+      final name = (snap?.displayName ?? widget.userName).trim();
+      final ok = await pinProfileShortcut(
+        userId: widget.userId,
+        displayName: name.isEmpty ? 'Soko Vibe' : name,
+        iconUrl: iconUrl.isEmpty ? null : iconUrl,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? context.tr('shortcut_added')
+                : context.tr(
+                    'shortcut_not_supported',
+                    'Shortcut haijaunganishwa kwenye skrini ya nyumbani',
+                  ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final productService = ProductService();
@@ -107,24 +135,48 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               }
             },
           ),
-          if (!_isMyProfile) ...[
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              if (value == 'shortcut') await _addProfileShortcut();
+              if (value == 'report') {
+                context.push(
+                  AppRoutes.report,
+                  extra: {'reportedUserId': widget.userId, 'reportedUserName': widget.userName},
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'shortcut',
+                child: ListTile(
+                  leading: const Icon(Icons.add_to_home_screen),
+                  title: Text(context.tr('add_shortcut', 'Add Shortcut')),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              if (!_isMyProfile)
+                PopupMenuItem(
+                  value: 'report',
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.flag_outlined,
+                      color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
+                    ),
+                    title: Text(context.tr('report_user')),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+            ],
+          ),
+          if (!_isMyProfile)
             IconButton(
               tooltip: context.tr('send_message'),
               icon: Icon(Icons.chat, color: Theme.of(context).colorScheme.whatsappGreen),
               onPressed: _chatWithSeller,
             ),
-            IconButton(
-              tooltip: context.tr('report_user'),
-              icon: Icon(
-                Icons.flag_outlined,
-                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
-              ),
-              onPressed: () => context.push(
-                AppRoutes.report,
-                extra: {'reportedUserId': widget.userId, 'reportedUserName': widget.userName},
-              ),
-            ),
-          ],
         ],
       ),
       body: SafeArea(
@@ -198,17 +250,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                             addAutomaticKeepAlives: false,
                           ),
                         ),
-                        // Footer placement: below the seller's catalogue so the
-                        // ad never competes with a product card, and inside the
-                        // same scroll view so it is built lazily.
-                        const SliverToBoxAdapter(
-                          child: AdSlot(
-                            placement: AdPlacement.sellerProfileFooter,
-                            variant: AdSlotVariant.feedGap,
-                            topMargin: Ds.sp5,
-                            bottomMargin: Ds.sp7,
-                          ),
-                        ),
+
                       ],
                     );
                   },

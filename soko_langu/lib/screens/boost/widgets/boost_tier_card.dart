@@ -120,16 +120,6 @@ class BoostTierCard extends StatelessWidget {
                     scheme.onSurface,
                   ).copyWith(fontSize: 22, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(width: AppSpacing.s2),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Text(
-                    context.trParams('boost_per_day', {
-                      'amount': tier.pricePerDay.toStringAsFixed(0),
-                    }),
-                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
-                  ),
-                ),
                 const Spacer(),
                 _SavingTag(tier: tier, selected: selected),
               ],

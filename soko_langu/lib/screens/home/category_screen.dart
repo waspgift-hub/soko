@@ -12,8 +12,6 @@ import '../../utils/category_icons.dart';
 import '../../widgets/marketplace/category_image.dart';
 import '../../widgets/inputs/soko_search_bar.dart';
 import '../../widgets/staggered_fade_in.dart';
-import '../../widgets/ads/ad_slot.dart';
-import '../../services/ads/ad_config.dart';
 
 /// Visual marketplace explorer: search, popular categories, then the full
 /// responsive grid. Images lead, names stay visible for accessibility.
@@ -203,13 +201,6 @@ class _Explorer extends StatelessWidget {
               );
             },
           ),
-        ),
-        // Footer placement: after the full category grid, so the ad is the last
-        // thing on a long explorer list and never sits between two tappable
-        // category cards.
-        const AdSlot(
-          placement: AdPlacement.categoriesFooter,
-          variant: AdSlotVariant.feedGap,
         ),
         SizedBox(
           height: MediaQuery.of(context).padding.bottom + AppInsets.lg,

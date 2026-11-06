@@ -386,11 +386,12 @@ class ProductCard extends StatelessWidget {
   Widget? _buildSellerBadges(BuildContext context, ColorScheme cs, double scale) {
     final featured = product.isFeaturedValid;
     final boosted = isBoosted || product.isBoostedValid;
-    if (!featured && !boosted) return null;
+    final showFeatured = featured || boosted;
+    if (!showFeatured) return null;
 
     return Stack(
       children: [
-        if (featured)
+        if (showFeatured)
           Positioned(
             top: 8,
             left: 8,
@@ -412,23 +413,6 @@ class ProductCard extends StatelessWidget {
                     style: TextStyle(color: cs.surface, fontSize: 9, fontWeight: FontWeight.bold),
                   ),
                 ],
-              ),
-            ),
-          ),
-        if (boosted)
-          Positioned(
-            top: featured ? 32 : 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
-              ),
-              child: Text(
-                context.tr('boost_product'),
-                style: TextStyle(color: cs.primary, fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),
           ),

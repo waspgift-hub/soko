@@ -22,8 +22,20 @@ class SiteNav extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
         color: SokoBrand.white.withValues(alpha: scrolled ? 0.96 : 1.0),
-        border: Border(bottom: BorderSide(color: SokoBrand.line.withValues(alpha: scrolled ? 1.0 : 0.0))),
-        boxShadow: scrolled ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, 4))] : null,
+        border: Border(
+          bottom: BorderSide(
+            color: SokoBrand.line.withValues(alpha: scrolled ? 1.0 : 0.0),
+          ),
+        ),
+        boxShadow: scrolled
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: SafeArea(
         bottom: false,
@@ -32,31 +44,53 @@ class SiteNav extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 1280),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: LayoutBuilder(builder: (context, c) {
-                final compact = c.maxWidth < 980;
-                return Row(children: [
-                  _Brand(onTap: () => onNavigate('home')),
-                  if (!compact) ...[
-                    const SizedBox(width: 20),
-                    _NavLink(label: context.str('nav_home'), onTap: () => onNavigate('home')),
-                    _NavLink(label: context.str('nav_about'), onTap: () => onNavigate('about')),
-                    _NavLink(label: context.str('nav_features'), onTap: () => onNavigate('features')),
-                    _NavLink(label: context.str('nav_faq'), onTap: () => onNavigate('faq')),
-                    _NavLink(label: context.str('nav_contact'), onTap: () => onNavigate('contact')),
-                  ],
-                  const Spacer(),
-                  _LangSwitch(strings: strings),
-                  const SizedBox(width: 8),
-                  if (!compact)
-                    FilledButton(onPressed: onNotify, child: Text(context.str('nav_updates'))),
-                  if (compact)
-                    IconButton(
-                      tooltip: context.str('nav_menu'),
-                      icon: const Icon(Icons.menu),
-                      onPressed: () => _openSheet(context),
-                    ),
-                ]);
-              }),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final compact = c.maxWidth < 980;
+                  return Row(
+                    children: [
+                      _Brand(onTap: () => onNavigate('home')),
+                      if (!compact) ...[
+                        const SizedBox(width: 20),
+                        _NavLink(
+                          label: context.str('nav_home'),
+                          onTap: () => onNavigate('home'),
+                        ),
+                        _NavLink(
+                          label: context.str('nav_about'),
+                          onTap: () => onNavigate('about'),
+                        ),
+                        _NavLink(
+                          label: context.str('nav_features'),
+                          onTap: () => onNavigate('features'),
+                        ),
+                        _NavLink(
+                          label: context.str('nav_faq'),
+                          onTap: () => onNavigate('faq'),
+                        ),
+                        _NavLink(
+                          label: context.str('nav_contact'),
+                          onTap: () => onNavigate('contact'),
+                        ),
+                      ],
+                      const Spacer(),
+                      _LangSwitch(strings: strings),
+                      const SizedBox(width: 8),
+                      if (!compact)
+                        FilledButton(
+                          onPressed: onNotify,
+                          child: Text(context.str('nav_updates')),
+                        ),
+                      if (compact)
+                        IconButton(
+                          tooltip: context.str('nav_menu'),
+                          icon: const Icon(Icons.menu),
+                          onPressed: () => _openSheet(context),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -69,14 +103,38 @@ class SiteNav extends StatelessWidget {
       context: context,
       showDragHandle: true,
       builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          for (final entry in [('home', 'nav_home'), ('about', 'nav_about'), ('features', 'nav_features'), ('faq', 'nav_faq'), ('contact', 'nav_contact')])
-            ListTile(title: Text(context.str(entry.$2)), onTap: () { Navigator.pop(context); onNavigate(entry.$1); }),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(width: double.infinity, child: FilledButton(onPressed: () { Navigator.pop(context); onNotify(); }, child: Text(context.str('nav_updates')))),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in [
+              ('home', 'nav_home'),
+              ('about', 'nav_about'),
+              ('features', 'nav_features'),
+              ('faq', 'nav_faq'),
+              ('contact', 'nav_contact'),
+            ])
+              ListTile(
+                title: Text(context.str(entry.$2)),
+                onTap: () {
+                  Navigator.pop(context);
+                  onNavigate(entry.$1);
+                },
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onNotify();
+                  },
+                  child: Text(context.str('nav_updates')),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -90,16 +148,33 @@ class _Brand extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(color: SokoBrand.deepGreen, borderRadius: BorderRadius.circular(11)),
-          child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 20),
-        ),
-        const SizedBox(width: 10),
-        const Text('Soko Vibe', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: SokoBrand.ink)),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: SokoBrand.deepGreen,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(
+              Icons.chat_bubble_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Soko Vibe',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: SokoBrand.ink,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -124,7 +199,14 @@ class _NavLinkState extends State<_NavLink> {
         onTap: widget.onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Text(widget.label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _hover ? SokoBrand.deepGreen : SokoBrand.muted)),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: _hover ? SokoBrand.deepGreen : SokoBrand.muted,
+            ),
+          ),
         ),
       ),
     );
@@ -140,11 +222,27 @@ class _LangSwitch extends StatelessWidget {
       tooltip: context.str('lang_label'),
       initialValue: strings.code,
       onSelected: strings.setLocale,
-      itemBuilder: (_) => const [PopupMenuItem(value: 'en', child: Text('English')), PopupMenuItem(value: 'sw', child: Text('Kiswahili'))],
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'en', child: Text('English')),
+        PopupMenuItem(value: 'sw', child: Text('Kiswahili')),
+      ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(border: Border.all(color: SokoBrand.line), borderRadius: BorderRadius.circular(10)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.language, size: 18, color: SokoBrand.muted), const SizedBox(width: 6), Text(strings.code.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))]),
+        decoration: BoxDecoration(
+          border: Border.all(color: SokoBrand.line),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.language, size: 18, color: SokoBrand.muted),
+            const SizedBox(width: 6),
+            Text(
+              strings.code.toUpperCase(),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }

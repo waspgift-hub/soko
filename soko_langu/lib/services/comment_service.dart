@@ -11,7 +11,7 @@ import 'api_config.dart';
 import 'notification_service.dart';
 
 class CommentService {
-  final Firestore _db = Firestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
   final NotificationService _notif = NotificationService();
 
   static const Duration _pollInterval = Duration(seconds: 2);
@@ -39,24 +39,16 @@ class CommentService {
     }
   }
 
-  Future<void> addComment({
-    required String productId,
-    required String text,
-  }) async {
+  Future<void> addComment({required String productId, required String text}) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw NetworkError(
-        message: 'Not logged in',
-        userMessage: 'auth_login_required',
-      );
+    if (user == null)
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
     final token = await _token();
     if (token != null) {
       try {
         final res = await http.post(
           Uri.parse(ApiConfig.v1('/products/$productId/comments')),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
+          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
           body: jsonEncode({'text': text}),
         );
         if (res.statusCode == 201) {
@@ -103,19 +95,14 @@ class CommentService {
     required String text,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw NetworkError(
-        message: 'Not logged in',
-        userMessage: 'auth_login_required',
-      );
+    if (user == null)
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
     final token = await _token();
     if (token != null) {
       try {
         final res = await http.post(
           Uri.parse(ApiConfig.v1('/comments/$commentId/replies')),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
+          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
           body: jsonEncode({'text': text}),
         );
         if (res.statusCode == 201) {
@@ -135,9 +122,7 @@ class CommentService {
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    await _commentsRef(
-      productId,
-    ).doc(commentId).update({'replyCount': FieldValue.increment(1)});
+    await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(1)});
 
     _notifyCommentAuthor(productId, commentId, user, text);
     _triggerPoll(productId);
@@ -157,9 +142,7 @@ class CommentService {
         'text': text,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      await _commentsRef(
-        productId,
-      ).doc(commentId).update({'replyCount': FieldValue.increment(1)});
+      await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(1)});
     } catch (_) {}
   }
 
@@ -174,10 +157,7 @@ class CommentService {
         userId: sellerId,
         title: 'New Comment on your listing!',
         body: '$name commented on your product',
-        data: {
-          'type': 'comment',
-          'productId': productId,
-        },
+        data: {'type': 'comment', 'productId': productId},
       );
     } catch (e) {
       debugPrint('CommentService _notifySeller: $e');
@@ -191,39 +171,28 @@ class CommentService {
     String replyText,
   ) async {
     try {
-      final commentSnap =
-          await _commentsRef(productId).doc(commentId).get();
+      final commentSnap = await _commentsRef(productId).doc(commentId).get();
       if (!commentSnap.exists) return;
       final commentData = commentSnap.data() as Map<String, dynamic>?;
       final authorId = commentData?['userId'] as String?;
       if (authorId == null || authorId == user.uid) return;
       final name = user.displayName ?? user.email ?? 'Someone';
-      final truncated =
-          replyText.length > 80 ? '${replyText.substring(0, 80)}…' : replyText;
+      final truncated = replyText.length > 80 ? '${replyText.substring(0, 80)}…' : replyText;
       _notif.sendNotification(
         userId: authorId,
         title: 'New reply to your comment!',
         body: '$name replied: "$truncated"',
-        data: {
-          'type': 'comment_reply',
-          'productId': productId,
-          'commentId': commentId,
-        },
+        data: {'type': 'comment_reply', 'productId': productId, 'commentId': commentId},
       );
     } catch (e) {
       debugPrint('CommentService _notifyCommentAuthor: $e');
     }
   }
 
-  Future<void> deleteComment({
-    required String productId,
-    required String commentId,
-  }) async {
+  Future<void> deleteComment({required String productId, required String commentId}) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw NetworkError(
-        message: 'Not logged in',
-        userMessage: 'auth_login_required',
-      );
+    if (user == null)
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
     final token = await _token();
     if (token != null) {
       try {
@@ -272,10 +241,8 @@ class CommentService {
     required String replyId,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw NetworkError(
-        message: 'Not logged in',
-        userMessage: 'auth_login_required',
-      );
+    if (user == null)
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
     final token = await _token();
     if (token != null) {
       try {
@@ -286,9 +253,9 @@ class CommentService {
         if (res.statusCode == 200) {
           // Postgres row soft-deleted; remove the mirrored Firestore copy.
           try {
-    final replySnap = await _repliesRef(productId, commentId).doc(replyId).get();
-    final replyData = replySnap.data() as Map<String, dynamic>?;
-    if (replySnap.exists && replyData?['userId'] == user.uid) {
+            final replySnap = await _repliesRef(productId, commentId).doc(replyId).get();
+            final replyData = replySnap.data() as Map<String, dynamic>?;
+            if (replySnap.exists && replyData?['userId'] == user.uid) {
               await _repliesRef(productId, commentId).doc(replyId).delete();
               await _commentsRef(
                 productId,
@@ -307,10 +274,7 @@ class CommentService {
         if (e is NetworkError) rethrow;
       }
     }
-    final replySnap = await _repliesRef(
-      productId,
-      commentId,
-    ).doc(replyId).get();
+    final replySnap = await _repliesRef(productId, commentId).doc(replyId).get();
     final replyData = replySnap.data() as Map<String, dynamic>?;
     if (replyData == null || replyData['userId'] != user.uid) {
       throw NetworkError(
@@ -319,9 +283,7 @@ class CommentService {
       );
     }
     await _repliesRef(productId, commentId).doc(replyId).delete();
-    await _commentsRef(
-      productId,
-    ).doc(commentId).update({'replyCount': FieldValue.increment(-1)});
+    await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(-1)});
   }
 
   Stream<List<ProductComment>> getComments(String productId) {
@@ -344,10 +306,7 @@ class CommentService {
         .map(
           (snap) => snap.docs
               .map(
-                (doc) => ProductComment.fromFirestore(
-                  doc.id,
-                  doc.data() as Map<String, dynamic>,
-                ),
+                (doc) => ProductComment.fromFirestore(doc.id, doc.data() as Map<String, dynamic>),
               )
               .toList(),
         );
@@ -359,10 +318,7 @@ class CommentService {
         () => _fetchRepliesApi(commentId),
         pollKey: productId,
         fingerprint: (items) => items
-            .map(
-              (r) =>
-                  '${r.id}:${r.createdAt.microsecondsSinceEpoch}:${r.text.hashCode}',
-            )
+            .map((r) => '${r.id}:${r.createdAt.microsecondsSinceEpoch}:${r.text.hashCode}')
             .join('|'),
       );
     }
@@ -417,10 +373,7 @@ class CommentService {
           } else {
             final doubled = delay.inSeconds * 2;
             delay = Duration(
-              seconds: doubled.clamp(
-                _pollInterval.inSeconds,
-                _maxPollInterval.inSeconds,
-              ),
+              seconds: doubled.clamp(_pollInterval.inSeconds, _maxPollInterval.inSeconds),
             );
           }
         }
@@ -494,8 +447,7 @@ class CommentService {
           userName: d['userName'] as String? ?? 'Unknown',
           userImage: d['userImage'] as String?,
           text: d['text'] as String? ?? '',
-          createdAt: DateTime.tryParse(d['createdAt'] as String? ?? '') ??
-              DateTime.now(),
+          createdAt: DateTime.tryParse(d['createdAt'] as String? ?? '') ?? DateTime.now(),
           replyCount: (d['replyCount'] as num?)?.toInt() ?? 0,
         );
       }).toList();
@@ -524,8 +476,7 @@ class CommentService {
           userName: d['userName'] as String? ?? 'Unknown',
           userImage: d['userImage'] as String?,
           text: d['text'] as String? ?? '',
-          createdAt: DateTime.tryParse(d['createdAt'] as String? ?? '') ??
-              DateTime.now(),
+          createdAt: DateTime.tryParse(d['createdAt'] as String? ?? '') ?? DateTime.now(),
         );
       }).toList();
     } catch (_) {

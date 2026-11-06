@@ -36,9 +36,8 @@ class Neu {
 
   /// Flat surface fill. One step off the canvas so a hairline edge reads in
   /// light mode, and so dark-mode cards do not vanish into the canvas.
-  static Color flatFill(Brightness b) => b == Brightness.dark
-      ? const Color(0xFF161616)
-      : const Color(0xFFFFFFFF);
+  static Color flatFill(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFF161616) : const Color(0xFFFFFFFF);
 
   /// Single-direction flat shadow. A tinted flat shadow reads cleaner than pure
   /// black over a grey canvas, and the alpha steps are deliberately low so
@@ -47,21 +46,19 @@ class Neu {
     return switch (depth) {
       NeuFlatDepth.none => const [],
       NeuFlatDepth.rest => [
-          BoxShadow(
-            color: shade(b)
-                .withValues(alpha: b == Brightness.dark ? 0.34 : 0.07),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        BoxShadow(
+          color: shade(b).withValues(alpha: b == Brightness.dark ? 0.34 : 0.07),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
       NeuFlatDepth.overlay => [
-          BoxShadow(
-            color: shade(b)
-                .withValues(alpha: b == Brightness.dark ? 0.5 : 0.12),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        BoxShadow(
+          color: shade(b).withValues(alpha: b == Brightness.dark ? 0.5 : 0.12),
+          blurRadius: 28,
+          offset: const Offset(0, 10),
+        ),
+      ],
     };
   }
 
@@ -83,7 +80,6 @@ class Neu {
 
   /// Extruded dual shadow scaled by [depth] (0 disables).
   static List<BoxShadow> raised(double depth, Brightness b) => const [];
-  static List<BoxShadow> raisedHue(double depth, Color base) => const [];
 
   /// Extruded dual shadow tinted around a colored base (green CTAs, FABs, …
   /// dark tones) instead of the neutral canvas tones.
@@ -92,19 +88,11 @@ class Neu {
   /// Recessed fill: darker base plus a hairline groove. Pass an [accent]
   /// (e.g. primary green) to recolor the groove for the focused state of
   /// fields.
-  static BoxDecoration inset(
-    double radius,
-    Brightness b, {
-    Color? fill,
-    Color? accent,
-  }) {
+  static BoxDecoration inset(double radius, Brightness b, {Color? fill, Color? accent}) {
     return BoxDecoration(
       color: fill ?? insetBase(b),
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: accent ?? grooveColor(b),
-        width: accent != null ? 1.5 : 1,
-      ),
+      border: Border.all(color: accent ?? grooveColor(b), width: accent != null ? 1.5 : 1),
     );
   }
 

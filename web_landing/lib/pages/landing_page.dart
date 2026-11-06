@@ -52,7 +52,9 @@ class _LandingPageState extends State<LandingPage> {
     if (ctx != null) {
       Scrollable.ensureVisible(
         ctx,
-        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 550),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 550),
         curve: Curves.easeInOutCubic,
         alignment: 0.05,
       );
@@ -71,16 +73,53 @@ class _LandingPageState extends State<LandingPage> {
               pinned: true,
               toolbarHeight: 72,
               backgroundColor: SokoBrand.white,
-              flexibleSpace: SiteNav(scrolled: _scrolled, onNavigate: _go, strings: _strings, onNotify: () => _go('register')),
+              flexibleSpace: SiteNav(
+                scrolled: _scrolled,
+                onNavigate: _go,
+                strings: _strings,
+                onNotify: () => _go('register'),
+              ),
             ),
-            SliverToBoxAdapter(child: Container(key: _keys['home'], child: HeroSection(onNotify: () => _go('register'), onDiscover: () => _go('about')))),
-            SliverToBoxAdapter(child: Container(key: _keys['register'], child: const RegisterSection())),
-            SliverToBoxAdapter(child: Container(key: _keys['about'], child: const AboutSection())),
-            SliverToBoxAdapter(child: Container(key: _keys['features'], child: const FeaturesSection())),
-            SliverToBoxAdapter(child: Container(key: _keys['how'], child: const HowSection())),
+            SliverToBoxAdapter(
+              child: Container(
+                key: _keys['home'],
+                child: HeroSection(
+                  onNotify: () => _go('register'),
+                  onDiscover: () => _go('about'),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Container(
+                key: _keys['register'],
+                child: const RegisterSection(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Container(
+                key: _keys['about'],
+                child: const AboutSection(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Container(
+                key: _keys['features'],
+                child: const FeaturesSection(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Container(key: _keys['how'], child: const HowSection()),
+            ),
             const SliverToBoxAdapter(child: EarlySection()),
-            SliverToBoxAdapter(child: Container(key: _keys['faq'], child: const FaqSection())),
-            SliverToBoxAdapter(child: Container(key: _keys['contact'], child: const SiteFooter())),
+            SliverToBoxAdapter(
+              child: Container(key: _keys['faq'], child: const FaqSection()),
+            ),
+            SliverToBoxAdapter(
+              child: Container(
+                key: _keys['contact'],
+                child: const SiteFooter(),
+              ),
+            ),
           ],
         ),
       ),

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/marketplace_taxonomy.dart';
 import '../../models/category_model.dart' as category_model;
@@ -532,15 +533,30 @@ class CategoryArtworkService {
 
   void markPromptDismissed() {
     _promptDismissed = true;
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (prefs) => prefs.setBool('artwork_pack_prompt_dismissed', true),
+      ),
+    );
   }
 
   /// Restores the declined flag from local storage at startup.
   void setPromptDismissed(bool value) {
     _promptDismissed = value;
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (prefs) => prefs.setBool('artwork_pack_prompt_dismissed', value),
+      ),
+    );
   }
 
   void clearPromptDismissed() {
     _promptDismissed = false;
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (prefs) => prefs.setBool('artwork_pack_prompt_dismissed', false),
+      ),
+    );
   }
 
   // =========================

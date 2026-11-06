@@ -943,6 +943,20 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
       }
 
+      if (db) {
+        const product = await db.collection('products').doc(String(productId)).get();
+        if (!product.exists) {
+          return res.status(404).json({ error: 'Product not found' });
+        }
+        const productData = product.data() || {};
+        const ownerId = String(
+          productData.userId || productData.sellerId || productData.ownerId || ''
+        );
+        if (ownerId && ownerId !== userId) {
+          return res.status(403).json({ error: 'Not product owner' });
+        }
+      }
+
       // Normalize phone to 255 format
       const phoneDigits = phone.replace(/\D/g, '');
       const normalizedPhone = phoneDigits.startsWith('0')

@@ -14,9 +14,8 @@ import '../../widgets/ds/ds.dart';
 import '../../widgets/product_cached_image.dart';
 import 'boost_tiers.dart';
 import 'widgets/boost_checkout_bar.dart';
-import 'widgets/boost_hero_panel.dart';
 import 'widgets/boost_payment_section.dart';
-import 'widgets/boost_reach_panel.dart';
+import 'widgets/boost_hero_panel.dart';
 import 'widgets/boost_result_overlays.dart';
 import 'widgets/boost_tier_card.dart';
 import 'widgets/boost_value_prop_grid.dart';
@@ -257,7 +256,7 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('boost_screen_title')), centerTitle: false),
+      appBar: AppBar(title: Text(context.tr('boost_screen_title')), centerTitle: true),
       body: SafeArea(
         bottom: false,
         child: _loadingProducts
@@ -300,15 +299,18 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
                       ),
                     ),
                   const SizedBox(height: AppSpacing.s2),
-                  BoostReachPanel(tier: _tier),
-                  const SizedBox(height: AppSpacing.s7),
-                  BoostPaymentSection(
-                    phoneController: _phoneCtrl,
-                    method: _method,
-                    provider: _provider,
-                    phoneError: _phoneError,
-                    onMethodChanged: (m) => setState(() => _method = m),
-                    onProviderChanged: (p) => setState(() => _provider = p),
+                  DsCard(
+                    padding: const EdgeInsets.all(AppSpacing.s4),
+                    child: TextField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: context.tr('boost_phone_label'),
+                        hintText: context.tr('boost_phone_hint'),
+                        errorText: _phoneError,
+                        prefixIcon: const Icon(Icons.smartphone_rounded),
+                      ),
+                    ),
                   ),
                 ],
               ),

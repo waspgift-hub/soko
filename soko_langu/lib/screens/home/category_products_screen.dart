@@ -18,8 +18,6 @@ import '../../app/routes.dart';
 import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/google_loading.dart';
-import '../../services/ads/ad_config.dart';
-import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 
 class CategoryProductsScreen extends StatefulWidget {
@@ -190,10 +188,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
               ],
             ),
         ],
-      ),
-      bottomNavigationBar: const AdSlot(
-        placement: AdPlacement.categoryProductsFooter,
-        variant: AdSlotVariant.pinnedFooter,
       ),
       body: SafeArea(
         child: StreamBuilder<List<Product>>(

@@ -156,6 +156,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       backgroundColor: cs.surface,
       appBar: _selectMode
           ? AppBar(
+              centerTitle: false,
               leading: IconButton(
                 tooltip: context.tr('exit_selection'),
                 icon: const Icon(Icons.close),
@@ -193,6 +194,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               ],
             )
           : AppBar(
+              centerTitle: false,
               titleSpacing: 16,
               title: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),

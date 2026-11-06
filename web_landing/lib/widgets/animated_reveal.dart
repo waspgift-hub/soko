@@ -37,8 +37,10 @@ class _AnimatedRevealState extends State<AnimatedReveal>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    final curve =
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
     _opacity = curve;
     _slide = Tween<Offset>(
       begin: const Offset(0, 0.06),

@@ -3,12 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// Classifies Firestore / network failures for UI messaging.
-enum FirestoreErrorKind {
-  network,
-  permission,
-  missingIndex,
-  other,
-}
+enum FirestoreErrorKind { network, permission, missingIndex, other }
 
 /// Translation keys for user-facing error messages. UI renders them through
 /// `context.trError()` so errors follow the app language, not hardcoded text.
@@ -99,8 +94,7 @@ FirestoreErrorInfo classifyFirestoreError(dynamic error) {
       lower.contains('caller does not have permission')) {
     return FirestoreErrorInfo(kind: FirestoreErrorKind.permission, raw: msg);
   }
-  if (lower.contains('failed-precondition') ||
-      lower.contains('requires an index')) {
+  if (lower.contains('failed-precondition') || lower.contains('requires an index')) {
     return FirestoreErrorInfo(kind: FirestoreErrorKind.missingIndex, raw: msg);
   }
   if (lower.contains('unavailable') ||
@@ -121,14 +115,18 @@ class NetworkError implements Exception {
   final String userMessage;
   final dynamic originalError;
 
-  NetworkError({
-    required this.message,
-    required this.userMessage,
-    this.originalError,
-  });
+  NetworkError({required this.message, required this.userMessage, this.originalError});
 
   @override
   String toString() => userMessage;
+}
+
+/// Thrown when Firebase requires a TOTP/second-factor challenge to complete sign-in.
+class MfaSignInRequired implements Exception {
+  MfaSignInRequired(this.resolver, {this.email});
+
+  final MultiFactorResolver resolver;
+  final String? email;
 }
 
 /// Maps an error to a translation KEY (see [ErrorKeys]). The UI renders it via
@@ -227,10 +225,6 @@ Future<T> guardNetwork<T>(Future<T> Function() operation) async {
     return await operation();
   } catch (e) {
     final friendly = translateError(e);
-    throw NetworkError(
-      message: e.toString(),
-      userMessage: friendly,
-      originalError: e,
-    );
+    throw NetworkError(message: e.toString(), userMessage: friendly, originalError: e);
   }
 }

@@ -13,9 +13,11 @@ Future<void> pumpAt(WidgetTester tester, Size size) async {
   });
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
   await tester.runAsync(() async {
-    final inter = FontLoader('Inter')..addFont(rootBundle.load('assets/fonts/Inter.ttf'));
+    final inter = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/Inter.ttf'));
     await inter.load();
-    final mono = FontLoader('JetBrainsMono')..addFont(rootBundle.load('assets/fonts/JetBrainsMono.ttf'));
+    final mono = FontLoader('JetBrainsMono')
+      ..addFont(rootBundle.load('assets/fonts/JetBrainsMono.ttf'));
     await mono.load();
   });
   await tester.pumpWidget(const SokoVibeWebApp());
@@ -30,10 +32,12 @@ Future<void> settlePage(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('coming soon renders hero, registration, and faq', (tester) async {
+  testWidgets('coming soon renders hero, registration, and faq', (
+    tester,
+  ) async {
     await pumpAt(tester, const Size(390, 844));
     expect(find.text('UNDER DEVELOPMENT'), findsWidgets);
-    expect(find.textContaining('Your Marketplace'), findsWidgets);
+    expect(find.textContaining('Soko la Tanzania'), findsWidgets);
 
     // Register section is below the fold in a lazy sliver; scroll to reveal it.
     final scrollable = find.byType(Scrollable).first;

@@ -55,6 +55,7 @@ class AppRoutes {
   static const String discovery = '/discovery';
   static const String myPurchases = '/my-purchases';
   static const String kyc = '/kyc';
+
   /// Hub for email, phone, MFA, and KYC verification statuses.
   static const String verificationCenter = '/verification-center';
   static const String report = '/report';
@@ -84,6 +85,7 @@ class AppRoutes {
   static const String verifyEmail = '/verify-email';
   static const String otpVerification = '/otp-verification';
   static const String mfaEnrollment = '/mfa-enrollment';
+  static const String mfaChallenge = '/mfa-challenge';
 
   // Social / verification routes
   static const String followers = '/followers';
@@ -107,4 +109,3 @@ class AppRoutes {
   static const String staffWeb = '/staff';
   static const String companyOsWeb = '/company';
 }
-

@@ -22,7 +22,6 @@ import '../../models/discovery_filters.dart';
 import '../../services/search_intent.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
-import '../../widgets/ads/ad_slot.dart';
 import '../../widgets/ads/blue_tick_badge.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
@@ -32,6 +31,7 @@ import '../../widgets/ds/ds.dart';
 import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
 import '../../services/ads/ad_config.dart';
+import '../../widgets/ads/ad_slot.dart';
 import '../../services/share_service.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -862,19 +862,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.all(horizontalPadding),
-      itemCount: head.length + results.length + 1,
+      itemCount: head.length + results.length,
       itemBuilder: (_, i) {
         if (i < head.length) {
           return head[i];
-        }
-        if (i == head.length + results.length) {
-          // Footer placement: the last item of a long result list is the least
-          // intrusive position, is never above the fold, and cannot be mistaken
-          // for a marketplace result.
-          return const AdSlot(
-            placement: AdPlacement.searchResultsFooter,
-            variant: AdSlotVariant.feedGap,
-          );
         }
         final r = results[i - head.length];
         return GestureDetector(

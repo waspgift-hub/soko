@@ -24,8 +24,9 @@ class SectionHeader extends StatelessWidget {
         : Theme.of(context).textTheme.headlineLarge;
     final align = center ? TextAlign.center : TextAlign.start;
     return Column(
-      crossAxisAlignment:
-          center ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment: center
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Text(
           eyebrow.toUpperCase(),
@@ -43,8 +44,11 @@ class SectionHeader extends StatelessWidget {
           const SizedBox(height: 14),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640),
-            child: Text(sub!, style: Theme.of(context).textTheme.bodyLarge,
-                textAlign: align),
+            child: Text(
+              sub!,
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: align,
+            ),
           ),
         ],
       ],

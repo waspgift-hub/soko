@@ -103,6 +103,9 @@ router.get('/transaction/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const doc = await commerceStore.getDocument('transactions', id);
   if (!doc) return res.status(404).json({ error: 'Transaction not found' });
+  if (!(await isOwnerOrAdmin(auth, doc))) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   res.json({ success: true, data: doc });
 }));
 

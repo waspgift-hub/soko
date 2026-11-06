@@ -21,8 +21,10 @@ class SokoLinks {
   static const site = 'https://www.sokovibe.co.tz';
   static const emailAddress = 'support@sokovibe.co.tz';
   static const email = 'mailto:$emailAddress';
-  static const privacy = '$site/privacy-policy';
-  static const terms = '$site/terms-of-service';
+  static const privacy = '/privacy-policy/';
+  static const terms = '/terms-of-service/';
+  static const cookiePolicy = '/cookie-policy/';
+  static const contact = '/contact/';
   static const apiBase = String.fromEnvironment(
     'SOKO_API_BASE',
     defaultValue: 'https://soko-langu-server.onrender.com',

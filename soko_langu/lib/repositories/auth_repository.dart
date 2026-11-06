@@ -19,12 +19,11 @@ class AuthRepository {
 
   Future<UserCredential> login(String email, String password) async {
     try {
-      final cred = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
       await _ensureProfileExists(cred.user);
       return cred;
+    } on FirebaseAuthMultiFactorException catch (e) {
+      throw MfaSignInRequired(e.resolver, email: email);
     } on FirebaseAuthException catch (e) {
       throw NetworkError(
         message: e.message ?? 'Login failed',
@@ -64,10 +63,7 @@ class AuthRepository {
         originalError: e,
       );
     } catch (e) {
-      throw NetworkError(
-        message: 'Phone login error: $e',
-        userMessage: ErrorKeys.poorNetwork,
-      );
+      throw NetworkError(message: 'Phone login error: $e', userMessage: ErrorKeys.poorNetwork);
     }
   }
 
@@ -76,10 +72,7 @@ class AuthRepository {
       final res = await http.post(
         Uri.parse(ApiConfig.v1('/auth/email-otp-login')),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email.trim().toLowerCase(),
-          'otp': otp,
-        }),
+        body: jsonEncode({'email': email.trim().toLowerCase(), 'otp': otp}),
       );
 
       final body = jsonDecode(res.body);
@@ -102,10 +95,7 @@ class AuthRepository {
         originalError: e,
       );
     } catch (e) {
-      throw NetworkError(
-        message: 'Email OTP login error: $e',
-        userMessage: ErrorKeys.poorNetwork,
-      );
+      throw NetworkError(message: 'Email OTP login error: $e', userMessage: ErrorKeys.poorNetwork);
     }
   }
 
@@ -115,10 +105,7 @@ class AuthRepository {
     required String displayName,
   }) async {
     try {
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
       final user = cred.user;
       if (user != null) {
         await user.updateDisplayName(displayName);
@@ -146,15 +133,11 @@ class AuthRepository {
   }) async {
     try {
       final email = phoneToEmail(phone);
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
       final user = cred.user;
       if (user != null) {
         await user.updateDisplayName(displayName);
-        await _createProfile(user.uid, displayName, email,
-            phone: phone);
+        await _createProfile(user.uid, displayName, email, phone: phone);
       }
       return cred;
     } on FirebaseAuthException catch (e) {
@@ -180,18 +163,15 @@ class AuthRepository {
       final googleUser = await GoogleSignIn.instance.authenticate();
       final googleAuth = googleUser.authentication;
       if (googleAuth.idToken == null) {
-        throw NetworkError(
-          message: 'Google idToken is null',
-          userMessage: 'auth_google_failed',
-        );
+        throw NetworkError(message: 'Google idToken is null', userMessage: 'auth_google_failed');
       }
 
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
+      final credential = GoogleAuthProvider.credential(idToken: googleAuth.idToken);
       final result = await _auth.signInWithCredential(credential);
       await _ensureProfileExists(result.user);
       return result;
+    } on FirebaseAuthMultiFactorException catch (e) {
+      throw MfaSignInRequired(e.resolver);
     } on NetworkError {
       rethrow;
     } on FirebaseAuthException catch (e) {
@@ -227,10 +207,7 @@ class AuthRepository {
         await http
             .post(
               Uri.parse(ApiConfig.v1('/auth/logout-all')),
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $token',
-              },
+              headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
             )
             .timeout(const Duration(seconds: 15));
       } catch (_) {
@@ -267,11 +244,7 @@ class AuthRepository {
     try {
       final doc = await _db.collection('users').doc(user.uid).get();
       if (!doc.exists) {
-        await _createProfile(
-          user.uid,
-          user.displayName ?? 'User',
-          user.email ?? '',
-        );
+        await _createProfile(user.uid, user.displayName ?? 'User', user.email ?? '');
       }
     } catch (e) {
       debugPrint('ensureProfileExists error: $e');
@@ -329,15 +302,9 @@ class AuthRepository {
   }
 
   /// Completes TOTP enrollment with a code from the authenticator app and the secret.
-  Future<void> completeMfaEnrollment({
-    required String secret,
-    required String totpCode,
-  }) async {
+  Future<void> completeMfaEnrollment({required String secret, required String totpCode}) async {
     final mfaService = MfaService();
-    return mfaService.completeEnrollmentWithSecret(
-      secret: secret,
-      totpCode: totpCode,
-    );
+    return mfaService.completeEnrollmentWithSecret(secret: secret, totpCode: totpCode);
   }
 
   /// Unenrolls the TOTP second factor.
@@ -352,10 +319,26 @@ class AuthRepository {
     return mfaService.getTotpSecret();
   }
 
+  /// Resolves an MFA sign-in challenge and finalizes the session.
+  Future<UserCredential> resolveMfaSignIn(MultiFactorResolver resolver, String totpCode) async {
+    try {
+      final cred = await MfaService().resolveSignInChallenge(resolver, totpCode);
+      await _ensureProfileExists(cred.user);
+      return cred;
+    } on MfaError {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'MFA verification failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
   /// Verifies a TOTP code for step-up authentication.
   Future<bool> verifyTotpForStepUp(String totpCode) async {
-    final mfaService = MfaService();
-    return mfaService.verifyTotpForStepUp(totpCode);
+    return MfaService().verifyTotpForStepUp(totpCode);
   }
 
   String _mapError(String code) {

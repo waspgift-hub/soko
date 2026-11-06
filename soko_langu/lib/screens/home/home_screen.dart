@@ -30,8 +30,6 @@ import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/category_artwork/category_artwork_service.dart';
 import '../onboarding/artwork_pack_screen.dart';
-import '../../services/ads/ad_config.dart';
-import '../../widgets/ads/ad_slot.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -788,10 +786,7 @@ class _HomeScreenState extends State<HomeScreen>
                       0,
                       MediaQuery.of(context).padding.bottom + 100,
                     ),
-                    child: const AdSlot(
-                      placement: AdPlacement.homeFeedFooter,
-                      variant: AdSlotVariant.feedGap,
-                    ),
+                    child: const SizedBox.shrink(),
                   ),
                 ),
               ],

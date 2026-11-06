@@ -1,14 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/flash_sale_model.dart';
 import 'banners/soko_banner_theme.dart';
 import 'flash_sale_banner.dart';
 import 'dynamic_banner.dart';
-import 'ads_promo_banner.dart';
 
-/// Rotates in-app promotional sections on the home feed (NOT AdMob).
-/// Preserves existing flash-sale dwell behavior and signed-in boost promo targeting.
+/// Rotates in-app promotional sections on the home feed (ads removed).
 class BannerRotator extends StatefulWidget {
   final List<FlashSale> flashSales;
   const BannerRotator({super.key, required this.flashSales});
@@ -98,10 +95,6 @@ class _BannerRotatorState extends State<BannerRotator> {
     final list = <Widget>[];
     if (widget.flashSales.isNotEmpty) {
       list.add(FlashSaleBanner(key: const ValueKey('flash_banner'), sales: widget.flashSales));
-    }
-    // Ads promo targets signed-in sellers/users; guests get the plain dynamic banner only.
-    if (FirebaseAuth.instance.currentUser != null) {
-      list.add(const AdsPromoBanner(key: ValueKey('ads_promo')));
     }
     list.add(const DynamicBanner(key: ValueKey('dynamic_banner')));
     return list;

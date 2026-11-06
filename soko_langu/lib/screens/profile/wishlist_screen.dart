@@ -12,8 +12,6 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds_empty_state.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/product_cached_image.dart';
-import '../../services/ads/ad_config.dart';
-import '../../widgets/ads/ad_slot.dart';
 import '../../services/share_service.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -127,10 +125,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                   );
                 },
               ),
-      ),
-      bottomNavigationBar: const AdSlot(
-        placement: AdPlacement.wishlistFooter,
-        variant: AdSlotVariant.pinnedFooter,
       ),
     );
   }
