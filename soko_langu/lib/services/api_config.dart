@@ -7,6 +7,29 @@ class ApiConfig {
   /// Use v1('/auth/send-otp') instead of '$baseUrl/api/auth/send-otp'.
   static String v1(String path) => '$baseUrl/api/v1$path';
 
+  /// Longest `q` the v1 search/catalog routes accept (server validates 100).
+  ///
+  /// Search text is sent in the URL, and proxies reject oversized URIs with
+  /// 414/431 before the request reaches Express. Callers may pass a whole AI
+  /// prompt, so every GET query is clamped here instead of trusting the input.
+  static const int maxSearchQueryLength = 100;
+
+  /// Trims and truncates [query] to [maxSearchQueryLength] UTF-16 units
+  /// without splitting a surrogate pair.
+  static String clampSearchQuery(String query) {
+    final trimmed = query.trim();
+    if (trimmed.length <= maxSearchQueryLength) return trimmed;
+    final buffer = StringBuffer();
+    var units = 0;
+    for (final rune in trimmed.runes) {
+      final width = rune > 0xFFFF ? 2 : 1;
+      if (units + width > maxSearchQueryLength) break;
+      buffer.writeCharCode(rune);
+      units += width;
+    }
+    return buffer.toString().trimRight();
+  }
+
   /// Phase C bridge switch: when true, the catalog feed reads from the v2 API
   /// (/api/v1/products, Postgres) and falls back to Firestore. Flipped true on
   /// 2026-09-17 after the Firestore→Postgres product backfill ran in production

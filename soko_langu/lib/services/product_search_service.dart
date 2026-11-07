@@ -67,19 +67,23 @@ class ProductSearchService {
   }
 
   Future<List<ProductSearchResult>> searchProducts(String query) async {
-    if (query.trim().isEmpty) return [];
+    // The AI screen passes the whole chat turn here; cap it once so both the
+    // GET URL and the local token match stay within the server's 100-char `q`
+    // contract (oversized URIs are rejected by the edge with 414/431).
+    final normalized = ApiConfig.clampSearchQuery(query);
+    if (normalized.isEmpty) return [];
 
     // Ranked Postgres search first; fall back to Firestore only when the API
     // is down or the catalog misses — matches SearchService's migration rule.
     if (ApiConfig.kUseSearchApi) {
-      final apiResults = await _search.fetchProducts(query: query, limit: 20);
+      final apiResults = await _search.fetchProducts(query: normalized, limit: 20);
       if (apiResults != null && apiResults.items.isNotEmpty) {
         return apiResults.items.take(10).map(_fromProduct).toList();
       }
     }
 
-    final lower = query.toLowerCase().trim();
-    final tokens = _tokens(query);
+    final lower = normalized.toLowerCase();
+    final tokens = _tokens(normalized);
     final seenIds = <String>{};
     final results = <ProductSearchResult>[];
 

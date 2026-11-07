@@ -102,6 +102,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// Oversized request URIs: Cloudflare answers 414/431 with an empty body before
+// the request reaches the origin, but direct-to-Render traffic and local runs
+// hit Node instead. Answer 414 with the normal JSON envelope so clients get a
+// readable reason. 8 KiB is far above every legitimate endpoint (the largest
+// legal query is /api/v1/products?ids= with 50 ids, ~2 KiB).
+const MAX_REQUEST_URI_BYTES = 8 * 1024;
+app.use((req, res, next) => {
+  const uri = req.originalUrl || req.url || '';
+  if (Buffer.byteLength(uri, 'utf8') > MAX_REQUEST_URI_BYTES) {
+    res.setHeader('Connection', 'close');
+    return jsonError(res, {
+      status: 414,
+      code: 'REQUEST_URI_TOO_LONG',
+      message: 'Request URI too long',
+    });
+  }
+  next();
+});
+
 // Usage analytics: count every /api hit for request-rate stats (per min /
 // hour / day / month / year). Fire-and-forget inside the service â€” it never
 // blocks or fails requests, and skips silently when Redis is unreachable.

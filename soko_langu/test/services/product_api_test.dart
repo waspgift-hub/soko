@@ -305,6 +305,21 @@ void main() {
       expect(q['maxPrice'], '500000');
     });
 
+    test('caps q at the server 100-char limit', () async {
+      Uri? captured;
+      final client = ProductApiClient(
+        httpClient: MockClient((request) async {
+          captured = request.url;
+          return http.Response(jsonEncode({
+            'success': true,
+            'data': {'items': []},
+          }), 200, headers: {'content-type': 'application/json'});
+        }),
+      );
+      await client.fetchProducts(query: 'b' * 250);
+      expect(captured!.queryParameters['q'], 'b' * 100);
+    });
+
     test('passes boosted/featured/subcategory filters', () async {
       Uri? captured;
       final client = ProductApiClient(

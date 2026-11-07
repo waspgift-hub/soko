@@ -26,9 +26,10 @@ class SearchApiClient {
     int? minPrice,
     int? maxPrice,
   }) async {
-    if (query.trim().isEmpty) return null;
+    final q = ApiConfig.clampSearchQuery(query);
+    if (q.isEmpty) return null;
     final params = <String, String>{
-      'q': query.trim(),
+      'q': q,
       'page': '$page',
       'limit': '$limit',
       'sort': ?sort,

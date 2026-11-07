@@ -56,6 +56,26 @@ void main() {
       expect(result.total, 1);
     });
 
+    test('fetchProducts caps q at the server 100-char limit', () async {
+      final longQuery = 'a' * 250;
+      final client = MockClient((request) async {
+        expect(request.url.queryParameters['q'], 'a' * 100);
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'data': {'products': [], 'pagination': {'page': 1, 'total': 0}},
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final api = SearchApiClient(httpClient: client);
+      final result = await api.fetchProducts(query: longQuery);
+
+      expect(result, isNotNull);
+    });
+
     test('fetchProducts returns null on non-200', () async {
       final client = MockClient((_) async => http.Response('nope', 500));
       final api = SearchApiClient(httpClient: client);

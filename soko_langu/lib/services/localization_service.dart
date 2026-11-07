@@ -1921,6 +1921,10 @@ class LocalizationService {
       'error_operation_not_allowed': 'Njia hii ya kuingia haijawashwa.',
       'error_weak_password': 'Nenosiri ni fupi sana. Tumia angalau herufi 6.',
       'error_too_many_attempts': 'Umejaribu mara nyingi sana. Tafadhali jaribu baadaye.',
+      'error_request_too_long':
+          'Ombi ni refu mno. Tafadhali fupisha maandishi au chaguo na ujaribu tena.',
+      'error_payload_too_large':
+          'Taarifa uliyotuma ni kubwa mno. Tafadhali punguza ukubwa na ujaribu tena.',
       'error_payment_failed':
           'Malipo hayajakamilika. Hakuna fedha zilizothibitishwa kuwa zimehamishwa. Tafadhali jaribu tena.',
       'error_upload_failed': 'Imeshindwa kupakia faili. Tafadhali jaribu tena.',
@@ -4865,6 +4869,10 @@ class LocalizationService {
       'error_operation_not_allowed': 'This sign-in method is not enabled.',
       'error_weak_password': 'The password is too weak. Use at least 6 characters.',
       'error_too_many_attempts': 'Too many attempts. Please try again later.',
+      'error_request_too_long':
+          'The request is too long. Please shorten the text or filters and try again.',
+      'error_payload_too_large':
+          'The data you sent is too large. Please reduce its size and try again.',
       'error_timeout':
           'The request timed out. Please check your internet connection and try again.',
       'error_payment_failed':

@@ -45,10 +45,11 @@ class ProductApiClient {
     int? maxPrice,
   }) async {
     try {
+      final q = query == null ? '' : ApiConfig.clampSearchQuery(query);
       final params = <String, String>{
         'page': '$page',
         'limit': '$limit',
-        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (q.isNotEmpty) 'q': q,
         'categoryId': ?categoryId,
         if (subcategory != null && subcategory.trim().isNotEmpty)
           'subcategory': subcategory.trim(),

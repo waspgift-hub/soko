@@ -23,6 +23,8 @@ class ErrorKeys {
   static const operationNotAllowed = 'error_operation_not_allowed';
   static const weakPassword = 'error_weak_password';
   static const tooManyAttempts = 'error_too_many_attempts';
+  static const requestTooLong = 'error_request_too_long';
+  static const payloadTooLarge = 'error_payload_too_large';
   static const invalidCredentials = 'error_invalid_credentials';
   static const timeout = 'error_timeout';
   static const paymentFailed = 'error_payment_failed';
@@ -49,6 +51,13 @@ String translateHttpStatus(int statusCode, {String? serverMessage}) {
       return ErrorKeys.notFound;
     case 408:
       return ErrorKeys.timeout;
+    case 413:
+      return ErrorKeys.payloadTooLarge;
+    case 414:
+    // Cloudflare answers oversized URIs with 431 because the request line is
+    // counted as headers; both mean "the URL was too long", not "server down".
+    case 431:
+      return ErrorKeys.requestTooLong;
     case 429:
       return ErrorKeys.tooManyAttempts;
     case 409:
