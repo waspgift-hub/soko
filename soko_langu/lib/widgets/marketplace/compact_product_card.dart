@@ -3,7 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/share_service.dart';
 import '../../theme/surface_policy.dart';
 import '../../services/product_service.dart';
-import '../ads/blue_tick_badge.dart';
+import '../blue_tick_badge.dart';
 import '../soko_vibe_watermark.dart';
 import '../ds/ds.dart';
 

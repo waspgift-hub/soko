@@ -6,7 +6,7 @@ import '../../extensions/context_tr.dart';
 import '../../models/social_models.dart';
 import '../../services/follow_service.dart';
 import '../../services/user_service.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 
 class FollowRequestsScreen extends StatefulWidget {
   const FollowRequestsScreen({super.key});

@@ -6,7 +6,7 @@ import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/design_tokens.dart';
-import 'ads/blue_tick_badge.dart';
+import 'blue_tick_badge.dart';
 import 'ds/ds.dart';
 
 /// Preview of a listing exactly as a buyer will see it, shown immediately

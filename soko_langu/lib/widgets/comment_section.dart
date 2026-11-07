@@ -7,7 +7,7 @@ import '../services/profanity_filter.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_motion.dart';
 import 'google_loading.dart';
-import 'ads/blue_tick_badge.dart';
+import 'blue_tick_badge.dart';
 import 'ds/ds.dart';
 import '../theme/design_tokens.dart';
 

@@ -42,7 +42,6 @@ import 'repositories/product_repository.dart';
 import 'services/notification_service.dart';
 import 'services/local_notification_service.dart';
 import 'services/balance_privacy_service.dart';
-import 'services/ads/ad_manager.dart';
 import 'services/seller_verification_service.dart';
 import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
@@ -291,13 +290,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   }
 
   void _onAppStateAuthChange() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    // Ad eligibility is per-account. Handing the new uid to AdManager clears the
-    // previous account's persisted frequency counters and cached creatives, then
-    // re-reads trusted verification state, so a second account on this device can
-    // never inherit the first account's Blue Tick exemption.
-    unawaited(adManager.onAccountChanged(uid));
-
     if (app_state.appStateNotifier.isAuthenticated) {
       // resume any private deep link that was held for auth
       DeepLinkService.instance.consumePendingAfterAuth();
@@ -507,10 +499,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       // first, the remote check is fire-and-forget, and every failure path
       // leaves the marketplace on icon fallbacks.
       _initArtworkPack(prefs);
-
-      // AdMob bootstrap. Fire-and-forget so a slow or failing SDK never delays
-      // the marketplace; AdManager gates every load on its own readiness flag.
-      unawaited(adManager.initialize());
 
       // Banner service bootstrap. Fire-and-forget; banners load asynchronously.
       unawaited(context.read<BannerService>().start());
@@ -724,11 +712,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         debugPrint('AppCheck: failed — $e');
       }
 
-      // AdMob: bootstrapped by AdManager, which also gates every load on SDK
-      // readiness and user eligibility. Initializing the SDK here directly used
-      // to race the first banner load, so a creative could request before the
-      // SDK was ready.
-
       // Security (root/jailbreak detection)
       try {
         await SecurityService().initialize();
@@ -802,15 +785,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         Provider.value(value: _authRepository),
         Provider.value(value: _onboardingService),
         ChangeNotifierProvider.value(value: _authNotifier),
-        // Trusted KYC / Blue Tick state. One instance feeds both the Blue Tick
-        // badges and — through AdManager — the ad exemption, so they can never
-        // disagree about whether a seller is verified.
+        // Trusted KYC / Blue Tick state for every badge on every surface.
         ChangeNotifierProvider<SellerVerificationService>.value(
           value: sellerVerificationService,
         ),
-        // Single owner of every ad in the app. Screens resolve it with
-        // context.watch<AdManager>(); nothing else imports google_mobile_ads.
-        ChangeNotifierProvider<AdManager>.value(value: adManager),
         // Centralized banner management service for first-party banners.
         Provider<BannerService>.value(
           value: BannerService(),

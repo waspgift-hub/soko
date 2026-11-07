@@ -15,7 +15,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/call_seller_button.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverId;

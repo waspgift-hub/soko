@@ -5,7 +5,7 @@ import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
 import '../../services/social_suggestion_service.dart';
 import '../../services/user_service.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 import '../../widgets/social/follow_button.dart';
 
 /// Suggested accounts screen — shows recommended sellers/users to follow.

@@ -2,8 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'app_transitions.dart';
-import '../services/ads/ad_manager.dart';
-import '../services/ads/ad_route_observer.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
 import '../ui/screens/home_v2_screen.dart';
@@ -65,7 +63,6 @@ import '../screens/auth/mfa_enrollment_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_kyc_screen.dart';
-import '../screens/admin/admin_ads_config_screen.dart';
 import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
@@ -145,7 +142,6 @@ final List<String> _adminOnlyRoutes = [
   AppRoutes.adminUserDetail,
   AppRoutes.adminReports,
   AppRoutes.adminKyc,
-  AppRoutes.adminAdsConfig,
   AppRoutes.adminBroadcast,
 ];
 
@@ -235,9 +231,6 @@ GoRouter buildRouter() {
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.home,
     refreshListenable: app_state.appStateNotifier,
-    // Publishes the on-top route to AdManager so critical flows (checkout,
-    // payment, OTP, KYC, disputes) can suppress every ad centrally.
-    observers: [AdRouteObserver(adManager)],
     redirect: (context, state) {
       if (!app_state.appStateNotifier.appInitialized) return null;
 
@@ -651,10 +644,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.adminKyc,
         pageBuilder: (context, state) => _premiumPage(const AdminKycScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.adminAdsConfig,
-        pageBuilder: (context, state) => _premiumPage(const AdminAdsConfigScreen()),
       ),
       GoRoute(
         path: AppRoutes.adminBroadcast,

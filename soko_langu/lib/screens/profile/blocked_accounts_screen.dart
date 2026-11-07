@@ -9,7 +9,7 @@ import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 import '../../models/user_profile.dart';
 import '../../models/seller_verification.dart';
 

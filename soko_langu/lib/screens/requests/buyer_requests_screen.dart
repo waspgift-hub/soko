@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/buyer_request_model.dart';
 import '../../services/buyer_request_service.dart';
-import '../../services/ads/ad_config.dart';
-import '../../widgets/rewarded_ad_gate.dart';
 import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
@@ -253,15 +251,6 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
   }
 
   Future<void> _unlock(BuyerRequest req) async {
-    final earned = await RewardedAdGate.require(
-      context,
-      action: 'unlock_request_${req.id}',
-      placement: AdPlacement.rewardedUnlockContact,
-      title: context.tr('unlock_contact'),
-      message: context.tr('unlock_contact_ad_msg'),
-    );
-    if (!earned || !mounted) return;
-
     try {
       await _service.unlockContact(req.id);
       if (mounted) {

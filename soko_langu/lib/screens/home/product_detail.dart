@@ -29,7 +29,7 @@ import '../../widgets/soko_vibe_watermark.dart';
 import '../../widgets/product_video_player.dart';
 import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 
 // ignore: unused_element
 Color? _hexToColor(String? hex) {

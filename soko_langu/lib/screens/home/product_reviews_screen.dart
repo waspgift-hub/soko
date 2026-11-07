@@ -6,7 +6,7 @@ import '../../models/review_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/soko_vibe_loading.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 
 class ProductReviewsScreen extends StatefulWidget {
   final String productId;

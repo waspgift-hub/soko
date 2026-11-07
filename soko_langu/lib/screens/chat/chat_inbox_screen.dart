@@ -11,7 +11,7 @@ import '../../extensions/context_tr.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/soko_vibe_states.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});

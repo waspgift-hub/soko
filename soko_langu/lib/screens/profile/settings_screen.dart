@@ -22,110 +22,21 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  bool _pinConfigured = false;
 
   @override
   void initState() {
     super.initState();
     _load();
-    AppLockService.instance.addListener(_onLockStateChanged);
-  }
-
-  @override
-  void dispose() {
-    AppLockService.instance.removeListener(_onLockStateChanged);
-    super.dispose();
-  }
-
-  void _onLockStateChanged() {
-    if (mounted) setState(() => _pinConfigured = AppLockService.instance.pinConfigured);
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final pinSet = await AppLockService.instance.isPinSet();
     if (mounted) {
       setState(() {
         _notificationsEnabled =
             prefs.getBool('push_notifications_enabled') ?? true;
-        _pinConfigured = pinSet;
       });
     }
-  }
-
-  void _showPinSetupDialog() {
-    final pinController = TextEditingController();
-    final confirmController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('set_pin')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: pinController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: context.tr('enter_pin'),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirmController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: context.tr('confirm_pin'),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
-            onPressed: () async {
-              if (pinController.text.length < 4) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pin_too_short'))),
-                );
-                return;
-              }
-              if (pinController.text != confirmController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pin_mismatch'))),
-                );
-                return;
-              }
-              final hashedPin = sha256.convert(utf8.encode(pinController.text)).toString();
-              await SecureStorageService.write(
-                'app_lock_pin',
-                hashedPin,
-              );
-              await AppLockService.instance.onPinSaved();
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                setState(() => _pinConfigured = true);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pin_updated'))),
-                );
-              }
-            },
-            child: Text(
-              context.tr('save'),
-              style:  TextStyle(color: Theme.of(context).colorScheme.surface),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<String?> _promptPassword() {
@@ -154,37 +65,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _confirmRemovePin() async {
-    final remove = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('remove_pin')),
-        content: Text(context.tr('remove_pin_confirm')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              context.tr('delete'),
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (remove != true || !mounted) return;
-    await AppLockService.instance.clearPin();
-    setState(() => _pinConfigured = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('pin_removed'))),
-      );
-    }
   }
 
   /// Starts MFA enrollment by navigating to the MFA enrollment screen.

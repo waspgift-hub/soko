@@ -60,7 +60,6 @@ class AppRoutes {
   static const String verificationCenter = '/verification-center';
   static const String report = '/report';
   static const String adminKyc = '/admin/kyc';
-  static const String adminAdsConfig = '/admin/ads-config';
   static const String adminBroadcast = '/admin/broadcast';
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';

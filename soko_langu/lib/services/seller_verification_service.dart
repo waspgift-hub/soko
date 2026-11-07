@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/seller_verification.dart';
-import 'ads/ad_eligibility_source.dart';
 import 'api_config.dart';
 import 'trust_api.dart';
 
@@ -33,7 +32,7 @@ import 'trust_api.dart';
 /// Because nothing is cached across accounts, logging out and signing in as a
 /// different user cannot inherit the previous user's exemption: [clear] runs on
 /// every auth transition.
-class SellerVerificationService extends ChangeNotifier implements AdEligibilitySource {
+class SellerVerificationService extends ChangeNotifier {
   SellerVerificationService({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
@@ -63,7 +62,6 @@ class SellerVerificationService extends ChangeNotifier implements AdEligibilityS
 
 /// Verification state of the signed-in user. Unknown until resolved, which
   /// means "not exempt" — ads stay on until trusted state proves otherwise.
-  @override
   SellerVerification get selfVerification => _self;
 
   String? get selfUid => _selfUid;
@@ -71,20 +69,16 @@ class SellerVerificationService extends ChangeNotifier implements AdEligibilityS
   bool get isSelfResolving => _selfResolving;
 
   /// The only signal the ad system is allowed to consult.
-  @override
   bool get isSelfAdExempt => _self.isAdExempt;
 
-  @override
   bool get isSelfBlueTick => _self.isBlueTickActive;
 
-  @override
   Future<void> refresh() => refreshSelf();
 
   SellerVerification? verificationOf(String sellerId) => _cache[sellerId];
 
   /// Cached Blue Tick state for badge rendering. Returns false while unknown so
   /// a badge never flashes on before the trusted read resolves.
-  @override
   bool isBlueTick(String sellerId) =>
       _cache[sellerId]?.isBlueTickActive ?? false;
 

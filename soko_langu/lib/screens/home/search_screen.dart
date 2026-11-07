@@ -22,7 +22,7 @@ import '../../models/discovery_filters.dart';
 import '../../services/search_intent.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/soko_vibe_watermark.dart';
@@ -30,8 +30,6 @@ import '../../widgets/soko_widgets.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
-import '../../services/ads/ad_config.dart';
-import '../../widgets/ads/ad_slot.dart';
 import '../../services/share_service.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -255,13 +253,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         _searchFailed = false;
       });
       _maybeLoadAiSummary(resp);
-      // Completing a search is the one deliberate interruption point on this
-      // screen: the user has finished typing and is about to read results, so
-      // there is no half-finished action to destroy. The AdManager decides
-      // whether it may actually fire.
-      if (resp.results.isNotEmpty && _selectedTab == 'all') {
-        AdTransitions.showInterstitial(context, AdPlacement.interstitialSearchComplete);
-      }
     } catch (_) {
       if (mounted && seq == _searchSeq) {
         setState(() {

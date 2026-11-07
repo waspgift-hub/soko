@@ -16,7 +16,7 @@ import '../../services/profile_view_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
-import '../../widgets/ads/blue_tick_badge.dart';
+import '../../widgets/blue_tick_badge.dart';
 import '../../widgets/ds/ds.dart';
 import '../../models/seller_verification.dart';
 import '../../services/seller_verification_service.dart';
