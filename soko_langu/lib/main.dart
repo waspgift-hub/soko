@@ -63,8 +63,7 @@ import 'widgets/age_gate_dialog.dart';
 import 'widgets/premium_background.dart';
 
 // SharedPreferences keys for the optional Category Artwork Pack. The pack is
-// never required: these only decide whether the user is asked again.
-const String _kArtworkPromptDismissed = 'artwork_pack_prompt_dismissed';
+// never required; these only throttle the remote version check.
 const String _kArtworkAutoChecked = 'artwork_pack_checked';
 const String _kArtworkLastCheckMs = 'artwork_pack_last_check_ms';
 
@@ -523,9 +522,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     }
   }
 
-  /// Warms local artwork state, then schedules a low-frequency remote version
-  /// check. The first-launch prompt is shown by the home screen, not from here,
-  /// so the marketplace is already on screen when it appears.
+  /// Warms local artwork state, then installs the pack silently.
+  ///
+  /// The first install has no visible prompt: the marketplace stays on icon
+  /// fallbacks while the download runs in the background, and a failure leaves
+  /// that state in place so the next cold start simply attempts again. The
+  /// remote version check stays throttled to 12h so installed devices do not
+  /// ping the manifest on every launch.
   Future<void> _initArtworkPack(SharedPreferences prefs) async {
     final service = CategoryArtworkService.instance;
     try {
@@ -536,16 +539,23 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       // is the safe direction to fail.
     }
     await service.initialize();
+    // A pack that is already on disk is the cache. Re-downloading it on every
+    // launch is what made the photo prompt feel like it never stuck.
+    if (service.status != ArtworkStatus.installed) {
+      unawaited(downloadCategoryArtworkPack());
+    }
 
-    // Don't re-offer the prompt to someone who already declined.
-    service.setPromptDismissed(prefs.getBool(_kArtworkPromptDismissed) ?? false);
-
-    // A large pack must not trigger an implicit mobile-data download on every
-    // cold start; only a small incremental update is fetched in the background.
+    // A remote manifest re-check must not happen on every cold start; only a
+    // small incremental update rides on it anyway.
     if ((prefs.getBool(_kArtworkAutoChecked) ?? false)) {
       final last = prefs.getInt(_kArtworkLastCheckMs) ?? 0;
       final elapsed = DateTime.now().millisecondsSinceEpoch - last;
       if (elapsed < const Duration(hours: 12).inMilliseconds) return;
+    }
+
+    await service.checkForUpdates();
+    if (service.status == ArtworkStatus.updateAvailable) {
+      unawaited(downloadCategoryArtworkPack());
     }
 
     // Only stamp the throttle once a manifest was actually parsed; a failed check
@@ -556,6 +566,19 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         _kArtworkLastCheckMs,
         DateTime.now().millisecondsSinceEpoch,
       );
+    }
+  }
+
+  /// Installs the artwork pack with no UI at all. Both the first install and
+  /// the incremental update come through here; a failure only logs, because
+  /// the service keeps the notInstalled/installed state that the next cold
+  /// start makes its retry decision from.
+  Future<void> downloadCategoryArtworkPack() async {
+    final service = CategoryArtworkService.instance;
+    try {
+      await service.downloadPack();
+    } catch (e) {
+      debugPrint('artwork pack silent download failed: $e');
     }
   }
 

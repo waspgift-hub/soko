@@ -23,3 +23,23 @@ class SokoCacheManager extends CacheManager {
     repo: JsonCacheInfoRepository(databaseName: key),
   ));
 }
+
+/// Long-lived cache for category artwork. Category images are small, rarely
+/// changed, and must render even while offline, so keep them cached for a year.
+class SokoCategoryCacheManager extends CacheManager {
+  static const key = 'soko_category_image_cache';
+
+  static SokoCategoryCacheManager? _instance;
+
+  factory SokoCategoryCacheManager() {
+    _instance ??= SokoCategoryCacheManager._();
+    return _instance!;
+  }
+
+  SokoCategoryCacheManager._() : super(Config(
+    key,
+    stalePeriod: const Duration(days: 365),
+    maxNrOfCacheObjects: 5000,
+    repo: JsonCacheInfoRepository(databaseName: key),
+  ));
+}

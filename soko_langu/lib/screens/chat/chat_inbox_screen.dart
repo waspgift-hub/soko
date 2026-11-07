@@ -194,6 +194,8 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               ],
             )
           : AppBar(
+              // AppBarTheme sets centerTitle: true globally (lib/theme/app_themes.dart) —
+              // this explicit false is what keeps the title anchored left.
               centerTitle: false,
               titleSpacing: 16,
               title: Padding(
@@ -277,35 +279,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 final allRooms = snap.data ?? [];
                 final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-                final rooms = allRooms.where((r) {
-                  final otherId = r.participants.where((p) => p != myUid).firstOrNull ?? '';
-
-                  if (_searchQuery.isNotEmpty) {
-                    final name = _userNames[otherId]?.toLowerCase() ?? '';
-                    return name.contains(_searchQuery.toLowerCase());
-                  }
-
-                  if (_hiddenUsers.contains(otherId)) return false;
-
-                  switch (_activeTab) {
-                    case 1:
-                      return r.unreadCountFor(myUid) > 0 && !r.archivedBy.contains(myUid);
-                    case 2:
-                      return r.isFavourited(myUid) && !r.archivedBy.contains(myUid);
-                    case 3:
-                      return r.archivedBy.contains(myUid);
-                    case 4:
-                      return !r.archivedBy.contains(myUid) &&
-                          (r.buyerId == null || r.buyerId!.isEmpty || r.buyerId == myUid);
-                    case 5:
-                      return !r.archivedBy.contains(myUid) &&
-                          r.sellerId != null &&
-                          r.sellerId!.isNotEmpty &&
-                          r.sellerId == myUid;
-                    default:
-                      return !r.archivedBy.contains(myUid);
-                  }
-                }).toList();
+                final rooms = allRooms.where((r) => _matchesVisibleFilter(r, myUid)).toList();
 
                 // Sort: favourited first, then pinned, then by timestamp
                 rooms.sort((a, b) {
@@ -461,32 +435,46 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     );
   }
 
+  // Search AND-combines with the active tab filter — a query narrows the
+  // selected chip's results instead of bypassing them. Kept in one helper so
+  // the visible list and select-all always agree.
+  bool _matchesVisibleFilter(ChatRoom room, String uid) {
+    final otherId = room.participants.where((p) => p != uid).firstOrNull ?? '';
+
+    if (_hiddenUsers.contains(otherId)) return false;
+
+    if (_searchQuery.isNotEmpty) {
+      final name = _userNames[otherId]?.toLowerCase() ?? '';
+      if (!name.contains(_searchQuery.toLowerCase())) return false;
+    }
+
+    switch (_activeTab) {
+      case 1:
+        return room.unreadCountFor(uid) > 0 && !room.archivedBy.contains(uid);
+      case 2:
+        return room.isFavourited(uid) && !room.archivedBy.contains(uid);
+      case 3:
+        return room.archivedBy.contains(uid);
+      case 4:
+        return !room.archivedBy.contains(uid) &&
+            (room.buyerId == null || room.buyerId!.isEmpty || room.buyerId == uid);
+      case 5:
+        return !room.archivedBy.contains(uid) &&
+            room.sellerId != null &&
+            room.sellerId!.isNotEmpty &&
+            room.sellerId == uid;
+      default:
+        return !room.archivedBy.contains(uid);
+    }
+  }
+
   void _selectAllFromStream() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     _chatService.getRooms().first.then((rooms) {
       if (!mounted) return;
-      final visible = rooms.where((r) {
-        final otherId = r.participants.where((p) => p != uid).firstOrNull ?? '';
-        if (_hiddenUsers.contains(otherId)) return false;
-        switch (_activeTab) {
-          case 1:
-            return r.unreadCountFor(uid) > 0 && !r.archivedBy.contains(uid);
-          case 2:
-            return r.isFavourited(uid) && !r.archivedBy.contains(uid);
-          case 3:
-            return r.archivedBy.contains(uid);
-          case 4:
-            return !r.archivedBy.contains(uid) &&
-                (r.buyerId == null || r.buyerId!.isEmpty || r.buyerId == uid);
-          case 5:
-            return !r.archivedBy.contains(uid) &&
-                r.sellerId != null &&
-                r.sellerId!.isNotEmpty &&
-                r.sellerId == uid;
-          default:
-            return !r.archivedBy.contains(uid);
-        }
-      }).toList();
+      // Select-all targets exactly what the user can see, so it must reuse
+      // the same filter as the visible list rather than reimplementing it.
+      final visible = rooms.where((r) => _matchesVisibleFilter(r, uid)).toList();
       setState(() {
         _selectedIds.addAll(visible.map((r) => r.id));
       });

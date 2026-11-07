@@ -316,6 +316,10 @@ class _PremiumCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // Always render the artwork layer: when the pack (or a remote URL) resolves
+    // it shows the photo, and CategoryImage falls back to the icon otherwise.
+    // Previously the layer was gated on displayImage != null, which meant the
+    // explorer tiles stayed icon-only even after the artwork pack was installed.
     final artwork = category.displayImage;
 
     return GestureDetector(
@@ -328,22 +332,21 @@ class _PremiumCategoryCard extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (artwork != null)
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: CategoryImage(
-                    imageUrl: artwork,
-                    categoryId: category.id,
-                    fallback: categoryIconFor(
-                      icon: category.icon,
-                      slug: category.id,
-                      name: category.name,
-                    ),
-                    memCacheSize: 400,
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: CategoryImage(
+                  imageUrl: artwork,
+                  categoryId: category.id,
+                  fallback: categoryIconFor(
+                    icon: category.icon,
+                    slug: category.id,
+                    name: category.name,
                   ),
+                  memCacheSize: 400,
                 ),
               ),
+            ),
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -366,24 +369,6 @@ class _PremiumCategoryCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (artwork == null)
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        categoryIconFor(
-                          icon: category.icon,
-                          slug: category.id,
-                          name: category.name,
-                        ),
-                        color: cs.primary,
-                        size: 20,
-                      ),
-                    ),
-                  if (artwork == null) const SizedBox(height: 12),
                   Text(
                     name,
                     style: TextStyle(

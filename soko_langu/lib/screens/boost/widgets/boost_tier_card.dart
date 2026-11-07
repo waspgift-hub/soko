@@ -121,7 +121,6 @@ class BoostTierCard extends StatelessWidget {
                   ).copyWith(fontSize: 22, fontWeight: FontWeight.w700),
                 ),
                 const Spacer(),
-                _SavingTag(tier: tier, selected: selected),
               ],
             ),
             const SizedBox(height: AppSpacing.s3),
@@ -181,29 +180,3 @@ class _SelectedCheck extends StatelessWidget {
   }
 }
 
-/// Bundle saving against buying the same span of days one Bronze day at a time.
-/// Hidden on Bronze itself, which *is* the day rate.
-class _SavingTag extends StatelessWidget {
-  const _SavingTag({required this.tier, required this.selected});
-
-  final BoostTier tier;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final percent = (tier.savingsPercent * 100).round();
-    if (percent <= 0) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: (selected ? tier.accent : scheme.primary).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.full),
-      ),
-      child: Text(
-        context.trParams('boost_save_percent', {'percent': '$percent'}),
-        style: AppTypography.statusChip(selected ? tier.accent : scheme.primary),
-      ),
-    );
-  }
-}

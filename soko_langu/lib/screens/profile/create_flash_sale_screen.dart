@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/follow_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/product_cached_image.dart';
@@ -360,6 +363,12 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
           endTime: _endTime,
         );
         _flashSaleService.notifyFlashSale(sale);
+        unawaited(FollowService().notifyFollowers(
+          ownerId: user.uid,
+          title: context.tr('flash_sale_new', 'Flash sale'),
+          body: _selectedProduct!.name,
+          data: {'type': 'flash_sale', 'flashSaleId': flashSaleId, 'productId': _selectedProduct!.id},
+        ));
       }
 
       if (mounted) {

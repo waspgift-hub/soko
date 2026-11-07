@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,6 +12,7 @@ import '../../main.dart';
 import '../../services/product_search_service.dart';
 import '../../services/voice_search_service.dart';
 import '../../widgets/staggered_fade_in.dart';
+import '../../design_system/tokens/one_ui_tokens.dart';
 import 'package:just_audio/just_audio.dart';
 
 class AiAssistantScreen extends StatefulWidget {
@@ -36,6 +39,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   bool _isLoading = false;
   bool _isRecording = false;
   bool _loadingConversations = true;
+  bool _hasText = false;
+  final FocusNode _inputFocus = FocusNode();
   String? _loadError;
   final Set<String> _playingVoice = {};
 
@@ -43,7 +48,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _inputFocus.addListener(_refreshInputDecor);
+    _controller.addListener(_refreshInputDecor);
     _bootstrap();
+  }
+
+  void _refreshInputDecor() {
+    if (!mounted) return;
+    setState(() => _hasText = _controller.text.trim().isNotEmpty);
   }
 
   Future<void> _bootstrap() async {
@@ -335,6 +347,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
+    _inputFocus.dispose();
     _scrollController.dispose();
     _voice.dispose();
     super.dispose();

@@ -257,6 +257,7 @@ class ProductService {
     String condition = 'new',
     String? barcode,
     void Function(ProductPublishStage)? onProgress,
+    void Function(int sent, int total)? onVideoProgress,
   }) async {
     // Hatua inayofanyika sasa — ikiwa kosa limetokea, lebo hii inaambatanishwa
     // na ujumbe ili mtumiaji/admin ajue kilichoshindwa (auth, kyc, upload...).
@@ -384,14 +385,16 @@ class ProductService {
         _invalidateProductCaches();
       }
 
-      // Fire-and-forget: the seller already has their listing. The clip lands
-      // whenever the upload finishes.
+      // Upload the clip before reporting "done" so the listing goes live with
+      // its video already attached; the seller no longer sees the clip appear
+      // later. Upload failures are swallowed inside _attachVideoInBackground so
+      // a failed clip never fails the publish.
       if (videoFile != null) {
-        unawaited(_attachVideoInBackground(
+        await _attachVideoInBackground(
           productId: createdId,
           videoFile: videoFile,
           onStarted: report,
-        ));
+        );
       }
 
       report(ProductPublishStage.done);

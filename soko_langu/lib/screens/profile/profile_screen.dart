@@ -449,10 +449,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         context.tr('accounts'),
         () => AccountSwitcherSheet.show(context),
       ),
-      _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async {
-        await context.push(AppRoutes.editProfile);
-        _refreshProfile();
-      }),
       _ActionItem(
         Icons.favorite_rounded,
         context.tr('wishlist'),

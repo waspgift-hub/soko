@@ -52,4 +52,30 @@ class ContactDiscoveryService {
       throw StateError('contact_discovery_opt_out_failed');
     }
   }
+
+  /// Matches device contacts against opted-in users. Returns their uids.
+  /// Phones are batched to respect the server's per-request cap (200).
+  Future<List<String>> matchContacts(List<String> phones) async {
+    final headers = await _headers();
+    final matches = <String>{};
+    const chunkSize = 200;
+    for (var i = 0; i < phones.length; i += chunkSize) {
+      final chunk = phones.sublist(
+        i,
+        i + chunkSize > phones.length ? phones.length : i + chunkSize,
+      );
+      final response = await http.post(
+        Uri.parse('$_base/match'),
+        headers: headers,
+        body: jsonEncode({'phones': chunk}),
+      );
+      if (response.statusCode >= 400) continue;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = (data['matches'] as List?) ?? [];
+      for (final m in list) {
+        matches.add(m.toString());
+      }
+    }
+    return matches.toList();
+  }
 }

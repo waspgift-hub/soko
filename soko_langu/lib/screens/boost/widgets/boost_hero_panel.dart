@@ -4,11 +4,9 @@ import 'package:flutter/services.dart';
 import '../../../extensions/context_tr.dart';
 import '../../../models/product_model.dart';
 import '../../../theme/app_dimens.dart';
-import '../../../theme/app_motion.dart';
 import '../../../theme/app_typography.dart';
 import '../../../widgets/ds/ds.dart';
 import '../../../widgets/product_cached_image.dart';
-import '../boost_tiers.dart';
 
 /// Dark, always-dark hero that anchors the boost screen: the value proposition,
 /// a live preview of the listing once it is boosted, and the reassurance strip.
@@ -303,52 +301,3 @@ class _HeroReassuranceStrip extends StatelessWidget {
 }
 
 /// Animated counting number used by the reach estimator.
-class CountUpText extends StatefulWidget {
-  const CountUpText({
-    super.key,
-    required this.value,
-    required this.style,
-    this.duration = Motion.countUp,
-  });
-
-  final int value;
-  final TextStyle style;
-  final Duration duration;
-
-  @override
-  State<CountUpText> createState() => _CountUpTextState();
-}
-
-class _CountUpTextState extends State<CountUpText> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _curve;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration);
-    _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    _controller.forward();
-  }
-
-  @override
-  void didUpdateWidget(covariant CountUpText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) _controller.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _curve,
-      builder: (context, _) =>
-          Text(formatBoostCount((widget.value * _curve.value).round()), style: widget.style),
-    );
-  }
-}

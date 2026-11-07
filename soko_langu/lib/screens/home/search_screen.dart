@@ -154,10 +154,11 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
       if (mounted) {
         setState(() {
-          _discoveryProducts = [
+          final combined = [
             ...boosted.map((p) => SearchResult.fromProduct(p)),
             ...normal.map((p) => SearchResult.fromProduct(p)),
-          ];
+          ]..shuffle();
+          _discoveryProducts = combined;
           _loadingInitial = false;
         });
       }
@@ -181,6 +182,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
         if (mounted) {
           setState(() {
+            normal.shuffle();
             _discoveryProducts = normal;
             _loadingInitial = false;
           });
@@ -245,7 +247,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     if (mounted) _loadHistory();
 
     try {
-      final resp = await _searchService.globalSearch(query: q, type: _selectedTab, pageSize: 30);
+      final resp = await _searchService.globalSearch(query: q, type: 'all', pageSize: 30);
       if (!mounted || seq != _searchSeq) return;
       setState(() {
         _response = resp;
@@ -939,8 +941,22 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   // G11 local client-side sort of the server ranking. 'best' keeps the
   // (relevance-ranked) server order; price sorts put items with no price last.
   List<SearchResult> _sortedResults(SearchResponse resp) {
-    if (_sortKey == 'best') return resp.results;
-    final copy = [...resp.results];
+    // Client-side per-tab filtering: the server's `type` filter is unreliable
+    // (fallbacks return products only), so always request 'all' and filter here.
+    final filtered = resp.results.where((r) {
+      switch (_selectedTab) {
+        case 'products':
+          return r.type == 'product';
+        case 'sellers':
+          return r.type == 'seller' || r.type == 'user';
+        case 'categories':
+          return r.type == 'category';
+        default:
+          return true;
+      }
+    }).toList();
+    if (_sortKey == 'best') return filtered;
+    final copy = [...filtered];
     copy.sort((a, b) {
       final pa = a.price;
       final pb = b.price;

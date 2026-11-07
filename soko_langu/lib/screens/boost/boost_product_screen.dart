@@ -9,12 +9,12 @@ import '../../extensions/context_tr.dart';
 import '../../models/product_model.dart';
 import '../../services/boost_service.dart';
 import '../../services/product_service.dart';
+import '../../services/follow_service.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/product_cached_image.dart';
 import 'boost_tiers.dart';
 import 'widgets/boost_checkout_bar.dart';
-import 'widgets/boost_payment_section.dart';
 import 'widgets/boost_hero_panel.dart';
 import 'widgets/boost_result_overlays.dart';
 import 'widgets/boost_tier_card.dart';
@@ -193,6 +193,15 @@ class _BoostProductScreenState extends State<BoostProductScreen> {
       ),
     );
     if (!mounted) return;
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me != null) {
+      unawaited(FollowService().notifyFollowers(
+        ownerId: me,
+        title: context.tr('product_boosted', 'Featured product'),
+        body: product.name,
+        data: {'type': 'boost', 'productId': product.id},
+      ));
+    }
     setState(() => _product = null);
   }
 

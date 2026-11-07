@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../services/soko_cache_manager.dart';
 
 import '../../services/category_artwork/category_artwork_service.dart';
 
@@ -27,7 +29,7 @@ import '../../services/category_artwork/category_artwork_service.dart';
 /// The pack is looked up by id, never by display name, so the mapping survives
 /// localization. Screens pass the taxonomy id and this widget does the rest;
 /// no screen implements its own asset lookup.
-class CategoryImage extends StatelessWidget {
+class CategoryImage extends StatefulWidget {
   /// Remote artwork URL. Only an `http(s)`/`//` value counts; anything else is
   /// ignored so a stale path cannot shadow the installed artwork pack.
   final String? imageUrl;
@@ -64,13 +66,36 @@ class CategoryImage extends StatelessWidget {
     this.borderRadius = BorderRadius.zero,
   });
 
+  @override
+  State<CategoryImage> createState() => _CategoryImageState();
+}
+
+class _CategoryImageState extends State<CategoryImage> {
+  StreamSubscription<void>? _artworkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // The pack installs after the first frame. Without this, tiles that
+    // painted the icon fallback stay icon-only until something else rebuilds.
+    _artworkSub = CategoryArtworkService.instance.artworkChanged.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _artworkSub?.cancel();
+    super.dispose();
+  }
+
   /// [imageUrl] only when it is genuinely remote.
   ///
   /// This is the single gate that keeps a non-URL out of every branch below.
   /// A bundled path used to be accepted here, which is how a photo deleted
   /// from the app bundle ended up permanently shadowing the artwork pack.
   String? get _remoteUrl {
-    final v = imageUrl?.trim();
+    final v = widget.imageUrl?.trim();
     if (v == null || v.isEmpty) return null;
     return (v.startsWith('http') || v.startsWith('//')) ? v : null;
   }
@@ -78,31 +103,30 @@ class CategoryImage extends StatelessWidget {
   /// Resolved pack file for this tile, or null when the pack has no artwork
   /// for the id (or is not installed at all).
   String? _packPath() {
-    if (localPath != null && localPath!.isNotEmpty) return localPath;
+    if (widget.localPath != null && widget.localPath!.isNotEmpty) return widget.localPath;
     final service = CategoryArtworkService.instance;
-    if (categoryId == null || categoryId!.isEmpty) return null;
-    if (subcategoryId != null && subcategoryId!.isNotEmpty) {
-      return service.resolveSubcategory(categoryId!, subcategoryId!);
+    if (widget.categoryId == null || widget.categoryId!.isEmpty) return null;
+    if (widget.subcategoryId != null && widget.subcategoryId!.isNotEmpty) {
+      return service.resolveSubcategory(widget.categoryId!, widget.subcategoryId!);
     }
-    return service.resolveCategory(categoryId!);
+    return service.resolveCategory(widget.categoryId!);
   }
 
   @override
   Widget build(BuildContext context) {
     final art = _buildArt(context);
-    if (borderRadius == BorderRadius.zero) return art;
-    return ClipRRect(borderRadius: borderRadius, child: art);
+    if (widget.borderRadius == BorderRadius.zero) return art;
+    return ClipRRect(borderRadius: widget.borderRadius, child: art);
   }
 
   Widget _buildArt(BuildContext context) {
-    // Tier 1: a real remote URL is the strongest signal we have.
-    final remote = _remoteUrl;
-    if (remote != null) return _remoteArt(context, remote);
-
-    // Tier 2/3: an explicit file, then the installed pack. Both are local, so
-    // they are cheap and cannot fail on a flaky connection.
+    // Installed pack first: it is already on disk, so popular and explorer
+    // tiles keep their photos offline and across launches.
     final packPath = _packPath();
     if (packPath != null) return _fileArt(context, packPath);
+
+    final remote = _remoteUrl;
+    if (remote != null) return _remoteArt(context, remote);
 
     return _iconFallback(context);
   }
@@ -110,11 +134,16 @@ class CategoryImage extends StatelessWidget {
   Widget _remoteArt(BuildContext context, String url) {
     return CachedNetworkImage(
       imageUrl: url,
-      fit: fit,
-      memCacheWidth: memCacheSize,
-      memCacheHeight: memCacheSize,
+      fit: widget.fit,
+      memCacheWidth: widget.memCacheSize,
+      memCacheHeight: widget.memCacheSize,
+      cacheManager: SokoCategoryCacheManager(),
       placeholder: (context, _) => _iconFallback(context),
-      errorWidget: (context, _, _) => _iconFallback(context),
+      errorWidget: (context, _, _) {
+        final pack = _packPath();
+        if (pack != null) return _fileArt(context, pack);
+        return _iconFallback(context);
+      },
     );
   }
 
@@ -123,9 +152,9 @@ class CategoryImage extends StatelessWidget {
   Widget _fileArt(BuildContext context, String path) {
     return Image.file(
       File(path),
-      fit: fit,
-      cacheWidth: memCacheSize,
-      cacheHeight: memCacheSize,
+      fit: widget.fit,
+      cacheWidth: widget.memCacheSize,
+      cacheHeight: widget.memCacheSize,
       gaplessPlayback: true,
       errorBuilder: (context, _, _) => _iconFallback(context),
     );
@@ -136,7 +165,7 @@ class CategoryImage extends StatelessWidget {
     return ColoredBox(
       color: cs.surfaceContainerHighest,
       child: Center(
-        child: Icon(fallback, size: iconSize, color: iconColor ?? cs.primary),
+        child: Icon(widget.fallback, size: widget.iconSize, color: widget.iconColor ?? cs.primary),
       ),
     );
   }

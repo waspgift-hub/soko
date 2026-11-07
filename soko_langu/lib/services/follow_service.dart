@@ -245,6 +245,46 @@ class FollowService {
     return doc.data()?['followerCount'] as int? ?? 0;
   }
 
+  /// Fan-out notification to every follower of [ownerId].
+  ///
+  /// Used when [ownerId] publishes something followers should hear about first
+  /// (new product, flash sale, boosted product). Failures per recipient are
+  /// swallowed so one bad token never blocks the rest.
+  Future<void> notifyFollowers({
+    required String ownerId,
+    required String title,
+    String? body,
+    Map<String, dynamic>? data,
+  }) async {
+    if (ownerId.isEmpty) return;
+    try {
+      final snap = await _db
+          .collection('users')
+          .doc(ownerId)
+          .collection('followers')
+          .get();
+      final ids = snap.docs.map((d) => d.id).toList();
+      for (final id in ids) {
+        try {
+          final payload = <String, String>{
+            for (final entry in (data ?? const <String, dynamic>{}).entries)
+              entry.key: '${entry.value}',
+          };
+          await _notifications.sendNotification(
+            userId: id,
+            title: title,
+            body: body ?? '',
+            data: payload,
+          );
+        } catch (_) {
+          // Per-recipient failure is non-fatal.
+        }
+      }
+    } catch (e) {
+      debugPrint('notifyFollowers failed: $e');
+    }
+  }
+
   /// Stream of follower count for [ownerId].
   Stream<int> followerCountStream(String ownerId) {
     return _db

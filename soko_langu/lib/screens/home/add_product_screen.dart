@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import '../../services/product_service.dart';
+import '../../services/follow_service.dart';
 import '../../models/product_publish_stage.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
@@ -13,7 +15,6 @@ import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/product_preview_sheet.dart';
 import '../../services/transfer/transfer_item.dart';
 import '../../services/transfer/transfer_progress.dart';
 import '../../widgets/transfer/media_upload_list.dart';
@@ -70,6 +71,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   List<Map<String, dynamic>> _newMeta = [];
   XFile? _videoFile;
   String? _existingVideoUrl;
+  VideoPlayerController? _videoController;
   bool _isWholesale = false;
   bool _saving = false;
 
@@ -285,6 +287,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _brandController.dispose();
     _locationController.dispose();
     _barcodeController.dispose();
+    _videoController?.dispose();
     for (var v in _variants) {
       v.dispose();
     }
@@ -389,7 +392,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> _pickVideo() async {
     final picked = await _picker.pickVideo(source: ImageSource.gallery);
     if (picked == null) return;
-    setState(() => _videoFile = picked);
+    // Drop any previously initialized controller before swapping the file.
+    await _videoController?.dispose();
+    final controller = VideoPlayerController.file(File(picked.path));
+    await controller.initialize();
+    await controller.setLooping(true);
+    await controller.pause();
+    if (!mounted) {
+      await controller.dispose();
+      return;
+    }
+    setState(() {
+      _videoFile = picked;
+      _videoController = controller;
+    });
   }
 
   void _removeExistingImage(int index) {
@@ -613,34 +629,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     await _publish(parsedPrice);
   }
 
-  /// Shows the buyer-facing preview and returns true when the seller confirms.
-  Future<bool> _confirmPreview(double price) async {
-    final stockText = _stockController.text.replaceAll(',', '').trim();
-    return ProductPreviewSheet.show(
-      context,
-      preview: ProductPreviewSheet(
-        name: _nameController.text,
-        price: price,
-        category: _selectedCategory,
-        subcategory: _selectedSubcategory,
-        stock: int.tryParse(stockText) ?? 0,
-        condition: _selectedCondition,
-        description: _descriptionController.text,
-        brand: _brandController.text,
-        location: _locationController.text,
-        district: _selectedDistrict,
-        isWholesale: _isWholesale,
-        variants: _buildVariantData(),
-        sellerId: FirebaseAuth.instance.currentUser?.uid ?? '',
-        newImagePaths: _newImages.map((f) => f.path).toList(),
-        existingImageUrls: _existingImages,
-        hasVideo: _videoFile != null || (_existingVideoUrl?.isNotEmpty ?? false),
-        publishLabel: _isEditing ? context.tr('update_product') : context.tr('sell_product'),
-        isEditing: _isEditing,
-      ),
-    );
-  }
-
   Future<void> _publish(double parsedPrice) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -728,14 +716,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
       }
 
       if (!mounted) return;
-      // Video is uploaded after the listing is live, so the seller is told up
-      // front instead of wondering where their clip went.
-      if (_videoFile != null && createdId != null) {
-        messenger.showSnackBar(SnackBar(content: Text(tr('video_will_attach'))));
-      }
       messenger.showSnackBar(
         SnackBar(content: Text(_isEditing ? tr('product_updated') : tr('product_added'))),
       );
+      if (createdId != null && !_isEditing) {
+        // Followers hear about the new listing first.
+        final me = FirebaseAuth.instance.currentUser?.uid;
+        if (me != null) {
+          unawaited(FollowService().notifyFollowers(
+            ownerId: me,
+            title: tr('new_product_from_following', 'New product'),
+            body: _nameController.text,
+            data: {'type': 'new_product', 'productId': createdId},
+          ));
+        }
+      }
       if (createdId != null) {
         _openCreatedProduct(createdId);
       } else {
@@ -953,25 +948,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
             _isEditing ? context.tr('update_product') : context.tr('sell_product'),
             style: TextStyle(color: Theme.of(context).colorScheme.primary),
           ),
-          actions: [
-            // Onyesho:fungua preview bila kuchapisha, ili muuzaji ajiruhusu
-            // kuangalia kabla ya kutuma.
-            if (!_saving)
-              IconButton(
-                tooltip: context.tr('preview'),
-                icon: const Icon(Icons.visibility_outlined),
-                onPressed: () {
-                  final price = double.tryParse(_priceController.text.replaceAll(',', '').trim());
-                  if (price == null || price <= 0) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(context.tr('enter_valid_price'))));
-                    return;
-                  }
-                  _confirmPreview(price);
-                },
-              ),
-            TextButton(
+        actions: [
+          TextButton(
               onPressed: _saving ? null : _submit,
               child: _saving
                   ? GoogleLoading(size: 20, strokeWidth: 2)
