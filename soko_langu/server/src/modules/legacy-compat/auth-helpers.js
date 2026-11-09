@@ -7,6 +7,12 @@ const config = require('../../config');
 const totp = require('../../services/totp');
 const crypto = require('crypto');
 
+function isBootstrapSuperAdminEmail(email) {
+  if (!email) return false;
+  const list = config.security && config.security.superAdminEmails;
+  return Array.isArray(list) && list.includes(String(email).trim().toLowerCase());
+}
+
 function decryptSecret(blob) {
   const raw = Buffer.from(String(blob), 'base64');
   const iv = raw.slice(0, 12);
@@ -66,7 +72,8 @@ async function requireAdmin(req, res) {
         if (a) {
           const decoded = await a.verifyIdToken(authHeader.slice(7));
           const userDoc = await commerceStore.getDocument('users', decoded.uid);
-          if (userDoc && userDoc.isAdmin === true) {
+          const roleOk = userDoc && ['admin', 'super_admin'].includes(userDoc.role);
+          if (userDoc && (userDoc.isAdmin === true || roleOk || isBootstrapSuperAdminEmail(userDoc.email))) {
             auth = { ok: true, uid: decoded.uid };
           }
         }

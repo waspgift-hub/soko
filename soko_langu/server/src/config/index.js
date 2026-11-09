@@ -31,21 +31,23 @@ const config = {
     publicUrl: process.env.R2_PUBLIC_URL || 'https://media.sokovibe.co.tz',
   },
   
-  // Payment (ClickPesa)
-  clickpesa: {
-    apiUrl: process.env.CLICKPESA_API_URL,
-    apiKey: process.env.CLICKPESA_API_KEY,
-    apiSecret: process.env.CLICKPESA_API_SECRET,
-    webhookSecret: process.env.CLICKPESA_WEBHOOK_SECRET,
-    checksumKey: process.env.CLICKPESA_CHECKSUM_KEY,
-    allowedIps: process.env.CLICKPESA_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
-    // The ONE ClickPesa collection callback URL. Every payment-initiation path
+  // Payment (AzamPay)
+  azampay: {
+    apiUrl: process.env.AZAMPAY_API_BASE,
+    apiKey: process.env.AZAMPAY_CLIENT_ID,
+    apiSecret: process.env.AZAMPAY_CLIENT_SECRET,
+    webhookSecret: process.env.AZAMPAY_WEBHOOK_SECRET,
+    callbackPassword: process.env.AZAMPAY_CALLBACK_PASSWORD,
+    checksumKey: process.env.AZAMPAY_CHECKSUM_KEY,
+    defaultProvider: process.env.AZAMPAY_DEFAULT_PROVIDER || 'Airtel',
+    allowedIps: process.env.AZAMPAY_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
+    // The ONE AzamPay collection callback URL. Every payment-initiation path
     // must use this value — providers must never receive a guessed/derived URL.
     // Kept separate from APP_URL: the webhook host is not the canonical app URL.
-    collectionWebhookUrl: process.env.CLICKPESA_COLLECTION_WEBHOOK_URL ||
+    collectionWebhookUrl: process.env.AZAMPAY_COLLECTION_WEBHOOK_URL ||
       (process.env.NODE_ENV === 'production'
         ? ''
-        : 'http://localhost:3000/api/v1/payments/webhook/clickpesa'),
+        : 'http://localhost:3000/api/v1/payments/webhook/azampay'),
   },
   
   // SMS
@@ -96,6 +98,12 @@ const config = {
     webhookSecret: process.env.WEBHOOK_SECRET,
     encryptionKey: process.env.ENCRYPTION_KEY,
     corsOrigins: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) || [],
+    // Bootstrap emails granted super-admin role/isAdmin on sign-in/provisioning.
+    // Keep minimal; explicit env overrides default.
+    superAdminEmails: (process.env.SUPER_ADMIN_EMAILS || 'admin@sokovibe.co.tz')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean),
   },
   
   // Rate Limiting
@@ -155,8 +163,11 @@ if (config.nodeEnv === 'production') {
   if (!config.urls.app) {
     throw new Error('APP_URL must be configured in production (e.g. https://api.sokovibe.co.tz)');
   }
-  if (!config.clickpesa.collectionWebhookUrl) {
-    throw new Error('CLICKPESA_COLLECTION_WEBHOOK_URL must be configured in production (e.g. https://soko-langu-server.onrender.com/api/v1/payments/webhook/clickpesa)');
+  if (!config.azampay.collectionWebhookUrl) {
+    throw new Error('AZAMPAY_COLLECTION_WEBHOOK_URL must be configured in production (e.g. https://api.sokovibe.co.tz/api/v1/payments/webhook/azampay)');
+  }
+  if (!config.azampay.callbackPassword) {
+    throw new Error('AZAMPAY_CALLBACK_PASSWORD must be configured in production (AzamPay callback password)');
   }
 }
 

@@ -4,11 +4,18 @@ const { recordUserActivity } = require('../services/activity');
 const crypto = require('crypto');
 const config = require('../config');
 const { jsonError } = require('../utils/http');
+const accountStore = require('../services/account-store');
 
 // Middleware errors keep `error` as the machine code (client parses it today)
 // while `jsonError` adds the §25 envelope fields.
 function apiError(res, status, code) {
   return jsonError(res, { status, code });
+}
+
+function isBootstrapSuperAdminEmail(email) {
+  if (!email) return false;
+  const list = config.security && config.security.superAdminEmails;
+  return Array.isArray(list) && list.includes(String(email).trim().toLowerCase());
 }
 
 // Verify Firebase ID token and attach user to request
@@ -52,14 +59,17 @@ async function authenticate(req, res, next) {
 
     if (!user) {
       const rec = await getFirebaseAuth().getUser(decoded.uid);
+      const email = rec.email || null;
+      const superAdmin = isBootstrapSuperAdminEmail(email);
       user = await store.user.create({
         data: {
           firebaseUid: decoded.uid,
-          email: rec.email || null,
+          email,
           phone: rec.phoneNumber || null,
           displayName: rec.displayName || null,
           accountStatus: 'active',
           phoneVerified: Boolean(rec.phoneNumber),
+          ...(superAdmin ? { role: 'super_admin', isAdmin: true } : {}),
         },
         select: {
           id: true,
@@ -69,6 +79,27 @@ async function authenticate(req, res, next) {
           accountStatus: true,
         },
       });
+      if (superAdmin) {
+        await getStore().user.update({ where: { id: user.id }, data: { role: 'super_admin', isAdmin: true } }).catch(() => {});
+        try {
+          const fs = require('../config/firebase').getFirebaseFirestore();
+          if (fs) await fs.collection('users').doc(decoded.uid).set({ role: 'super_admin', isAdmin: true, email, updatedAt: new Date().toISOString() }, { merge: true });
+        } catch (_) {}
+        await accountStore.writeProfile(decoded.uid, {
+          col: { email, displayName: rec.displayName || null, accountStatus: 'active' },
+          meta: { profile: {} },
+        }).catch(() => {});
+      }
+    } else if (isBootstrapSuperAdminEmail(user.email || decoded.email) && user.role !== 'super_admin') {
+      try {
+        const store = getStore();
+        await store.user.update({ where: { id: user.id }, data: { role: 'super_admin', isAdmin: true } });
+        user.role = 'super_admin';
+        try {
+          const fs = require('../config/firebase').getFirebaseFirestore();
+          if (fs) await fs.collection('users').doc(decoded.uid).set({ role: 'super_admin', isAdmin: true, email: user.email || decoded.email || null, updatedAt: new Date().toISOString() }, { merge: true });
+        } catch (_) {}
+      } catch (_) {}
     }
 
     if (user.accountStatus === 'deleted') {
@@ -223,7 +254,7 @@ function decryptAdminSecret(blob) {
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
 }
 
-function authenticateAdmin(req, res, next) {
+async function authenticateAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
   const expected = config.security.adminSecret;
 
@@ -241,9 +272,6 @@ function authenticateAdmin(req, res, next) {
     try {
       const commerceStore = require('../services/commerce-store');
       const totp = require('../services/totp');
-      const userDoc = commerceStore.getDocument ? null : null;
-      // Load synchronously via await inside async wrapper not possible here (sync middleware).
-      // Use a promise chain.
       commerceStore.getDocument('users', 'admin-secret').then((doc) => {
         const mfa = doc && doc.mfa;
         if (mfa && mfa.enabled && mfa.secret) {
@@ -260,6 +288,38 @@ function authenticateAdmin(req, res, next) {
     } catch (_) {
       req.isAdmin = true;
       return next();
+    }
+  }
+
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    try {
+      const auth = getFirebaseAuth();
+      if (auth) {
+        const decoded = await auth.verifyIdToken(authHeader.slice(7));
+        const store = getStore();
+        let user = await store.user.findUnique({
+          where: { firebaseUid: decoded.uid },
+          select: { id: true, firebaseUid: true, email: true, role: true, accountStatus: true },
+        });
+        const email = (user && user.email) || decoded.email || null;
+        const allowed = isBootstrapSuperAdminEmail(email) || (user && ['admin', 'super_admin'].includes(user.role));
+        if (!allowed) return apiError(res, 403, 'ADMIN_REQUIRED');
+        if (isBootstrapSuperAdminEmail(email) && user && user.role !== 'super_admin') {
+          await store.user.update({ where: { id: user.id }, data: { role: 'super_admin', isAdmin: true } }).catch(() => {});
+          user.role = 'super_admin';
+          try {
+            const fs = require('../config/firebase').getFirebaseFirestore();
+            if (fs) await fs.collection('users').doc(decoded.uid).set({ role: 'super_admin', isAdmin: true, email, updatedAt: new Date().toISOString() }, { merge: true });
+          } catch (_) {}
+        }
+        req.isAdmin = true;
+        req.firebaseUid = decoded.uid;
+        req.user = user ? { ...user, role: user.role || (isBootstrapSuperAdminEmail(email) ? 'super_admin' : user.role) } : { firebaseUid: decoded.uid, email, role: 'super_admin', accountStatus: 'active' };
+        return next();
+      }
+    } catch (_) {
+      return apiError(res, 401, 'INVALID_TOKEN');
     }
   }
 

@@ -1,12 +1,16 @@
 /* Soko Vibe Admin Panel
-   Vanilla no-build SPA. The single login method is ADMIN_SECRET, sent as the
-   x-admin-secret header on the same-origin v2 + legacy-compat API. No
-   Firebase, no Google dependency. */
+   Vanilla no-build SPA. Supports Google sign-in (restricted to
+   admin@sokovibe.co.tz) and ADMIN_SECRET as a fallback option. */
 'use strict';
 
 const API = '';
 const SECRET_KEY = 'sv_admin_secret';
+const AUTH_MODE_KEY = 'sv_admin_auth_mode';
+const GOOGLE_ALLOWED_EMAIL = 'admin@sokovibe.co.tz';
 let MFA_CODE = '';
+let AUTH_MODE = ''; // 'secret' | 'google'
+let ID_TOKEN = '';
+let ID_TOKEN_EXP = 0;
 const THEME_KEY = 'sv_admin_theme';
 // A request must never hang the UI forever: abort slow calls so every
 // section either renders or shows its error instead of spinning endlessly.
@@ -344,12 +348,61 @@ new MutationObserver((muts) => {
 // API
 // ---------------------------------------------------------------------------
 function secret() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (_) { return ''; } }
+function authMode() { try { return localStorage.getItem(AUTH_MODE_KEY) || AUTH_MODE || (secret() ? 'secret' : ''); } catch (_) { return AUTH_MODE || (secret() ? 'secret' : ''); } }
+function initFirebaseAdmin() {
+  try {
+    if (!window.firebase) return null;
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey: 'AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s',
+        appId: '1:344682929526:web:5d3732578d6f012ac26e57',
+        messagingSenderId: '344682929526',
+        projectId: 'sokonimoko-8c171-a8d14',
+        authDomain: 'sokonimoko-8c171-a8d14.firebaseapp.com',
+        databaseURL: 'https://sokonimoko-8c171-a8d14-default-rtdb.firebaseio.com',
+        storageBucket: 'sokonimoko-8c171-a8d14.firebasestorage.app',
+        measurementId: 'G-P6VXK4LYMT',
+      });
+    }
+    return firebase.auth();
+  } catch (_) { return null; }
+}
+async function currentIdToken(force) {
+  const auth = initFirebaseAdmin();
+  if (!auth || !auth.currentUser) return '';
+  try {
+    if (!force && ID_TOKEN && ID_TOKEN_EXP > Date.now() + 60_000) return ID_TOKEN;
+    const r = await auth.currentUser.getIdTokenResult(!!force);
+    ID_TOKEN = r.token || '';
+    ID_TOKEN_EXP = r.expirationTime ? new Date(r.expirationTime).getTime() : (Date.now() + 50 * 60_000);
+    return ID_TOKEN;
+  } catch (_) { return ''; }
+}
+async function clearAuthSession() {
+  AUTH_MODE = '';
+  ID_TOKEN = '';
+  ID_TOKEN_EXP = 0;
+  MFA_CODE = '';
+  try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+  try { localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+  try { const a = initFirebaseAdmin(); if (a) await a.signOut(); } catch (_) {}
+}
 async function api(path, opts = {}) {
-  const s = secret();
-  if (!s) throw new Error('Ingia kwanza');
-  const headers = { ...(opts.headers || {}), 'x-admin-secret': s };
-  if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
-  if (opts.body && typeof opts.body === 'object') {
+  const mode = authMode();
+  const headers = { ...(opts.headers || {}) };
+  if (mode === 'google') {
+    let token = await currentIdToken(false);
+    if (!token) token = await currentIdToken(true);
+    if (!token) { await clearAuthSession(); showLogin('Ingia tena kwa Google.'); throw new Error('AUTH_REQUIRED'); }
+    headers.Authorization = 'Bearer ' + token;
+    if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
+  } else {
+    const s = secret();
+    if (!s) throw new Error('Ingia kwanza');
+    headers['x-admin-secret'] = s;
+    if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
+  }
+  if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
   }
@@ -372,10 +425,17 @@ async function api(path, opts = {}) {
       return api(path, opts);
     }
   }
-  if (r.status === 401) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-    showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
-    throw new Error((j && j.error) || 'Haijaidhinishwa');
+  if (r.status === 401 || r.status === 403) {
+    const msg = (j && j.error) || (r.status === 403 ? 'ADMIN_REQUIRED' : 'AUTH_REQUIRED');
+    if (authMode() === 'google') {
+      await clearAuthSession();
+      showLogin(msg === 'ADMIN_REQUIRED' ? 'Akaunti hii hairuhusiwi. Tumia ' + GOOGLE_ALLOWED_EMAIL + '.' : 'Kikao kimeisha. Ingia tena.');
+    } else {
+      try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+      try { localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+      showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
+    }
+    throw new Error(msg);
   }
   if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
   return j;
@@ -651,7 +711,7 @@ async function loadDashboard() {
         data: {
           labels: series.map((s) => String(s.date || '').slice(5)),
           datasets: [
-            { label: 'Money', data: series.map((s) => s.money), borderColor: '#2f9e5f', backgroundColor: 'rgba(47,158,95,.12)', fill: true, tension: .3, pointRadius: 0 },
+            { label: 'Money', data: series.map((s) => s.money), borderColor: '#008069', backgroundColor: '#008069.12)', fill: true, tension: .3, pointRadius: 0 },
             { label: 'Commission', data: series.map((s) => s.commission), borderColor: '#b7791f', backgroundColor: 'transparent', borderDash: [4, 3], tension: .3, pointRadius: 0 },
             { label: 'Users', data: series.map((s) => s.users), borderColor: '#2563eb', backgroundColor: 'transparent', tension: .3, pointRadius: 0, yAxisID: 'y1' },
           ],
@@ -668,7 +728,7 @@ async function loadDashboard() {
         type: 'doughnut',
         data: {
           labels: orderGroups.map((g) => g.status),
-          datasets: [{ data: orderGroups.map((g) => g.count), backgroundColor: ['#2f9e5f', '#7da8ff', '#e3a94d', '#f07070', '#2586e3', '#9b7dd8', '#49c3a0', '#d8a5e0'] }],
+          datasets: [{ data: orderGroups.map((g) => g.count), backgroundColor: ['#008069', '#7da8ff', '#e3a94d', '#f07070', '#2586e3', '#9b7dd8', '#49c3a0', '#d8a5e0'] }],
         },
         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 }, color: chartBase().ticks.color } } } },
       });
@@ -1443,7 +1503,7 @@ function adminEscrowCard(o) {
   return '<hr class="hr"><div class="dsub">Amana (Escrow) — Vitendo vya Admin</div>' +
     '<div class="dim mono" style="margin:2px 0 8px">Id ya amana: ' + esc(escrowId) + '</div>' +
     '<div class="drawer-actions">' + buttons + '</div>' +
-    '<p class="hint">Refund na hamisho hutumia ClickPesa payout kwenye namba halisi. Thibitisha id ya amana kabla ya kutuma.</p>';
+    '<p class="hint">Refund na hamisho hutumia AzamPay payout kwenye namba halisi. Thibitisha id ya amana kabla ya kutuma.</p>';
 }
 async function escrowReleaseAction(args) {
   const ok = await confirmModal('Fungua Amana', 'Fungua escrow ya agizo ' + args.num + ' na kuweka pesa kwa salio la muuzaji?', 'Fungua', false);
@@ -1459,7 +1519,7 @@ async function escrowAdjudicate(args, mode) {
   const ok = await confirmModal(
     isRefund ? 'Rejesha kwa Mnunuzi' : 'Toa kwa Muuzaji',
     isRefund
-      ? 'Tuma refund KAMILI ya agizo ' + args.num + ' kwa namba ya mnunuzi kupitia ClickPesa?'
+      ? 'Tuma refund KAMILI ya agizo ' + args.num + ' kwa namba ya mnunuzi kupitia AzamPay?'
       : 'Kamilisha mgogoro wa ' + args.num + ' na kutoa pesa zote kwa muuzaji?',
     isRefund ? 'Tuma Refund' : 'Toa kwa Muuzaji',
     isRefund
@@ -1478,7 +1538,7 @@ async function escrowTransferAction(args) {
     '<h3>Hamisha Fedha (Admin Transfer)</h3>' +
     '<p class="msub">Agizo: ' + esc(args.num) + ' · Id ya amana: <span class="mono">' + esc(args.orderId) + '</span></p>' +
     '<label class="lab">Kiasi (TZS)</label><input id="trAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 50000">' +
-    '<label class="lab">Namba ya kupokea (ClickPesa)</label><input id="trPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
+    '<label class="lab">Namba ya kupokea (AzamPay)</label><input id="trPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
     '<label class="lab">Maelezo (si lazima)</label><input id="trNote" class="field" type="text" placeholder="Sababu ya hamisho">' +
     '<div class="err" id="trErr"></div>' +
     '<div class="mfooter"><button class="btn" id="trNo">Futa</button><button class="btn danger" id="trYes">Tuma Transfer</button></div>'
@@ -1789,7 +1849,7 @@ async function loadWithdrawals() {
   bindSection('finance'); touch();
 }
 async function withdrawalOp(id, op) {
-  const map = { process: 'Tuma payout ya TSh kwenda ClickPesa?', retry: 'Jaribu tena payout iliyoshindikana?', confirm: 'Thibitisha payout imekamilika (inahitajika kama provider hairudishi callback)?' };
+  const map = { process: 'Tuma payout ya TSh kwenda AzamPay?', retry: 'Jaribu tena payout iliyoshindikana?', confirm: 'Thibitisha payout imekamilika (inahitajika kama provider hairudishi callback)?' };
   const ok = await confirmModal('Withdrawal: ' + op, map[op] || 'Hakika?', op === 'retry' ? 'Jaribu tena' : 'Ndiyo', false);
   if (!ok) return;
   run(async () => {
@@ -1827,7 +1887,7 @@ async function loadRecon() {
 async function reconciliationRun() {
   openModal(
     '<h3>Tengeneza Rekodi</h3><p class="msub">Linganisha malipo na provider kwa kipindi.</p>' +
-    '<label>Provider</label><select class="field" id="rcProvider"><option value="clickpesa">clickpesa</option></select>' +
+    '<label>Provider</label><select class="field" id="rcProvider"><option value="azampay">azampay</option></select>' +
     '<div class="formgrid"><div><label>Kuanzia</label><input class="field" id="rcStart" type="datetime-local"></div>' +
     '<div><label>Hadi</label><input class="field" id="rcEnd" type="datetime-local"></div></div>' +
     '<div class="mfooter"><button class="btn" id="rcNo">Futa</button><button class="btn accent" id="rcYes">Run</button></div>'
@@ -2200,7 +2260,7 @@ async function loadStats() {
         type: 'bar',
         data: {
           labels: series14.map((s) => String(s.date || '').slice(5)),
-          datasets: [{ label: 'Watumiaji hai', data: series14.map((s) => s.users), backgroundColor: 'rgba(47,158,95,.55)', borderRadius: 4 }],
+          datasets: [{ label: 'Watumiaji hai', data: series14.map((s) => s.users), backgroundColor: '#008069.55)', borderRadius: 4 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
@@ -2398,7 +2458,7 @@ async function loadRevenue() {
       kpi('Jumla ya Mapato', fmtTZS(fin.totalAdminBalance || 0), 'all revenue', 'coins') +
       kpi('Inapatikana kuondolewa', fmtTZS(fin.availableBalance || 0), 'baada ya withdrawals', 'banknote') +
       '</div>' +
-      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) ClickPesa</button><button class="btn sm" onclick="mfaManage()">MFA (TOTP)</button></div>' +
+      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) AzamPay</button><button class="btn sm" onclick="mfaManage()">MFA (TOTP)</button></div>' +
       '<div class="grid cols2" style="margin-top:6px">' +
       '<div class="card"><div class="cardhead"><h3>Ledger ya Mapato (commission/boost)</h3></div>' +
       '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Mtumiaji</th><th>Aina</th><th>Kiasi</th><th>Tume</th></tr></thead><tbody>' +
@@ -2430,9 +2490,9 @@ function wdRows(rows) {
 async function revenueWithdraw() {
   openModal(
     '<h3>Toa Mapato ya Jukwaa</h3>' +
-    '<p class="msub">Fedha zitatumwa kwa namba yako kupitia ClickPesa payout.</p>' +
+    '<p class="msub">Fedha zitatumwa kwa namba yako kupitia AzamPay payout.</p>' +
     '<label class="lab">Kiasi (TZS)</label><input id="rwAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 100000">' +
-    '<label class="lab">Namba yako (ClickPesa)</label><input id="rwPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
+    '<label class="lab">Namba yako (AzamPay)</label><input id="rwPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
     '<div class="err" id="rwErr"></div>' +
     '<div class="mfooter"><button class="btn" id="rwNo">Futa</button><button class="btn accent" id="rwYes">Tuma Withdraw</button></div>'
   );
@@ -2773,12 +2833,11 @@ async function loadSettings() {
       '<div class="settings-group"><h4>Escrow</h4>' +
       '<label class="lab chk"><input type="checkbox" id="st-pc-enableEscrow" ' + chk(pc.enableEscrow) + '> Washa escrow</label>' +
       '<label class="lab">Siku kabla ya auto-release</label><input id="st-pc-escrowReleaseDays" class="field" type="number" value="' + esc(pc.escrowReleaseDays ?? 7) + '">' +
-      '<label class="lab">Gateway kuu</label><select id="st-pc-primaryGateway" class="field"><option value="clickpesa"' + sel(pc.primaryGateway, 'clickpesa') + '>ClickPesa</option><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
+      '<label class="lab">Gateway kuu</label><select id="st-pc-primaryGateway" class="field"><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
       '</div>' +
       '<div class="settings-group"><h4>Njia za Malipo</h4>' +
-      '<label class="lab">ClickPesa merchantId</label><input id="st-gw-clickpesa-merchantId" class="field" value="' + esc((gw.clickpesa || {}).merchantId || '') + '">' +
-      '<label class="lab">ClickPesa apiKey</label><input id="st-gw-clickpesa-apiKey" class="field" value="' + esc((gw.clickpesa || {}).apiKey || '') + '" placeholder="****** ikiwa imewekwa">' +
-      '<label class="lab">ClickPesa secret</label><input id="st-gw-clickpesa-secretKey" class="field" type="password" value="' + esc((gw.clickpesa || {}).secretKey || '') + '" placeholder="******">' +
+      '<label class="lab">AzamPay merchantId</label><input id="st-gw-azamPay-merchantId" class="field" value="' + esc((gw.azamPay || {}).merchantId || '') + '">' +
+      '<label class="lab">AzamPay apiKey</label><input id="st-gw-azamPay-apiKey" class="field" value="' + esc((gw.azamPay || {}).apiKey || '') + '" placeholder="****** ikiwa imewekwa">' +
       '<label class="lab">AzamPay secret</label><input id="st-gw-azamPay-secretKey" class="field" type="password" value="' + esc((gw.azamPay || {}).secretKey || '') + '" placeholder="******">' +
       '<label class="lab">Selcom secret</label><input id="st-gw-selcom-secretKey" class="field" type="password" value="' + esc((gw.selcom || {}).secretKey || '') + '" placeholder="******">' +
       '<label class="lab">Stripe secret</label><input id="st-gw-stripe-secretKey" class="field" type="password" value="' + esc((gw.stripe || {}).secretKey || '') + '" placeholder="******">' +
@@ -2874,8 +2933,7 @@ async function saveSettings() {
       currency: v('st-pc-currency'), taxRatePct: n('st-pc-taxRatePct', 0), platformCommissionPct: n('st-pc-platformCommissionPct', 0),
       enableEscrow: c('st-pc-enableEscrow'), escrowReleaseDays: n('st-pc-escrowReleaseDays', 7), primaryGateway: v('st-pc-primaryGateway'),
       gateways: {
-        clickpesa: { merchantId: v('st-gw-clickpesa-merchantId'), apiKey: v('st-gw-clickpesa-apiKey'), secretKey: v('st-gw-clickpesa-secretKey') },
-        azamPay: { secretKey: v('st-gw-azamPay-secretKey') },
+        azamPay: { merchantId: v('st-gw-azamPay-merchantId'), apiKey: v('st-gw-azamPay-apiKey'), secretKey: v('st-gw-azamPay-secretKey') },
         selcom: { secretKey: v('st-gw-selcom-secretKey') },
         stripe: { secretKey: v('st-gw-stripe-secretKey') },
         paypal: { secretKey: v('st-gw-paypal-secretKey') },
@@ -3009,13 +3067,13 @@ function applyTheme() {
   icons();
 }
 
-// The single login: verify the secret against the dashboard, then enter.
+// Secret login (fallback option).
 async function trySecretLogin() {
   const v = $('secVal').value.trim();
   if (!v) { $('authErr').textContent = 'Andika ADMIN_SECRET.'; return; }
   $('authErr').textContent = '';
   $('secSave').disabled = true;
-  try { localStorage.setItem(SECRET_KEY, v); } catch (_) {}
+  try { localStorage.setItem(SECRET_KEY, v); localStorage.setItem(AUTH_MODE_KEY, 'secret'); AUTH_MODE = 'secret'; } catch (_) { AUTH_MODE = 'secret'; }
   try {
     await getJSON('/api/v1/admin/dashboard');
     let st = null;
@@ -3031,10 +3089,47 @@ async function trySecretLogin() {
     $('meRole').textContent = 'secret mode';
     showApp();
   } catch (e) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    try { localStorage.removeItem(SECRET_KEY); localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+    AUTH_MODE = '';
     showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
   } finally {
     $('secSave').disabled = false;
+  }
+}
+
+async function tryGoogleLogin() {
+  $('authErr').textContent = '';
+  const btn = $('googleLoginBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const auth = initFirebaseAdmin();
+    if (!auth) throw new Error('Firebase haijapakia. Onyesha upya ukurasa.');
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await auth.signInWithPopup(provider);
+    const user = result && result.user;
+    const email = String((user && user.email) || '').trim().toLowerCase();
+    if (email !== GOOGLE_ALLOWED_EMAIL) {
+      try { await auth.signOut(); } catch (_) {}
+      showLogin('Akaunti hairuhusiwi. Tumia tu ' + GOOGLE_ALLOWED_EMAIL + '.');
+      return;
+    }
+    try { localStorage.setItem(AUTH_MODE_KEY, 'google'); localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    AUTH_MODE = 'google';
+    ID_TOKEN = '';
+    ID_TOKEN_EXP = 0;
+    await getJSON('/api/v1/admin/dashboard');
+    $('meName').textContent = (user && (user.displayName || user.email)) || GOOGLE_ALLOWED_EMAIL;
+    $('meRole').textContent = 'google admin';
+    showApp();
+  } catch (e) {
+    try { const auth = initFirebaseAdmin(); if (auth) await auth.signOut(); } catch (_) {}
+    try { localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+    AUTH_MODE = '';
+    const msg = (e && e.message) || 'Google sign-in imeshindikana';
+    showLogin(msg.includes('popup') ? 'Google sign-in haikukamilika. Jaribu tena.' : msg);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -3054,9 +3149,10 @@ function promptTotpCode() {
 }
 $('secSave').onclick = () => { trySecretLogin().catch(handleActionErr); };
 $('secVal').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('secSave').click(); });
-$('logoutBtn').onclick = () => {
-  try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-  MFA_CODE = '';
+if ($('googleLoginBtn')) $('googleLoginBtn').onclick = () => { tryGoogleLogin().catch(handleActionErr); };
+if ($('showSecretBtn')) $('showSecretBtn').onclick = () => { const p = $('secretPane'); if (p) p.hidden = !p.hidden; };
+$('logoutBtn').onclick = async () => {
+  await clearAuthSession();
   location.reload();
 };
 
@@ -3069,11 +3165,34 @@ window.addEventListener('error', (ev) => {
   showLogin('Runtime: ' + err);
 });
 
-// Boot: a stored secret is verified silently, otherwise show the login.
-// Every path settles — no Firebase, no hanging callbacks, no eternal splash.
+// Boot: restore Google session or stored ADMIN_SECRET, otherwise show login.
 (async () => {
   try {
-    if (secret()) {
+    const mode = authMode();
+    if (mode === 'google') {
+      const auth = initFirebaseAdmin();
+      if (auth) {
+        await new Promise((resolve) => {
+          const unsub = auth.onAuthStateChanged((u) => { try { unsub(); } catch (_) {} resolve(u || null); });
+          setTimeout(() => resolve(auth.currentUser || null), 6000);
+        });
+        const u = auth.currentUser;
+        const email = String((u && u.email) || '').trim().toLowerCase();
+        if (u && email === GOOGLE_ALLOWED_EMAIL) {
+          AUTH_MODE = 'google';
+          await getJSON('/api/v1/admin/dashboard');
+          $('meName').textContent = (u.displayName || u.email) || GOOGLE_ALLOWED_EMAIL;
+          $('meRole').textContent = 'google admin';
+          showApp();
+          return;
+        }
+      }
+      await clearAuthSession();
+      showLogin('');
+      return;
+    }
+    if (mode === 'secret' || secret()) {
+      AUTH_MODE = 'secret';
       await getJSON('/api/v1/admin/dashboard');
       $('meName').textContent = 'ADMIN_SECRET';
       $('meRole').textContent = 'secret mode';
@@ -3082,8 +3201,8 @@ window.addEventListener('error', (ev) => {
       showLogin('');
     }
   } catch (e) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-    showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
+    await clearAuthSession();
+    showLogin((e && e.message) ? ('Imeshindikana kuingia: ' + e.message) : '');
   }
 })();
 
