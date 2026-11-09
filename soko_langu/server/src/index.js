@@ -41,6 +41,39 @@ if (process.env.NOTIFICATION_WORKER_IN_PROCESS !== 'false') {
   startNotificationWorker().catch((e) => console.error('[NOTIFY] in-process worker:', e.message));
 }
 
+// In-process daily engagement scheduler (best-effort). On Render free tier the
+// web service sleeps after ~15 min of inactivity, so this only fires while the
+// service is awake. For reliable daily delivery, also configure an external
+// cron (e.g. cron-job.org) to POST to
+//   https://soko-langu-server.onrender.com/api/v1/cron/daily-engagement
+// with header  x-cron-secret: <CRON_SECRET or ADMIN_SECRET>
+// every day at 09:00 Africa/Dar_es_Salaam. Disable with
+// DAILY_ENGAGEMENT_SCHEDULER=false.
+if (process.env.DAILY_ENGAGEMENT_SCHEDULER !== 'false') {
+  const _secret = process.env.CRON_SECRET || process.env.ADMIN_SECRET;
+  let _lastRunDay = null;
+  const _tick = async () => {
+    try {
+      const eat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Dar_es_Salaam' }));
+      const dayKey = `${eat.getFullYear()}-${String(eat.getMonth() + 1).padStart(2, '0')}-${String(eat.getDate()).padStart(2, '0')}`;
+      if (eat.getHours() === 9 && eat.getMinutes() < 30 && _lastRunDay !== dayKey && _secret) {
+        _lastRunDay = dayKey;
+        const r = await fetch(`http://127.0.0.1:${PORT}/api/v1/cron/daily-engagement`, {
+          method: 'POST',
+          headers: { 'x-cron-secret': _secret, 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const t = await r.text();
+        console.log('[DAILY-ENGAGEMENT] triggered:', r.status, t.slice(0, 200));
+      }
+    } catch (e) {
+      console.error('[DAILY-ENGAGEMENT] tick failed:', e?.message || e);
+    }
+  };
+  setInterval(_tick, 30 * 60 * 1000);
+  setTimeout(_tick, 60 * 1000).unref?.();
+}
+
 const server = app.listen(PORT, () => {
   console.log(`[API] Soko Vibe API running on port ${PORT}`);
   console.log(`[API] Environment: ${config.nodeEnv}`);

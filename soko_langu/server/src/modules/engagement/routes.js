@@ -24,6 +24,21 @@ function verifyCronSecret(secret) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+function makeUnsubscribeToken(userId) {
+  const secret = process.env.UNSUBSCRIBE_SECRET || process.env.ADMIN_SECRET || process.env.CRON_SECRET || '';
+  if (!secret) return '';
+  return crypto.createHmac('sha256', secret).update(String(userId)).digest('base64url');
+}
+
+function verifyUnsubscribeToken(userId, token) {
+  if (!token || !userId) return false;
+  const expected = makeUnsubscribeToken(userId);
+  if (!expected) return false;
+  const a = Buffer.from(String(token));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 function toDate(value) {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -100,12 +115,23 @@ router.post('/cron/daily-engagement', async (req, res) => {
       sms: false,
     };
     const delivery = { email: 'skipped', push: 'skipped' };
+    const unsubToken = makeUnsubscribeToken(doc.id);
+    const unsubUrl = unsubToken
+      ? `https://www.sokovibe.co.tz/api/v1/unsubscribe?token=${unsubToken}&uid=${encodeURIComponent(doc.id)}`
+      : 'https://www.sokovibe.co.tz';
     if (channelPlan.email && user.email) {
       try {
         const { sendMail } = require('../../services/mailer');
         const dest = `https://www.sokovibe.co.tz${message.destination}`;
-        const html = `<p>${String(message.emailBody).replace(/[<>]/g, '')}</p><p><a href="${dest}">Soko Vibe</a></p>`;
-        const ok = await sendMail(user.email, message.subject, html);
+        const html = `<p>${String(message.emailBody).replace(/[<>]/g, '')}</p><p><a href="${dest}">Soko Vibe</a></p><p style="font-size:12px;color:#888;margin-top:24px">Huwezi kupokea barua hizi tena? <a href="${unsubUrl}">Jiondoe hapa</a>.</p>`;
+        const ok = await sendMail(user.email, message.subject, html, undefined, {
+          headers: {
+            'Precedence': 'bulk',
+            'X-Mailer': 'Soko Vibe',
+            'List-Unsubscribe': `<${unsubUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        });
         delivery.email = ok ? 'accepted' : 'failed';
       } catch (_) {
         delivery.email = 'failed';
@@ -146,6 +172,25 @@ router.post('/cron/daily-engagement', async (req, res) => {
     dryRun,
     note: 'Live channel send runs only when dailyEngagement.enabled is true.',
   });
+});
+
+// One-click unsubscribe for marketing/daily-engagement emails.
+router.get('/unsubscribe', async (req, res) => {
+  const token = String(req.query.token || '');
+  const uid = String(req.query.uid || '');
+  if (!uid || !verifyUnsubscribeToken(uid, token)) {
+    return res.status(400).send('<!doctype html><html><body style="font-family:sans-serif;padding:40px"><h1>Linki si sahihi</h1><p>Linki ya kuondoa imeisha au si sahihi.</p></body></html>');
+  }
+  try {
+    const db = getFirebaseFirestore();
+    if (db) {
+      const ref = db.collection('notification_preferences').doc(uid);
+      await ref.set({ daily_reminders: false, marketing: false, updatedAt: new Date() }, { merge: true });
+    }
+  } catch (e) {
+    // best effort
+  }
+  res.send('<!doctype html><html><head><meta charset="utf-8"><title>Soko Vibe</title></head><body style="font-family:sans-serif;padding:40px;text-align:center"><h1>Umeondolewa</h1><p>Hutapokea barua pepe za matangazo tena. Unaweza kurejesha kwenye mipangilio ya app.</p><p><a href="https://www.sokovibe.co.tz">Rudi Soko Vibe</a></p></body></html>');
 });
 
 module.exports = router;
