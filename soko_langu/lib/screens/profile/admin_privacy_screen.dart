@@ -13,7 +13,6 @@ import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
-import '../../theme/design_tokens.dart';
 
 /// Admin Privacy & Verification settings screen.
 ///
@@ -38,7 +37,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
 
   bool _isPrivate = false;
   bool _isLoading = true;
-  String? _username;
   String? _usernameError;
   final TextEditingController _usernameController = TextEditingController();
   bool _isSavingUsername = false;
@@ -69,7 +67,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
 
       final name = profile?.username ?? '';
       setState(() {
-        _username = name;
         _usernameController.text = name;
         _isPrivate = visibility?['isPrivate'] == true;
         _isLoading = false;
@@ -145,7 +142,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
       if (!mounted) return;
 
       setState(() {
-        _username = newName;
         _usernameError = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -236,7 +232,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
                     errorText: _usernameError,
                     prefixIcon: const Icon(Icons.person_outline),
                   ),
-                  onChanged: (v) => setState(() => _username = v),
                 ),
                 const SizedBox(height: AppInsets.s2),
                 SizedBox(

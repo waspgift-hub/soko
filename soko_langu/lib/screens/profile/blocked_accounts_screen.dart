@@ -1,16 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../services/follow_service.dart';
 import '../../services/seller_verification_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/app_dimens.dart';
 import '../../widgets/blue_tick_badge.dart';
-import '../../models/user_profile.dart';
 import '../../models/seller_verification.dart';
 
 /// Blocked accounts screen — shows all accounts blocked by the current user.
@@ -25,7 +19,6 @@ class BlockedAccountsScreen extends StatefulWidget {
 
 class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
   final FollowService _followService = FollowService();
-  final UserService _userService = UserService();
 
   List<String> _blockedUids = [];
   bool _loading = true;
@@ -64,7 +57,6 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
   }
 
   Future<void> _unblock(String uid) async {
-    setState(() => _isMutating = true);
     try {
       await _followService.unblock(uid);
       if (!mounted) return;
@@ -76,12 +68,8 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );
-    } finally {
-      if (mounted) setState(() => _isMutating = false);
     }
   }
-
-  bool _isMutating = false;
 
   @override
   Widget build(BuildContext context) {

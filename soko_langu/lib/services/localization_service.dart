@@ -4612,7 +4612,6 @@ class LocalizationService {
       'buyer_reviews': 'Buyer Reviews',
       'payment_summary': 'Payment Summary',
       'order_information': 'Order Information',
-      'view_map': 'View on Map',
       'track_shipment': 'Track Shipment',
       'download_receipt': 'Download Receipt',
       'copied_to_clipboard': 'Copied to clipboard',

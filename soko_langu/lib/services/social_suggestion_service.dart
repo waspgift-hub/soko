@@ -1,11 +1,6 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../models/social_models.dart';
-import 'api_config.dart';
-import 'follow_service.dart';
 import 'user_service.dart';
 
 /// Surface suggested accounts to follow.
@@ -24,7 +19,6 @@ class SocialSuggestionService {
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FollowService _follow = FollowService();
   final UserService _userService = UserService();
 
   String? get _uid => _auth.currentUser?.uid;
