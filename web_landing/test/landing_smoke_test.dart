@@ -32,33 +32,54 @@ Future<void> settlePage(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('coming soon renders hero, registration, and faq', (
+  testWidgets('landing renders hero, registration, and waitlist CTA', (
     tester,
   ) async {
     await pumpAt(tester, const Size(390, 844));
-    expect(find.text('UNDER DEVELOPMENT'), findsWidgets);
-    expect(find.textContaining('Soko la Tanzania'), findsWidgets);
+    expect(find.textContaining('Soko Vibe'), findsWidgets);
 
-    // Register section is below the fold in a lazy sliver; scroll to reveal it.
     final scrollable = find.byType(Scrollable).first;
-    for (var i = 0; i < 20; i++) {
-      if (find.text('Get Launch Updates').evaluate().isNotEmpty) break;
+    for (var i = 0; i < 24; i++) {
+      if (find.textContaining('Notify').evaluate().isNotEmpty ||
+          find.textContaining('Nijulishe').evaluate().isNotEmpty) {
+        break;
+      }
       await tester.drag(scrollable, const Offset(0, -500));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
     }
-    expect(find.text('Get Launch Updates'), findsWidgets);
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is Text &&
+          ((w.data ?? '').contains('Notify Me') ||
+              (w.data ?? '').contains('Nijulishe') ||
+              (w.data ?? '').contains('Get Launch Updates') ||
+              (w.data ?? '').contains('Pata Taarifa'))),
+      findsWidgets,
+    );
     await settlePage(tester);
   });
 
   testWidgets('desktop renders nav and key sections', (tester) async {
     await pumpAt(tester, const Size(1440, 900));
-    expect(find.text('Home'), findsWidgets);
-    expect(find.text('About'), findsWidgets);
-    expect(find.text('Features'), findsWidgets);
-    expect(find.text('FAQ'), findsWidgets);
-    expect(find.text('Contact'), findsWidgets);
-    expect(find.text('UNDER DEVELOPMENT'), findsWidgets);
+    expect(find.byTooltip('Menu'), findsNothing);
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is Text &&
+          ((w.data ?? '') == 'Home' || (w.data ?? '') == 'Mwanzo')),
+      findsWidgets,
+    );
+    expect(
+      find.byWidgetPredicate(
+          (w) => w is Text && ((w.data ?? '') == 'FAQ' || (w.data ?? '') == 'Maswali')),
+      findsWidgets,
+    );
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is Text &&
+          ((w.data ?? '') == 'Contact' || (w.data ?? '') == 'Mawasiliano')),
+      findsWidgets,
+    );
     await settlePage(tester);
   });
 }

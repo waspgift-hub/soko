@@ -13,7 +13,7 @@ import '../../models/product_model.dart';
 import '../../models/order_statuses.dart';
 import '../../models/flash_sale_model.dart';
 import '../../models/transaction_model.dart';
-import '../../services/clickpesa_service.dart';
+import '../../services/azampay_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/api_config.dart';
 import '../../widgets/input_field.dart';
@@ -143,7 +143,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
     final seq = ++_quoteSeq;
     if (mounted) setState(() => _quotePending = true);
-    final quote = await ClickPesaService.previewUssdPushFee(
+    final quote = await AzamPayService.previewMnoCheckoutFee(
       productPrice: _lineTotal,
       productId: widget.product.id,
       phone: phone,

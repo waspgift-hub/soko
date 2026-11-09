@@ -19,29 +19,56 @@ class Message {
   final Map<String, List<String>> reactions;
 
   factory Message.fromMap(String id, Map<String, dynamic> data) {
-    final rawReactions = data['reactions'] as Map<String, dynamic>? ?? {};
     final reactions = <String, List<String>>{};
-    rawReactions.forEach((key, value) {
-      reactions[key] = List<String>.from(value as List);
-    });
+    final rawReactions = data['reactions'];
+    if (rawReactions is Map) {
+      rawReactions.forEach((key, value) {
+        if (value is Iterable) {
+          reactions[key.toString()] = value.whereType<String>().toList();
+        }
+      });
+    }
     return Message(
       id: id,
-      senderId: data['sender_id'] ?? data['senderId'] ?? '',
-      receiverId: data['receiver_id'] ?? data['receiverId'] ?? '',
-      content: data['text'] ?? data['content'] ?? '',
-      timestamp: (data['timestamp'] as dynamic)?.toDate() ?? DateTime.now(),
-      isRead: data['is_read'] ?? data['isRead'] ?? false,
-      isDelivered: data['is_delivered'] ?? data['isDelivered'] ?? false,
-      isEdited: data['is_edited'] ?? data['isEdited'] ?? false,
-      productId: data['product_id'] ?? data['productId'],
-      productName: data['product_name'] ?? data['productName'],
-      replyTo: data['reply_to'] ?? data['replyTo'],
-      replyToContent: data['reply_to_content'] ?? data['replyToContent'],
-      replyToSender: data['reply_to_sender'] ?? data['replyToSender'],
-      messageType: data['message_type'] ?? data['messageType'] ?? 'text',
-      isDeletedForEveryone: data['is_deleted_for_everyone'] ?? data['isDeletedForEveryone'] ?? false,
+      senderId: _string(data['sender_id'] ?? data['senderId']),
+      receiverId: _string(data['receiver_id'] ?? data['receiverId']),
+      content: _string(data['text'] ?? data['content']),
+      timestamp: _timestamp(data['timestamp']) ?? DateTime.now(),
+      isRead: _bool(data['is_read'] ?? data['isRead']),
+      isDelivered: _bool(data['is_delivered'] ?? data['isDelivered']),
+      isEdited: _bool(data['is_edited'] ?? data['isEdited']),
+      productId: _nullableString(data['product_id'] ?? data['productId']),
+      productName: _nullableString(data['product_name'] ?? data['productName']),
+      replyTo: _nullableString(data['reply_to'] ?? data['replyTo']),
+      replyToContent:
+          _nullableString(data['reply_to_content'] ?? data['replyToContent']),
+      replyToSender:
+          _nullableString(data['reply_to_sender'] ?? data['replyToSender']),
+      messageType:
+          _nullableString(data['message_type'] ?? data['messageType']) ?? 'text',
+      isDeletedForEveryone: _bool(
+        data['is_deleted_for_everyone'] ?? data['isDeletedForEveryone'],
+      ),
       reactions: reactions,
     );
+  }
+
+  // Legacy messages were written by several clients with inconsistent types.
+  // Coercing instead of casting keeps one bad document from throwing while
+  // the chat is being read.
+
+  static String _string(Object? raw) =>
+      raw is String ? raw : (raw?.toString() ?? '');
+
+  static String? _nullableString(Object? raw) => raw is String ? raw : null;
+
+  static bool _bool(Object? raw) => raw is bool ? raw : false;
+
+  static DateTime? _timestamp(Object? raw) {
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    return null;
   }
 
   Message({

@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Clickpesa USSD Push fee tiers (source: clickpesa.com/pricing)
-const List<(int, int, int)> ussdPushFeeTiers = [
+// AzamPay MNO checkout fee tiers (source: azampay.co.tz pricing)
+const List<(int, int, int)> mnoCheckoutFeeTiers = [
   (500, 899, 54), (900, 1999, 92), (2000, 2999, 124), (3000, 3999, 230),
   (4000, 4399, 380), (4400, 8999, 580), (9000, 19999, 920), (20000, 39999, 1150),
   (40000, 49999, 1572), (50000, 95999, 2136), (96000, 199999, 3240),
@@ -10,22 +10,17 @@ const List<(int, int, int)> ussdPushFeeTiers = [
   (1000000, 1999999, 7210), (2000000, 3000000, 7960),
 ];
 
-/// Fee ClickPesa adds on top of the amount for a USSD push.
+/// Fee AzamPay adds on top of the amount for an MNO checkout.
 ///
-/// [amount] must be the value actually pushed to ClickPesa — the product price
+/// [amount] must be the value actually pushed to AzamPay — the product price
 /// plus the Soko Vibe commission — because the tiers are banded on the charge,
 /// not on the item price.
-double getUssdPushFee(double amount) {
-  // Below the smallest published tier there is no chargeable USSD push, so the
-  // fee is zero. Falling through to the top tier charged 7,960 on a 300 TZS
-  // purchase, a 2,653% fee.
-  if (amount < ussdPushFeeTiers.first.$1) return 0;
-  for (final tier in ussdPushFeeTiers) {
+double getMnoCheckoutFee(double amount) {
+  if (amount < mnoCheckoutFeeTiers.first.$1) return 0;
+  for (final tier in mnoCheckoutFeeTiers) {
     if (amount >= tier.$1 && amount <= tier.$2) return tier.$3.toDouble();
   }
-  // Above the top published band: hold at that band's fee rather than repeating
-  // its number in two places where they could drift apart.
-  return ussdPushFeeTiers.last.$3.toDouble();
+  return mnoCheckoutFeeTiers.last.$3.toDouble();
 }
 
 class TransactionFeeBreakdown {
@@ -45,10 +40,10 @@ class TransactionFeeBreakdown {
   final double totalAmount;
   final double sellerReceives;
 
-  /// [quotedProcessingFee] is the fee ClickPesa actually quoted for this charge
+  /// [quotedProcessingFee] is the fee AzamPay actually quoted for this charge
   /// via the preview endpoint. It wins over the local tier table because the
-  /// table only knows ClickPesa's own fee — it cannot see the MNO fee that
-  /// ClickPesa charges "in addition", and it drifts whenever ClickPesa reprices.
+  /// table only knows AzamPay's own fee — it cannot see the MNO fee that
+  /// AzamPay charges "in addition", and it drifts whenever AzamPay reprices.
   factory TransactionFeeBreakdown({
     required double productPrice,
     double? quotedProcessingFee,
@@ -67,7 +62,7 @@ class TransactionFeeBreakdown {
       productPrice: productPrice,
       platformFee: platformFee,
       totalAmount: totalAmount,
-      processingFee: quotedProcessingFee ?? getUssdPushFee(totalAmount),
+      processingFee: quotedProcessingFee ?? getMnoCheckoutFee(totalAmount),
     );
   }
 
@@ -77,7 +72,7 @@ class TransactionFeeBreakdown {
     required this.totalAmount,
     required this.processingFee,
   })  : payoutFee = 0,
-        // processingFee is what ClickPesa charges the customer ON TOP of the
+        // processingFee is what AzamPay charges the customer ON TOP of the
         // amount (not pre-added to what we send), so totalAmount excludes it.
         totalFees = platformFee,
         sellerReceives = productPrice;
@@ -187,7 +182,7 @@ class MarketplaceTransaction {
     required this.totalAmount,
     required this.sellerReceives,
     required this.status,
-    this.paymentMethod = 'ClickPesa',
+    this.paymentMethod = 'AzamPay',
     this.transactionReference,
     required this.createdAt,
     this.shippingCost,
@@ -236,7 +231,7 @@ class MarketplaceTransaction {
       sellerReceives: (data['sellerReceives'] ?? breakdown.sellerReceives)
           .toDouble(),
       status: parseStatus(data['status'] ?? 'pending'),
-      paymentMethod: data['paymentMethod'] ?? 'ClickPesa',
+      paymentMethod: data['paymentMethod'] ?? 'AzamPay',
       transactionReference: data['transactionReference'],
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()

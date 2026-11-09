@@ -1443,7 +1443,7 @@ function adminEscrowCard(o) {
   return '<hr class="hr"><div class="dsub">Amana (Escrow) — Vitendo vya Admin</div>' +
     '<div class="dim mono" style="margin:2px 0 8px">Id ya amana: ' + esc(escrowId) + '</div>' +
     '<div class="drawer-actions">' + buttons + '</div>' +
-    '<p class="hint">Refund na hamisho hutumia ClickPesa payout kwenye namba halisi. Thibitisha id ya amana kabla ya kutuma.</p>';
+    '<p class="hint">Refund na hamisho hutumia AzamPay payout kwenye namba halisi. Thibitisha id ya amana kabla ya kutuma.</p>';
 }
 async function escrowReleaseAction(args) {
   const ok = await confirmModal('Fungua Amana', 'Fungua escrow ya agizo ' + args.num + ' na kuweka pesa kwa salio la muuzaji?', 'Fungua', false);
@@ -1459,7 +1459,7 @@ async function escrowAdjudicate(args, mode) {
   const ok = await confirmModal(
     isRefund ? 'Rejesha kwa Mnunuzi' : 'Toa kwa Muuzaji',
     isRefund
-      ? 'Tuma refund KAMILI ya agizo ' + args.num + ' kwa namba ya mnunuzi kupitia ClickPesa?'
+      ? 'Tuma refund KAMILI ya agizo ' + args.num + ' kwa namba ya mnunuzi kupitia AzamPay?'
       : 'Kamilisha mgogoro wa ' + args.num + ' na kutoa pesa zote kwa muuzaji?',
     isRefund ? 'Tuma Refund' : 'Toa kwa Muuzaji',
     isRefund
@@ -1478,7 +1478,7 @@ async function escrowTransferAction(args) {
     '<h3>Hamisha Fedha (Admin Transfer)</h3>' +
     '<p class="msub">Agizo: ' + esc(args.num) + ' · Id ya amana: <span class="mono">' + esc(args.orderId) + '</span></p>' +
     '<label class="lab">Kiasi (TZS)</label><input id="trAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 50000">' +
-    '<label class="lab">Namba ya kupokea (ClickPesa)</label><input id="trPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
+    '<label class="lab">Namba ya kupokea (AzamPay)</label><input id="trPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
     '<label class="lab">Maelezo (si lazima)</label><input id="trNote" class="field" type="text" placeholder="Sababu ya hamisho">' +
     '<div class="err" id="trErr"></div>' +
     '<div class="mfooter"><button class="btn" id="trNo">Futa</button><button class="btn danger" id="trYes">Tuma Transfer</button></div>'
@@ -1789,7 +1789,7 @@ async function loadWithdrawals() {
   bindSection('finance'); touch();
 }
 async function withdrawalOp(id, op) {
-  const map = { process: 'Tuma payout ya TSh kwenda ClickPesa?', retry: 'Jaribu tena payout iliyoshindikana?', confirm: 'Thibitisha payout imekamilika (inahitajika kama provider hairudishi callback)?' };
+  const map = { process: 'Tuma payout ya TSh kwenda AzamPay?', retry: 'Jaribu tena payout iliyoshindikana?', confirm: 'Thibitisha payout imekamilika (inahitajika kama provider hairudishi callback)?' };
   const ok = await confirmModal('Withdrawal: ' + op, map[op] || 'Hakika?', op === 'retry' ? 'Jaribu tena' : 'Ndiyo', false);
   if (!ok) return;
   run(async () => {
@@ -1827,7 +1827,7 @@ async function loadRecon() {
 async function reconciliationRun() {
   openModal(
     '<h3>Tengeneza Rekodi</h3><p class="msub">Linganisha malipo na provider kwa kipindi.</p>' +
-    '<label>Provider</label><select class="field" id="rcProvider"><option value="clickpesa">clickpesa</option></select>' +
+    '<label>Provider</label><select class="field" id="rcProvider"><option value="azampay">azampay</option></select>' +
     '<div class="formgrid"><div><label>Kuanzia</label><input class="field" id="rcStart" type="datetime-local"></div>' +
     '<div><label>Hadi</label><input class="field" id="rcEnd" type="datetime-local"></div></div>' +
     '<div class="mfooter"><button class="btn" id="rcNo">Futa</button><button class="btn accent" id="rcYes">Run</button></div>'
@@ -2398,7 +2398,7 @@ async function loadRevenue() {
       kpi('Jumla ya Mapato', fmtTZS(fin.totalAdminBalance || 0), 'all revenue', 'coins') +
       kpi('Inapatikana kuondolewa', fmtTZS(fin.availableBalance || 0), 'baada ya withdrawals', 'banknote') +
       '</div>' +
-      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) ClickPesa</button><button class="btn sm" onclick="mfaManage()">MFA (TOTP)</button></div>' +
+      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) AzamPay</button><button class="btn sm" onclick="mfaManage()">MFA (TOTP)</button></div>' +
       '<div class="grid cols2" style="margin-top:6px">' +
       '<div class="card"><div class="cardhead"><h3>Ledger ya Mapato (commission/boost)</h3></div>' +
       '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Mtumiaji</th><th>Aina</th><th>Kiasi</th><th>Tume</th></tr></thead><tbody>' +
@@ -2430,9 +2430,9 @@ function wdRows(rows) {
 async function revenueWithdraw() {
   openModal(
     '<h3>Toa Mapato ya Jukwaa</h3>' +
-    '<p class="msub">Fedha zitatumwa kwa namba yako kupitia ClickPesa payout.</p>' +
+    '<p class="msub">Fedha zitatumwa kwa namba yako kupitia AzamPay payout.</p>' +
     '<label class="lab">Kiasi (TZS)</label><input id="rwAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 100000">' +
-    '<label class="lab">Namba yako (ClickPesa)</label><input id="rwPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
+    '<label class="lab">Namba yako (AzamPay)</label><input id="rwPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
     '<div class="err" id="rwErr"></div>' +
     '<div class="mfooter"><button class="btn" id="rwNo">Futa</button><button class="btn accent" id="rwYes">Tuma Withdraw</button></div>'
   );
@@ -2773,12 +2773,11 @@ async function loadSettings() {
       '<div class="settings-group"><h4>Escrow</h4>' +
       '<label class="lab chk"><input type="checkbox" id="st-pc-enableEscrow" ' + chk(pc.enableEscrow) + '> Washa escrow</label>' +
       '<label class="lab">Siku kabla ya auto-release</label><input id="st-pc-escrowReleaseDays" class="field" type="number" value="' + esc(pc.escrowReleaseDays ?? 7) + '">' +
-      '<label class="lab">Gateway kuu</label><select id="st-pc-primaryGateway" class="field"><option value="clickpesa"' + sel(pc.primaryGateway, 'clickpesa') + '>ClickPesa</option><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
+      '<label class="lab">Gateway kuu</label><select id="st-pc-primaryGateway" class="field"><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
       '</div>' +
       '<div class="settings-group"><h4>Njia za Malipo</h4>' +
-      '<label class="lab">ClickPesa merchantId</label><input id="st-gw-clickpesa-merchantId" class="field" value="' + esc((gw.clickpesa || {}).merchantId || '') + '">' +
-      '<label class="lab">ClickPesa apiKey</label><input id="st-gw-clickpesa-apiKey" class="field" value="' + esc((gw.clickpesa || {}).apiKey || '') + '" placeholder="****** ikiwa imewekwa">' +
-      '<label class="lab">ClickPesa secret</label><input id="st-gw-clickpesa-secretKey" class="field" type="password" value="' + esc((gw.clickpesa || {}).secretKey || '') + '" placeholder="******">' +
+      '<label class="lab">AzamPay merchantId</label><input id="st-gw-azamPay-merchantId" class="field" value="' + esc((gw.azamPay || {}).merchantId || '') + '">' +
+      '<label class="lab">AzamPay apiKey</label><input id="st-gw-azamPay-apiKey" class="field" value="' + esc((gw.azamPay || {}).apiKey || '') + '" placeholder="****** ikiwa imewekwa">' +
       '<label class="lab">AzamPay secret</label><input id="st-gw-azamPay-secretKey" class="field" type="password" value="' + esc((gw.azamPay || {}).secretKey || '') + '" placeholder="******">' +
       '<label class="lab">Selcom secret</label><input id="st-gw-selcom-secretKey" class="field" type="password" value="' + esc((gw.selcom || {}).secretKey || '') + '" placeholder="******">' +
       '<label class="lab">Stripe secret</label><input id="st-gw-stripe-secretKey" class="field" type="password" value="' + esc((gw.stripe || {}).secretKey || '') + '" placeholder="******">' +
@@ -2874,8 +2873,7 @@ async function saveSettings() {
       currency: v('st-pc-currency'), taxRatePct: n('st-pc-taxRatePct', 0), platformCommissionPct: n('st-pc-platformCommissionPct', 0),
       enableEscrow: c('st-pc-enableEscrow'), escrowReleaseDays: n('st-pc-escrowReleaseDays', 7), primaryGateway: v('st-pc-primaryGateway'),
       gateways: {
-        clickpesa: { merchantId: v('st-gw-clickpesa-merchantId'), apiKey: v('st-gw-clickpesa-apiKey'), secretKey: v('st-gw-clickpesa-secretKey') },
-        azamPay: { secretKey: v('st-gw-azamPay-secretKey') },
+        azamPay: { merchantId: v('st-gw-azamPay-merchantId'), apiKey: v('st-gw-azamPay-apiKey'), secretKey: v('st-gw-azamPay-secretKey') },
         selcom: { secretKey: v('st-gw-selcom-secretKey') },
         stripe: { secretKey: v('st-gw-stripe-secretKey') },
         paypal: { secretKey: v('st-gw-paypal-secretKey') },

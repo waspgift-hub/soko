@@ -1,4 +1,4 @@
-const clickpesaPayout = require('../clickpesa').clickpesaPayout;
+const azampayPayout = require('../azampay').azampayPayout;
 
 module.exports = function ({ commerceStore }) {
   function generatePayoutReference(prefix = 'po') {
@@ -26,6 +26,7 @@ module.exports = function ({ commerceStore }) {
       createdAt: now,
       updatedAt: now,
       metadata: metadata || {},
+      paymentMethod: 'AzamPay',
     };
     await commerceStore.setDocument('payouts', payoutId, record);
     return payoutId;
@@ -55,23 +56,23 @@ module.exports = function ({ commerceStore }) {
         fee: Math.round(fee),
         netAmount: Math.round(netAmount),
         status: 'PENDING',
-        paymentMethod: 'ClickPesa',
+        paymentMethod: 'AzamPay',
         source: source || '',
         metadata: metadata || {},
         createdAt: commerceStore.serverTimestamp(),
       });
     }
 
-    const result = await clickpesaPayout({
+    const result = await azampayPayout({
       amount: netAmount,
       phoneNumber: phone,
       orderReference: payoutId,
     });
 
-    const clickpesaRef = result.id || result.orderReference || '';
-    await updatePayoutStatus(payoutId, PAYOUT_STATUSES.PROCESSING, { clickpesaReference: clickpesaRef });
+    const azampayRef = result.id || result.orderReference || '';
+    await updatePayoutStatus(payoutId, PAYOUT_STATUSES.PROCESSING, { clickpesaReference: azampayRef });
 
-    return { payoutId, clickpesaReference: clickpesaRef, netAmount, fee };
+    return { payoutId, clickpesaReference: azampayRef, netAmount, fee };
   }
 
   async function retryFailedPayout(payoutId) {

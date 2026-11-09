@@ -22,12 +22,11 @@ const { requireUser, requireAdmin, isOwnerOrAdmin } = require('./auth-helpers');
 const { sendOneSignalNotification, notifyAdmins } = require('./notify');
 const { verifyAdminSecret } = require('../../../middlewares/security');
 const {
-  clickpesaCollect,
-  clickpesaPaymentStatus,
-  clickpesaCreateBillPayOrder,
+  azampayCollect,
+  azampayPaymentStatus,
+  azampayCreateBillPayOrder,
   calcGatewayFee,
-  ALL_PAYMENT_METHODS,
-} = require('../../../clickpesa');
+} = require('../../../azampay');
 const { localizeNotif, localizeDefaultReason, smsSafeForGateway } = require('../../../notif_lang');
 const { parseFlashSaleEndTime, isFlashSaleStillActive } = require('../../../money');
 const cache = require('../../../cache');
@@ -339,9 +338,8 @@ async function releaseExpiredEscrows(db) {
   }
 }
 
-// Maps raw ClickPesa status rows (GET /payments/{orderReference}) to
-// 'success' | 'failed' | '' (still pending/unknown).
-function clickPesaStatusFrom(resp, orderId) {
+// Maps raw AzamPay status rows to 'success' | 'failed' | '' (still pending/unknown).
+function azamPayStatusFrom(resp, orderId) {
   let rows = [];
   if (resp && Array.isArray(resp.data)) rows = resp.data;
   else if (Array.isArray(resp)) rows = resp;
@@ -354,7 +352,7 @@ function clickPesaStatusFrom(resp, orderId) {
 }
 
 // Extracts the human-readable failure reason from GET /payments/{orderReference}.
-function clickPesaFailureReasonFrom(resp, orderId) {
+function azamPayFailureReasonFrom(resp, orderId) {
   let rows = [];
   if (resp && Array.isArray(resp.data)) rows = resp.data;
   else if (Array.isArray(resp)) rows = resp;
@@ -415,24 +413,24 @@ async function failStalePendingBoosts(db) {
       if (createdAt.getTime() > cutoff.getTime()) continue;
       if (tx.status !== 'pending') continue;
 
-      // Ask ClickPesa for the real outcome before deciding to time out.
-      let cpStatus = '';
-      let cpFailureReason = '';
+      // Ask AzamPay for the real outcome before deciding to time out.
+      let azStatus = '';
+      let azFailureReason = '';
       try {
-        const resp = await clickpesaPaymentStatus(doc.id);
-        cpStatus = clickPesaStatusFrom(resp, doc.id);
-        cpFailureReason = clickPesaFailureReasonFrom(resp, doc.id);
+        const resp = await azampayPaymentStatus(doc.id);
+        azStatus = azamPayStatusFrom(resp, doc.id);
+        azFailureReason = azamPayFailureReasonFrom(resp, doc.id);
       } catch (_) {
         // Status API unreachable — fall through and let the poller keep trying.
       }
 
-      if (cpStatus === 'success') {
+      if (azStatus === 'success') {
         // Payment actually completed — apply it instead of failing.
         await boostPaymentSuccess(db, doc.id);
         continue;
       }
-      if (cpStatus === 'failed') {
-        const reason = cpFailureReason || 'Malipo ya ussd yameshindikana';
+      if (azStatus === 'failed') {
+        const reason = azFailureReason || 'Malipo ya ussd yameshindikana';
         await doc.ref.update({
           status: 'failed',
           failureReason: reason,
@@ -980,7 +978,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       const order_id = `boost${Date.now()}`;
 
       if (isBillPay) {
-        const billResult = await clickpesaCreateBillPayOrder({
+        const billResult = await azampayCreateBillPayOrder({
           billAmount: totalToCollect,
           billDescription: `Soko Vibe boost: ${tier} - ${productName || 'Product'}`,
           billPaymentMode: 'EXACT',
@@ -1045,15 +1043,15 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         }
 
         // Central webhook config: never derive the callback from the request host.
-        clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
+        azampayCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.azampay.collectionWebhookUrl })
           .then((result) => {
             const ref = result?.id || result?.orderReference || '';
-            if (!ref) { console.error(`[USSD] Boost ClickPesa no ref for ${order_id}`); return; }
+            if (!ref) { console.error(`[USSD] Boost AzamPay no ref for ${order_id}`); return; }
             return commerceStore.updateDocument("transactions", order_id, { clickpesaReference: ref, ussdSent: true });
           })
           .then(() => console.log(`[USSD] Boost push sent for ${order_id}`))
           .catch((err) => {
-            console.error(`[USSD] Boost ClickPesa error:`, err?.response?.data || err.message);
+            console.error(`[USSD] Boost AzamPay error:`, err?.response?.data || err.message);
             const reason = err?.response?.data?.message || err?.message || 'USSD push haikufika';
             commerceStore.getDocument("transactions", order_id).then(tx => {
               if (!tx) return;
@@ -1068,12 +1066,12 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
 
         res.json({
           order_id, amount: tierConfig.price, gatewayFee, totalAmount: totalToCollect,
-          message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()}). Ada ya ClickPesa inaongezwa kwenye malipo yako. Tuma PIN yako kwenye simu.`,
+          message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()}). Ada ya AzamPay inaongezwa kwenye malipo yako. Tuma PIN yako kwenye simu.`,
         });
       }
     } catch (e) {
       console.error('/api/boost-product error:', e?.message || e);
-      const msg = e?.message?.includes('ClickPesa') ? e.message : 'Internal server error';
+      const msg = e?.message?.includes('AzamPay') ? e.message : 'Internal server error';
       res.status(500).json({ error: msg });
     }
   });
@@ -2211,7 +2209,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           createdAt: commerceStore.serverTimestamp(),
         });
 
-        const billResult = await clickpesaCreateBillPayOrder({
+        const billResult = await azampayCreateBillPayOrder({
           billAmount: totalCharge,
           billDescription: `Soko Vibe wallet deposit: TZS ${Math.round(amount)}`,
           billPaymentMode: 'EXACT',
@@ -2261,20 +2259,20 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           processingFee,
           totalCharge,
           status: 'pending',
-          paymentMethod: 'ClickPesa',
+          paymentMethod: 'AzamPay',
           createdAt: commerceStore.serverTimestamp(),
         });
 
-        // Fire ClickPesa async — return immediately
-        clickpesaCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
+        // Fire AzamPay async — return immediately
+        azampayCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.azampay.collectionWebhookUrl })
           .then((result) => {
             const ref = result?.id || '';
-            if (!ref) { console.error(`[USSD] Deposit ClickPesa no ref for ${depositRef}`); return; }
+            if (!ref) { console.error(`[USSD] Deposit AzamPay no ref for ${depositRef}`); return; }
             return db.collection('deposits').doc(depositRef).update({ clickpesaReference: ref, ussdSent: true });
           })
           .then(() => console.log(`[USSD] Deposit push sent for ${depositRef}`))
           .catch((err) => {
-            console.error(`[USSD] Deposit ClickPesa error:`, err?.response?.data || err.message);
+            console.error(`[USSD] Deposit AzamPay error:`, err?.response?.data || err.message);
             db.collection('deposits').doc(depositRef).update({ ussdFailed: true }).catch(() => {});
           });
 

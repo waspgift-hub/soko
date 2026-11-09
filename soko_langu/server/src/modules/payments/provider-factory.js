@@ -1,17 +1,17 @@
-const ClickPesaProvider = require('./clickpesa-provider');
+const AzamPayProvider = require('./azampay-provider');
 
-let clickpesa;
+let azampay;
 
 /**
- * Returns the ClickPesa provider instance (singleton).
+ * Returns the AzamPay provider instance (singleton).
+ * ClickPesa has been removed entirely — use AZAMPAY_* env vars instead.
  */
-function getProvider(name = 'clickpesa') {
+function getProvider(name = 'azampay') {
   switch (name) {
-    case 'clickpesa':
-    case 'ussd_push':
-    case 'billpay':
-      if (!clickpesa) clickpesa = new ClickPesaProvider();
-      return clickpesa;
+    case 'azampay':
+    case 'mno_checkout':
+      if (!azampay) azampay = new AzamPayProvider();
+      return azampay;
     default:
       throw new Error(`UNSUPPORTED_PROVIDER: ${name}`);
   }

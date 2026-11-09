@@ -18,12 +18,12 @@ const CONFIG = require.resolve('../src/config');
 const CONFIG_FIREBASE = require.resolve('../src/config/firebase');
 const NOTIFY = require.resolve('../src/modules/legacy-compat/notify');
 const CACHE = require.resolve('../cache');
-const CLICKPESA = require.resolve('../clickpesa');
+const AZAMPAY = require.resolve('../azampay');
 const FEATURE_COMPAT = require.resolve('../src/modules/legacy-compat/feature-compat');
 const DEPOSIT_CONFIRM = require.resolve('../src/modules/payments/legacy-deposit-confirm');
 
 const TS = '::TS';
-const WEBHOOK_URL = 'https://cp-webhook.test/v1';
+const WEBHOOK_URL = 'https://azampay-webhook.test/v1';
 
 const fakeAdmin = {
   firestore: {
@@ -100,17 +100,17 @@ function fakeCache() {
   };
 }
 
-function clickpesaMock() {
+function azampayMock() {
   const mock = {
     calls: { collect: [], billPay: [] },
-    billPayResponse: { success: true, id: 'cpb-77', billPayNumber: '9911223344' },
+    billPayResponse: { success: true, id: 'apb-77', billPayNumber: '9911223344' },
   };
-  mock.clickpesaCollect = async (opts) => {
+  mock.azampayCollect = async (opts) => {
     mock.calls.collect.push(opts);
-    return { id: 'cp-ref-1' };
+    return { id: 'ap-ref-1' };
   };
-  mock.clickpesaPaymentStatus = async () => ({ success: true, status: 'SUCCESS' });
-  mock.clickpesaCreateBillPayOrder = async (opts) => {
+  mock.azampayPaymentStatus = async () => ({ success: true, status: 'SUCCESS' });
+  mock.azampayCreateBillPayOrder = async (opts) => {
     mock.calls.billPay.push(opts);
     return mock.billPayResponse;
   };
@@ -119,7 +119,7 @@ function clickpesaMock() {
   return mock;
 }
 
-const clickpesa = clickpesaMock();
+const azampay = azampayMock();
 
 function installStubs() {
   const stub = (path, exports) => {
@@ -129,7 +129,7 @@ function installStubs() {
   stub(FIREBASE_ADMIN_FIRESTORE, { FieldValue: fakeAdmin.firestore.FieldValue });
   stub(CONFIG, {
     nodeEnv: 'test',
-    clickpesa: { collectionWebhookUrl: WEBHOOK_URL },
+    azampay: { collectionWebhookUrl: WEBHOOK_URL },
     security: { adminSecret: 's3cret' },
     business: { platformCommissionPercent: 10 },
     sms: {},
@@ -144,7 +144,7 @@ function installStubs() {
     notifyAdmins: async () => undefined,
   });
   stub(CACHE, fakeCache());
-  stub(CLICKPESA, clickpesa);
+  stub(AZAMPAY, azampay);
 }
 
 const MODULE_KEYS = [FEATURE_COMPAT, DEPOSIT_CONFIRM];
@@ -241,16 +241,16 @@ describe('POST /api/wallet/deposit', () => {
     assert.equal(dep.processingFee, 0);
     assert.equal(dep.totalCharge, 2500);
     assert.equal(dep.status, 'pending');
-    assert.equal(dep.paymentMethod, 'ClickPesa');
+    assert.equal(dep.paymentMethod, 'AzamPay');
     assert.ok(dep.createdAt instanceof Date);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const collect = clickpesa.calls.collect[clickpesa.calls.collect.length - 1];
+    const collect = azampay.calls.collect[azampay.calls.collect.length - 1];
     assert.equal(collect.amount, 2500);
     assert.equal(collect.orderReference, json.depositRef);
     assert.equal(collect.phoneNumber, '255754123456');
     assert.equal(collect.callbackUrl, WEBHOOK_URL);
-    assert.equal(readDoc('deposits', json.depositRef).clickpesaReference, 'cp-ref-1');
+    assert.equal(readDoc('deposits', json.depositRef).clickpesaReference, 'ap-ref-1');
     assert.equal(readDoc('deposits', json.depositRef).ussdSent, true);
   });
 
@@ -274,7 +274,7 @@ describe('POST /api/wallet/deposit', () => {
     assert.equal(json.success, true);
     assert.equal(json.method, 'billpay');
     assert.equal(json.billPayNumber, '9911223344');
-    assert.equal(json.clickpesaId, 'cpb-77');
+    assert.equal(json.clickpesaId, 'apb-77');
     assert.equal(json.gatewayFee, 20);
     assert.equal(json.totalCharge, 2020);
 
@@ -285,12 +285,12 @@ describe('POST /api/wallet/deposit', () => {
     assert.equal(dep.gatewayFee, 20);
     assert.equal(dep.totalCharge, 2020);
     assert.equal(dep.billPayNumber, '9911223344');
-    assert.equal(dep.clickpesaReference, 'cpb-77');
+    assert.equal(dep.clickpesaReference, 'apb-77');
   });
 
   it('wraps a BillPay API failure as 502', async () => {
-    const original = clickpesa.billPayResponse;
-    clickpesa.billPayResponse = { success: false, error: 'cannot be processed' };
+    const original = azampay.billPayResponse;
+    azampay.billPayResponse = { success: false, error: 'cannot be processed' };
     try {
       const { status, json } = await postJson('/api/wallet/deposit', {
         userId: UID, phone: '0754123456', amount: 500, method: 'billpay',
@@ -298,7 +298,7 @@ describe('POST /api/wallet/deposit', () => {
       assert.equal(status, 502);
       assert.match(json.error, /BillPay error/);
     } finally {
-      clickpesa.billPayResponse = original;
+      azampay.billPayResponse = original;
     }
   });
 });
@@ -314,15 +314,15 @@ describe('confirmLegacyDeposit (webhook dep_ branch)', () => {
     db._data.set('deposits', new Map([['dep1', { userId: UID, amount: 5000, status: 'pending' }]]));
     db._data.set('users', new Map([[UID, { walletBalance: 1000 }]]));
 
-    const result = await confirm({ orderReference: 'dep1', status: 'completed', providerPaymentId: 'cp-x' });
+    const result = await confirm({ orderReference: 'dep1', status: 'completed', providerPaymentId: 'ap-x' });
     assert.equal(result.status, 'COMPLETED');
     assert.equal(readDoc('deposits', 'dep1').status, 'completed');
-    assert.equal(readDoc('deposits', 'dep1').clickpesaReference, 'cp-x');
+    assert.equal(readDoc('deposits', 'dep1').clickpesaReference, 'ap-x');
     assert.equal(readDoc('users', UID).walletBalance, 6000);
   });
 
   it('is idempotent — a replayed completion never credits twice', async () => {
-    const result = await confirm({ orderReference: 'dep1', status: 'completed', providerPaymentId: 'cp-x2' });
+    const result = await confirm({ orderReference: 'dep1', status: 'completed', providerPaymentId: 'ap-x2' });
     assert.equal(result.status, 'SKIPPED_ALREADY_FINAL');
     assert.equal(readDoc('users', UID).walletBalance, 6000);
   });

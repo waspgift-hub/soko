@@ -3,7 +3,7 @@ const { verifyProviderWebhook } = require('./payment-webhooks');
 
 const router = Router();
 
-// ClickPesa collection webhook - publicly callable but HMAC-verified
-router.post('/webhook/clickpesa', verifyProviderWebhook('clickpesa'));
+// AzamPay collection webhook - publicly callable but HMAC-verified
+router.post('/webhook/azampay', verifyProviderWebhook('azampay'));
 
 module.exports = router;

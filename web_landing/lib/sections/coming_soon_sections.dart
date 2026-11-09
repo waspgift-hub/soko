@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../localization/app_strings.dart';
 import '../models/models.dart';
+import '../router/app_router.dart';
 import '../services/launch_api.dart';
 import '../theme/app_colors.dart';
 import '../widgets/animated_reveal.dart';
@@ -87,12 +88,26 @@ class HeroSection extends StatelessWidget {
                 const SizedBox(height: 18),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: Text(
-                    context.str('hero_sub'),
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.88),
-                      fontSize: 18,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.str('hero_sub'),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        context.str('hero_status'),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -153,6 +168,7 @@ class _RegisterSectionState extends State<RegisterSection> {
   bool _success = false;
   bool _duplicate = false;
   bool _consent = false;
+  String _userType = 'both';
   String? _message;
 
   @override
@@ -168,6 +184,16 @@ class _RegisterSectionState extends State<RegisterSection> {
     super.dispose();
   }
 
+  String _friendlyError(String code) {
+    if (code == 'RATE_LIMITED') return context.str('form_rate_limited');
+    if (code == 'NETWORK_ERROR') return context.str('form_network_error');
+    if (code == 'INVALID_INPUT' || code == 'INVALID_EMAIL')
+      return context.str('form_invalid');
+    if (code.isNotEmpty && !code.contains('_') && !code.contains(' '))
+      return code;
+    return context.str('form_error');
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() => _message = null);
@@ -177,10 +203,12 @@ class _RegisterSectionState extends State<RegisterSection> {
     }
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _loading = true);
-    final lang = Localizations.localeOf(context).languageCode;
+    final lang = AppStrings.of(context).code;
     final result = await _api.subscribe(
       email: _email.text,
       name: _name.text,
+      userType: _userType,
+      consent: _consent,
       lang: lang,
       formStartedAt: _startedAt,
     );
@@ -191,9 +219,7 @@ class _RegisterSectionState extends State<RegisterSection> {
       _duplicate = result.duplicate;
       _message = result.ok
           ? (result.duplicate ? context.str('form_duplicate') : null)
-          : (result.message.isNotEmpty
-                ? result.message
-                : context.str('form_error'));
+          : _friendlyError(result.message);
     });
   }
 
@@ -260,6 +286,30 @@ class _RegisterSectionState extends State<RegisterSection> {
                 Expanded(flex: 2, child: _emailField()),
               ],
             ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _userType,
+            decoration: InputDecoration(
+              labelText: context.str('form_user_type'),
+            ),
+            items: [
+              DropdownMenuItem(
+                value: 'buyer',
+                child: Text(context.str('form_type_buyer')),
+              ),
+              DropdownMenuItem(
+                value: 'seller',
+                child: Text(context.str('form_type_seller')),
+              ),
+              DropdownMenuItem(
+                value: 'both',
+                child: Text(context.str('form_type_both')),
+              ),
+            ],
+            onChanged: _loading
+                ? null
+                : (v) => setState(() => _userType = v ?? 'both'),
+          ),
           const SizedBox(height: 14),
           Semantics(
             label: 'Leave this field empty',
@@ -776,7 +826,8 @@ class FaqSection extends StatelessWidget {
 }
 
 class SiteFooter extends StatelessWidget {
-  const SiteFooter({super.key});
+  final void Function(String route)? onNavigate;
+  const SiteFooter({super.key, this.onNavigate});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -867,7 +918,21 @@ class SiteFooter extends StatelessWidget {
                     ),
                     _FooterLink(
                       label: context.str('foot_contact_page'),
-                      onTap: () => openLink(context, SokoLinks.contact),
+                      onTap: () => (onNavigate != null
+                          ? onNavigate!(AppRoutes.contact)
+                          : openLink(context, SokoLinks.contactPage)),
+                    ),
+                    _FooterLink(
+                      label: context.str('nav_faq'),
+                      onTap: () => onNavigate?.call(AppRoutes.faq),
+                    ),
+                    _FooterLink(
+                      label: context.str('foot_buyers'),
+                      onTap: () => onNavigate?.call(AppRoutes.buyers),
+                    ),
+                    _FooterLink(
+                      label: context.str('foot_sellers'),
+                      onTap: () => onNavigate?.call(AppRoutes.sellers),
                     ),
                   ],
                 );

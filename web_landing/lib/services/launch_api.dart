@@ -14,6 +14,12 @@ class LaunchSubscribeResult {
   });
 }
 
+class LaunchContactResult {
+  final bool ok;
+  final String message;
+  const LaunchContactResult({required this.ok, required this.message});
+}
+
 class LaunchApi {
   LaunchApi({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
@@ -21,8 +27,11 @@ class LaunchApi {
   Future<LaunchSubscribeResult> subscribe({
     required String email,
     String? name,
+    String userType = 'both',
+    required bool consent,
     required String lang,
     required int formStartedAt,
+    String source = 'web_launch',
   }) async {
     final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/launch/subscribe');
     try {
@@ -36,8 +45,10 @@ class LaunchApi {
             body: jsonEncode({
               'email': email.trim(),
               'name': (name ?? '').trim(),
+              'userType': userType,
+              'consent': consent,
               'lang': lang,
-              'source': 'web_launch',
+              'source': source,
               'formStartedAt': formStartedAt,
               'website': '',
             }),
@@ -70,31 +81,82 @@ class LaunchApi {
         return const LaunchSubscribeResult(
           ok: false,
           duplicate: false,
-          message: 'Too many requests. Please try again later.',
+          message: 'RATE_LIMITED',
         );
       }
       if (response.statusCode == 400) {
         return LaunchSubscribeResult(
           ok: false,
           duplicate: false,
-          message: message.isNotEmpty
-              ? message
-              : 'Please enter a valid email address.',
+          message: message.isNotEmpty ? message : 'INVALID_INPUT',
         );
       }
       return LaunchSubscribeResult(
         ok: false,
         duplicate: false,
-        message: message.isNotEmpty
-            ? message
-            : 'Something went wrong. Please try again.',
+        message: message.isNotEmpty ? message : 'SERVER_ERROR',
       );
     } catch (_) {
       return const LaunchSubscribeResult(
         ok: false,
         duplicate: false,
-        message: 'Unable to connect right now. Please try again.',
+        message: 'NETWORK_ERROR',
       );
+    }
+  }
+
+  Future<LaunchContactResult> contact({
+    required String email,
+    required String subject,
+    required String message,
+    String? name,
+    required String lang,
+    required int formStartedAt,
+  }) async {
+    final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/launch/contact');
+    try {
+      final response = await _client
+          .post(
+            uri,
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email.trim(),
+              'name': (name ?? '').trim(),
+              'subject': subject.trim(),
+              'message': message.trim(),
+              'lang': lang,
+              'formStartedAt': formStartedAt,
+              'website': '',
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      Map<String, dynamic> body = {};
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) body = decoded;
+      } catch (_) {}
+      final data = body['data'] is Map<String, dynamic>
+          ? body['data'] as Map<String, dynamic>
+          : <String, dynamic>{};
+      final msg = (data['message'] ?? body['message'] ?? body['error'] ?? '')
+          .toString();
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          body['success'] == true) {
+        return LaunchContactResult(ok: true, message: msg);
+      }
+      if (response.statusCode == 429) {
+        return const LaunchContactResult(ok: false, message: 'RATE_LIMITED');
+      }
+      return LaunchContactResult(
+        ok: false,
+        message: msg.isNotEmpty ? msg : 'SERVER_ERROR',
+      );
+    } catch (_) {
+      return const LaunchContactResult(ok: false, message: 'NETWORK_ERROR');
     }
   }
 }

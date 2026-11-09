@@ -187,7 +187,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
         if (payment) {
           let providerStatus = null;
           try {
-            const provider = getProvider(payment.provider);
+            const provider = getProvider(payment.provider || 'azampay');
             providerStatus = (await provider.queryCollectionStatus(fresh.orderNumber)).status;
           } catch (e) {
             console.warn('[FINANCE] provider re-verify failed', fresh.orderNumber, e.message);
@@ -379,7 +379,7 @@ async function runReconciliationSweep({ now = new Date() } = {}) {
   const start = new Date(now.getTime() - config.finance.reconciliationWindowMs);
   try {
     const row = await runReconciliation({
-      provider: 'clickpesa',
+      provider: 'azampay',
       periodStart: start.toISOString(),
       periodEnd: now.toISOString(),
       skipWhenQuiet: true,

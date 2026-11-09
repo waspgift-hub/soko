@@ -282,7 +282,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
     await ref.set({
       sellerId: String(sellerId),
       amount: Math.round(requested),
-      provider: 'clickpesa',
+      provider: 'azampay',
       status: WITHDRAWAL_STATUS.REQUESTED,
       phoneNumber: phoneNumber || null,
       idempotencyKey: `withdrawal_${sellerId}_${ref.id}`,
@@ -357,8 +357,8 @@ async function _gatewayHasPayout(orderReference) {
     // Lazy require: `clickpesa.js` pulls in the axios client and token cache, and
     // wallet-service is imported by many tests that never touch the gateway.
     // eslint-disable-next-line global-require
-    const { clickpesaQueryPayouts } = require('../../../clickpesa');
-    rows = await clickpesaQueryPayouts({ orderReference });
+    const { azampayQueryPayouts } = require('../../../azampay');
+    rows = await azampayQueryPayouts({ orderReference });
   } catch (e) {
     console.warn(
       `[wallet] payout lookup failed for ${orderReference}: ${e.message} — treating as unknown`,
@@ -457,7 +457,7 @@ async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const provider = getProvider(withdrawal.provider || 'clickpesa');
+    const provider = getProvider(withdrawal.provider || 'azampay');
     const payout = await provider.initiatePayout({
       amount: withdrawal.amount,
       orderReference,

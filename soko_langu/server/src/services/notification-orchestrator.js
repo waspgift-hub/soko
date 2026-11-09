@@ -4,6 +4,8 @@
 
 // Firestore-backed orchestrator. Mongo/Joi are not part of this stack.
 
+const { sendWhatsApp } = require('./whatsapp-service');
+
 // ---------------------------------------------------------------------------
 // Event Catalogue — Categories and templates
 // ---------------------------------------------------------------------------
@@ -18,7 +20,8 @@ const notificationCategories = {
     channels: {
       push: true,
       email: true,
-      sms: false, // SMS only for high-risk
+      sms: false,
+      whatsapp: true, // SMS only for high-risk
     },
   },
   // B. ACCOUNT
@@ -31,6 +34,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // C. VERIFICATION
@@ -43,6 +47,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // D. PAYMENT
@@ -53,7 +58,8 @@ const notificationCategories = {
     priority: 9,
     channels: {
       push: true,
-      sms: false, // Converted to email
+      sms: false,
+      whatsapp: true, // Converted to email
       email: true,
     },
   },
@@ -66,6 +72,7 @@ const notificationCategories = {
     channels: {
       push: true,
       sms: false,
+      whatsapp: true,
       email: true,
     },
   },
@@ -79,6 +86,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // G. DELIVERY
@@ -91,6 +99,7 @@ const notificationCategories = {
       push: true,
       email: false,
       sms: false,
+      whatsapp: true,
     },
   },
   // H. KYC
@@ -103,6 +112,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // I. WALLET
@@ -115,6 +125,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // J. WITHDRAWAL
@@ -125,7 +136,8 @@ const notificationCategories = {
     priority: 8,
     channels: {
       push: true,
-      sms: false, // Converted to email
+      sms: false,
+      whatsapp: true, // Converted to email
       email: true,
     },
   },
@@ -139,6 +151,7 @@ const notificationCategories = {
       push: true,
       email: false,
       sms: false,
+      whatsapp: true,
     },
   },
   // L. SELLER
@@ -151,6 +164,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // M. BUYER
@@ -163,6 +177,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // N. CUSTOMER SERVICE
@@ -175,6 +190,7 @@ const notificationCategories = {
       push: true,
       email: true,
       sms: false,
+      whatsapp: true,
     },
   },
   // O. LIFECYCLE
@@ -187,6 +203,7 @@ const notificationCategories = {
       push: true,
       email: false,
       sms: false,
+      whatsapp: true,
     },
   },
   // P. RE-ENGAGEMENT
@@ -199,6 +216,7 @@ const notificationCategories = {
       push: true,
       email: false,
       sms: false,
+      whatsapp: true,
     },
   },
   // Q. MARKETING
@@ -210,7 +228,8 @@ const notificationCategories = {
     channels: {
       push: false, // Only if user consented
       email: false, // Only if user consented
-      sms: false, // Never SMS for marketing
+      sms: false,
+      whatsapp: false, // Never WhatsApp for marketing
     },
   },
 };
@@ -406,9 +425,9 @@ function selectChannels(category, preferences, isUrgent = false) {
   const allowed = [];
 
   // Determine which channels to consider
-  const candidates = isUrgent || cat.isTransactional
-    ? ['push', 'email', 'sms']
-    : ['push', 'email'];
+    const candidates = isUrgent || cat.isTransactional
+      ? ['push', 'whatsapp', 'email', 'sms']
+      : ['push', 'whatsapp', 'email'];
 
   for (const channel of candidates) {
     // Check category definition
@@ -675,6 +694,8 @@ class NotificationOrchestrator {
     switch (channel) {
       case 'push':
         return await this.sendPush(userId, title, body, data);
+      case 'whatsapp':
+        return await this.sendWhatsApp(userId, title, body, data);
       case 'email':
         return await this.sendEmail(userId, title, body, data);
       case 'sms':
@@ -690,6 +711,33 @@ class NotificationOrchestrator {
     const onesignal = require('./push-service');
     const result = await onesignal.sendPush(userId, title, body, data);
     return result;
+  }
+
+  // WhatsApp via Zernio
+  async sendWhatsApp(userId, title, body, data) {
+    try {
+      const { sendWhatsApp } = require('./whatsapp-service');
+      const db = require('../config/firebase').getFirebaseFirestore();
+      let phone = null;
+      if (db && userId) {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          if (userData.phone) phone = userData.phone;
+        }
+      }
+      if (!phone) {
+        return { success: false, error: 'no_phone_number' };
+      }
+      const ok = await sendWhatsApp(phone, body);
+      return {
+        success: ok,
+        notificationId: `whatsapp_${Date.now()}`,
+        providerMessageId: ok ? `wa_${Date.now()}` : null,
+      };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   }
 
   // Email via mailer service

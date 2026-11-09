@@ -5,24 +5,24 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
-import '../../services/clickpesa_service.dart';
+import '../../services/azampay_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_states.dart';
 
-/// Admin view of everything ClickPesa knows: account balances, collections
+/// Admin view of everything AzamPay knows: account balances, collections
 /// (payments/deposits) and disbursements (payouts/withdrawals). Mirrors the
-/// ClickPesa merchant dashboard so the admin can audit without leaving the app.
-class AdminClickPesaScreen extends StatefulWidget {
+/// AzamPay merchant dashboard so the admin can audit without leaving the app.
+class AdminAzamPayScreen extends StatefulWidget {
   final bool embedded;
 
-  const AdminClickPesaScreen({super.key, this.embedded = false});
+  const AdminAzamPayScreen({super.key, this.embedded = false});
 
   @override
-  State<AdminClickPesaScreen> createState() => _AdminClickPesaScreenState();
+  State<AdminAzamPayScreen> createState() => _AdminAzamPayScreenState();
 }
 
-class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
+class _AdminAzamPayScreenState extends State<AdminAzamPayScreen> {
   bool _loading = true;
   String? _error;
 
@@ -105,7 +105,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         _asOf = DateTime.tryParse(result['asOf'] as String? ?? '');
         _loading = false;
       });
-      final finance = await ClickPesaService.getFinanceSummary();
+      final finance = await AzamPayService.getFinanceSummary();
       if (mounted && finance != null) {
         setState(() => _financeSummary = finance);
       }
@@ -141,11 +141,8 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
       );
     }
     FirebaseFirestore.instance.collection('admin_exports').add({
-      'type': 'clickpesa_csv',
-      'data': buffer.toString(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'exportedBy': FirebaseAuth.instance.currentUser?.uid,
-      'filters': {'type': _type, 'status': _status, 'channel': _channel},
+      'status': _status,
+      'channel': _channel,
     });
     ScaffoldMessenger.of(
       context,
@@ -177,7 +174,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.tr('clickpesa_overview')),
+        title: Text(context.tr('azampay_overview')),
         actions: [
           IconButton(
             tooltip: context.tr('refresh'),
@@ -236,7 +233,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
                 Icon(Icons.filter_alt, size: 18, color: cs.primary),
                 const SizedBox(width: 8),
                 Text(
-                  '${context.tr('clickpesa_overview')} \u2022 ${_asOf != null ? DateFormat('MMM dd HH:mm').format(_asOf!) : ''}',
+                  '${context.tr('azampay_overview')} \u2022 ${_asOf != null ? DateFormat('MMM dd HH:mm').format(_asOf!) : ''}',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ],
@@ -246,15 +243,15 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
               segments: [
                 ButtonSegment(
                   value: 'all',
-                  label: Text(context.tr('clickpesa_all')),
+                  label: Text(context.tr('azampasa_all')),
                 ),
                 ButtonSegment(
                   value: 'payments',
-                  label: Text(context.tr('clickpesa_deposits')),
+                  label: Text(context.tr('azampay_deposits')),
                 ),
                 ButtonSegment(
                   value: 'payouts',
-                  label: Text(context.tr('clickpesa_withdrawals')),
+                  label: Text(context.tr('azampay_withdrawals')),
                 ),
               ],
               selected: {_type},
@@ -315,7 +312,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     return DropdownButtonFormField<String>(
       initialValue: channels.contains(_channel) ? _channel : '',
       decoration: InputDecoration(
-        labelText: context.tr('clickpesa_channel'),
+        labelText: context.tr('azampay_channel'),
         border: const OutlineInputBorder(),
         isDense: true,
       ),
@@ -344,7 +341,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
                 Icon(Icons.account_balance_wallet, color: cs.tertiary),
                 const SizedBox(width: 8),
                 Text(
-                  context.tr('clickpesa_balance'),
+                  context.tr('azampay_balance'),
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
@@ -621,7 +618,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
               ),
             IconButton(
               icon: const Icon(Icons.download_rounded, size: 20),
-              tooltip: context.tr('clickpesa_export'),
+              tooltip: context.tr('azampay_export'),
               onPressed: (_payments.isEmpty && _payouts.isEmpty)
                   ? null
                   : _exportCsv,
@@ -667,7 +664,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
     if (rows.isEmpty) {
       return SokoVibeEmptyState(
         icon: Icons.account_balance_outlined,
-        title: context.tr('clickpesa_no_data'),
+        title: context.tr('azampay_no_data'),
       );
     }
 
@@ -680,7 +677,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         const SizedBox(height: 8),
         Center(
           child: Text(
-            '${context.tr('clickpesa_total')}: ${_paymentsTotal + _payoutsTotal}',
+            '${context.tr('azampay_total')}: ${_paymentsTotal + _payoutsTotal}',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 12,

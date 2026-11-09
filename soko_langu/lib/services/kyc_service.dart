@@ -135,7 +135,7 @@ class KycService {
     }
   }
 
-  /// Starts a ClickPesa collection for the one-time fee.
+  /// Starts an AzamPay collection for the one-time fee.
   ///
   /// `paymentMethod` is 'ussd_push' (default) or 'billpay'. Returns
   /// `{success: true, ...serverData}` or `{success: false, error}`.

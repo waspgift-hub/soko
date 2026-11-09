@@ -85,8 +85,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final breakdown = TransactionFeeBreakdown(productPrice: price);
             final platformFee =
                 (d['platformFee'] as num?)?.toDouble() ?? breakdown.platformFee;
-            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? breakdown.processingFee;
-            final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + clickpesaFee);
+            final azamPayFee = (d['clickpesaFee'] as num?)?.toDouble() ?? breakdown.processingFee;
+            final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + azamPayFee);
             final buyerName = d['buyerName'] as String? ?? '';
             final sellerName = d['sellerName'] as String? ?? '';
             final buyerPhone = d['buyerPhone'] as String? ?? '';
@@ -105,7 +105,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     : null);
             final createdAt = d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : DateTime.now();
             final productImage = d['productImage'] as String? ?? '';
-            final paymentMethod = d['paymentMethod'] as String? ?? 'ClickPesa';
+            final paymentMethod = d['paymentMethod'] as String? ?? 'AzamPay';
             final transactionReference = d['transactionReference'] as String? ?? d['transactionId'] as String?;
             final courierName = d['courierName'] as String?;
             final driverPhone = d['driverPhone'] as String?;
@@ -114,7 +114,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 20, 16, 32),
               child: _buildReceiptCard(context, cs, d, status, productName, productDescription, productDetails,
-                  price, shippingCost, platformFee, clickpesaFee, totalAmount,
+                   price, shippingCost, platformFee, azamPayFee, totalAmount,
                   buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
                   deliveryAddress, createdAt,
                   productImage, paymentMethod, transactionReference,
@@ -129,7 +129,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   Widget _buildReceiptCard(
     BuildContext context, ColorScheme cs, Map<String, dynamic> d,
     String status, String productName, String productDescription, String productDetails,
-    double price, double shippingCost, double platformFee, double clickpesaFee, double totalAmount,
+    double price, double shippingCost, double platformFee, double azamPayFee, double totalAmount,
     String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
     Map<String, dynamic>? deliveryAddress,
     DateTime createdAt, String productImage,
@@ -220,7 +220,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   if (shippingCost == 0)
                     _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), context.tr('free_delivery'), valueColor: cs.successGreen),
                   _infoRow(cs, context.tr( 'commission', 'Commission ya Soko Vibe'), context.formatPriceInt(platformFee.toInt()), valueColor: cs.tertiary),
-                  _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), context.formatPriceInt(clickpesaFee.toInt()), valueColor: cs.tertiary),
+                  _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), context.formatPriceInt(azamPayFee.toInt()), valueColor: cs.tertiary),
                 ]),
                 const SizedBox(height: 8),
                 _divider(cs),
@@ -248,7 +248,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ],
                 const SizedBox(height: 24),
                 // Download Button
-                _buildDownloadButton(context, cs, productName, price, shippingCost, platformFee, clickpesaFee, sellerReceives,
+                _buildDownloadButton(context, cs, productName, price, shippingCost, platformFee, azamPayFee, sellerReceives,
                     totalAmount, buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
                     deliveryAddress, createdAt, status, productImage, paymentMethod, transactionReference,
                     productDescription, productDetails),
@@ -299,7 +299,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   Widget _buildDownloadButton(
     BuildContext context, ColorScheme cs,
-    String productName, double price, double shippingCost, double platformFee, double clickpesaFee, double sellerReceives,
+    String productName, double price, double shippingCost, double platformFee, double azamPayFee, double sellerReceives,
     double totalAmount, String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
     Map<String, dynamic>? deliveryAddress, DateTime createdAt, String status, String productImage,
     String paymentMethod, String? transactionReference, String productDescription, String productDetails,
@@ -307,7 +307,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     return Center(
       child: _ReceiptDownloadButton(
         orderId: widget.orderId, productName: productName, productImageUrl: productImage,
-        price: price, shippingCost: shippingCost, platformFee: platformFee, clickpesaFee: clickpesaFee,
+        price: price, shippingCost: shippingCost, platformFee: platformFee, azamPayFee: azamPayFee,
         sellerReceives: sellerReceives, totalAmount: totalAmount,
         buyerName: buyerName, sellerName: sellerName, buyerPhone: buyerPhone, sellerPhone: sellerPhone,
         sellerLocation: sellerLocation, deliveryAddress: deliveryAddress, createdAt: createdAt,
@@ -368,7 +368,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
 class _ReceiptDownloadButton extends StatefulWidget {
   final String orderId, productName, productImageUrl;
-  final double price, shippingCost, platformFee, clickpesaFee, sellerReceives, totalAmount;
+  final double price, shippingCost, platformFee, azamPayFee, sellerReceives, totalAmount;
   final String buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation;
   final Map<String, dynamic>? deliveryAddress;
   final DateTime createdAt;
@@ -378,7 +378,7 @@ class _ReceiptDownloadButton extends StatefulWidget {
 
   const _ReceiptDownloadButton({
     required this.orderId, required this.productName, required this.productImageUrl,
-    required this.price, required this.shippingCost, required this.platformFee, required this.clickpesaFee,
+    required this.price, required this.shippingCost, required this.platformFee, required this.azamPayFee,
     required this.sellerReceives, required this.totalAmount,
     required this.buyerName, required this.sellerName, required this.buyerPhone, required this.sellerPhone,
     required this.sellerLocation, this.deliveryAddress, required this.createdAt, required this.status,
@@ -441,7 +441,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       final pdfBytes = await ReceiptPdfService.generate(
         orderId: widget.orderId, productName: widget.productName,
         productImageUrl: widget.productImageUrl, price: widget.price,
-        shippingCost: widget.shippingCost, clickpesaFee: widget.clickpesaFee,
+        shippingCost: widget.shippingCost, azamPayFee: widget.azamPayFee,
         totalAmount: widget.totalAmount, buyerName: widget.buyerName,
         sellerName: widget.sellerName, buyerPhone: widget.buyerPhone,
         sellerPhone: widget.sellerPhone, deliveryAddress: widget.deliveryAddress,
@@ -466,7 +466,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       final pdfBytes = await ReceiptPdfService.generate(
         orderId: widget.orderId, productName: widget.productName,
         productImageUrl: widget.productImageUrl, price: widget.price,
-        shippingCost: widget.shippingCost, clickpesaFee: widget.clickpesaFee,
+        shippingCost: widget.shippingCost, azamPayFee: widget.azamPayFee,
         totalAmount: widget.totalAmount, buyerName: widget.buyerName,
         sellerName: widget.sellerName, buyerPhone: widget.buyerPhone,
         sellerPhone: widget.sellerPhone, deliveryAddress: widget.deliveryAddress,

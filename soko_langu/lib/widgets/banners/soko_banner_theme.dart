@@ -27,7 +27,9 @@ class SokoBannerTheme {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
     return BoxDecoration(
-      color: color ?? cs.surfaceContainerLow,
+      // Flutter asserts when both `color` and `gradient` are supplied, so only
+      // apply the solid colour when no gradient was requested.
+      color: gradient == null ? (color ?? cs.surfaceContainerLow) : null,
       gradient: gradient,
       borderRadius: borderRadius,
       border: Border.all(

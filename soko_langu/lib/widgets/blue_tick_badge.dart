@@ -57,7 +57,11 @@ class _BlueTickBadgeState extends State<BlueTickBadge> {
   void didUpdateWidget(BlueTickBadge oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sellerId != widget.sellerId && mounted) {
-      context.read<SellerVerificationService>().resolve(widget.sellerId);
+      // Defer state mutation out of the element update pass to avoid
+      // "_dependents.isEmpty" assertion failures.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<SellerVerificationService>().resolve(widget.sellerId);
+      });
     }
   }
 

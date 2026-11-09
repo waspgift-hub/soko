@@ -103,13 +103,13 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
     final cs = Theme.of(context).colorScheme;
     if (_loading) {
       return Scaffold(
-        backgroundColor: cs.surfaceContainerLow,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: const Center(child: GoogleLoading(size: 32)),
       );
     }
     if (_error != null) {
       return Scaffold(
-        backgroundColor: cs.surfaceContainerLow,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -125,7 +125,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
       );
     }
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Builder(
         builder: (context) {
           final sales = _sales ?? const <FlashSale>[];

@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 import '../../models/transaction_model.dart';
 import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
-import '../../services/clickpesa_service.dart';
+import '../../services/azampay_service.dart';
 import '../../services/order_api.dart';
 import '../../services/rating_service.dart';
 import '../../services/profanity_filter.dart';
@@ -163,7 +163,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final sellerId = d['sellerId'] as String? ?? '';
       final sellerName = d['sellerName'] as String? ?? '';
 
-      final result = await ClickPesaService.initiateMarketplacePayment(
+      final result = await AzamPayService.initiateMarketplacePayment(
         productPrice: productPrice,
         productName: productName,
         productId: productId,
@@ -942,6 +942,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                               ? const SizedBox.shrink()
                               : Text(context.tr('select'), style: const TextStyle(fontSize: 13)),
                         ),
+                        const SizedBox(width: 8),
                         if (isNarrow)
                           IconButton(
                             tooltip: context.tr('home'),
@@ -1639,7 +1640,7 @@ class _OrderGlassCard extends StatelessWidget {
     final paymentMethod = data['paymentMethod'] as String? ?? 'ClickPesa';
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
-    final clickpesaFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
+    final azamPayFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
     final platformFee =
         (data['platformFee'] as num?)?.toDouble() ??
         TransactionFeeBreakdown(productPrice: productPrice).platformFee;
@@ -1695,7 +1696,7 @@ class _OrderGlassCard extends StatelessWidget {
             _receiptRow(
               cs,
               context.tr('processing_fee'),
-              'TZS ${_nf(clickpesaFee.toInt())}',
+              'TZS ${_nf(azamPayFee.toInt())}',
               valueColor: cs.tertiary,
             ),
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15)),

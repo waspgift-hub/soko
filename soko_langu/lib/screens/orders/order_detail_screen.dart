@@ -13,7 +13,7 @@ import '../../models/transaction_model.dart';
 import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
 import '../../services/order_api.dart';
-import '../../services/clickpesa_service.dart';
+import '../../services/azampay_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/order_status_config.dart';
@@ -2955,7 +2955,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final cost = _freeShip
         ? 0.0
         : double.tryParse(_shipCostCtrl.text.trim().replaceAll(',', ''));
-    if (cost == null || (!_freeShip && cost <= 0)) {
+    if (cost == null || !cost.isFinite || (!_freeShip && cost <= 0)) {
       if (mounted) _showSellerSnack(context.tr('enter_valid_shipping_cost', 'Weka gharama halali ya usafirishaji'), isError: true);
       return;
     }
@@ -3112,7 +3112,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     try {
       final normalizedPhone = PhoneUtils.toE164(raw);
 
-      final result = await ClickPesaService.initiateMarketplacePayment(
+      final result = await AzamPayService.initiateMarketplacePayment(
         productPrice: _quotedProductPrice,
         productName: d['productName'] ?? '',
         productId: d['productId'] ?? '',

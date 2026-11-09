@@ -31,10 +31,12 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   final Set<String> _selectedIds = {};
   Set<String> _hiddenUsers = {};
   String _searchQuery = '';
+  late final Stream<List<ChatRoom>> _roomsStream;
 
   @override
   void initState() {
     super.initState();
+    _roomsStream = _chatService.getRooms();
     _loadCached();
     _loadHiddenUsers();
   }
@@ -274,7 +276,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             ),
           Expanded(
             child: StreamBuilder<List<ChatRoom>>(
-              stream: _chatService.getRooms(),
+              stream: _roomsStream,
               builder: (context, snap) {
                 final allRooms = snap.data ?? [];
                 final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';

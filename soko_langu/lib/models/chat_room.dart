@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ChatRoom {
   final String id;
   final List<String> participants;
@@ -46,25 +48,43 @@ class ChatRoom {
         if (v is num) counts[k.toString()] = v.toInt();
       });
     }
-    final oldBuyer = (data['unread_count_buyer'] as num?)?.toInt() ?? 0;
-    final oldSeller = (data['unread_count_seller'] as num?)?.toInt() ?? 0;
     return ChatRoom(
       id: id,
-      participants: List<String>.from(data['participants'] ?? []),
-      lastMessage: data['last_message'] as String? ?? '',
-      lastTimestamp: (data['last_timestamp'] as dynamic)?.toDate(),
-      unreadCountBuyer: oldBuyer,
-      unreadCountSeller: oldSeller,
+      participants: _stringList(data['participants']),
+      lastMessage: _string(data['last_message']) ?? '',
+      lastTimestamp: _timestamp(data['last_timestamp']),
+      unreadCountBuyer: _int(data['unread_count_buyer']),
+      unreadCountSeller: _int(data['unread_count_seller']),
       unreadCounts: counts,
-      productId: data['product_id'] as String?,
-      productTitle: data['product_title'] as String?,
-      buyerId: data['buyer_id'] as String?,
-      sellerId: data['seller_id'] as String?,
-      pinnedBy: List<String>.from(data['pinned_by'] ?? []),
-      mutedBy: List<String>.from(data['muted_by'] ?? []),
-      archivedBy: List<String>.from(data['archived_by'] ?? []),
-      favouritedBy: List<String>.from(data['favourited_by'] ?? []),
+      productId: _string(data['product_id']),
+      productTitle: _string(data['product_title']),
+      buyerId: _string(data['buyer_id']),
+      sellerId: _string(data['seller_id']),
+      pinnedBy: _stringList(data['pinned_by']),
+      mutedBy: _stringList(data['muted_by']),
+      archivedBy: _stringList(data['archived_by']),
+      favouritedBy: _stringList(data['favourited_by']),
     );
+  }
+
+  // Legacy rooms were written by several clients with inconsistent types.
+  // Coercing instead of casting keeps one bad document from throwing and
+  // blanking the whole inbox.
+
+  static String? _string(Object? raw) => raw is String ? raw : null;
+
+  static int _int(Object? raw) => raw is num ? raw.toInt() : 0;
+
+  static List<String> _stringList(Object? raw) {
+    if (raw is! Iterable) return const [];
+    return raw.whereType<String>().toList();
+  }
+
+  static DateTime? _timestamp(Object? raw) {
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    return null;
   }
 
   int unreadCountFor(String uid) {

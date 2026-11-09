@@ -47,32 +47,7 @@ function toDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-router.post('/cron/daily-engagement', async (req, res) => {
-  if (!verifyCronSecret(req.headers['x-cron-secret'])) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const settings = await settingsService.getSettings();
-  const cfg = settings.dailyEngagement || {};
-  if (cfg.enabled === false) {
-    return res.json({
-      success: true,
-      skipped: true,
-      reason: 'paused',
-    });
-  }
-
-  const db = getFirebaseFirestore();
-  if (!db) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
-  const now = new Date();
-  const timeZone = cfg.timezone || DEFAULT_TZ;
-  const dayKey = localDayKey(now, timeZone);
-  const dryRun = req.body?.dryRun === true;
-  const limit = Math.min(Number(req.body?.limit) || BATCH, 200);
-
+async function processCampaign({ db, cfg, now, timeZone, dayKey, dryRun, limit }) {
   const usersSnap = await db.collection('users').limit(limit).get();
   let prepared = 0;
   let sent = 0;
@@ -115,10 +90,12 @@ router.post('/cron/daily-engagement', async (req, res) => {
       sms: false,
     };
     const delivery = { email: 'skipped', push: 'skipped' };
+
     const unsubToken = makeUnsubscribeToken(doc.id);
     const unsubUrl = unsubToken
       ? `https://www.sokovibe.co.tz/api/v1/unsubscribe?token=${unsubToken}&uid=${encodeURIComponent(doc.id)}`
       : 'https://www.sokovibe.co.tz';
+
     if (channelPlan.email && user.email) {
       try {
         const { sendMail } = require('../../services/mailer');
@@ -163,15 +140,65 @@ router.post('/cron/daily-engagement', async (req, res) => {
     sent += 1;
   }
 
-  res.json({
+  return { prepared, recorded: sent, skipped };
+}
+
+router.post('/cron/daily-engagement', async (req, res) => {
+  if (!verifyCronSecret(req.headers['x-cron-secret'])) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const settings = await settingsService.getSettings();
+  const cfg = settings.dailyEngagement || {};
+  if (cfg.enabled === false) {
+    return res.json({
+      success: true,
+      skipped: true,
+      reason: 'paused',
+    });
+  }
+
+  const db = getFirebaseFirestore();
+  if (!db) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  const now = new Date();
+  const timeZone = cfg.timezone || DEFAULT_TZ;
+  const dayKey = localDayKey(now, timeZone);
+  const dryRun = req.body?.dryRun === true;
+  const limit = Math.min(Number(req.body?.limit) || BATCH, 200);
+
+  // Dry runs are fast (no sending) — answer synchronously.
+  if (dryRun) {
+    const result = await processCampaign({ db, cfg, now, timeZone, dayKey, dryRun: true, limit });
+    return res.json({
+      success: true,
+      dayKey,
+      prepared: result.prepared,
+      recorded: result.recorded,
+      skipped: result.skipped,
+      dryRun: true,
+      note: 'Live channel send runs only when dailyEngagement.enabled is true.',
+    });
+  }
+
+  // Live sends can take a while (one mail per user). Respond immediately and
+  // process in the background so the caller (cron/Render) does not time out.
+  res.status(202).json({
     success: true,
+    started: true,
     dayKey,
-    prepared,
-    recorded: sent,
-    skipped,
-    dryRun,
-    note: 'Live channel send runs only when dailyEngagement.enabled is true.',
+    note: 'Processing in background. Counts are not returned synchronously.',
   });
+
+  processCampaign({ db, cfg, now, timeZone, dayKey, dryRun: false, limit })
+    .then((result) => {
+      console.log('[DAILY-ENGAGEMENT] finished:', JSON.stringify(result));
+    })
+    .catch((e) => {
+      console.error('[DAILY-ENGAGEMENT] failed:', e?.message || e);
+    });
 });
 
 // One-click unsubscribe for marketing/daily-engagement emails.
@@ -193,4 +220,5 @@ router.get('/unsubscribe', async (req, res) => {
   res.send('<!doctype html><html><head><meta charset="utf-8"><title>Soko Vibe</title></head><body style="font-family:sans-serif;padding:40px;text-align:center"><h1>Umeondolewa</h1><p>Hutapokea barua pepe za matangazo tena. Unaweza kurejesha kwenye mipangilio ya app.</p><p><a href="https://www.sokovibe.co.tz">Rudi Soko Vibe</a></p></body></html>');
 });
 
+router.processCampaign = processCampaign;
 module.exports = router;

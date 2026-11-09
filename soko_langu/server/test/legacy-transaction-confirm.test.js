@@ -12,7 +12,7 @@ const CONFIG = require.resolve('../src/config');
 const CONFIG_FIREBASE = require.resolve('../src/config/firebase');
 const NOTIFY = require.resolve('../src/modules/legacy-compat/notify');
 const CACHE = require.resolve('../cache');
-const CLICKPESA = require.resolve('../clickpesa');
+const AZAMPAY = require.resolve('../azampay');
 const LEACY_TX_CONFIRM = require.resolve('../src/modules/payments/legacy-transaction-confirm');
 const DEPOSIT_CONFIRM = require.resolve('../src/modules/payments/legacy-deposit-confirm');
 
@@ -117,7 +117,7 @@ before(() => {
   stub(FIREBASE_ADMIN, fakeAdmin);
   stub(CONFIG, {
     nodeEnv: 'test',
-    clickpesa: { collectionWebhookUrl: 'https://cp-webhook.test/v1' },
+    azampay: { collectionWebhookUrl: 'https://ap-webhook.test/v1' },
     security: { adminSecret: 's3cret' },
     business: { platformCommissionPercent: 10 },
     sms: {},
@@ -139,10 +139,10 @@ before(() => {
     getOrCompute: async (k, fn) => fn(),
     setRedisClient: () => undefined,
   });
-  stub(CLICKPESA, {
-    clickpesaCollect: async () => ({ id: 'cp' }),
-    clickpesaPaymentStatus: async () => ({ success: true, status: 'SUCCESS' }),
-    clickpesaCreateBillPayOrder: async () => ({ success: true, billPayNumber: '1' }),
+  stub(AZAMPAY, {
+    azampayCollect: async () => ({ id: 'ap' }),
+    azampayPaymentStatus: async () => ({ success: true, status: 'SUCCESS' }),
+    azampayCreateBillPayOrder: async () => ({ success: true, billPayNumber: '1' }),
     calcGatewayFee: () => 0,
     ALL_PAYMENT_METHODS: [],
   });
@@ -151,7 +151,7 @@ before(() => {
 });
 
 after(() => {
-  for (const k of [FIREBASE_ADMIN, CONFIG, CONFIG_FIREBASE, NOTIFY, CACHE, CLICKPESA, LEACY_TX_CONFIRM, DEPOSIT_CONFIRM]) {
+  for (const k of [FIREBASE_ADMIN, CONFIG, CONFIG_FIREBASE, NOTIFY, CACHE, AZAMPAY, LEACY_TX_CONFIRM, DEPOSIT_CONFIRM]) {
     delete require.cache[k];
   }
 });

@@ -25,7 +25,7 @@ const { confirmLegacyTransaction } = require('./legacy-transaction-confirm');
 async function initiatePayment({
   orderId,
   buyerId,
-  provider: providerName = 'clickpesa',
+  provider: providerName = 'azampay',
   amount,
   phoneNumber,
 }) {
@@ -53,7 +53,7 @@ async function initiatePayment({
         amount,
         orderReference: order.orderNumber,
         phoneNumber,
-        callbackUrl: config.clickpesa.collectionWebhookUrl,
+        callbackUrl: config.azampay.collectionWebhookUrl,
       });
 
       const payment = await tx.payment.create({
