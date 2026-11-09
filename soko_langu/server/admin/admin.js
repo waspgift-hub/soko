@@ -651,7 +651,7 @@ async function loadDashboard() {
         data: {
           labels: series.map((s) => String(s.date || '').slice(5)),
           datasets: [
-            { label: 'Money', data: series.map((s) => s.money), borderColor: '#2f9e5f', backgroundColor: 'rgba(47,158,95,.12)', fill: true, tension: .3, pointRadius: 0 },
+            { label: 'Money', data: series.map((s) => s.money), borderColor: '#008069', backgroundColor: '#008069.12)', fill: true, tension: .3, pointRadius: 0 },
             { label: 'Commission', data: series.map((s) => s.commission), borderColor: '#b7791f', backgroundColor: 'transparent', borderDash: [4, 3], tension: .3, pointRadius: 0 },
             { label: 'Users', data: series.map((s) => s.users), borderColor: '#2563eb', backgroundColor: 'transparent', tension: .3, pointRadius: 0, yAxisID: 'y1' },
           ],
@@ -668,7 +668,7 @@ async function loadDashboard() {
         type: 'doughnut',
         data: {
           labels: orderGroups.map((g) => g.status),
-          datasets: [{ data: orderGroups.map((g) => g.count), backgroundColor: ['#2f9e5f', '#7da8ff', '#e3a94d', '#f07070', '#2586e3', '#9b7dd8', '#49c3a0', '#d8a5e0'] }],
+          datasets: [{ data: orderGroups.map((g) => g.count), backgroundColor: ['#008069', '#7da8ff', '#e3a94d', '#f07070', '#2586e3', '#9b7dd8', '#49c3a0', '#d8a5e0'] }],
         },
         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 }, color: chartBase().ticks.color } } } },
       });
@@ -2200,7 +2200,7 @@ async function loadStats() {
         type: 'bar',
         data: {
           labels: series14.map((s) => String(s.date || '').slice(5)),
-          datasets: [{ label: 'Watumiaji hai', data: series14.map((s) => s.users), backgroundColor: 'rgba(47,158,95,.55)', borderRadius: 4 }],
+          datasets: [{ label: 'Watumiaji hai', data: series14.map((s) => s.users), backgroundColor: '#008069.55)', borderRadius: 4 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
