@@ -14,6 +14,83 @@ function journeyCard({ title, text, status, iconName }) {
   </li>`;
 }
 
+function conceptDiagram() {
+  const steps = [
+    { sw: '1. Gundua', en: '1. Discover', color: '#00c853' },
+    { sw: '2. Chat', en: '2. Chat', color: '#00c853' },
+    { sw: '3. Oda', en: '3. Order', color: '#00c853' },
+    { sw: '4. Lipa', en: '4. Pay', color: '#009624' },
+    { sw: '5. Usafirishaji', en: '5. Delivery', color: '#6b6b6b' },
+    { sw: '6. Kukamilisha', en: '6. Complete', color: '#6b6b6b' },
+  ];
+  const stepW = 132;
+  const gap = 18;
+  const startX = 24;
+  const y = 150;
+  const rects = steps.map((st, i) => {
+    const x = startX + i * (stepW + gap);
+    return `<g>
+      <rect x="${x}" y="${y}" width="${stepW}" height="74" rx="14" fill="#ffffff" stroke="${st.color}" stroke-width="2"/>
+      <circle cx="${x + 22}" cy="${y + 24}" r="11" fill="${st.color}"/>
+      <text x="${x + 22}" y="${y + 28}" text-anchor="middle" font-size="11" font-weight="800" fill="#ffffff">${i + 1}</text>
+      <text x="${x + stepW / 2}" y="${y + 52}" text-anchor="middle" font-size="13" font-weight="700" fill="#141414" data-en="${st.en}">${st.sw}</text>
+    </g>
+    ${i < steps.length - 1 ? `<path d="M${x + stepW} ${y + 37} L${x + stepW + gap - 4} ${y + 37}" stroke="#c9cec9" stroke-width="2" marker-end="url(#sv-arrow)"/>` : ''}`;
+  }).join('');
+
+  return `<section class="sv-section sv-section--tint">
+  <div class="sv-container">
+    ${sectionHead({
+      eyebrow: { sw: 'Mchoro wa dhana', en: 'Concept diagram' },
+      title: { sw: 'Safari ya biashara moja, kwa picha.', en: 'One sale, in one picture.' },
+      lead: { sw: 'Mchoro huu unaonyesha jinsi tunavyopanga Soko Vibe kufanya kazi. Kijani inaonyesha kile kinachoendelezwa; kijivu ni kinachopangwa.', en: 'This diagram shows how we intend Soko Vibe to work. Green marks what is being built; grey marks what is planned.' },
+    })}
+    <div class="sv-diagram" role="img" aria-labelledby="sv-diagram-title sv-diagram-desc">
+      <svg viewBox="0 0 920 460" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <title id="sv-diagram-title" data-en="Soko Vibe sale flow concept diagram">Mchoro wa dhana: safari ya biashara ya Soko Vibe</title>
+        <desc id="sv-diagram-desc" data-en="Buyer discovers a product, chats with the seller, places an order, pays with mobile money held safely, receives delivery, and completes the sale; the seller is then settled.">Mnunuzi hugundua bidhaa, anazungumza na muuza, anaagiza, analipa kwa mobile money inayoshikiliwa kwa usalama, anapokea bidhaa, anathibitisha; muuza analipwa.</desc>
+        <defs>
+          <marker id="sv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c9cec9"/>
+          </marker>
+        </defs>
+
+        <g>
+          <rect x="24" y="40" width="150" height="70" rx="14" fill="#0a0a0a"/>
+          <text x="99" y="72" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff" data-en="Buyer">Mnunuzi</text>
+          <text x="99" y="92" text-anchor="middle" font-size="11" fill="#a7a7a7" data-en="searches, chats, pays">hutafuta, huzungumza, analipa</text>
+        </g>
+
+        <g>
+          <rect x="746" y="40" width="150" height="70" rx="14" fill="#0a0a0a"/>
+          <text x="821" y="72" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff" data-en="Seller">Muuza</text>
+          <text x="821" y="92" text-anchor="middle" font-size="11" fill="#a7a7a7" data-en="lists, verifies, gets paid">huuza, huthibitishwa, analipwa</text>
+        </g>
+
+        <path d="M174 75 L200 75 L200 120" stroke="#c9cec9" stroke-width="2" fill="none"/>
+        <path d="M746 75 L720 75 L720 120" stroke="#c9cec9" stroke-width="2" fill="none"/>
+
+        ${rects}
+
+        <g>
+          <rect x="24" y="260" width="872" height="62" rx="14" fill="#e9f9ef" stroke="#00c853" stroke-width="1.5"/>
+          <text x="460" y="286" text-anchor="middle" font-size="14" font-weight="800" fill="#007a1d" data-en="Money is held safely (escrow) between payment and delivery">Fedha zinashikiliwa kwa usalama (escrow) kati ya malipo na usafirishaji</text>
+          <text x="460" y="308" text-anchor="middle" font-size="12" fill="#4c514c" data-en="Released to the seller only after the buyer confirms receipt (in development)">Zinaachiliwa kwa muuza baada ya mnunuzi kuthibitisha upokeaji (inaendelezwa)</text>
+        </g>
+
+        <g>
+          <circle cx="40" cy="360" r="7" fill="#00c853"/>
+          <text x="54" y="364" font-size="12" fill="#4c514c" data-en="Being built">Inaendelezwa</text>
+          <circle cx="200" cy="360" r="7" fill="#6b6b6b"/>
+          <text x="214" y="364" font-size="12" fill="#4c514c" data-en="Planned">Imepangwa</text>
+          <text x="40" y="392" font-size="11" fill="#a7a7a7" data-en="Pre-launch: orders, payments and seller registration are not open yet.">Kabla ya uzinduzi: oda, malipo na usajili wa wauzaji bado havijafunguliwa.</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>`;
+}
+
 function howPage() {
   const title = 'Jinsi Soko Vibe Inavyofanya Kazi | How Soko Vibe Works';
   const description = 'Elewa safari ya mnunuzi na muuza kwenye Soko Vibe: ugunduzi, mazungumzo, oda, malipo, usafirishaji na kukamilisha biashara.';
@@ -33,6 +110,8 @@ function howPage() {
     lead: { sw: 'Hivi ndivyo tunavyopanga uzoefu wa Soko Vibe kufanya kazi. Vipengele vinavyoendelezwa vinaonyeshwa kwa uwazi.', en: 'This is how we intend the Soko Vibe experience to work. Features still in development are marked clearly.' },
     breadcrumb: 'Jinsi inavyofanya kazi',
   })}
+
+${conceptDiagram()}
 
 <section class="sv-section">
   <div class="sv-container">
