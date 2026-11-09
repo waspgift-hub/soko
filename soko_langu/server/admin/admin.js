@@ -3111,7 +3111,7 @@ async function tryGoogleLogin() {
     const email = String((user && user.email) || '').trim().toLowerCase();
     if (email !== GOOGLE_ALLOWED_EMAIL) {
       try { await auth.signOut(); } catch (_) {}
-      showLogin('Akaunti hairuhusiwi. Tumia tu ' + GOOGLE_ALLOWED_EMAIL + '.');
+      showLogin('Akaunti hii hairuhusiwi kuingia.');
       return;
     }
     try { localStorage.setItem(AUTH_MODE_KEY, 'google'); localStorage.removeItem(SECRET_KEY); } catch (_) {}
@@ -3119,8 +3119,8 @@ async function tryGoogleLogin() {
     ID_TOKEN = '';
     ID_TOKEN_EXP = 0;
     await getJSON('/api/v1/admin/dashboard');
-    $('meName').textContent = (user && (user.displayName || user.email)) || GOOGLE_ALLOWED_EMAIL;
-    $('meRole').textContent = 'google admin';
+    $('meName').textContent = (user && (user.displayName || user.email)) || 'admin';
+    $('meRole').textContent = 'admin';
     showApp();
   } catch (e) {
     try { const auth = initFirebaseAdmin(); if (auth) await auth.signOut(); } catch (_) {}
@@ -3181,8 +3181,8 @@ window.addEventListener('error', (ev) => {
         if (u && email === GOOGLE_ALLOWED_EMAIL) {
           AUTH_MODE = 'google';
           await getJSON('/api/v1/admin/dashboard');
-          $('meName').textContent = (u.displayName || u.email) || GOOGLE_ALLOWED_EMAIL;
-          $('meRole').textContent = 'google admin';
+          $('meName').textContent = (u.displayName || u.email) || 'admin';
+          $('meRole').textContent = 'admin';
           showApp();
           return;
         }
