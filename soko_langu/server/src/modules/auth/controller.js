@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { getFirebaseAuth } = require('../../config/firebase');
 const { getStore } = require('../../config/database');
+const config = require('../../config');
 const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp, createOtpHash, verifyOtpHash } = require('../../services/otp-store');
 const { sendMail } = require('../../services/mailer');
 const { buildOtpEmail, buildPasswordChangedEmail } = require('../../services/email-templates');
@@ -15,6 +16,12 @@ const accountStore = require('../../services/account-store');
 
 const OTP_TTL_SECONDS = 300; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
+
+function isBootstrapSuperAdminEmail(email) {
+  if (!email) return false;
+  const list = config.security && config.security.superAdminEmails;
+  return Array.isArray(list) && list.includes(String(email).trim().toLowerCase());
+}
 
 // Per-target ceiling for the pre-auth existence probes (stacked on top of the
 // shared authLimiter IP bucket). Registration needs a duplicate check, but an
@@ -362,7 +369,7 @@ async function otpSignIn(req, res) {
       const store = getStore();
       const user = await store.user.findFirst({
         where: { firebaseUid: uid },
-        select: { role: true },
+        select: { id: true, role: true },
       });
       if (user && ['admin', 'super_admin'].includes(user.role)) {
         isAdmin = true;
@@ -370,7 +377,18 @@ async function otpSignIn(req, res) {
         // Firestore users/{uid}.role is authoritative for admin identity once the
         // account has no seam row (fresh-backed admin bookings).
         const doc = await accountStore.getProfile(uid);
-        if (doc && ['admin', 'super_admin'].includes(doc.role)) isAdmin = true;
+        if (doc && ['admin', 'super_admin'].includes(doc.role)) {
+          isAdmin = true;
+        } else if (isBootstrapSuperAdminEmail(cleanEmail)) {
+          isAdmin = true;
+          if (user) {
+            await store.user.update({ where: { id: user.id }, data: { role: 'super_admin', isAdmin: true } }).catch(() => {});
+          }
+          try {
+            const fs = require('../../config/firebase').getFirebaseFirestore();
+            if (fs) await fs.collection('users').doc(uid).set({ role: 'super_admin', isAdmin: true, email: cleanEmail, updatedAt: new Date().toISOString() }, { merge: true });
+          } catch (_) {}
+        }
       }
     } catch (e) {
       uid = null;

@@ -24,6 +24,12 @@ const router = Router();
  * Anything else is a 401. Nothing about the request is trusted except the
  * verified token and the server-side role lookup.
  */
+function isBootstrapSuperAdminEmail(email) {
+  if (!email) return false;
+  const list = config.security && config.security.superAdminEmails;
+  return Array.isArray(list) && list.includes(String(email).trim().toLowerCase());
+}
+
 function requireKycReviewer(req, res, next) {
   const secret = req.headers['x-admin-secret'];
   const expected = config.security.adminSecret;
@@ -43,8 +49,8 @@ function requireKycReviewer(req, res, next) {
 
   // optionalAuth already verified the token cryptographically and loaded the
   // user row; role comes from that row, not from anything the client sent.
-  if (req.user && ['admin', 'super_admin'].includes(req.user.role)) {
-    req.kycReviewer = `role:${req.user.role}`;
+  if (req.user && (['admin', 'super_admin'].includes(req.user.role) || isBootstrapSuperAdminEmail(req.user.email))) {
+    req.kycReviewer = `role:${req.user.role || 'super_admin'}`;
     return next();
   }
 

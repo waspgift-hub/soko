@@ -1,12 +1,16 @@
 /* Soko Vibe Admin Panel
-   Vanilla no-build SPA. The single login method is ADMIN_SECRET, sent as the
-   x-admin-secret header on the same-origin v2 + legacy-compat API. No
-   Firebase, no Google dependency. */
+   Vanilla no-build SPA. Supports Google sign-in (restricted to
+   admin@sokovibe.co.tz) and ADMIN_SECRET as a fallback option. */
 'use strict';
 
 const API = '';
 const SECRET_KEY = 'sv_admin_secret';
+const AUTH_MODE_KEY = 'sv_admin_auth_mode';
+const GOOGLE_ALLOWED_EMAIL = 'admin@sokovibe.co.tz';
 let MFA_CODE = '';
+let AUTH_MODE = ''; // 'secret' | 'google'
+let ID_TOKEN = '';
+let ID_TOKEN_EXP = 0;
 const THEME_KEY = 'sv_admin_theme';
 // A request must never hang the UI forever: abort slow calls so every
 // section either renders or shows its error instead of spinning endlessly.
@@ -344,12 +348,61 @@ new MutationObserver((muts) => {
 // API
 // ---------------------------------------------------------------------------
 function secret() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (_) { return ''; } }
+function authMode() { try { return localStorage.getItem(AUTH_MODE_KEY) || AUTH_MODE || (secret() ? 'secret' : ''); } catch (_) { return AUTH_MODE || (secret() ? 'secret' : ''); } }
+function initFirebaseAdmin() {
+  try {
+    if (!window.firebase) return null;
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey: 'AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s',
+        appId: '1:344682929526:web:5d3732578d6f012ac26e57',
+        messagingSenderId: '344682929526',
+        projectId: 'sokonimoko-8c171-a8d14',
+        authDomain: 'sokonimoko-8c171-a8d14.firebaseapp.com',
+        databaseURL: 'https://sokonimoko-8c171-a8d14-default-rtdb.firebaseio.com',
+        storageBucket: 'sokonimoko-8c171-a8d14.firebasestorage.app',
+        measurementId: 'G-P6VXK4LYMT',
+      });
+    }
+    return firebase.auth();
+  } catch (_) { return null; }
+}
+async function currentIdToken(force) {
+  const auth = initFirebaseAdmin();
+  if (!auth || !auth.currentUser) return '';
+  try {
+    if (!force && ID_TOKEN && ID_TOKEN_EXP > Date.now() + 60_000) return ID_TOKEN;
+    const r = await auth.currentUser.getIdTokenResult(!!force);
+    ID_TOKEN = r.token || '';
+    ID_TOKEN_EXP = r.expirationTime ? new Date(r.expirationTime).getTime() : (Date.now() + 50 * 60_000);
+    return ID_TOKEN;
+  } catch (_) { return ''; }
+}
+async function clearAuthSession() {
+  AUTH_MODE = '';
+  ID_TOKEN = '';
+  ID_TOKEN_EXP = 0;
+  MFA_CODE = '';
+  try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+  try { localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+  try { const a = initFirebaseAdmin(); if (a) await a.signOut(); } catch (_) {}
+}
 async function api(path, opts = {}) {
-  const s = secret();
-  if (!s) throw new Error('Ingia kwanza');
-  const headers = { ...(opts.headers || {}), 'x-admin-secret': s };
-  if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
-  if (opts.body && typeof opts.body === 'object') {
+  const mode = authMode();
+  const headers = { ...(opts.headers || {}) };
+  if (mode === 'google') {
+    let token = await currentIdToken(false);
+    if (!token) token = await currentIdToken(true);
+    if (!token) { await clearAuthSession(); showLogin('Ingia tena kwa Google.'); throw new Error('AUTH_REQUIRED'); }
+    headers.Authorization = 'Bearer ' + token;
+    if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
+  } else {
+    const s = secret();
+    if (!s) throw new Error('Ingia kwanza');
+    headers['x-admin-secret'] = s;
+    if (MFA_CODE) headers['x-admin-totp'] = MFA_CODE;
+  }
+  if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
   }
@@ -372,10 +425,17 @@ async function api(path, opts = {}) {
       return api(path, opts);
     }
   }
-  if (r.status === 401) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-    showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
-    throw new Error((j && j.error) || 'Haijaidhinishwa');
+  if (r.status === 401 || r.status === 403) {
+    const msg = (j && j.error) || (r.status === 403 ? 'ADMIN_REQUIRED' : 'AUTH_REQUIRED');
+    if (authMode() === 'google') {
+      await clearAuthSession();
+      showLogin(msg === 'ADMIN_REQUIRED' ? 'Akaunti hii hairuhusiwi. Tumia ' + GOOGLE_ALLOWED_EMAIL + '.' : 'Kikao kimeisha. Ingia tena.');
+    } else {
+      try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+      try { localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+      showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
+    }
+    throw new Error(msg);
   }
   if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
   return j;
@@ -3007,13 +3067,13 @@ function applyTheme() {
   icons();
 }
 
-// The single login: verify the secret against the dashboard, then enter.
+// Secret login (fallback option).
 async function trySecretLogin() {
   const v = $('secVal').value.trim();
   if (!v) { $('authErr').textContent = 'Andika ADMIN_SECRET.'; return; }
   $('authErr').textContent = '';
   $('secSave').disabled = true;
-  try { localStorage.setItem(SECRET_KEY, v); } catch (_) {}
+  try { localStorage.setItem(SECRET_KEY, v); localStorage.setItem(AUTH_MODE_KEY, 'secret'); AUTH_MODE = 'secret'; } catch (_) { AUTH_MODE = 'secret'; }
   try {
     await getJSON('/api/v1/admin/dashboard');
     let st = null;
@@ -3029,10 +3089,47 @@ async function trySecretLogin() {
     $('meRole').textContent = 'secret mode';
     showApp();
   } catch (e) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    try { localStorage.removeItem(SECRET_KEY); localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+    AUTH_MODE = '';
     showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
   } finally {
     $('secSave').disabled = false;
+  }
+}
+
+async function tryGoogleLogin() {
+  $('authErr').textContent = '';
+  const btn = $('googleLoginBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const auth = initFirebaseAdmin();
+    if (!auth) throw new Error('Firebase haijapakia. Onyesha upya ukurasa.');
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await auth.signInWithPopup(provider);
+    const user = result && result.user;
+    const email = String((user && user.email) || '').trim().toLowerCase();
+    if (email !== GOOGLE_ALLOWED_EMAIL) {
+      try { await auth.signOut(); } catch (_) {}
+      showLogin('Akaunti hairuhusiwi. Tumia tu ' + GOOGLE_ALLOWED_EMAIL + '.');
+      return;
+    }
+    try { localStorage.setItem(AUTH_MODE_KEY, 'google'); localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    AUTH_MODE = 'google';
+    ID_TOKEN = '';
+    ID_TOKEN_EXP = 0;
+    await getJSON('/api/v1/admin/dashboard');
+    $('meName').textContent = (user && (user.displayName || user.email)) || GOOGLE_ALLOWED_EMAIL;
+    $('meRole').textContent = 'google admin';
+    showApp();
+  } catch (e) {
+    try { const auth = initFirebaseAdmin(); if (auth) await auth.signOut(); } catch (_) {}
+    try { localStorage.removeItem(AUTH_MODE_KEY); } catch (_) {}
+    AUTH_MODE = '';
+    const msg = (e && e.message) || 'Google sign-in imeshindikana';
+    showLogin(msg.includes('popup') ? 'Google sign-in haikukamilika. Jaribu tena.' : msg);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -3052,9 +3149,10 @@ function promptTotpCode() {
 }
 $('secSave').onclick = () => { trySecretLogin().catch(handleActionErr); };
 $('secVal').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('secSave').click(); });
-$('logoutBtn').onclick = () => {
-  try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-  MFA_CODE = '';
+if ($('googleLoginBtn')) $('googleLoginBtn').onclick = () => { tryGoogleLogin().catch(handleActionErr); };
+if ($('showSecretBtn')) $('showSecretBtn').onclick = () => { const p = $('secretPane'); if (p) p.hidden = !p.hidden; };
+$('logoutBtn').onclick = async () => {
+  await clearAuthSession();
   location.reload();
 };
 
@@ -3067,11 +3165,34 @@ window.addEventListener('error', (ev) => {
   showLogin('Runtime: ' + err);
 });
 
-// Boot: a stored secret is verified silently, otherwise show the login.
-// Every path settles — no Firebase, no hanging callbacks, no eternal splash.
+// Boot: restore Google session or stored ADMIN_SECRET, otherwise show login.
 (async () => {
   try {
-    if (secret()) {
+    const mode = authMode();
+    if (mode === 'google') {
+      const auth = initFirebaseAdmin();
+      if (auth) {
+        await new Promise((resolve) => {
+          const unsub = auth.onAuthStateChanged((u) => { try { unsub(); } catch (_) {} resolve(u || null); });
+          setTimeout(() => resolve(auth.currentUser || null), 6000);
+        });
+        const u = auth.currentUser;
+        const email = String((u && u.email) || '').trim().toLowerCase();
+        if (u && email === GOOGLE_ALLOWED_EMAIL) {
+          AUTH_MODE = 'google';
+          await getJSON('/api/v1/admin/dashboard');
+          $('meName').textContent = (u.displayName || u.email) || GOOGLE_ALLOWED_EMAIL;
+          $('meRole').textContent = 'google admin';
+          showApp();
+          return;
+        }
+      }
+      await clearAuthSession();
+      showLogin('');
+      return;
+    }
+    if (mode === 'secret' || secret()) {
+      AUTH_MODE = 'secret';
       await getJSON('/api/v1/admin/dashboard');
       $('meName').textContent = 'ADMIN_SECRET';
       $('meRole').textContent = 'secret mode';
@@ -3080,8 +3201,8 @@ window.addEventListener('error', (ev) => {
       showLogin('');
     }
   } catch (e) {
-    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-    showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
+    await clearAuthSession();
+    showLogin((e && e.message) ? ('Imeshindikana kuingia: ' + e.message) : '');
   }
 })();
 
