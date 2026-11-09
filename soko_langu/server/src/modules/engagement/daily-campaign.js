@@ -33,12 +33,11 @@ function alreadyOpenedToday(lastLoginAt, now, timeZone = DEFAULT_TZ) {
 }
 
 function isEligibleUser({ lastLoginAt, prefs = {}, now, timeZone = DEFAULT_TZ }) {
-  // Marketing consent is opt-in: a missing daily_reminders flag means the user
-  // never asked for these messages, and an explicit marketing opt-out always
-  // wins.
+  // Marketing consent: an explicit marketing opt-out always wins. Every
+  // registered account with an email receives these messages unless they
+  // have opted out — there is no separate opt-in flag.
   if (prefs.marketing === false) return false;
-  if (prefs.daily_reminders !== true) return false;
-  if (alreadyOpenedToday(lastLoginAt, now, timeZone)) return false;
+  if (prefs.daily_reminders === false) return false;
   return true;
 }
 

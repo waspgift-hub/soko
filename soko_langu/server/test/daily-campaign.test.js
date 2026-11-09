@@ -20,31 +20,31 @@ test('local day key uses Africa/Dar_es_Salaam by default', () => {
   assert.equal(localDayKey(utcEvening), '2026-10-28');
 });
 
-test('users who already opened the app today are not eligible', () => {
-  const now = new Date('2026-10-28T10:00:00+03:00');
-  const eligible = isEligibleUser({
-    lastLoginAt: now,
-    prefs: { marketing: true, daily_reminders: true },
-    now,
-  });
-  assert.equal(eligible, false);
-});
-
-test('opted-out marketing users are not eligible', () => {
-  const now = new Date('2026-10-28T10:00:00+03:00');
-  const eligible = isEligibleUser({
-    lastLoginAt: new Date('2026-10-27T10:00:00+03:00'),
-    prefs: { marketing: false, daily_reminders: true },
-    now,
-  });
-  assert.equal(eligible, false);
-});
-
-test('daily reminders are off until the user opts in', () => {
+test('users are eligible by default unless they opt out', () => {
   const now = new Date('2026-10-28T10:00:00+03:00');
   const eligible = isEligibleUser({
     lastLoginAt: new Date('2026-10-27T10:00:00+03:00'),
     prefs: {},
+    now,
+  });
+  assert.equal(eligible, true);
+});
+
+test('users who explicitly opt out of marketing are not eligible', () => {
+  const now = new Date('2026-10-28T10:00:00+03:00');
+  const eligible = isEligibleUser({
+    lastLoginAt: new Date('2026-10-27T10:00:00+03:00'),
+    prefs: { marketing: false },
+    now,
+  });
+  assert.equal(eligible, false);
+});
+
+test('users who opt out of daily reminders are not eligible', () => {
+  const now = new Date('2026-10-28T10:00:00+03:00');
+  const eligible = isEligibleUser({
+    lastLoginAt: new Date('2026-10-27T10:00:00+03:00'),
+    prefs: { daily_reminders: false },
     now,
   });
   assert.equal(eligible, false);
