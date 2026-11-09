@@ -216,10 +216,13 @@ class ClickPesaProvider extends PaymentProvider {
 
   verifyWebhook(payload, signature) {
     const secret = process.env.CLICKPESA_WEBHOOK_SECRET;
-    if (!secret) return config.nodeEnv === 'development';
+    if (!secret) {
+      // Never fail open: a missing secret means we cannot authenticate the
+      // callback. Reject in every environment; configure the secret instead.
+      return false;
+    }
     const expected = createPayloadChecksum(payload);
     if (!signature) {
-      // Some ClickPesa webhook payloads carry their own checksum field
       const bodyChecksum = payload && payload.checksum;
       return !!bodyChecksum && safeEqual(bodyChecksum, expected);
     }

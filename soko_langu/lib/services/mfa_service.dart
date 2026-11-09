@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:base32/base32.dart';
@@ -176,42 +177,17 @@ class MfaService {
 
   /// Verifies a TOTP code for step-up authentication.
   ///
-  /// This requires the user to have recently signed in. The user provides
-  /// a TOTP code which is verified against their enrolled TOTP factor.
-  /// Returns true if the code is valid.
+  /// Step-up verification requires server-side validation against the enrolled
+  /// secret; the client does not have access to that secret. This method
+  /// therefore fails closed and must not be treated as a successful check.
+  /// Callers must use the backend verification endpoint instead.
   Future<bool> verifyTotpForStepUp(String totpCode) async {
     final user = _currentUser;
     if (user == null) return false;
-
-    try {
-      // Get the enrolled TOTP factor
-      final factors = await user.multiFactor.getEnrolledFactors();
-      final totpFactor = factors.where((f) => f.factorId == 'totp').firstOrNull;
-
-      if (totpFactor == null) return false;
-
-      // Note: signInWithMultiFactor is not available on FirebaseAuth in current SDK.
-      // Step-up authentication typically requires re-authentication flow.
-      // For now, we verify by attempting to re-authenticate with the TOTP assertion.
-      // This is a best-effort check.
-      try {
-        return true; // Assertion created successfully
-      } catch (e) {
-        return false;
-      }
-    } on FirebaseAuthException catch (e) {
-      debugPrint('MFA step-up verification failed: ${e.code} - ${e.message}');
-      if (e.code == 'invalid-verification-code' ||
-          e.code == 'invalid-credential' ||
-          e.code == 'second-factor-already-enrolled' ||
-          e.code == 'argument-error') {
-        return false;
-      }
-      return false;
-    } catch (e) {
-      debugPrint('MFA step-up error: $e');
-      return false;
-    }
+    // Never auto-succeed: without server-side verification the code cannot be
+    // validated against the enrolled secret.
+    debugPrint('MFA step-up verification requires server-side validation; failing closed.');
+    return false;
   }
 
   /// Generates recovery codes for TOTP MFA.
@@ -219,12 +195,12 @@ class MfaService {
   /// Returns 10 codes of 8 characters each (e.g., "A1B2-C3D4").
   List<String> _generateRecoveryCodes(int count) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    final random = DateTime.now().millisecondsSinceEpoch;
+    final random = Random.secure();
     final codes = <String>[];
     for (var i = 0; i < count; i++) {
       final buffer = StringBuffer();
       for (var j = 0; j < 8; j++) {
-        final idx = (random + i * 8 + j) % chars.length;
+        final idx = random.nextInt(chars.length);
         buffer.write(chars[idx]);
         if (j == 3) buffer.write('-');
       }
