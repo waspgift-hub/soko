@@ -64,7 +64,7 @@ function toPlainText(html) {
     .trim();
 }
 
-async function sendViaCloudflare(to, subject, html) {
+async function sendViaCloudflare(to, subject, html, headers = {}) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/email/sending/send`,
@@ -120,7 +120,7 @@ async function sendViaCloudflare(to, subject, html) {
 
 // Resend API: HTTPS beats SMTP from Render (see file header). The api async
 // is one POST; the from address lives on a DNS-verified Resend domain.
-async function sendViaResend(to, subject, html) {
+async function sendViaResend(to, subject, html, headers = {}) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -243,8 +243,8 @@ async function sendMail(to, subject, html, recipientOverride, { action = 'otp', 
   // Resend first: sokovibe.co.tz is DNS-verified there, so recipients see
   // no-reply@sokovibe.co.tz and the call is a single HTTPS POST that answers
   // in ~1s.
-  if (resendConfigured()) channels.push(['Resend', () => sendViaResend(recipient, subject, wrappedHtml)]);
-  if (cloudFlareConfigured()) channels.push(['Cloudflare', () => sendViaCloudflare(recipient, subject, wrappedHtml)]);
+  if (resendConfigured()) channels.push(['Resend', () => sendViaResend(recipient, subject, wrappedHtml, headers)]);
+  if (cloudFlareConfigured()) channels.push(['Cloudflare', () => sendViaCloudflare(recipient, subject, wrappedHtml, headers)]);
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     channels.push(['SMTP', () => getTransporter().sendMail({
       from: process.env.SMTP_FROM || 'Soko Vibe <no-reply@sokovibe.co.tz>',
