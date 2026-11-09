@@ -399,7 +399,7 @@ ul, ol { padding: 0; list-style: none; }
 }
 .sv-hero__inner {
   display: grid;
-  grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+  grid-template-columns: 1fr;
   gap: clamp(2rem, 5vw, 4rem);
   align-items: center;
 }

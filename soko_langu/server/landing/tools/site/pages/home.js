@@ -78,32 +78,6 @@ const HOME_FAQ = [
   },
 ];
 
-function phonePreview() {
-  return `<div class="sv-preview" role="img" aria-label="Mchoro wa dhana wa kiolesura cha Soko Vibe: utafutaji, kategoria na kadi za bidhaa" data-en-aria-label="Concept illustration of the Soko Vibe interface: search, categories and product cards">
-  <div class="sv-phone">
-    <div class="sv-phone__bar"><span></span><span></span><span></span></div>
-    <div class="sv-phone__screen">
-      <div class="sv-phone__top">
-        <span class="sv-phone__logo">Soko Vibe</span>
-        <span class="sv-phone__dot" aria-hidden="true"></span>
-      </div>
-      <div class="sv-phone__search">${icon('search', 'sv-icon--sm')}<span>Tafuta bidhaa…</span></div>
-      <div class="sv-phone__chips">
-        <span class="is-on">Zote</span><span>Mavazi</span><span>Elektroniki</span><span>Nyumbani</span>
-      </div>
-      <div class="sv-phone__grid">
-        <div class="sv-phone__card"><div class="sv-phone__img sv-phone__img--a">${icon('bag')}</div><b>TSH 45,000</b><i>Dar es Salaam</i></div>
-        <div class="sv-phone__card"><div class="sv-phone__img sv-phone__img--b">${icon('video')}</div><b>TSH 120,000</b><i>Arusha</i></div>
-        <div class="sv-phone__card"><div class="sv-phone__img sv-phone__img--c">${icon('store')}</div><b>TSH 18,500</b><i>Mwanza</i></div>
-        <div class="sv-phone__card"><div class="sv-phone__img sv-phone__img--d">${icon('sparkles')}</div><b>TSH 65,000</b><i>Dodoma</i></div>
-      </div>
-      <div class="sv-phone__nav" aria-hidden="true"><span class="is-on">${icon('bag')}</span><span>${icon('search')}</span><span>${icon('heart')}</span><span>${icon('user')}</span></div>
-    </div>
-  </div>
-  <p class="sv-preview__note">${icon('sparkles', 'sv-icon--sm')} <span data-en="Concept illustration — the app is in development.">Mchoro wa dhana — app bado inatengenezwa.</span></p>
-</div>`;
-}
-
 function hero() {
   return `<section class="sv-hero">
   <div class="sv-container sv-hero__inner">
@@ -122,7 +96,6 @@ function hero() {
         <li>${icon('check', 'sv-icon--sm')} ${t('span', 'Bila barua taka', 'No spam')}</li>
       </ul>
     </div>
-    <div class="sv-hero__visual">${phonePreview()}</div>
   </div>
 </section>`;
 }
