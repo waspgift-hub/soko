@@ -134,10 +134,10 @@ const NOT_FOUND_HTML = (() => {
   <p>Angalia moja ya kurasa zinazofuata:</p>
   <div class="links">
     <a href="${home}">${esc(SITE.name)} — Mwanzo</a>
-    <a href="${esc(SITE.canonicalHost)}/categories">Kategoria</a>
-    <a href="${esc(SITE.canonicalHost)}/tanzania-marketplace">Soko la Tanzania</a>
-    <a href="${esc(SITE.canonicalHost)}/how-soko-vibe-works">Jinsi inavyofanya kazi</a>
-    <a href="${esc(SITE.canonicalHost)}/support">Usaidizi</a>
+    <a href="${esc(SITE.canonicalHost)}/features">Vipengele</a>
+    <a href="${esc(SITE.canonicalHost)}/about">Kuhusu Soko Vibe</a>
+    <a href="${esc(SITE.canonicalHost)}/how-it-works">Jinsi inavyofanya kazi</a>
+    <a href="${esc(SITE.canonicalHost)}/contact">Mawasiliano</a>
   </div>
 </body></html>`;
 })();

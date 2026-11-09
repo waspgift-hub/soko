@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://www.sokovibe.co.tz/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
+  <url><loc>https://www.sokovibe.co.tz/</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/about</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/about/founder</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/how-it-works</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/features</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/buyers</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/sellers</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/pricing</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/faq</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/contact</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/privacy</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/terms</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/cookies</loc></url>
+  <url><loc>https://www.sokovibe.co.tz/data-deletion</loc></url>
 </urlset>

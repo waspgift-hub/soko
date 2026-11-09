@@ -879,6 +879,9 @@ router.post(
       const byEmail = {};
       const emails = [];
       for (const e of serializedEntries) {
+        // A subscriber who used the unsubscribe link must never receive a
+        // broadcast again, even if the row is also kept for duplicate counts.
+        if (e.status === 'unsubscribed' || e.unsubscribedAt) continue;
         const em = String(e.email || '').trim().toLowerCase();
         if (!em || byEmail[em]) continue;
         byEmail[em] = e;

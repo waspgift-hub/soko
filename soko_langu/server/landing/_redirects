@@ -1,1 +1,20 @@
-/* /index.html 200
+# Legacy URLs from the previous marketing site.
+/how-soko-vibe-works /how-it-works 301
+/soko-vibe-fees /pricing 301
+/soko-vibe-escrow /features#trust 301
+/support /contact 301
+/privacy-policy /privacy 301
+/terms-of-service /terms 301
+/tanzania-marketplace /about 301
+/categories /features#discovery 301
+
+# Old .html entry points.
+/index.html / 301
+/about.html /about 301
+/how-soko-vibe-works.html /how-it-works 301
+/soko-vibe-fees.html /pricing 301
+/support.html /contact 301
+/categories.html /features#discovery 301
+/privacy-policy.html /privacy 301
+/terms-of-service.html /terms 301
+/deletion.html /data-deletion 301

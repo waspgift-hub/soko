@@ -32,6 +32,7 @@ const subscriptionRouter = require('./modules/subscriptions/routes');
 const sharingRouter = require('./modules/sharing/routes');
 const trustRouter = require('./modules/trust/routes');
 const launchRouter = require('./modules/launch/routes');
+const contactRouter = require('./modules/contact/routes');
 const adminRouter = require('./modules/admin/routes');
 // KYC identity documents. Mounted BEFORE the general admin router so its own
 // gate (secret OR database-verified admin role) is the one that runs; the
@@ -53,7 +54,7 @@ const kycRouter = require('./modules/kyc/routes');
 const engagementRouter = require('./modules/engagement/routes');
 const socialRouter = require('./modules/social/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
-const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
+const { seoRouter } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 const requestId = require('./middleware/requestId');
 const { jsonError } = require('./utils/http');
@@ -262,17 +263,21 @@ app.use(seoRouter);
 // Public marketing/legal pages on clean URLs. Served from the landing dir so
 // their relative asset + translation links resolve (styles.css, i18n.js, index.html).
 const PUBLIC_HTML_PAGES = [
-  ['/privacy-policy', 'privacy.html'],
-  ['/terms-of-service', 'terms.html'],
-  ['/data-deletion', 'deletion.html'],
-  ['/support', 'support.html'],
-  ['/tanzania-marketplace', 'tanzania-marketplace.html'],
-  ['/categories', 'categories.html'],
-  ['/how-soko-vibe-works', 'how-soko-vibe-works.html'],
-  ['/soko-vibe-fees', 'soko-vibe-fees.html'],
-  ['/soko-vibe-escrow', 'soko-vibe-escrow.html'],
   ['/about', 'about.html'],
   ['/about/founder', 'about-founder.html'],
+  ['/how-it-works', 'how-it-works.html'],
+  ['/features', 'features.html'],
+  ['/buyers', 'buyers.html'],
+  ['/sellers', 'sellers.html'],
+  ['/pricing', 'pricing.html'],
+  ['/faq', 'faq.html'],
+  ['/contact', 'contact.html'],
+  ['/privacy', 'privacy.html'],
+  ['/terms', 'terms.html'],
+  ['/cookies', 'cookies.html'],
+  ['/data-deletion', 'data-deletion.html'],
+  ['/waitlist/success', 'waitlist-success.html'],
+  ['/unsubscribe', 'unsubscribe.html'],
 ];
 for (const [route, file] of PUBLIC_HTML_PAGES) {
   app.get(route, (req, res) => {
@@ -282,11 +287,38 @@ for (const [route, file] of PUBLIC_HTML_PAGES) {
   });
 }
 
+// Old URLs were indexed and are still in bookmarks and the mobile app. A 301
+// keeps their ranking signals on the replacement page instead of showing a 404.
+const LEGACY_PATH_REDIRECTS = {
+  '/how-soko-vibe-works': '/how-it-works',
+  '/soko-vibe-fees': '/pricing',
+  '/soko-vibe-escrow': '/features#trust',
+  '/support': '/contact',
+  '/privacy-policy': '/privacy',
+  '/terms-of-service': '/terms',
+  '/tanzania-marketplace': '/about',
+  '/categories': '/features#discovery',
+};
+for (const [from, to] of Object.entries(LEGACY_PATH_REDIRECTS)) {
+  app.get(from, (req, res) => res.redirect(301, to));
+}
+
 // Every page above is also reachable as a raw *.html file through the static
 // mount below, which would publish each document at two URLs and split its
 // ranking signals. Fold the file form onto the clean URL permanently. Built
-// from PUBLIC_HTML_PAGES so a new page cannot reintroduce a duplicate.
-const LEGACY_HTML_REDIRECTS = { '/index.html': '/' };
+// from PUBLIC_HTML_PAGES so a new page cannot reintroduce a duplicate, plus the
+// files of the retired pages whose routes now redirect.
+const LEGACY_HTML_REDIRECTS = {
+  '/index.html': '/',
+  '/404.html': '/',
+  '/deletion.html': '/data-deletion',
+  '/how-soko-vibe-works.html': '/how-it-works',
+  '/soko-vibe-fees.html': '/pricing',
+  '/soko-vibe-escrow.html': '/features#trust',
+  '/support.html': '/contact',
+  '/tanzania-marketplace.html': '/about',
+  '/categories.html': '/features#discovery',
+};
 for (const [route, file] of PUBLIC_HTML_PAGES) {
   LEGACY_HTML_REDIRECTS[`/${file}`] = route;
 }
@@ -364,6 +396,11 @@ app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/share', sharingRouter);
 app.use('/api/v1/trust', trustRouter);
 app.use('/api/v1/launch', launchRouter);
+app.use('/api/v1/contact', contactRouter);
+// The retired Flutter web landing (and older installs) posted to
+// /api/v1/launch/contact. Keep that path on the same hardened handler so an old
+// client is not forced to fail while the static site becomes the only surface.
+app.use('/api/v1/launch/contact', contactRouter);
 app.use('/api/v1/admin/kyc', adminKycRouter);
 app.use('/api/v1/admin', adsAdminRouter);
 app.use('/api/v1/admin', adminRouter);
@@ -434,18 +471,21 @@ try {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);
 }
 
-// Final 404: JSON for API routes, premium HTML page for everything else.
+// Final 404: JSON for API routes, the branded static 404 for everything else.
+// Serving the same document the generator builds keeps the design system, the
+// language switch and the recovery links consistent with every other page.
+const NOT_FOUND_FILE = path.join(landingDir, '404.html');
 app.use((req, res) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
     if (!req.accepts('json') && req.accepts('html')) {
-      return res.status(404).setHeader('Cache-Control', 'no-cache').type('html').send(NOT_FOUND_HTML);
+      return res.status(404).setHeader('Cache-Control', 'no-cache').sendFile(NOT_FOUND_FILE);
     }
     return jsonError(res, { status: 404, code: 'NOT_FOUND', message: 'Not found' });
   }
   if (!req.accepts('html')) {
     return res.status(404).type('text/plain').send('Not found');
   }
-  res.status(404).setHeader('Cache-Control', 'no-cache').type('html').send(NOT_FOUND_HTML);
+  res.status(404).setHeader('Cache-Control', 'no-cache').sendFile(NOT_FOUND_FILE);
 });
 
 // Error handler

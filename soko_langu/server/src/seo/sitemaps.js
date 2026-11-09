@@ -15,34 +15,38 @@ const LANDING_DIR = path.join(__dirname, '..', '..', 'landing');
 //     intentionally absent here
 const SITEMAP_PATHS = [
   '/',
-  '/tanzania-marketplace',
-  '/categories',
-  '/how-soko-vibe-works',
-  '/soko-vibe-fees',
-  '/soko-vibe-escrow',
   '/about',
   '/about/founder',
-  '/privacy-policy',
-  '/terms-of-service',
+  '/how-it-works',
+  '/features',
+  '/buyers',
+  '/sellers',
+  '/pricing',
+  '/faq',
+  '/contact',
+  '/privacy',
+  '/terms',
+  '/cookies',
   '/data-deletion',
-  '/support',
 ];
 
 // Route -> source document, so <lastmod> reflects when the page actually
 // changed. A hardcoded date would go stale and teach crawlers to ignore it.
 const PAGE_FILES = {
   '/': 'index.html',
-  '/tanzania-marketplace': 'tanzania-marketplace.html',
-  '/categories': 'categories.html',
-  '/how-soko-vibe-works': 'how-soko-vibe-works.html',
-  '/soko-vibe-fees': 'soko-vibe-fees.html',
-  '/soko-vibe-escrow': 'soko-vibe-escrow.html',
   '/about': 'about.html',
   '/about/founder': 'about-founder.html',
-  '/privacy-policy': 'privacy.html',
-  '/terms-of-service': 'terms.html',
-  '/data-deletion': 'deletion.html',
-  '/support': 'support.html',
+  '/how-it-works': 'how-it-works.html',
+  '/features': 'features.html',
+  '/buyers': 'buyers.html',
+  '/sellers': 'sellers.html',
+  '/pricing': 'pricing.html',
+  '/faq': 'faq.html',
+  '/contact': 'contact.html',
+  '/privacy': 'privacy.html',
+  '/terms': 'terms.html',
+  '/cookies': 'cookies.html',
+  '/data-deletion': 'data-deletion.html',
 };
 
 function lastmodFor(p) {

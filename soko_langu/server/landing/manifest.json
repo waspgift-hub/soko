@@ -1,17 +1,19 @@
 {
-  "name": "Soko Vibe",
+  "name": "Soko Vibe — Soko la Mtandaoni Tanzania",
   "short_name": "Soko Vibe",
-  "start_url": ".",
+  "description": "Soko la mtandaoni la Tanzania linalojengwa kwa wanunuzi na wauzaji. Tanzania online marketplace, coming soon.",
+  "lang": "sw",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0B141A",
-  "theme_color": "#008069",
-  "description": "Soko Vibe — A Tanzanian Digital Marketplace (Coming Soon)",
   "orientation": "portrait-primary",
+  "background_color": "#0A0A0A",
+  "theme_color": "#00C853",
+  "categories": ["shopping", "business"],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "icons/Icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/Icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/Icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/Icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
