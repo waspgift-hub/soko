@@ -9,7 +9,9 @@ const {
   localDayKey,
   campaignId,
   isEligibleUser,
+  pickRecommendation,
   buildMessages,
+  renderProductCardEmail,
   validateOutbound,
 } = require('./daily-campaign');
 
@@ -47,6 +49,55 @@ function toDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function normalizeProduct(id, d) {
+  if (!d || typeof d !== 'object') return null;
+  const images = Array.isArray(d.images) ? d.images : [];
+  return {
+    id,
+    title: d.title || d.name || d.productName || 'Bidhaa',
+    price: d.price != null ? Number(d.price) : null,
+    status: d.status || (d.isActive === false ? 'inactive' : 'active'),
+    deleted: d.deleted === true || d.isDeleted === true,
+    disabled: d.disabled === true || d.isActive === false,
+    image: images[0] || d.image || d.thumbnail || d.imageUrl || d.coverImage || null,
+    shopName: d.shopName || d.storeName || d.sellerName || d.sellerDisplayName || null,
+  };
+}
+
+async function fetchRecommendationProduct(db) {
+  const attempts = [
+    () => db.collection('products').where('status', '==', 'active').limit(20).get(),
+    () => db.collection('products').where('status', '==', 'published').limit(20).get(),
+    () => db.collection('products').where('isActive', '==', true).limit(20).get(),
+    () => db.collection('products').limit(20).get(),
+  ];
+  let products = [];
+  for (const run of attempts) {
+    try {
+      const snap = await run();
+      products = snap.docs.map((doc) => normalizeProduct(doc.id, doc.data())).filter(Boolean);
+      if (products.length) break;
+    } catch (_) {}
+  }
+  const rec = pickRecommendation({ products });
+  return rec && rec.type === 'product' ? rec.product : null;
+}
+
+async function sendEngagementEmail({ to, message, unsubUrl }) {
+  const { sendMail } = require('../../services/mailer');
+  const html = message.campaignType === 'product'
+    ? renderProductCardEmail({ message, unsubUrl })
+    : `<p>${String(message.emailBody).replace(/[<>]/g, '')}</p><p><a href="https://www.sokovibe.co.tz${message.destination}">Soko Vibe</a></p><p style="font-size:12px;color:#888;margin-top:24px">Huwezi kupokea barua hizi tena? <a href="${unsubUrl}">Jiondoe hapa</a>.</p>`;
+  return sendMail(to, message.subject, html, undefined, {
+    headers: {
+      'Precedence': 'bulk',
+      'X-Mailer': 'Soko Vibe',
+      'List-Unsubscribe': `<${unsubUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  });
+}
+
 async function processCampaign({ db, cfg, now, timeZone, dayKey, dryRun, limit }) {
   const usersSnap = await db.collection('users').limit(limit).get();
   let prepared = 0;
@@ -75,7 +126,8 @@ async function processCampaign({ db, cfg, now, timeZone, dayKey, dryRun, limit }
     }
 
     const locale = user.langCode === 'en' ? 'en' : 'sw';
-    const message = buildMessages({ locale, feature: 'search' });
+    const product = await fetchRecommendationProduct(db).catch(() => null);
+    const message = buildMessages({ locale, product, feature: 'search' });
     if (!validateOutbound(message)) {
       skipped += 1;
       continue;
@@ -98,17 +150,7 @@ async function processCampaign({ db, cfg, now, timeZone, dayKey, dryRun, limit }
 
     if (channelPlan.email && user.email) {
       try {
-        const { sendMail } = require('../../services/mailer');
-        const dest = `https://www.sokovibe.co.tz${message.destination}`;
-        const html = `<p>${String(message.emailBody).replace(/[<>]/g, '')}</p><p><a href="${dest}">Soko Vibe</a></p><p style="font-size:12px;color:#888;margin-top:24px">Huwezi kupokea barua hizi tena? <a href="${unsubUrl}">Jiondoe hapa</a>.</p>`;
-        const ok = await sendMail(user.email, message.subject, html, undefined, {
-          headers: {
-            'Precedence': 'bulk',
-            'X-Mailer': 'Soko Vibe',
-            'List-Unsubscribe': `<${unsubUrl}>`,
-            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-          },
-        });
+        const ok = await sendEngagementEmail({ to: user.email, message, unsubUrl });
         delivery.email = ok ? 'accepted' : 'failed';
       } catch (_) {
         delivery.email = 'failed';
@@ -121,6 +163,7 @@ async function processCampaign({ db, cfg, now, timeZone, dayKey, dryRun, limit }
         const r = await push.sendPush(uid, message.pushTitle, message.pushBody, {
           type: 'daily_engagement',
           destination: message.destination,
+          ...(message.productId ? { productId: message.productId } : {}),
         });
         delivery.push = r && r.success ? 'accepted' : (r && r.error) || 'failed';
       } catch (_) {

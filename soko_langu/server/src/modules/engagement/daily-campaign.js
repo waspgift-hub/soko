@@ -69,20 +69,34 @@ function pickRecommendation({
   return { type: 'feature', feature: 'search' };
 }
 
+function escHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function buildMessages({ locale = 'sw', product, feature } = {}) {
   const sw = locale === 'sw';
   if (product) {
-    const title = sw ? 'Bidhaa inayokufaa leo' : 'A product for you today';
-    const body = sw
-      ? `${product.title} — TSh ${Number(product.price).toLocaleString('en-TZ')}`
-      : `${product.title} — TSh ${Number(product.price).toLocaleString('en-TZ')}`;
+    const titleText = product.title || product.name || (sw ? 'Bidhaa' : 'Product');
+    const price = Number(product.price);
+    const priceText = Number.isFinite(price) ? `TSh ${price.toLocaleString('en-TZ')}` : '';
+    const subject = sw ? 'Bidhaa inayokufaa leo' : 'A product for you today';
+    const body = priceText ? `${titleText} — ${priceText}` : titleText;
     return {
       campaignType: 'product',
-      subject: title,
-      pushTitle: title,
+      subject,
+      pushTitle: subject,
       pushBody: body,
       emailBody: body,
       productId: product.id,
+      product: {
+        id: product.id,
+        title: titleText,
+        price: Number.isFinite(price) ? price : null,
+        image: product.image || product.thumbnail || product.imageUrl || null,
+        shopName: product.shopName || product.storeName || product.sellerName || null,
+      },
       destination: `/product/${product.id}`,
       locale,
     };
@@ -104,6 +118,39 @@ function buildMessages({ locale = 'sw', product, feature } = {}) {
   };
 }
 
+function renderProductCardEmail({ message, unsubUrl, baseUrl = 'https://www.sokovibe.co.tz' } = {}) {
+  const sw = message?.locale !== 'en';
+  const product = message?.product || {};
+  const dest = `${baseUrl}${message?.destination || '/search'}`;
+  const title = escHtml(product.title || (sw ? 'Bidhaa' : 'Product'));
+  const price = Number.isFinite(Number(product.price))
+    ? `TSh ${Number(product.price).toLocaleString('en-TZ')}` : '';
+  const shop = product.shopName ? escHtml(product.shopName) : '';
+  const image = typeof product.image === 'string' && /^https?:\/\//i.test(product.image) ? product.image : '';
+  const cta = sw ? 'Tazama Bidhaa' : 'View Product';
+  const intro = sw ? 'Tumekupatia bidhaa unayoweza kuipenda leo.' : 'Here is a product you might like today.';
+  const unsubText = sw ? 'Huwezi kupokea barua hizi tena?' : 'Don’t want these emails?';
+  const unsubCta = sw ? 'Jiondoe hapa' : 'Unsubscribe';
+  const imageHtml = image
+    ? `<a href="${dest}" style="display:block;text-decoration:none;"><img src="${escHtml(image)}" alt="${title}" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:14px;background:#1a1a1a;" /></a>`
+    : `<div style="width:100%;height:220px;border-radius:14px;background:#1f2937;color:#9ca3af;display:flex;align-items:center;justify-content:center;font-size:14px;">Soko Vibe</div>`;
+  return `
+    <p style="margin:0 0 16px;color:#e5e7eb;font-size:15px;line-height:1.6;">${escHtml(intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;background:#141414;border:1px solid #2a2a2a;border-radius:18px;overflow:hidden;">
+      <tr><td style="padding:14px 14px 0;">${imageHtml}</td></tr>
+      <tr>
+        <td style="padding:16px 18px 18px;">
+          ${shop ? `<p style="margin:0 0 6px;font-size:12px;line-height:1.4;color:#9ca3af;">${shop}</p>` : ''}
+          <h2 style="margin:0 0 8px;font-size:20px;line-height:1.3;color:#ffffff;font-weight:700;">${title}</h2>
+          ${price ? `<p style="margin:0 0 16px;font-size:18px;line-height:1.3;color:#1F8F4E;font-weight:700;">${escHtml(price)}</p>` : ''}
+          <a href="${dest}" style="display:inline-block;background:#1F8F4E;color:#ffffff;text-decoration:none;padding:13px 18px;border-radius:12px;font-weight:600;font-size:14px;">${escHtml(cta)}</a>
+        </td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:#888;margin-top:22px;line-height:1.5;">${escHtml(unsubText)} <a href="${escHtml(unsubUrl || baseUrl)}" style="color:#9ca3af;">${escHtml(unsubCta)}</a>.</p>
+  `;
+}
+
 function validateOutbound(message) {
   if (!message || typeof message !== 'object') return false;
   if (!message.subject || !message.pushTitle || !message.pushBody) return false;
@@ -122,5 +169,6 @@ module.exports = {
   isEligibleUser,
   pickRecommendation,
   buildMessages,
+  renderProductCardEmail,
   validateOutbound,
 };
