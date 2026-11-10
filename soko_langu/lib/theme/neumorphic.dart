@@ -98,7 +98,22 @@ class Neu {
 
   /// Extruded dual shadow tinted around a colored base (green CTAs, FABs, …
   /// dark tones) instead of the neutral canvas tones.
-  static List<BoxShadow> raisedHue(double depth, Color base) => const [];
+  static List<BoxShadow> raisedHue(double depth, Color base) {
+    if (depth <= 0) return const [];
+    final d = depth;
+    return [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.25),
+        blurRadius: d * 2,
+        offset: Offset(d, d),
+      ),
+      BoxShadow(
+        color: Colors.white.withValues(alpha: 0.12),
+        blurRadius: d * 2,
+        offset: Offset(-d, -d),
+      ),
+    ];
+  }
 
   /// Recessed fill: darker base plus a hairline groove. Pass an [accent]
   /// (e.g. primary green) to recolor the groove for the focused state of
