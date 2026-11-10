@@ -18,6 +18,10 @@ const router = express.Router();
 const PRIVATE_PATHS = `Disallow: /api/
 Disallow: /apiv1/
 Disallow: /admin/
+Disallow: /company
+Disallow: /company/
+Disallow: /staff
+Disallow: /staff/
 Disallow: /health
 Disallow: /marketing/
 Disallow: /product-fallback.html
