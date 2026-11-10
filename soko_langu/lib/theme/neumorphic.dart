@@ -79,7 +79,22 @@ class Neu {
       b == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFD5D9E0);
 
   /// Extruded dual shadow scaled by [depth] (0 disables).
-  static List<BoxShadow> raised(double depth, Brightness b) => const [];
+  static List<BoxShadow> raised(double depth, Brightness b) {
+    if (depth <= 0) return const [];
+    final d = depth;
+    return [
+      BoxShadow(
+        color: shade(b).withValues(alpha: b == Brightness.dark ? 0.5 : 0.18),
+        blurRadius: d * 2,
+        offset: Offset(d, d),
+      ),
+      BoxShadow(
+        color: highlight(b).withValues(alpha: b == Brightness.dark ? 0.06 : 0.9),
+        blurRadius: d * 2,
+        offset: Offset(-d, -d),
+      ),
+    ];
+  }
 
   /// Extruded dual shadow tinted around a colored base (green CTAs, FABs, …
   /// dark tones) instead of the neutral canvas tones.

@@ -81,6 +81,16 @@ const config = {
     verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
     appSecret: process.env.WHATSAPP_APP_SECRET,
   },
+
+  // Cloudflare Turnstile (bot protection for public email forms)
+  turnstile: {
+    siteKey: process.env.TURNSTILE_SITE_KEY || '',
+    secret: process.env.TURNSTILE_SECRET || '',
+    hostnames: (process.env.TURNSTILE_HOSTNAMES || 'www.sokovibe.co.tz,sokovibe.co.tz,localhost,127.0.0.1')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
   
   // AI
   groq: {

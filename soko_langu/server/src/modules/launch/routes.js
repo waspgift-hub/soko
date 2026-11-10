@@ -5,6 +5,7 @@ const commerceStore = require('../../services/commerce-store');
 const { jsonError } = require('../../utils/http');
 const { validate } = require('../../middleware/validation');
 const { rateLimit } = require('../../middleware/rateLimiter');
+const { verifyTurnstile } = require('../../utils/turnstile');
 const { verifyAdminSecret } = require('../../../middlewares/security');
 const { sendMail } = require('../../services/mailer');
 const { esc } = require('../../services/email-layout');
@@ -142,6 +143,9 @@ router.post(
       website: z.string().optional().default(''),
       company: z.string().optional().default(''),
       formStartedAt: z.union([z.number(), z.string()]).optional(),
+      'cf-turnstile-response': z.string().optional(),
+      turnstileToken: z.string().optional(),
+      turnstile_token: z.string().optional(),
     }),
   }),
   async (req, res) => {
@@ -150,6 +154,15 @@ router.post(
       // caught them; nothing is stored.
       if (isSpam(req.body)) {
         return res.json({ success: true, data: { status: 'ok' } });
+      }
+
+      const turnstile = await verifyTurnstile(req, { expectedAction: 'subscribe' });
+      if (!turnstile.ok) {
+        return jsonError(res, {
+          status: turnstile.status || 403,
+          code: turnstile.code || 'TURNSTILE_FAILED',
+          message: turnstile.message || 'Bot verification failed. Please try again.',
+        });
       }
 
       const email = normalizeEmail(req.body.email);

@@ -9,9 +9,13 @@
 
   var STORAGE_KEY = 'sv_lang';
   var PAGE_STARTED = Date.now();
+  var TURNSTILE_SITE_KEY = '0x4AAAAAAF68ooCj8ZHajCRz';
   var originalContent = new WeakMap();
   var originalAttrs = new WeakMap();
   var currentLang = 'sw';
+  var turnstileWidgets = new WeakMap();
+  var turnstileTokens = new WeakMap();
+  var turnstileReadyPromise = null;
 
   var MESSAGES = {
     sw: {
@@ -20,7 +24,7 @@
       consent: 'Tafadhali kubali kupokea taarifa ili kuendelea.',
       message: 'Ujumbe unahitaji herufi 20 au zaidi.',
       subject: 'Tafadhali chagua mada.',
-      sending: 'Inatuma…',
+      sending: 'Inatumaâ€¦',
       subscribed: 'Umejiunga! Tunakutumia taarifa tutakapozindua.',
       duplicate: 'Tayari uko kwenye orodha. Asante!',
       contactSent: 'Asante. Ujumbe wako umepokelewa; tutajibu ndani ya siku mbili za kazi.',
@@ -32,6 +36,7 @@
       unsubDone: 'Umeondolewa kwenye orodha. Asante kwa muda wako.',
       unsubInvalid: 'Kiungo hiki si sahihi au kimekwisha tumika.',
       copied: 'Kiungo kimekopwa.',
+      captcha: 'Tafadhali thibitisha kuwa wewe si roboti.',
     },
     en: {
       email: 'That email address is not valid. Check the name@example.com format.',
@@ -39,7 +44,7 @@
       consent: 'Please agree to receive updates to continue.',
       message: 'Your message needs at least 20 characters.',
       subject: 'Please choose a subject.',
-      sending: 'Sending…',
+      sending: 'Sendingâ€¦',
       subscribed: 'You are on the list. We will email you when we launch.',
       duplicate: 'You are already on the list. Thank you!',
       contactSent: 'Thank you. Your message has been received; we will reply within two working days.',
@@ -51,6 +56,7 @@
       unsubDone: 'You have been removed from the list. Thank you for your time.',
       unsubInvalid: 'This link is invalid or has already been used.',
       copied: 'Link copied.',
+      captcha: 'Please confirm you are not a robot.',
     },
   };
 
@@ -239,6 +245,95 @@
     }
   }
 
+  function ensureTurnstileScript() {
+    if (window.turnstile) return Promise.resolve(window.turnstile);
+    if (turnstileReadyPromise) return turnstileReadyPromise;
+    turnstileReadyPromise = new Promise(function (resolve, reject) {
+      var script = document.querySelector('script[data-sv-turnstile]');
+      if (!script) {
+        script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.defer = true;
+        script.dataset.svTurnstile = '1';
+        document.head.appendChild(script);
+      }
+      var timeout = setTimeout(function () {
+        reject(new Error('turnstile_load_timeout'));
+      }, 10000);
+      script.addEventListener('load', function () {
+        clearTimeout(timeout);
+        resolve(window.turnstile);
+      }, { once: true });
+      script.addEventListener('error', function () {
+        clearTimeout(timeout);
+        reject(new Error('turnstile_load_error'));
+      }, { once: true });
+    }).catch(function (err) {
+      turnstileReadyPromise = null;
+      throw err;
+    });
+    return turnstileReadyPromise;
+  }
+
+  function actionForForm(form) {
+    if (form.hasAttribute('data-contact')) return 'contact';
+    if (form.hasAttribute('data-deletion')) return 'data_deletion';
+    return 'subscribe';
+  }
+
+  function ensureTurnstileWidget(form) {
+    if (!TURNSTILE_SITE_KEY || !form || typeof form.getAttribute !== 'function') return Promise.resolve(null);
+    var container = form.querySelector('.sv-turnstile');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'sv-turnstile';
+      container.setAttribute('aria-label', 'Security check');
+      var honeypot = form.querySelector('.sv-hp');
+      if (honeypot && honeypot.parentNode) honeypot.parentNode.insertBefore(container, honeypot);
+      else form.appendChild(container);
+    }
+    if (turnstileWidgets.has(form)) return Promise.resolve(turnstileWidgets.get(form));
+
+    return ensureTurnstileScript().then(function (ts) {
+      if (!ts) return null;
+      var widgetId = ts.render(container, {
+        sitekey: TURNSTILE_SITE_KEY,
+        action: actionForForm(form),
+        theme: 'light',
+        callback: function (token) { turnstileTokens.set(form, token || ''); },
+        'expired-callback': function () { turnstileTokens.set(form, ''); },
+        'error-callback': function () { turnstileTokens.set(form, ''); },
+      });
+      turnstileWidgets.set(form, widgetId);
+      return widgetId;
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function initTurnstile() {
+    var forms = document.querySelectorAll('[data-waitlist], [data-contact], [data-deletion]');
+    if (!forms.length || !TURNSTILE_SITE_KEY) return;
+    forms.forEach(function (form) {
+      ensureTurnstileWidget(form);
+    });
+  }
+
+  function turnstileToken(form) {
+    return turnstileTokens.get(form) || '';
+  }
+
+  function resetTurnstile(form) {
+    var widgetId = turnstileWidgets.get(form);
+    if (window.turnstile && (widgetId || widgetId === 0)) {
+      try {
+        window.turnstile.reset(widgetId);
+      } catch (e) {}
+    }
+    turnstileTokens.set(form, '');
+  }
+
   function stampForms() {
     document.querySelectorAll('[data-started]').forEach(function (input) {
       input.value = String(PAGE_STARTED);
@@ -265,6 +360,7 @@
         var honeypot = form.querySelector('[name="website"]');
         var started = form.querySelector('[name="formStartedAt"]');
         var value = String(email && email.value || '').trim();
+        var token = turnstileToken(form);
 
         markInvalid(email, false);
         setStatus(form, '', null);
@@ -278,6 +374,10 @@
         if (consent && !consent.checked) {
           setStatus(form, m('consent'), 'error');
           consent.focus();
+          return;
+        }
+        if (!token) {
+          setStatus(form, m('captcha'), 'error');
           return;
         }
         if (started) started.value = String(PAGE_STARTED);
@@ -294,6 +394,7 @@
           source: (form.querySelector('[name="source"]') || {}).value || 'website',
           website: honeypot ? honeypot.value : '',
           formStartedAt: PAGE_STARTED,
+          'cf-turnstile-response': token,
         }).then(function (res) {
           if (res.ok && res.data && res.data.success) {
             var status = res.data.data && res.data.data.status;
@@ -301,8 +402,10 @@
               setStatus(form, m('duplicate'), 'success');
               toast(m('duplicate'), 'success');
               setBusy(form, false);
+              resetTurnstile(form);
               return;
             }
+            resetTurnstile(form);
             setStatus(form, m('subscribed'), 'success');
             window.location.href = '/waitlist/success';
             return;
@@ -312,6 +415,7 @@
           throw new Error(detail || 'generic');
         }).catch(function (error) {
           setBusy(form, false);
+          resetTurnstile(form);
           var key = error && error.message === 'rate' ? 'rate' : 'generic';
           if (error && error.name === 'TypeError') key = 'network';
           setStatus(form, m(key), 'error');
@@ -340,6 +444,7 @@
         var consent = form.querySelector('[name="consent"]');
         var honeypot = form.querySelector('[name="website"]');
         var started = form.querySelector('[name="formStartedAt"]');
+        var token = turnstileToken(form);
 
         [name, email, subject, message].forEach(function (field) { markInvalid(field, false); });
         setStatus(form, '', null);
@@ -373,6 +478,10 @@
           consent.focus();
           return;
         }
+        if (!token) {
+          setStatus(form, m('captcha'), 'error');
+          return;
+        }
         if (started) started.value = String(PAGE_STARTED);
 
         setBusy(form, true);
@@ -387,6 +496,7 @@
           preferredLanguage: langValue(),
           website: honeypot ? honeypot.value : '',
           formStartedAt: PAGE_STARTED,
+          'cf-turnstile-response': token,
         }).then(function (res) {
           if (res.ok && res.data && res.data.success) {
             form.reset();
@@ -394,12 +504,14 @@
             setStatus(form, m('contactSent'), 'success');
             toast(m('contactSent'), 'success');
             setBusy(form, false);
+            resetTurnstile(form);
             return;
           }
           if (res.status === 429) throw new Error('rate');
           throw new Error('generic');
         }).catch(function (error) {
           setBusy(form, false);
+          resetTurnstile(form);
           var key = error && error.message === 'rate' ? 'rate' : 'generic';
           if (error && error.name === 'TypeError') key = 'network';
           setStatus(form, m(key), 'error');
@@ -416,6 +528,7 @@
         event.preventDefault();
         var email = form.querySelector('[name="email"]');
         var honeypot = form.querySelector('[name="website"]');
+        var token = turnstileToken(form);
         markInvalid(email, false);
         setStatus(form, '', null);
 
@@ -425,6 +538,10 @@
           if (email) email.focus();
           return;
         }
+        if (!token) {
+          setStatus(form, m('captcha'), 'error');
+          return;
+        }
 
         setBusy(form, true);
         setStatus(form, m('sending'), 'loading');
@@ -432,6 +549,7 @@
         var payload = {
           email: email.value.trim(),
           website: honeypot ? honeypot.value : '',
+          'cf-turnstile-response': token,
         };
         var fullName = form.querySelector('[name="fullName"]');
         var phone = form.querySelector('[name="phone"]');
@@ -451,12 +569,14 @@
             holder.appendChild(message);
             toast(m('deleted'), 'success');
             setBusy(form, false);
+            resetTurnstile(form);
             return;
           }
           if (res.status === 429) throw new Error('rate');
           throw new Error('generic');
         }).catch(function (error) {
           setBusy(form, false);
+          resetTurnstile(form);
           var key = error && error.message === 'rate' ? 'rate' : 'generic';
           if (error && error.name === 'TypeError') key = 'network';
           setStatus(form, m(key), 'error');
@@ -547,6 +667,7 @@
     initNav();
     initAccordions();
     stampForms();
+    initTurnstile();
     initWaitlist();
     initContact();
     initDeletion();

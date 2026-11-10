@@ -14,6 +14,12 @@ class LaunchSubscribeResult {
   });
 }
 
+class LaunchContactResult {
+  final bool ok;
+  final String message;
+  const LaunchContactResult({required this.ok, required this.message});
+}
+
 class LaunchApi {
   LaunchApi({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
@@ -23,6 +29,8 @@ class LaunchApi {
     String? name,
     required String lang,
     required int formStartedAt,
+    required String turnstileToken,
+    String source = 'web_launch',
   }) async {
     final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/launch/subscribe');
     try {
@@ -40,6 +48,7 @@ class LaunchApi {
               'source': 'web_launch',
               'formStartedAt': formStartedAt,
               'website': '',
+              'cf-turnstile-response': turnstileToken,
             }),
           )
           .timeout(const Duration(seconds: 15));
@@ -73,7 +82,7 @@ class LaunchApi {
           message: 'Too many requests. Please try again later.',
         );
       }
-      if (response.statusCode == 400) {
+      if (response.statusCode == 400 || response.statusCode == 403 || response.statusCode == 503) {
         return LaunchSubscribeResult(
           ok: false,
           duplicate: false,
@@ -95,6 +104,69 @@ class LaunchApi {
         duplicate: false,
         message: 'Unable to connect right now. Please try again.',
       );
+    }
+  }
+
+  Future<LaunchContactResult> contact({
+    required String email,
+    required String subject,
+    required String message,
+    String? name,
+    required String lang,
+    required int formStartedAt,
+    required String turnstileToken,
+  }) async {
+    final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/contact');
+    try {
+      final response = await _client
+          .post(
+            uri,
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email.trim(),
+              'name': (name ?? '').trim(),
+              'subject': subject.trim(),
+              'message': message.trim(),
+              'lang': lang,
+              'formStartedAt': formStartedAt,
+              'website': '',
+              'cf-turnstile-response': turnstileToken,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      Map<String, dynamic> body = {};
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) body = decoded;
+      } catch (_) {}
+      final data = body['data'] is Map<String, dynamic>
+          ? body['data'] as Map<String, dynamic>
+          : <String, dynamic>{};
+      final msg = (data['message'] ?? body['message'] ?? body['error'] ?? '')
+          .toString();
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          body['success'] == true) {
+        return LaunchContactResult(ok: true, message: msg);
+      }
+      if (response.statusCode == 429) {
+        return const LaunchContactResult(ok: false, message: 'RATE_LIMITED');
+      }
+      if (response.statusCode == 403 || response.statusCode == 503) {
+        return LaunchContactResult(
+          ok: false,
+          message: msg.isNotEmpty ? msg : 'TURNSTILE_FAILED',
+        );
+      }
+      return LaunchContactResult(
+        ok: false,
+        message: msg.isNotEmpty ? msg : 'SERVER_ERROR',
+      );
+    } catch (_) {
+      return const LaunchContactResult(ok: false, message: 'NETWORK_ERROR');
     }
   }
 }
