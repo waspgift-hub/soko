@@ -85,7 +85,19 @@ class SurfacePolicy {
   };
 
   /// The fixed style for [role].
-  static SurfaceStyle styleFor(SurfaceRole role) => SurfaceStyle.flat;
+  static SurfaceStyle styleFor(SurfaceRole role) {
+    if (role == SurfaceRole.primaryCta ||
+        role == SurfaceRole.floatingAction ||
+        role == SurfaceRole.navBar) {
+      return SurfaceStyle.raised;
+    }
+    if (role == SurfaceRole.searchField ||
+        role == SurfaceRole.textField ||
+        role == SurfaceRole.activeFilter) {
+      return SurfaceStyle.inset;
+    }
+    return SurfaceStyle.flat;
+  }
 
   /// Whether [role] is one of the soft-UI accents.
   static bool isSoft(SurfaceRole role) => softRoles.contains(role);
