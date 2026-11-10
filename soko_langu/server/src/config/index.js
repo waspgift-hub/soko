@@ -69,7 +69,7 @@ const config = {
   },
 
   // WhatsApp Business Cloud API (OTP template delivery). Missing token/phone
-  // number id is a valid no-op — the delivery chain then falls back to SMS.
+  // number id is a valid no-op â€” the delivery chain then falls back to SMS.
   // verifyToken/appSecret back the inbound webhook: verifyToken is the value
   // pasted into the Meta dashboard, appSecret validates X-Hub-Signature-256.
   whatsapp: {
@@ -80,6 +80,16 @@ const config = {
     language: process.env.WHATSAPP_LANGUAGE || 'sw',
     verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
     appSecret: process.env.WHATSAPP_APP_SECRET,
+  },
+
+  // Cloudflare Turnstile (bot protection for public email forms)
+  turnstile: {
+    siteKey: process.env.TURNSTILE_SITE_KEY || '',
+    secret: process.env.TURNSTILE_SECRET || '',
+    hostnames: (process.env.TURNSTILE_HOSTNAMES || 'www.sokovibe.co.tz,sokovibe.co.tz,localhost,127.0.0.1')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
   
   // AI

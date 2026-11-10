@@ -7,6 +7,7 @@ const { validate } = require('../../middleware/validation');
 const { rateLimit } = require('../../middleware/rateLimiter');
 const { sendMail } = require('../../services/mailer');
 const { esc } = require('../../services/email-layout');
+const { verifyTurnstile } = require('../../utils/turnstile');
 const {
   normalizeEmail,
   isValidEmail,
@@ -89,6 +90,9 @@ router.post(
       website: z.string().optional().default(''),
       company: z.string().optional().default(''),
       formStartedAt: z.union([z.number(), z.string()]).optional(),
+      'cf-turnstile-response': z.string().optional(),
+      turnstileToken: z.string().optional(),
+      turnstile_token: z.string().optional(),
     }),
   }),
   async (req, res) => {
@@ -97,6 +101,15 @@ router.post(
       // message rows are created.
       if (isSpam(req.body)) {
         return res.json({ success: true, data: { status: 'ok' } });
+      }
+
+      const turnstile = await verifyTurnstile(req, { expectedAction: 'contact' });
+      if (!turnstile.ok) {
+        return jsonError(res, {
+          status: turnstile.status || 403,
+          code: turnstile.code || 'TURNSTILE_FAILED',
+          message: turnstile.message || 'Bot verification failed. Please try again.',
+        });
       }
 
       const email = normalizeEmail(req.body.email);

@@ -4,6 +4,7 @@ import '../router/app_router.dart';
 import '../services/launch_api.dart';
 import '../widgets/layout/site_shell.dart';
 import '../widgets/responsive_container.dart';
+import '../widgets/turnstile_widget.dart';
 
 class ContactPage extends StatefulWidget {
   const ContactPage({super.key});
@@ -18,6 +19,8 @@ class _ContactPageState extends State<ContactPage> {
   final _subject = TextEditingController();
   final _message = TextEditingController();
   final _api = LaunchApi();
+  final _turnstile = TurnstileController();
+  static const _turnstileSiteKey = '0x4AAAAAAF68ooCj8ZHajCRz';
   late final int _startedAt;
   bool _loading = false;
   bool _ok = false;
@@ -44,6 +47,11 @@ class _ContactPageState extends State<ContactPage> {
       _ok = false;
     });
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final turnstileToken = _turnstile.token;
+    if (turnstileToken.isEmpty) {
+      setState(() => _error = 'Please complete the security check.');
+      return;
+    }
     setState(() => _loading = true);
     final res = await _api.contact(
       email: _email.text,
@@ -52,6 +60,7 @@ class _ContactPageState extends State<ContactPage> {
       name: _name.text,
       lang: AppStrings.of(context).code,
       formStartedAt: _startedAt,
+      turnstileToken: turnstileToken,
     );
     if (!mounted) return;
     setState(() {
@@ -69,6 +78,7 @@ class _ContactPageState extends State<ContactPage> {
         _message.clear();
       }
     });
+    _turnstile.reset();
   }
 
   @override
@@ -181,6 +191,12 @@ class _ContactPageState extends State<ContactPage> {
                                 (v == null || v.trim().length < 10)
                                 ? context.str('contact_invalid')
                                 : null,
+                          ),
+                          const SizedBox(height: 14),
+                          TurnstileWidget(
+                            siteKey: _turnstileSiteKey,
+                            action: 'contact',
+                            controller: _turnstile,
                           ),
                           if (_error != null)
                             Padding(

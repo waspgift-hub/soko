@@ -8,6 +8,7 @@ import '../widgets/animated_reveal.dart';
 import '../widgets/open_link.dart';
 import '../widgets/responsive_container.dart';
 import '../widgets/section_header.dart';
+import '../widgets/turnstile_widget.dart';
 
 class HeroSection extends StatelessWidget {
   final VoidCallback onNotify;
@@ -163,6 +164,8 @@ class _RegisterSectionState extends State<RegisterSection> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _api = LaunchApi();
+  final _turnstile = TurnstileController();
+  static const _turnstileSiteKey = '0x4AAAAAAF68ooCj8ZHajCRz';
   late final int _startedAt;
   bool _loading = false;
   bool _success = false;
@@ -187,10 +190,12 @@ class _RegisterSectionState extends State<RegisterSection> {
   String _friendlyError(String code) {
     if (code == 'RATE_LIMITED') return context.str('form_rate_limited');
     if (code == 'NETWORK_ERROR') return context.str('form_network_error');
-    if (code == 'INVALID_INPUT' || code == 'INVALID_EMAIL')
+    if (code == 'INVALID_INPUT' || code == 'INVALID_EMAIL') {
       return context.str('form_invalid');
-    if (code.isNotEmpty && !code.contains('_') && !code.contains(' '))
+    }
+    if (code.isNotEmpty && !code.contains('_') && !code.contains(' ')) {
       return code;
+    }
     return context.str('form_error');
   }
 
@@ -202,6 +207,11 @@ class _RegisterSectionState extends State<RegisterSection> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final turnstileToken = _turnstile.token;
+    if (turnstileToken.isEmpty) {
+      setState(() => _message = 'Please complete the security check.');
+      return;
+    }
     setState(() => _loading = true);
     final lang = AppStrings.of(context).code;
     final result = await _api.subscribe(
@@ -211,6 +221,7 @@ class _RegisterSectionState extends State<RegisterSection> {
       consent: _consent,
       lang: lang,
       formStartedAt: _startedAt,
+      turnstileToken: turnstileToken,
     );
     if (!mounted) return;
     setState(() {
@@ -221,6 +232,7 @@ class _RegisterSectionState extends State<RegisterSection> {
           ? (result.duplicate ? context.str('form_duplicate') : null)
           : _friendlyError(result.message);
     });
+    _turnstile.reset();
   }
 
   @override
@@ -320,6 +332,12 @@ class _RegisterSectionState extends State<RegisterSection> {
               ),
             ),
           ),
+          TurnstileWidget(
+            siteKey: _turnstileSiteKey,
+            action: 'subscribe',
+            controller: _turnstile,
+          ),
+          const SizedBox(height: 8),
           SizedBox(
             width: compact ? double.infinity : null,
             child: FilledButton.icon(

@@ -31,6 +31,7 @@ class LaunchApi {
     required bool consent,
     required String lang,
     required int formStartedAt,
+    required String turnstileToken,
     String source = 'web_launch',
   }) async {
     final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/launch/subscribe');
@@ -51,6 +52,7 @@ class LaunchApi {
               'source': source,
               'formStartedAt': formStartedAt,
               'website': '',
+              'cf-turnstile-response': turnstileToken,
             }),
           )
           .timeout(const Duration(seconds: 15));
@@ -84,7 +86,7 @@ class LaunchApi {
           message: 'RATE_LIMITED',
         );
       }
-      if (response.statusCode == 400) {
+      if (response.statusCode == 400 || response.statusCode == 403 || response.statusCode == 503) {
         return LaunchSubscribeResult(
           ok: false,
           duplicate: false,
@@ -112,8 +114,9 @@ class LaunchApi {
     String? name,
     required String lang,
     required int formStartedAt,
+    required String turnstileToken,
   }) async {
-    final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/launch/contact');
+    final uri = Uri.parse('${SokoLinks.apiBase}/api/v1/contact');
     try {
       final response = await _client
           .post(
@@ -130,6 +133,7 @@ class LaunchApi {
               'lang': lang,
               'formStartedAt': formStartedAt,
               'website': '',
+              'cf-turnstile-response': turnstileToken,
             }),
           )
           .timeout(const Duration(seconds: 15));
@@ -150,6 +154,12 @@ class LaunchApi {
       }
       if (response.statusCode == 429) {
         return const LaunchContactResult(ok: false, message: 'RATE_LIMITED');
+      }
+      if (response.statusCode == 403 || response.statusCode == 503) {
+        return LaunchContactResult(
+          ok: false,
+          message: msg.isNotEmpty ? msg : 'TURNSTILE_FAILED',
+        );
       }
       return LaunchContactResult(
         ok: false,
