@@ -483,11 +483,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }.contains(s);
   }
 
-  String _nf(num n) => NumberFormat('#,###', 'en').format(n);
+  String _nf(num n) => n.isFinite ? NumberFormat('#,###', 'en').format(n) : '0';
 
   /// Money fields can arrive as NaN/Infinity from the server; `toInt()` and
   /// `round()` throw on those, so collapse them to zero instead of crashing.
   int _safeInt(num n) => n.isFinite ? n.round() : 0;
+  double _safeDouble(dynamic v, [double fallback = 0]) {
+    if (v is num && v.isFinite) return v.toDouble();
+    return fallback;
+  }
+  double? _safeDoubleN(dynamic v) {
+    if (v is num && v.isFinite) return v.toDouble();
+    return null;
+  }
 
   /// Position on the seven-stage Trust-Commerce journey (see TrustStage).
   int _currentStep() => trustStageOf(status).index;
@@ -718,8 +726,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Widget _buildHeroSection(BuildContext context, ColorScheme cs) {
     final productName = d['productName'] as String? ?? context.tr('product');
     final productImage = d['productImage'] as String? ?? '';
-    final price = (d['productPrice'] ?? 0).toDouble();
-    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
+    final price = _safeDouble(d['productPrice']);
+    final totalAmount = _safeDouble(d['totalAmount'], price);
     final orderIdDisplay = widget.docId.length > 12
         ? '#...${widget.docId.substring(widget.docId.length - 8)}'
         : '#${widget.docId}';
@@ -874,7 +882,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           : context.tr('payment_failed_short');
     } else if (_isPaidState) {
       final amt =
-          (d['totalAmount'] is num ? d['totalAmount'] as num : 0).toDouble();
+          _safeDouble(d['totalAmount']);
       statusSubtitle = '${context.tr('paid_label')} \u2022 TZS ${_nf(amt)}';
     } else if (status == OrderStatus.quoted ||
         status == OrderStatus.awaitingPayment ||
@@ -1183,16 +1191,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildOrderTable(BuildContext context, ColorScheme cs) {
-    final price = (d['productPrice'] ?? 0).toDouble();
-    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
-    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
+    final price = _safeDouble(d['productPrice']);
+    final shippingCost = _safeDoubleN(d['shippingCost']);
+    final totalAmount = _safeDouble(d['totalAmount'], price);
     final breakdown = TransactionFeeBreakdown(productPrice: price);
     final platformFee =
-        (d['platformFee'] as num?)?.toDouble() ??
-        (d['sokoLanguCommission'] as num?)?.toDouble() ??
-        breakdown.platformFee;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? breakdown.processingFee;
-    final discount = (d['discount'] as num?)?.toDouble();
+        _safeDouble(d['platformFee'], _safeDouble(d['sokoLanguCommission'], breakdown.platformFee));
+    final processingFee = _safeDouble(d['processingFee'], breakdown.processingFee);
+    final discount = _safeDoubleN(d['discount']);
     final txId =
         d['transactionId'] as String? ??
         d['mpesaTransactionId'] as String? ??
@@ -1724,21 +1730,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   bool _hasFees() {
     final platformFee =
-        (d['platformFee'] as num?)?.toDouble() ??
-        (d['sokoLanguCommission'] as num?)?.toDouble() ??
-        0;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
-    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
+        _safeDouble(d['platformFee'], _safeDouble(d['sokoLanguCommission'], 0));
+    final processingFee = _safeDouble(d['processingFee'], 0);
+    final sellerReceives = _safeDouble(d['sellerReceives'], 0);
     return platformFee > 0 || processingFee > 0 || sellerReceives > 0;
   }
 
   Widget _buildFeeRows(ColorScheme cs) {
     final platformFee =
-        (d['platformFee'] as num?)?.toDouble() ??
-        (d['sokoLanguCommission'] as num?)?.toDouble() ??
-        0;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
-    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
+        _safeDouble(d['platformFee'], _safeDouble(d['sokoLanguCommission'], 0));
+    final processingFee = _safeDouble(d['processingFee'], 0);
+    final sellerReceives = _safeDouble(d['sellerReceives'], 0);
     final children = <Widget>[];
     if (platformFee > 0) {
       children.add(
@@ -2115,7 +2117,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildSellerDispatchActions(ColorScheme cs) {
-    final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
+    final shippingCost = _safeDouble(d['shippingCost'], 0);
     final hasShipping = shippingCost > 0;
     return Container(
       padding: const EdgeInsets.all(18),
@@ -3061,7 +3063,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   Future<void> _fetchGatewayFee() async {
     try {
-      final price = (d['productPrice'] ?? 0).toDouble();
+      final price = _safeDouble(d['productPrice']);
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
         headers: {'Content-Type': 'application/json'},
@@ -3069,20 +3071,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (mounted) setState(() => _gatewayFee = (data['fee'] as num).toDouble());
+        if (mounted) setState(() => _gatewayFee = _safeDouble(data['fee']));
       }
     } catch (_) {}
   }
 
   double get _quotedShippingCost =>
-      (d['shippingCost'] as num?)?.toDouble() ?? 0;
+      _safeDouble(d['shippingCost'], 0);
   double get _quotedProductPrice =>
-      (d['productPrice'] ?? 0).toDouble();
-  double get _quotedPlatformFee => (d['platformFee'] as num?)?.toDouble() ?? 0;
+      _safeDouble(d['productPrice']);
+  double get _quotedPlatformFee => _safeDouble(d['platformFee'], 0);
   // The server locks totalAmount = price + shipping when the quote lands; the
   // invoice must show exactly what the escrow charges, never an invented fee.
   double get _quotedTotal {
-    final locked = (d['totalAmount'] as num?)?.toDouble() ?? 0;
+    final locked = _safeDouble(d['totalAmount'], 0);
     if (locked > 0) return locked;
     return _quotedProductPrice + _quotedShippingCost;
   }
