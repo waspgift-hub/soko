@@ -140,14 +140,16 @@ module.exports = function ({ commerceStore, db: injectedDb } = {}) {
 
       const lang = ['sw', 'en'].includes(langCode) ? langCode : 'sw';
 
-      const { subject, html } = buildOtpEmail({
+      const otpEmail = buildOtpEmail({
         otp,
         lang,
         expiresInMinutes: 10,
-        recipientEmail: cleanEmail,
       });
 
-      const sent = await sendMail(cleanEmail, subject, html);
+      const sent = await sendMail(cleanEmail, otpEmail.subject, otpEmail.html || '', null, {
+        action: otpEmail.action || 'otp',
+        context: { ...(otpEmail.context || {}), recipientEmail: cleanEmail },
+      });
       if (!sent) {
         return res.status(502).json({ error: 'auth_otp_send_failed' });
       }

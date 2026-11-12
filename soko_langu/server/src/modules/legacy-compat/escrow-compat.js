@@ -5,6 +5,8 @@ const express = require('express');
 const admin = require('firebase-admin');
 const { requireAdmin } = require('./auth-helpers');
 const escrowService = require('../../services/escrow-service');
+const commerceStore = require('../../services/commerce-store');
+const { normalizePaymentMethod, isCod } = require('../../utils/payment-method');
 
 const router = express.Router();
 
@@ -23,6 +25,14 @@ async function verifySeller(req, res, userId) {
   }
 }
 
+async function assertEscrowOrder(orderId, res) {
+  const doc = await commerceStore.getDocument('transactions', orderId).catch(() => null)
+    || await commerceStore.getDocument('orders', orderId).catch(() => null);
+  if (!doc) { res.status(404).json({ error: 'ORDER_NOT_FOUND' }); return null; }
+  if (isCod(doc.paymentMethod)) { res.status(400).json({ error: 'INVALID_PAYMENT_METHOD', message: 'COD orders cannot use escrow endpoints' }); return null; }
+  return doc;
+}
+
 router.post('/dispatch', async (req, res) => {
   try {
     const { orderId, userId, courierName, trackingNumber, driverPhone, notes, receiptUrl, photoUrl, note } = req.body;
@@ -30,6 +40,9 @@ router.post('/dispatch', async (req, res) => {
 
     const auth = await verifySeller(req, res, userId);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+    const doc = await assertEscrowOrder(orderId, res);
+    if (!doc) return;
 
     await escrowService.dispatchOrder({
       orderId,
@@ -62,6 +75,9 @@ router.post('/release', async (req, res) => {
     const auth = await verifySeller(req, res, userId);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
+    const doc = await assertEscrowOrder(orderId, res);
+    if (!doc) return;
+
     const result = await escrowService.releaseEscrow({
       orderId,
       sellerId: userId,
@@ -83,6 +99,9 @@ router.post('/cancel', async (req, res) => {
     const auth = await verifySeller(req, res, userId);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
+    const doc = await assertEscrowOrder(orderId, res);
+    if (!doc) return;
+
     const result = await escrowService.cancelOrder({
       orderId,
       buyerId: userId,
@@ -102,6 +121,9 @@ router.post('/dispute', async (req, res) => {
 
     const auth = await verifySeller(req, res, userId);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+    const doc = await assertEscrowOrder(orderId, res);
+    if (!doc) return;
 
     await escrowService.openDispute({
       orderId,

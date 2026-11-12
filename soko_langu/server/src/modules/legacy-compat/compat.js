@@ -122,6 +122,8 @@ function setupCompat(app) {
   // eslint-disable-next-line global-require
   const escrowRouter = require('./escrow-compat');
   // eslint-disable-next-line global-require
+  const codRouter = require('./cod-compat');
+  // eslint-disable-next-line global-require
   const ordersCompatRouter = require('./orders-compat');
   // eslint-disable-next-line global-require
   const trustCompatRouter = require('./trust-compat');
@@ -132,7 +134,7 @@ function setupCompat(app) {
   // eslint-disable-next-line global-require
   const featureCompatRouter = require('./feature-compat')({ admin, db });
 
-  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter, ordersCompatRouter, trustCompatRouter, moderationCompatRouter, adminCompatRouter: adminCompat, adminCompatPublic: adminCompat.publicRouter, featureCompatRouter };
+  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter, codRouter, ordersCompatRouter, trustCompatRouter, moderationCompatRouter, adminCompatRouter: adminCompat, adminCompatPublic: adminCompat.publicRouter, featureCompatRouter };
 }
 
 module.exports = { setupCompat, webhookIpWhitelist, verifyWebhook };

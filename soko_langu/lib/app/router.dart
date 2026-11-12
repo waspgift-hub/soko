@@ -32,6 +32,7 @@ import '../screens/chat/group_chat_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/profile/public_profile_screen.dart';
 import '../screens/profile/settings_screen.dart';
+import '../screens/profile/subscription_screen.dart';
 import '../screens/profile/follower_following_screen.dart';
 import '../screens/profile/follow_requests_screen.dart';
 import '../screens/profile/suggested_accounts_screen.dart';
@@ -758,6 +759,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.kyc,
         pageBuilder: (context, state) => _premiumPage(const KycScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.subscription,
+        pageBuilder: (context, state) => _premiumPage(const SubscriptionScreen()),
       ),
       GoRoute(
         path: AppRoutes.verificationCenter,

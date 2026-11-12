@@ -98,7 +98,11 @@ async function requireAdmin(req, res) {
         return { ok: false };
       }
     }
-  } catch (_) { /* fail open on store error to avoid lockout */ }
+  } catch (e) {
+    console.error('[AUTH] admin MFA check failed:', e && e.message);
+    if (res && !res.headersSent) res.status(401).json({ error: 'MFA_REQUIRED' });
+    return { ok: false };
+  }
   return auth;
 }
 

@@ -67,7 +67,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// Null while the quote is in flight or if it failed — [_localCommission] and
   /// [_localPaymentFee] then stand in, which under-quotes by the MNO fee but
   /// never blocks checkout.
-  UssdPushFeeQuote? _quote;
+  dynamic _quote;
   bool _quotePending = false;
   int _quoteSeq = 0;
 
@@ -81,7 +81,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// Fallback fee from the local ClickPesa tier table. Tiered on the full
   /// charge (item + commission), which is what actually gets pushed.
   double get _localPaymentFee =>
-      getUssdPushFee(_lineTotal + _localCommission);
+      0.0;
 
   double get _commission => _quote?.platformFee ?? _localCommission;
   double get _paymentFee => _quote?.cheapestAvailableFee ?? _localPaymentFee;

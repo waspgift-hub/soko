@@ -2242,7 +2242,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
   }
 
   Widget _buildClickPesaTab() {
-    return const AdminClickPesaScreen(embedded: true);
+    return const Center(child: Text('ClickPesa admin (not available)'));
   }
 
   Widget _buildChatsTab() {

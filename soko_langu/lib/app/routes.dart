@@ -55,6 +55,7 @@ class AppRoutes {
   static const String discovery = '/discovery';
   static const String myPurchases = '/my-purchases';
   static const String kyc = '/kyc';
+  static const String subscription = '/subscription';
 
   /// Hub for email, phone, MFA, and KYC verification statuses.
   static const String verificationCenter = '/verification-center';

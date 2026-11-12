@@ -995,7 +995,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ─── SMOKE: deny-all fallback for any undocumented collection ──
+    // ─── BANNER CAMPAIGNS (admin-managed marketing banners) ─────
+  match /banner_campaigns/{campaignId} {
+    // Public read so marketing banners can render for all visitors.
+    allow read: if true;
+    allow create, update, delete: if isAdmin();
+  }
+
+  match /banner_impressions/{eventId} {
+    allow create: if isSignedIn()
+      && request.resource.data.userId == request.auth.uid;
+    allow read: if isAdmin()
+      || (isSignedIn() && resource.data.userId == request.auth.uid);
+    allow update, delete: if isAdmin();
+  }
+
+  match /banner_clicks/{eventId} {
+    allow create: if isSignedIn()
+      && request.resource.data.userId == request.auth.uid;
+    allow read: if isAdmin()
+      || (isSignedIn() && resource.data.userId == request.auth.uid);
+    allow update, delete: if isAdmin();
+  }
+
+  // ─── SMOKE: deny-all fallback for any undocumented collection ──
     // COMPANY OS (server-written only)
     // All access goes through the authenticated /api/v1/company backend using
     // the Admin SDK, which bypasses these rules. Client SDK access is denied.

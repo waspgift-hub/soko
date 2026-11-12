@@ -266,6 +266,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Map<String, dynamic> get d => _liveData.isNotEmpty ? _liveData : widget.data;
   String get status => d['status'] as String? ?? 'pending';
 
+  /// Canonical payment method for this order. Legacy docs may carry aliases
+  /// (mobile_money/cash) or no value at all — normalize before comparing.
+  String get _paymentMethod {
+    final raw = (d['paymentMethod'] ?? d['preferredPaymentMethod'] ?? '').toString().toLowerCase().trim();
+    switch (raw) {
+      case 'mobile_money':
+      case 'escrow':
+        return 'escrow';
+      case 'cash':
+      case 'cod':
+        return 'cod';
+      default:
+        // Legacy docs without an explicit method but with an escrow hold are escrow.
+        if (d['escrowHold'] != null || d['escrowReleased'] == true) return 'escrow';
+        return 'escrow';
+    }
+  }
+
+  bool get _isCodOrder => _paymentMethod == 'cod';
+  bool get _isEscrowOrder => _paymentMethod == 'escrow';
+
   /// True while the goods are travelling (any engine spelling, raw or v2).
   bool get _inTransitState {
     final s = canonicalStatusOf(status);
@@ -537,7 +558,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     const SizedBox(height: 16),
                     _buildStatusBanner(context, cs),
                     const SizedBox(height: 16),
-                if (_isPaidState)
+                if (_isPaidState && _isEscrowOrder)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Container(
@@ -1817,8 +1838,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final isBuyer = user != null && d['buyerId'] == user.uid;
     final isSeller = user != null && d['sellerId'] == user.uid;
     final canConfirm = _inTransitState || _inInspectionState || status == 'delivered';
-    final canDispute = _isEscrowStatus || _inTransitState || _inInspectionState;
-    final canCancel = _isEscrowStatus;
+    final canDispute = !_isCodOrder && (_isEscrowStatus || _inTransitState || _inInspectionState);
+    final canCancel = !_isCodOrder && _isEscrowStatus;
 
     if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
       return Container(
@@ -1857,7 +1878,68 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
     }
 
-    if (status == 'quoted' && isBuyer) {
+    if (status == 'quoted' && isBuyer && _isCodOrder) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: cs.surface.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: cs.tertiary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.money_outlined, color: cs.tertiary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Text(context.tr('cod_payment_title', 'Malipo mkononi'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              context.tr('cod_quote_instructions', 'Muuzaji ameweka gharama ya usafirishaji. Kiasi cha jumla kinacholipwa mkononi: TZS ${_nf(_quotedTotal)}. Lipa moja kwa moja kwa muuzaji baada ya kupokea bidhaa.'),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+                    if (token == null) return;
+                    await http.post(
+                      Uri.parse('${ApiConfig.baseUrl}/api/orders/${widget.docId}/accept-quote'),
+                      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+                    );
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('quote_accepted', 'Quote imekubaliwa'))));
+                  } catch (_) {}
+                },
+                icon: const Icon(Icons.check, size: 20),
+                label: Text(context.tr('accept_quote', 'Kubali gharama')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status == 'quoted' && isBuyer && _isEscrowOrder) {
       final shipping = _quotedShippingCost;
       final price = _quotedProductPrice;
       final platformFee = _quotedPlatformFee;

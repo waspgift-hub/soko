@@ -461,6 +461,7 @@ try {
   app.use('/api/notifications', generalLimiter, compat.notificationRouter);
   app.use('/api', generalLimiter, compat.featureCompatRouter);
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
+  app.use('/api/cod', generalLimiter, compat.codRouter);
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
   app.use('/api', generalLimiter, compat.trustCompatRouter);
   app.use('/api', generalLimiter, compat.moderationCompatRouter);

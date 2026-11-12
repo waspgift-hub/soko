@@ -75,7 +75,7 @@ class _CheckoutV2ScreenState extends State<CheckoutV2Screen> {
           'district': _district.text.trim(),
           'street': _street.text.trim(),
           'deliveryType': 'standard',
-          'preferredPaymentMethod': _mobileMoney ? 'mobile_money' : 'cash',
+          'preferredPaymentMethod': _mobileMoney ? 'escrow' : 'cod',
         }),
       ).timeout(const Duration(seconds: 30));
       final data = jsonDecode(resp.body) as Map<String, dynamic>;

@@ -26,3 +26,6 @@ analyze*.txt
 *.firebase.cache
 
 _attic/
+
+# Build outputssoko_langu/apps/admin-console/.next/
+soko_langu/apps/admin-console/.open-next/

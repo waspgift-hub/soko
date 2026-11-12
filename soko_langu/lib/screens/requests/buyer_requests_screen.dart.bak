@@ -1,0 +1,321 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../models/buyer_request_model.dart';
+import '../../services/buyer_request_service.dart';
+import '../../widgets/google_loading.dart';
+import '../../extensions/context_tr.dart';
+import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/ds/ds.dart';
+import '../../widgets/soko_vibe_states.dart';
+
+class BuyerRequestsScreen extends StatefulWidget {
+  const BuyerRequestsScreen({super.key});
+
+  @override
+  State<BuyerRequestsScreen> createState() => _BuyerRequestsScreenState();
+}
+
+class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
+  final BuyerRequestService _service = BuyerRequestService();
+  int _tab = 0; // 0 market, 1 mine, 2 history
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(context.tr('buyer_requests_title')),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                _tabChip(0, context.tr('buyer_requests_tab_market', 'Market')),
+                const SizedBox(width: 8),
+                _tabChip(1, context.tr('my_requests_tab_active', 'Mine')),
+                const SizedBox(width: 8),
+                _tabChip(2, context.tr('buyer_requests_tab_history', 'History')),
+              ],
+            ),
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(AppRoutes.postBuyerRequest),
+        icon: const Icon(Icons.add),
+        label: Text(context.tr('post_request')),
+      ),
+      body: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnap) {
+          final user = authSnap.data ?? FirebaseAuth.instance.currentUser;
+          if (user == null) {
+            if (authSnap.connectionState == ConnectionState.waiting) {
+              return const Center(child: GoogleLoading(size: 32));
+            }
+            return SokoVibeEmptyState(
+              icon: Icons.lock_outline,
+              title: context.tr('login_required'),
+              subtitle: context.tr('login_required_body'),
+              actionLabel: context.tr('login'),
+              onAction: () => context.push(AppRoutes.login),
+            );
+          }
+          if (_tab == 0) {
+            return _streamBody(_service.getRequests(), market: true);
+          }
+          return _streamBody(_service.getMyRequests(), market: false);
+        },
+      ),
+    );
+  }
+
+  Widget _tabChip(int idx, String label) {
+    final selected = _tab == idx;
+    return Expanded(
+      child: ChoiceChip(
+        label: Center(child: Text(label)),
+        selected: selected,
+        onSelected: (_) => setState(() => _tab = idx),
+      ),
+    );
+  }
+
+  Widget _streamBody(Stream<List<BuyerRequest>> stream, {required bool market}) {
+    return StreamBuilder<List<BuyerRequest>>(
+      stream: stream,
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return _ErrorState(detail: snap.error?.toString() ?? '');
+        }
+        if (!snap.hasData) return const Center(child: GoogleLoading(size: 32));
+        var requests = snap.data!;
+        if (!market) {
+          if (_tab == 1) {
+            requests = requests.where((r) => r.isActive).toList();
+          } else if (_tab == 2) {
+            requests = requests.where((r) => r.isExpired || r.isClosed).toList();
+          }
+        }
+        if (requests.isEmpty) {
+          return SokoVibeEmptyState(
+            icon: market ? Icons.search_off : Icons.history,
+            title: context.tr('requests_empty'),
+            subtitle: market ? context.tr('requests_empty_hint') : context.tr('no_results'),
+            actionLabel: market ? context.tr('post_request') : null,
+            onAction: market ? () => context.push(AppRoutes.postBuyerRequest) : null,
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+          itemCount: requests.length,
+          itemBuilder: (context, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildRequestCard(requests[index], market: market),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRequestCard(BuyerRequest req, {required bool market}) {
+    final cs = Theme.of(context).colorScheme;
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final unlocked = req.isUnlockedFor(uid);
+    final mine = req.buyerUid == uid;
+    final canUnlock = market && !mine && req.isActive && !unlocked;
+    final statusLabel = req.isClosed
+        ? context.tr('request_closed', 'Closed')
+        : req.isExpired
+            ? context.tr('request_expired', 'Expired')
+            : _expiryLabel(req);
+
+    return DsCard(
+      padding: const EdgeInsets.all(16),
+      color: cs.cardBase,
+      radius: 18,
+      border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
+      elevation: DsCardElevation.low,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            DsAvatar(
+              initials: _initials(req.buyerName.isEmpty ? req.buyerUid : req.buyerName),
+              size: DsAvatarSize.md,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(req.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.25)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.person_outline, size: 14, color: cs.contentMuted),
+                    const SizedBox(width: 4),
+                    Text(req.buyerName.isEmpty ? req.buyerUid : req.buyerName,
+                        style: TextStyle(fontSize: 12, color: cs.contentMuted)),
+                  ]),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.schedule, size: 13, color: cs.contentMuted),
+                    const SizedBox(width: 3),
+                    Text(_relativeTime(req.createdAt), style: TextStyle(fontSize: 12, color: cs.contentMuted)),
+                  ]),
+                ]),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            DsBadge(
+              label: req.isClosed ? context.tr('request_closed', 'Closed') : (req.isExpired ? context.tr('request_expired', 'Expired') : (unlocked ? context.tr('contact_unlocked_short') : context.tr('locked_short'))),
+              color: (req.isClosed || req.isExpired) ? cs.contentMuted.withValues(alpha: 0.9) : (unlocked ? cs.brandSuccess.withValues(alpha: 0.9) : cs.contentMuted.withValues(alpha: 0.9)),
+              icon: (req.isClosed || req.isExpired) ? Icons.event_busy : (unlocked ? Icons.lock_open_rounded : Icons.lock_rounded),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            DsChip(label: '${context.tr('request_budget_label')}: ${context.formatPrice(req.budget)}', chipSize: DsChipSize.sm, selected: false, icon: Icons.monetization_on_outlined),
+            DsChip(label: statusLabel, chipSize: DsChipSize.sm, selected: false, icon: Icons.timer_outlined),
+          ]),
+          if (req.description.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(req.description, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: cs.contentSecondary, height: 1.4)),
+          ],
+          const SizedBox(height: 14),
+          if (market) ...[
+            if (unlocked)
+              DsButton(label: context.tr('whatsapp_contact'), size: DsButtonSize.sm, fullWidth: true, icon: Icons.chat, onPressed: () => _openWhatsApp(req.whatsapp))
+            else if (canUnlock)
+              DsButton(label: context.tr('unlock_contact'), variant: DsButtonVariant.secondary, size: DsButtonSize.sm, fullWidth: true, icon: Icons.lock_open, onPressed: () => _unlock(req))
+            else
+              DsButton(label: context.tr('request_expired_unlock_blocked', 'This request is expired or closed'), variant: DsButtonVariant.secondary, size: DsButtonSize.sm, fullWidth: true, icon: Icons.lock_outline, onPressed: null),
+          ] else ...[
+            if (mine && req.isActive)
+              Row(children: [
+                Expanded(child: DsButton(label: context.tr('request_close', 'Close request'), variant: DsButtonVariant.secondary, size: DsButtonSize.sm, fullWidth: true, icon: Icons.lock_clock, onPressed: () => _close(req))),
+                const SizedBox(width: 8),
+                Expanded(child: DsButton(label: context.tr('request_delete', 'Delete request'), variant: DsButtonVariant.secondary, size: DsButtonSize.sm, fullWidth: true, icon: Icons.delete_outline, onPressed: () => _delete(req))),
+              ])
+            else if (mine)
+              DsButton(label: context.tr('request_delete', 'Delete request'), variant: DsButtonVariant.secondary, size: DsButtonSize.sm, fullWidth: true, icon: Icons.delete_outline, onPressed: () => _delete(req)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _expiryLabel(BuyerRequest req) {
+    final exp = req.expiresAt;
+    if (exp == null) return context.tr('active', 'Active');
+    final now = DateTime.now();
+    final diff = exp.difference(now);
+    if (diff.isNegative) return context.tr('request_expired', 'Expired');
+    if (diff.inHours < 24 && exp.day == now.day) {
+      return diff.inHours <= 0
+          ? context.tr('request_expires_in', 'Expires in {0}').replaceAll('{0}', '${diff.inMinutes}m')
+          : context.tr('request_expires_in', 'Expires in {0}').replaceAll('{0}', '${diff.inHours}h');
+    }
+    final tomorrow = now.add(const Duration(days: 1));
+    if (exp.year == tomorrow.year && exp.month == tomorrow.month && exp.day == tomorrow.day) {
+      return context.tr('request_expires_tomorrow', 'Expires tomorrow');
+    }
+    return context.tr('request_expires_in', 'Expires in {0}').replaceAll('{0}', '${diff.inDays}d');
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final s = parts.first.trim();
+      return s.substring(0, s.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
+  String _relativeTime(DateTime time) {
+    final d = DateTime.now().difference(time);
+    if (d.inSeconds < 10) return context.tr('just_now');
+    if (d.inMinutes < 1) return '${d.inSeconds}s';
+    if (d.inHours < 1) return '${d.inMinutes}m';
+    if (d.inDays < 1) return '${d.inHours}h';
+    return '${d.inDays}d';
+  }
+
+  Future<void> _unlock(BuyerRequest req) async {
+    try {
+      await _service.unlockContact(req.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('contact_unlocked')), backgroundColor: Theme.of(context).colorScheme.primary));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyError(e)), backgroundColor: Theme.of(context).colorScheme.error));
+      }
+    }
+  }
+
+  Future<void> _close(BuyerRequest req) async {
+    try {
+      await _service.closeRequest(req.id);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('request_closed_success', 'Request closed'))));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyError(e))));
+    }
+  }
+
+  Future<void> _delete(BuyerRequest req) async {
+    try {
+      await _service.deleteRequest(req.id);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('request_deleted_success', 'Request deleted'))));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyError(e))));
+    }
+  }
+
+  String _friendlyError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('REQUEST_EXPIRED') || msg.contains('REQUEST_CLOSED')) {
+      return context.tr('request_expired_unlock_blocked', 'This request is expired or closed');
+    }
+    return context.tr('imeshindwa').replaceAll('{0}', msg);
+  }
+
+  Future<void> _openWhatsApp(String link) async {
+    final uri = Uri.parse(link);
+    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('phone_number_missing'))));
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String detail;
+  const _ErrorState({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 88, height: 88,
+            decoration: BoxDecoration(color: cs.error.withValues(alpha: 0.1), shape: BoxShape.circle, border: Border.all(color: cs.error.withValues(alpha: 0.2))),
+            child: Icon(Icons.cloud_off_rounded, size: 40, color: cs.error.withValues(alpha: 0.85)),
+          ),
+          const SizedBox(height: 18),
+          Text(context.tr('requests_error'), textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.contentPrimary)),
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(detail, textAlign: TextAlign.center, style: TextStyle(color: cs.contentMuted, fontSize: 11, fontFamily: 'monospace')),
+          ],
+        ]),
+      ),
+    );
+  }
+}

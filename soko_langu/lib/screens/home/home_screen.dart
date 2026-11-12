@@ -13,6 +13,9 @@ import '../../models/product_model.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/banner_rotator.dart';
+import '../../widgets/banners/campaign_banner_slot.dart';
+import '../../models/banner_model.dart';
+import '../../services/banner_service.dart';
 import '../../widgets/marketplace/category_card.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/premium_widgets.dart';
@@ -608,6 +611,13 @@ class _HomeScreenState extends State<HomeScreen>
                       // Banners
                       BannerRotator(flashSales: _flashSales.values.toList()),
                       const SizedBox(height: AppInsets.sm),
+                       // Admin-configured campaign banners (home placement).
+                       CampaignBannerSlot(
+                         placement: BannerPlacement.homeFeed,
+                         bannerService: context.read<BannerService>(),
+                         margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                       ),
+                       const SizedBox(height: AppInsets.sm),
                       // Categories
                       SectionHeader(
                         title: context.tr('categories'),
