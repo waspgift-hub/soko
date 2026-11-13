@@ -1,9 +1,14 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import '../services/api_config.dart';
 import '../services/fraud_prevention_service.dart';
+import '../services/mfa_service.dart';
 import '../utils/network_error.dart';
+import '../utils/phone_utils.dart';
 
 class AuthRepository {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -14,12 +19,11 @@ class AuthRepository {
 
   Future<UserCredential> login(String email, String password) async {
     try {
-      final cred = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
       await _ensureProfileExists(cred.user);
       return cred;
+    } on FirebaseAuthMultiFactorException catch (e) {
+      throw MfaSignInRequired(e.resolver, email: email);
     } on FirebaseAuthException catch (e) {
       throw NetworkError(
         message: e.message ?? 'Login failed',
@@ -29,16 +33,79 @@ class AuthRepository {
     }
   }
 
+  Future<UserCredential> loginWithPhone(String phone, String otp) async {
+    try {
+      final normalized = PhoneUtils.toE164(phone);
+
+      final res = await http.post(
+        Uri.parse(ApiConfig.v1('/auth/phone-login')),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': normalized, 'otp': otp}),
+      );
+
+      final body = jsonDecode(res.body);
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw NetworkError(
+          message: 'Phone login failed: ${body['error']}',
+          userMessage: body['error'] ?? 'auth_no_account',
+        );
+      }
+
+      final cred = await _auth.signInWithCustomToken(body['token'] as String);
+      await _ensureProfileExists(cred.user);
+      return cred;
+    } on NetworkError {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Phone login failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    } catch (e) {
+      throw NetworkError(message: 'Phone login error: $e', userMessage: ErrorKeys.poorNetwork);
+    }
+  }
+
+  Future<UserCredential> loginWithEmailOtp(String email, String otp) async {
+    try {
+      final res = await http.post(
+        Uri.parse(ApiConfig.v1('/auth/email-otp-login')),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim().toLowerCase(), 'otp': otp}),
+      );
+
+      final body = jsonDecode(res.body);
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw NetworkError(
+          message: 'Email OTP login failed: ${body['error']}',
+          userMessage: body['error'] ?? 'auth_otp_invalid',
+        );
+      }
+
+      final cred = await _auth.signInWithCustomToken(body['token'] as String);
+      await _ensureProfileExists(cred.user);
+      return cred;
+    } on NetworkError {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Email OTP login failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    } catch (e) {
+      throw NetworkError(message: 'Email OTP login error: $e', userMessage: ErrorKeys.poorNetwork);
+    }
+  }
+
   Future<UserCredential> register({
     required String email,
     required String password,
     required String displayName,
   }) async {
     try {
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
       final user = cred.user;
       if (user != null) {
         await user.updateDisplayName(displayName);
@@ -48,6 +115,34 @@ class AuthRepository {
     } on FirebaseAuthException catch (e) {
       throw NetworkError(
         message: e.message ?? 'Registration failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
+  static String phoneToEmail(String phone) {
+    final clean = phone.replaceAll(RegExp(r'\D'), '');
+    return 'phone_$clean@soko-vibe.com';
+  }
+
+  Future<UserCredential> registerWithPhone({
+    required String phone,
+    required String password,
+    required String displayName,
+  }) async {
+    try {
+      final email = phoneToEmail(phone);
+      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      final user = cred.user;
+      if (user != null) {
+        await user.updateDisplayName(displayName);
+        await _createProfile(user.uid, displayName, email, phone: phone);
+      }
+      return cred;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Phone registration failed',
         userMessage: _mapError(e.code),
         originalError: e,
       );
@@ -68,18 +163,15 @@ class AuthRepository {
       final googleUser = await GoogleSignIn.instance.authenticate();
       final googleAuth = googleUser.authentication;
       if (googleAuth.idToken == null) {
-        throw NetworkError(
-          message: 'Google idToken is null',
-          userMessage: 'Google Sign-In imeshindwa. Tafadhali jaribu tena.',
-        );
+        throw NetworkError(message: 'Google idToken is null', userMessage: 'auth_google_failed');
       }
 
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
+      final credential = GoogleAuthProvider.credential(idToken: googleAuth.idToken);
       final result = await _auth.signInWithCredential(credential);
       await _ensureProfileExists(result.user);
       return result;
+    } on FirebaseAuthMultiFactorException catch (e) {
+      throw MfaSignInRequired(e.resolver);
     } on NetworkError {
       rethrow;
     } on FirebaseAuthException catch (e) {
@@ -92,8 +184,7 @@ class AuthRepository {
       debugPrint('GoogleSignIn error: $e');
       throw NetworkError(
         message: 'Google Sign-In failed: $e',
-        userMessage:
-            'Google Sign-In imeshindwa. Tafadhali hakikisha umechagua akaunti na jaribu tena.',
+        userMessage: 'auth_google_cancelled',
       );
     }
   }
@@ -103,6 +194,27 @@ class AuthRepository {
       await GoogleSignIn.instance.signOut();
     }
     await _auth.signOut();
+  }
+
+  /// Revokes every session for this user on the server (logout from all
+  /// devices), then signs out locally. The server call is best-effort: the
+  /// local sign-out always runs so this device never stays logged in.
+  Future<void> logoutAll() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        final token = await user.getIdToken();
+        await http
+            .post(
+              Uri.parse(ApiConfig.v1('/auth/logout-all')),
+              headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+            )
+            .timeout(const Duration(seconds: 15));
+      } catch (_) {
+        // Revocation failure must not block the local sign-out below.
+      }
+    }
+    await logout();
   }
 
   Future<void> sendEmailVerification() async {
@@ -127,72 +239,12 @@ class AuthRepository {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
-  // ---------------------------------------------------------------------------
-  // Passwordless Email Auth (Magic Link)
-  // ---------------------------------------------------------------------------
-
-  Future<void> sendSignInLink({
-    required String email,
-    required ActionCodeSettings actionCodeSettings,
-  }) async {
-    try {
-      await _auth.sendSignInLinkToEmail(
-        email: email,
-        actionCodeSettings: actionCodeSettings,
-      );
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Failed to send magic link',
-        userMessage: _mapError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
-  static bool isSignInWithEmailLink(String link) {
-    return FirebaseAuth.instance.isSignInWithEmailLink(link);
-  }
-
-  Future<UserCredential> signInWithEmailLink({
-    required String email,
-    required String link,
-  }) async {
-    try {
-      final cred = await _auth.signInWithEmailLink(
-        email: email,
-        emailLink: link,
-      );
-      await _ensureProfileExists(cred.user);
-      return cred;
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Failed to sign in with magic link',
-        userMessage: _mapError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
-  static ActionCodeSettings magicLinkSettings() {
-    return ActionCodeSettings(
-      url: 'https://sokonimoko-8c171-a8d14.web.app/magic-link',
-      handleCodeInApp: true,
-      androidPackageName: 'com.sokolangu.app',
-      iOSBundleId: 'com.sokolangu.app',
-      androidInstallApp: false,
-    );
-  }
-
   Future<void> _ensureProfileExists(User? user) async {
     if (user == null) return;
     try {
       final doc = await _db.collection('users').doc(user.uid).get();
       if (!doc.exists) {
-        await _createProfile(
-          user.uid,
-          user.displayName ?? 'User',
-          user.email ?? '',
-        );
+        await _createProfile(user.uid, user.displayName ?? 'User', user.email ?? '');
       }
     } catch (e) {
       debugPrint('ensureProfileExists error: $e');
@@ -202,15 +254,16 @@ class AuthRepository {
   Future<void> _createProfile(
     String uid,
     String displayName,
-    String email,
-  ) async {
+    String email, {
+    String phone = '',
+  }) async {
     try {
       await _db.collection('users').doc(uid).set({
         'displayName': displayName,
         'email': email,
         'username': '',
         'bio': '',
-        'phone': '',
+        'phone': phone,
         'location': '',
         'mood': '',
         'profileImage': '',
@@ -222,10 +275,10 @@ class AuthRepository {
         'longitude': null,
         'coins': 0,
         'viewerCoins': 0,
-        'sellerBalance': 0,
         'soldCount': 0,
-        'isAdmin': false,
-        'isSuspended': false,
+        // Trust/financial fields (isAdmin, isSuspended, sellerBalance,
+        // walletBalance, ...) are intentionally NOT written by the client —
+        // Firestore rules reject them and the server owns them via Admin SDK.
         'createdAt': FieldValue.serverTimestamp(),
       });
       await FraudPreventionService().checkNewSeller(uid, displayName);
@@ -234,48 +287,101 @@ class AuthRepository {
     }
   }
 
+  // MFA (TOTP) methods
+
+  /// Checks if the current user has TOTP MFA enrolled.
+  Future<bool> hasMfaEnrolled() async {
+    final mfaService = MfaService();
+    return mfaService.hasMfaEnrolled();
+  }
+
+  /// Starts TOTP enrollment.
+  Future<MfaEnrollmentData> startMfaEnrollment() async {
+    final mfaService = MfaService();
+    return mfaService.startEnrollment();
+  }
+
+  /// Completes TOTP enrollment with a code from the authenticator app and the secret.
+  Future<void> completeMfaEnrollment({required String secret, required String totpCode}) async {
+    final mfaService = MfaService();
+    return mfaService.completeEnrollmentWithSecret(secret: secret, totpCode: totpCode);
+  }
+
+  /// Unenrolls the TOTP second factor.
+  Future<void> unenrollMfa() async {
+    final mfaService = MfaService();
+    return mfaService.unenroll();
+  }
+
+  /// Gets the TOTP secret for an enrolled factor.
+  Future<String?> getTotpSecret() async {
+    final mfaService = MfaService();
+    return mfaService.getTotpSecret();
+  }
+
+  /// Resolves an MFA sign-in challenge and finalizes the session.
+  Future<UserCredential> resolveMfaSignIn(MultiFactorResolver resolver, String totpCode) async {
+    try {
+      final cred = await MfaService().resolveSignInChallenge(resolver, totpCode);
+      await _ensureProfileExists(cred.user);
+      return cred;
+    } on MfaError {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'MFA verification failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
+  /// Verifies a TOTP code for step-up authentication.
+  Future<bool> verifyTotpForStepUp(String totpCode) async {
+    return MfaService().verifyTotpForStepUp(totpCode);
+  }
+
   String _mapError(String code) {
     switch (code) {
       case 'user-not-found':
-        return 'Hakuna akaunti iliyopatikana kwa barua pepe hii.';
+        return ErrorKeys.noAccount;
       case 'wrong-password':
-        return 'Nenosiri si sahihi. Tafadhali jaribu tena.';
+        return ErrorKeys.wrongPassword;
       case 'invalid-email':
-        return 'Barua pepe si sahihi.';
+        return ErrorKeys.invalidEmail;
       case 'user-disabled':
-        return 'Akaunti hii imezimwa. Wasiliana na msaada.';
+        return ErrorKeys.accountDisabled;
       case 'email-already-in-use':
-        return 'Akaunti yenye barua pepe hii tayari ipo. Jaribu kuingia.';
+        return ErrorKeys.emailInUse;
       case 'weak-password':
-        return 'Nenosiri ni fupi sana. Tumia angalau herufi 8.';
+        return ErrorKeys.weakPassword;
       case 'network-request-failed':
-        return 'Mtandao dhaifu. Angalia muunganisho wako.';
+        return ErrorKeys.poorNetwork;
       case 'too-many-requests':
-        return 'Umejaribu mara nyingi sana. Subiri kidogo kisha jaribu tena.';
+        return ErrorKeys.tooManyAttempts;
       case 'invalid-credential':
-        return 'Barua pepe au nenosiri si sahihi.';
+        return ErrorKeys.invalidCredentials;
       case 'account-exists-with-different-credential':
-        return 'Akaunti ipo kwa njia tofauti. Jaribu kuingia kwa kutumia Google.';
+        return ErrorKeys.emailInUse;
       case 'requires-recent-login':
-        return 'Tafadhali ingia tena kwa usalama kisha jaribu tena.';
+        return ErrorKeys.sessionExpired;
       case 'invalid-phone-number':
-        return 'Namba ya simu si sahihi. Tumia mfano 0712345678.';
-      case 'invalid-verification-code':
-        return 'OTP si sahihi. Angalia SMS na jaribu tena.';
-      case 'invalid-verification-id':
-        return 'OTP imeisha muda. Tuma OTP mpya.';
-      case 'session-expired':
-        return 'Muda wa OTP umeisha. Tuma OTP mpya.';
-      case 'quota-exceeded':
-        return 'Ujumbe mwingi umetumwa. Subiri kidogo kisha jaribu tena.';
       case 'missing-phone-number':
-        return 'Weka namba ya simu.';
+        return 'auth_wrong_phone';
+      case 'invalid-verification-code':
+        return 'auth_otp_invalid';
+      case 'invalid-verification-id':
+        return 'auth_otp_expired';
+      case 'session-expired':
+        return ErrorKeys.sessionExpired;
+      case 'quota-exceeded':
+        return 'auth_otp_rate_limited';
       case 'credential-already-in-use':
-        return 'Namba hii tayari inatumika na akaunti nyingine.';
+        return ErrorKeys.emailInUse;
       case 'provider-already-linked':
-        return 'Akaunti hii tayari imeunganishwa na mtandao huu.';
+        return ErrorKeys.alreadyExists;
       default:
-        return 'Kuna tatizo lililotokea. Tafadhali jaribu tena.';
+        return ErrorKeys.generic;
     }
   }
 }

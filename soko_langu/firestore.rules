@@ -10,49 +10,138 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // A missing isAdmin is treated as "not an admin" via get() rather than left to
+    // raise an evaluation error: the flag is absent on every ordinary profile,
+    // so reading it directly would make this helper error out instead of simply
+    // returning false.
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'admin@soko-langu.com' ||
-        request.auth.token.email == 'admin@soko-vibe.com' ||
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-        )
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true
       );
     }
 
-    function kycApproved() {
-      return isSignedIn() && (
-        request.auth.token.email == 'admin@soko-langu.com' ||
-        request.auth.token.email == 'admin@soko-vibe.com' ||
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kyc.approved == true
-        )
-      );
-    }
-
+    // Firestore rules do not guarantee short-circuit evaluation, and reading a
+    // field that is not present raises an evaluation error (which denies the
+    // whole request) rather than yielding null. Reading isSuspended through
+    // get() with a false default keeps an account whose profile predates the
+    // field — or whose profile write failed — able to comment, review and post
+    // a buyer request, instead of silently losing every write action.
     function notSuspended() {
       return isSignedIn() && (
-        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuspended != true
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) != true
       );
+    }
+
+    // ─── FIELD-LEVEL WRITE PROTECTION ──────────────────────
+    // Fields that only the backend admin SDK may write.
+    // A client-side user document update that touches any of these
+    // fields is silently rejected by Firestore rules, preventing
+    // privilege escalation, wallet tampering, and boost fraud.
+    // Admin SDK bypasses these rules entirely (server-side trust boundary).
+    //
+    // `trust` is here because it holds the Blue Tick grant and therefore the
+    // seller's ad-exemption. `sellerKycApproved` belongs on the same list for
+    // products below: both feed the ranking boost and the ad exemption, so a
+    // client that could write them could buy itself a visibility advantage and
+    // an ad-free account.
+    function noSensitiveFieldChanges() {
+      // Allowing fcmToken to only ever be DELETED (set to null) lets the client
+      // clear its device token on logout without granting any write power.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken'])
+          && request.resource.data.fcmToken == null
+          || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'walletBalance', 'sellerBalance', 'pendingEscrow',
+            'totalSales', 'grossSalesVolume', 'totalWithdrawn',
+            'isAdmin', 'isSuspended', 'kyc', 'trust',
+            'sellerKycApproved', 'adsExempt', 'isBlueTick', 'blueTick',
+            'isBoosted', 'boostedUntil', 'boostTier', 'sessionRevokedAt',
+            'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
+          ]);
+    }
+
+    // For CREATE the doc doesn't exist yet (resource is null), so diff() is
+    // unreliable. Check the incoming keys directly instead: reject any attempt
+    // to bootstrap financial/trust state. isAdmin / isSuspended may only be
+    // false, sellerBalance may only be 0, and createdAt may be written as a
+    // timestamp (legacy client profile payload). Everything that carries real
+    // value or privilege stays server-only.
+    function noSensitiveCreateFields() {
+      let incoming = request.resource.data;
+      return !incoming.keys().hasAny([
+          'walletBalance', 'pendingEscrow',
+          'totalSales', 'grossSalesVolume', 'totalWithdrawn',
+          'kyc', 'trust', 'sellerKycApproved', 'adsExempt', 'isBlueTick', 'blueTick',
+          'isBoosted', 'boostedUntil', 'boostTier', 'sessionRevokedAt',
+          'lastSaleAt', 'lastLoginAt', 'fcmToken'
+        ])
+        && incoming.get('sellerBalance', 0) == 0
+        && incoming.get('isAdmin', false) != true
+        && incoming.get('isSuspended', false) != true;
+    }
+
+    // ─── USER PUBLIC PROJECTIONS ────────────────────────────
+    //
+    // Why this collection exists: `users/{uid}` is the owner's private record
+    // (phone, email, kyc, balances, isAdmin, isSuspended). Firestore rules CAN
+    // filter a *list* but CANNOT redact fields from a document read — so
+    // `allow read: if isSignedIn()` on `users` handed every logged-in account
+    // the entire user table, including other people's phone numbers and admin
+    // status.
+    //
+    // Rather than pretend field-level rules exist, the fields the marketplace
+    // legitimately needs about *other* people are projected into this
+    // collection, which contains no PII, no money and no privilege flags. It is
+    // written ONLY by the Admin SDK (which bypasses rules); no client rule
+    // grants write, so a caller cannot forge a verified badge.
+    match /userPublic/{userId} {
+      // Readable by anyone: everything here is display data by construction.
+      allow read: if true;
+      // ONE field is client-writable: the profile-view counter, and only by
+      // incrementing it by exactly one. There is deliberately no `create`, so a
+      // caller cannot fabricate a projection. Follower/following counts are
+      // server-owned (admin SDK) and are NOT client-writable.
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profileViews'])
+        && request.resource.data.profileViews == resource.data.profileViews + 1;
+      // Public/private toggle + visibility settings are client-writable by the
+      // OWNER only.
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'visibility'
+        ])
+        && request.resource.data.visibility is map
+        && request.resource.data.visibility.keys().hasOnly([
+          'isPrivate', 'showFollowers', 'showFollowing', 'showProducts',
+          'allowContactDiscovery'
+        ])
+        && request.resource.data.visibility.isPrivate is bool
+        && request.resource.data.visibility.showFollowers is bool
+        && request.resource.data.visibility.showFollowing is bool
+        && request.resource.data.visibility.showProducts is bool
+        && request.resource.data.visibility.allowContactDiscovery is bool;
     }
 
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      // Owner or admin only.
+      //
+      // Cross-user reads that the marketplace genuinely needs (display name for
+      // chat, seller badge for a listing, profile-view counter) must go through
+      // `userPublic/{uid}` above, which carries only the safe subset. Keeping
+      // this owner-scoped is what stops one seller from scripting a loop over
+      // `collection('users').get()` and harvesting every phone number, email,
+      // KYC state and `isAdmin` flag in the platform.
+      allow read: if isOwner(userId) || isAdmin();
+      // Create must also pass noSensitiveFieldChanges — otherwise a client could
+      // sign up and create their own doc with isAdmin:true, sellerBalance, etc.
+      allow create: if isOwner(userId) && noSensitiveCreateFields();
+      // Clients may update their own profile BUT NOT financial, trust,
+      // or boost fields. Only the admin SDK (server webhook) may touch those.
+      allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
-
-      match /following/{followingId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /followers/{followerId} {
-        allow read, write: if isOwner(userId);
-      }
 
       match /admin_withdrawals/{wdId} {
         allow read, write: if isOwner(userId);
@@ -61,19 +150,128 @@ service cloud.firestore {
       match /cart/{itemId} {
         allow read, write: if isOwner(userId);
       }
+
+      // ─── FOLLOWING (who this user follows) ───────────────────
+      // Each doc: users/{followerId}/following/{followingId}
+      match /following/{followingId} {
+        allow create: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.followerId == request.auth.uid
+          && request.resource.data.followingId == followingId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isSignedIn();
+      }
+
+      // ─── FOLLOWERS (who follows this user) ────────────────────
+      // Each doc: users/{followedId}/followers/{followerId}
+      match /followers/{followerId} {
+        allow create: if isSignedIn()
+          && request.resource.data.followerId == followerId
+          && (
+            // Follower writes their own follower edge to a public target
+            (request.auth.uid == followerId
+              && get(/databases/$(database)/documents/users/$(userId)).data.get('visibility', {}).get('isPrivate', false) == false)
+            // Target approves a pending request (must have a pending request doc)
+            || (request.auth.uid == userId
+              && followerId != request.auth.uid
+              && exists(/databases/$(database)/documents/users/$(userId)/followRequests/$(followerId)))
+          );
+        allow delete: if isSignedIn()
+          && (request.auth.uid == userId || request.auth.uid == followerId);
+        allow read: if isSignedIn();
+      }
+
+      // ─── FOLLOW REQUESTS (pending, private accounts) ────────────
+      // Each doc: users/{targetId}/followRequests/{requesterId}
+      match /followRequests/{requesterId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && request.auth.uid == requesterId
+          && requesterId != userId
+          && get(/databases/$(database)/documents/users/$(userId)).data.get('visibility', {}).get('isPrivate', false) == true;
+        allow delete: if isSignedIn()
+          && (request.auth.uid == userId || request.auth.uid == requesterId);
+      }
+
+      // ─── FOLLOW REQUESTS SENT (outgoing) ──────────────────────
+      // Each doc: users/{requesterId}/followRequestsSent/{targetId}
+      match /followRequestsSent/{targetId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && request.auth.uid == userId
+          && targetId != request.auth.uid
+          && request.resource.data.targetId == targetId;
+        allow delete: if isSignedIn()
+          && (request.auth.uid == userId || request.auth.uid == targetId);
+      }
+
+      // ─── BLOCKED ACCOUNTS ─────────────────────────────────────
+      // Each doc: users/{blockerId}/blocked/{blockedId}
+      match /blocked/{blockedId} {
+        allow create: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.blockerId == request.auth.uid
+          && request.resource.data.blockedId == blockedId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
+      // A "seller" is not a stored role — anyone signed in may list a product
+      // under their own uid (Postgres API and Firestore fallback both run under
+      // the user's token), which makes the products doc the single source of
+      // seller-ness. Ownership is therefore checked against sellerId on the doc.
+      // Suspension/trust enforcement stays server-side.
+      function isSellerOwns() {
+        return isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      }
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
-      allow delete: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
+      // Create must not bootstrap boost/featured/sales state (server owns those
+      // via the ClickPesa webhook and purchase flow), and cannot start with a
+      // pre-inflated rating — otherwise a client could list a product with
+      // isBoosted:true + rating:5.0 and get a free featured placement.
+      // sellerKycApproved is on the forbidden list for the same reason: it is the
+      // denormalised trust flag the search ranking boost reads.
+      allow create: if isSellerOwns()
+        && !request.resource.data.keys().hasAny([
+          'isBoosted', 'boostedUntil', 'boostTier',
+          'isFeatured', 'featuredUntil', 'soldCount',
+          'sellerKycApproved'
+        ])
+        && request.resource.data.get('rating', 0) == 0
+        && request.resource.data.get('reviewCount', 0) == 0;
+      allow update: if isSignedIn() && (
+        // Seller owns the product AND is not tampering with reputation or
+        // placement state. rating / reviewCount / soldCount are server-owned:
+        // the aggregate is recomputed by POST /api/products/:id/rating through
+        // the admin SDK, so a client write of any of the three can only be an
+        // attempt to inflate a listing's reputation or sales volume. (The
+        // ProductService.updateProductRating / incrementSoldCount helpers that
+        // wrote these from the client have no callers.) sellerKycApproved is
+        // server-owned for the same reason — see create above.
+        (resource.data.sellerId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isBoosted', 'boostedUntil', 'boostTier', 'isFeatured', 'featuredUntil',
+          'rating', 'reviewCount', 'soldCount', 'sellerKycApproved'
+        ]))
+        // any signed-in user can bump viewCount
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
+        // any signed-in user can like/unlike (arrayUnion/arrayRemove on likedBy)
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+        // admin SDK writes bypass rules entirely; this branch covers a client
+        // running as an admin (moderation tools) touching the same fields.
+        || isAdmin()
+      );
+      allow delete: if (isSignedIn() && resource.data.sellerId == request.auth.uid) || isAdmin();
 
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isSignedIn() && notSuspended() && request.resource.data.userId == request.auth.uid;
-        allow update: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
+        allow update: if isSignedIn() && notSuspended() && (
+          resource.data.userId == request.auth.uid ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount'])
+        );
         allow delete: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
 
         match /replies/{replyId} {
@@ -88,7 +286,7 @@ service cloud.firestore {
     // ─── CATEGORIES ─────────────────────────────────────────
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // ─── ORDERS ─────────────────────────────────────────────
@@ -98,10 +296,56 @@ service cloud.firestore {
         resource.data.sellerId == request.auth.uid ||
         isAdmin()
       );
+      // Orders and their mirrors are normally SERVER-OWNED via /api/orders/*
+      // (admin SDK bypasses rules; the Postgres state machine funds escrow).
+      // Client create is allowed ONLY for the buyer's own row (buyerId == uid)
+      // so a seller can never forge someone else's purchase attempt; real money
+      // still settles server-side.
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      // Order lifecycle (status, escrow release, dispatch proof, OTP gen) and
+      // all money fields (shippingCost, totalAmount) are SERVER-OWNED. Clients
+      // may only soft-delete their own row.
       allow update: if isSignedIn() && (
+        (resource.data.buyerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])) ||
+        (resource.data.sellerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+
+      // Delivery OTP: plaintext visible ONLY to buyer; seller never reads this.
+      // The hash stays on the parent doc (readable by both parties — harmless).
+      match /delivery_otp/{otpDoc} {
+        allow read: if isSignedIn() && resource.data.buyerId == request.auth.uid;
+        allow write: if false;
+      }
+    }
+
+    // ─── ORDER TIMELINE ─────────────────────────────────────
+    // Server-only (admin SDK writes). Clients never read or write directly.
+    match /orderTimeline/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── TRANSACTIONS ───────────────────────────────────────
+    match /transactions/{txId} {
+      allow read: if isSignedIn() && (
         resource.data.buyerId == request.auth.uid ||
         resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      // Mirrors are written by the server (admin SDK). No client create path.
+      allow create: if false;
+      // Server owns status/amount mutations (webhook, escrow, orders transition,
+      // presentation mirror). Clients may only soft-delete their own row.
+      allow update: if isSignedIn() && (
+        (resource.data.buyerId == request.auth.uid && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])
+        )) ||
+        (resource.data.sellerId == request.auth.uid && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller'])
+        )) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -120,37 +364,100 @@ service cloud.firestore {
       }
     }
 
-    // ─── CONVERSATIONS & MESSAGES ───────────────────────────
+    // ─── CONVERSATIONS (typing indicators) ──────────────────
+    // Doc ID is `{uid1}_{uid2}` — only those two users may read/write.
     match /conversations/{convId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSignedIn() && (
+        convId.split('_').hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
 
       match /messages/{msgId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn() && (convId.split('_').hasAny([request.auth.uid]) || isAdmin());
+        allow create: if isSignedIn() && (convId.split('_').hasAny([request.auth.uid]) || isAdmin());
+        allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 
     // ─── CHATS (legacy) ─────────────────────────────────────
     match /chats/{chatId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSignedIn() && isAdmin();
 
       match /messages/{msgId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn() && isAdmin();
+        allow create: if isSignedIn() && isAdmin();
+        allow update: if isSignedIn() && isAdmin();
+        allow delete: if isSignedIn() && isAdmin();
+      }
+    }
+
+    // ─── CHAT ROOMS ─────────────────────────────────────────
+    match /chat_rooms/{roomId} {
+      allow read: if isSignedIn() && (
+        resource == null ||
+        resource.data.participants.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.participants.hasAny([request.auth.uid]);
+      allow update: if isSignedIn() && (
+        resource.data.participants.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+
+      match /messages/{msgId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && (
+          get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 
     // ─── FLASH SALES ────────────────────────────────────────
+    // All mutations route through /api/flash-sale/* (admin SDK): a seller can
+    // never extend endTime, rewrite prices, or inflate stock after creation.
     match /flash_sales/{saleId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ─── BUYER REQUESTS (Natafuta Bidhaa) ───────────────────
+    // Any signed-in user may read the feed (was notSuspended gated).
+    match /BuyerRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.buyerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['buyerUid','title','budget'])
+        // contact must start locked — a requester cannot pre-grant unlocks
+        && request.resource.data.get('unlockedBy', []).size() == 0;
+      // Unlock: a signed-in seller OTHER than the requester may arrayUnion
+      // only their OWN uid. Blocks self-unlock and any tampering with other
+      // sellers' unlock state. The premium/paid gate lives server-side.
+      allow update: if isAdmin() || (
+        isSignedIn() && notSuspended()
+        && request.auth.uid != resource.data.buyerUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockedBy'])
+        && request.resource.data.unlockedBy is list
+        && request.resource.data.unlockedBy.size() == resource.data.unlockedBy.size() + 1
+        && resource.data.unlockedBy.toSet().difference(request.resource.data.unlockedBy.toSet()).size() == 0
+        && request.resource.data.unlockedBy.toSet().difference(resource.data.unlockedBy.toSet()).hasOnly([request.auth.uid])
+      );
       allow delete: if isAdmin();
     }
 
     // ─── NOTIFICATIONS ──────────────────────────────────────
     match /notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // userId must be the caller's own — a client may never target another
+      // user's inbox (spam/phishing). Server fan-out uses the admin SDK.
       allow create: if isSignedIn()
-        && (request.resource.data.userId == request.auth.uid || isAdmin())
+        && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasAll(['title', 'body', 'userId'])
         && request.resource.data.title is string
         && request.resource.data.body is string;
@@ -160,19 +467,143 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // ─── NOTIFICATION PREFERENCES ───────────────────────────
+    // Server reads/writes via admin SDK. Clients go through /api/notification/*.
+    match /notification_preferences/{userId} {
+      allow read, write: if isAdmin();
+    }
+
     // ─── REVIEWS ────────────────────────────────────────────
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if isSignedIn() && notSuspended() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && notSuspended()
+        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.sellerId != request.auth.uid)
+        && request.resource.data.productId is string
+        && exists(/databases/$(database)/documents/products/$(request.resource.data.productId))
+        && request.resource.data.get('rating', 5) is number
+        && request.resource.data.get('rating', 5) >= 1
+        && request.resource.data.get('rating', 5) <= 5;
+      allow update: if isSignedIn() && notSuspended()
+        && (
+          // any signed-in user can like/unlike any review (unlimited)
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'helpfulCount'])
+          ||
+          // product seller can reply/edit reply (unlimited)
+          (request.auth.uid != resource.data.userId
+            && exists(/databases/$(database)/documents/products/$(resource.data.productId))
+            && get(/databases/$(database)/documents/products/$(resource.data.productId)).data.sellerId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sellerReply', 'sellerReplyAt']))
+        );
       allow delete: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
     }
 
     // ─── AD VIEWS ───────────────────────────────────────────
+    // Each view pays out TSh 15 to the seller, so the create rule doubles as
+    // an anti-fraud gate: buyerId must be the caller (no bot accounts via a
+    // script), the timestamp must be server-produced (no backdating), and a
+    // seller can never record a view on their OWN product (self-inflation).
+    // Rewarded-ads (100% platform revenue) carry no sellerId and are exempt
+    // from the self-serve check. True per-device rate limiting is not possible
+    // in rules — needs server-side enforcement (see /api/ad-revenue).
     match /ad_views/{adViewId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      // Sellers see only their own ad views; users see only what they watched.
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.get('processed', false) == false
+        && request.resource.data.timestamp == request.time
+        && (
+          !request.resource.data.keys().hasAny(['sellerId', 'productId'])
+          || (request.resource.data.sellerId != request.auth.uid
+              && request.resource.data.productId is string
+              && exists(/databases/$(database)/documents/products/$(request.resource.data.productId)))
+        );
       allow update, delete: if isAdmin();
+    }
+
+    // ─── PRODUCT ANALYTICS ──────────────────────────────────
+    // Tracked views are unique per account (doc id == uid); dashboards and
+    // demographic breakdowns are server-read.
+    match /product_analytics/{productId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+
+      match /views/{viewId} {
+        // A viewer may only ever read their OWN row — that is the de-dupe probe
+        // in AnalyticsService.trackProductView ("have I already seen this?").
+        // The rows carry gender + location + age of every visitor, so letting a
+        // signed-in user list the whole subcollection would expose one seller's
+        // audience demographics to any account.
+        allow read: if isAdmin()
+          || (isSignedIn() && viewId == request.auth.uid);
+
+        // The product must exist, and the row's own productId must match the
+        // parent path. Without the path check a caller could file a view for
+        // product A inside product B's tree and skew B's analytics; without the
+        // exists() check analytics trees could be spawned for products that do
+        // not exist (unbounded storage spam, since views are the only writable
+        // part of this subtree).
+        allow create: if exists(/databases/$(database)/documents/products/$(productId))
+          && request.resource.data.productId == productId
+          && (
+            // Signed-in: a row may only claim the caller's own identity, so a
+            // client cannot inflate the count on behalf of someone else.
+            (isSignedIn() && request.resource.data.get('userId', null) == request.auth.uid)
+            // Anonymous visitor: there is no uid to claim, so userId must be null.
+            // Rate limiting is not expressible in rules — the client caps one
+            // anonymous view per session, and real enforcement is server-side.
+            || (!isSignedIn() && request.resource.data.get('userId', null) == null)
+          );
+
+        // View rows are immutable telemetry; correcting or removing one would
+        // change the number the seller dashboard reports.
+        allow update, delete: if isAdmin();
+      }
+
+      match /daily_stats/{statId} {
+        allow read: if isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ─── BOOST ANALYTICS ────────────────────────────────────
+    // Impressions are SERVER-OWNED (the boost service meters placements
+    // via the admin SDK) — any client write here would inflate boost
+    // metrics, so there is no client create path.
+    match /boost_analytics/{productId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+
+      match /impressions/{impId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // ─── USER SESSIONS ──────────────────────────────────────
+    // Client writes own session (lastActive). Admin reads all.
+    match /user_sessions/{uid} {
+      allow read: if isAdmin();
+      allow write: if isSignedIn() && uid == request.auth.uid;
+    }
+
+    // ─── PAYOUTS ────────────────────────────────────────────
+    // Server writes via admin SDK. Client streams own payouts.
+    match /payouts/{payoutId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+    }
+
+    // ─── PLATFORM EARNINGS ──────────────────────────────────
+    match /platform_earnings/{docId} {
+      allow read, write: if isAdmin();
     }
 
     // ─── ADMIN ADMOB EARNINGS ───────────────────────────────
@@ -185,16 +616,39 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // ─── APP SETTINGS (maintenance mode, etc.) ─────────────
+    // ─── APP SETTINGS (maintenance mode, ads config, etc.) ───
     match /app_settings/{docId} {
+      // Signed-in users may read: AdRemoteConfigService streams `ad_config` so an
+      // admin can switch ads off without shipping a build.
       allow read: if isSignedIn();
+
+      // Only an admin client may write. The server-side path
+      // (PUT /api/v1/admin/config/ads) uses the admin SDK and bypasses rules
+      // entirely; this branch exists so a client running as an admin (the
+      // in-app moderation tools) can also write, and so an ordinary seller
+      // cannot disable ads on their own account, disable the Blue Tick ad
+      // exemption, or raise their own search boost.
       allow write: if isAdmin();
+    }
+
+    // ─── TRUST / BLUE TICK ────────────────────────────────
+    // Server-owned verification grants. Kept out of `users/{uid}` reads so a
+    // client cannot enumerate who is verified, and append-only from a client's
+    // point of view: reads are admin-only, writes are admin-only.
+    match /seller_trust/{sellerId} {
+      allow read, write: if isAdmin();
     }
 
     // ─── PRICE DROPS ────────────────────────────────────────
     match /price_drops/{docId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      // Only the product's own seller may announce a drop (blocks forged
+      // attribution + app-wide fan-out spam; the server also rate-limits).
+      allow create: if isSignedIn() && notSuspended()
+        && request.resource.data.keys().hasAll(['productId', 'sellerId', 'createdAt'])
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.sellerId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
@@ -205,13 +659,61 @@ service cloud.firestore {
     }
 
     // ─── GROUPS ─────────────────────────────────────────────
+    // Client stores participantIds + adminIds + createdBy (NOT 'members' — the
+    // old rules referenced a field the client never writes, which blocked all
+    // group reads/writes). Admin management (makeAdmin/removeAdmin/deleteGroup
+    // /update details) is restricted to the creator or an existing admin. Any
+    // participant may still send messages (updates lastMessage* fields) or
+    // leave; a non-admin participant can never add themselves to adminIds.
     match /groups/{groupId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      function isGroupCreator() {
+        return resource.data.createdBy == request.auth.uid;
+      }
+
+      function isGroupAdmin() {
+        return resource.data.adminIds.hasAny([request.auth.uid]);
+      }
+
+      function isGroupParticipant() {
+        return resource.data.participantIds.hasAny([request.auth.uid]);
+      }
+
+      allow read: if isSignedIn() && (isGroupParticipant() || isAdmin());
+      // Creator must be a member of their own group and the only initial admin.
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.participantIds.hasAny([request.auth.uid])
+        && request.resource.data.adminIds.hasAll([request.auth.uid])
+        && request.resource.data.adminIds.size() == 1;
+      allow update: if isSignedIn() && (
+        isAdmin() || isGroupCreator() || isGroupAdmin()
+        // message-send system writes by any member
+        || (isGroupParticipant()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'lastMessage', 'lastMessageTime', 'unreadCount'
+            ]))
+        // a non-admin participant may only REMOVE THEMSELVES when leaving:
+        // adminIds must stay untouched, nothing may be added, and the only
+        // removed member must be the caller (blocks kicking others out).
+        || (isGroupParticipant() && !isGroupAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantIds', 'adminIds'])
+            && request.resource.data.adminIds == resource.data.adminIds
+            && request.resource.data.participantIds.toSet().difference(resource.data.participantIds.toSet()).size() == 0
+            && resource.data.participantIds.toSet().difference(request.resource.data.participantIds.toSet()).hasOnly([request.auth.uid]))
+      );
+      allow delete: if isSignedIn() && (isGroupCreator() || isAdmin());
 
       match /messages/{msgId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/groups/$(groupId)).data.participantIds.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && (
+          get(/databases/$(database)/documents/groups/$(groupId)).data.participantIds.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 
@@ -221,17 +723,6 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    // ─── TRANSACTIONS (server-managed, client read-only) ────
-    match /transactions/{txId} {
-      allow read: if isSignedIn() && (
-        resource.data.buyerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid ||
-        isAdmin()
-      );
-      // For now, allow writes for backward compat (webhook already writes server-side)
-      allow write: if isSignedIn();
     }
 
     // ─── REVENUE TRANSACTIONS ───────────────────────────────
@@ -257,7 +748,9 @@ service cloud.firestore {
         resource.data.reporterId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() && notSuspended();
+      allow create: if isSignedIn() && notSuspended()
+        && request.resource.data.keys().hasAll(['reporterId', 'reason'])
+        && request.resource.data.reporterId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -265,14 +758,285 @@ service cloud.firestore {
     // ─── FRAUD ALERTS ───────────────────────────────────────
     match /fraud_alerts/{alertId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isAdmin();
       allow update, delete: if isAdmin();
+    }
+
+    // ─── CLIENT ERROR TELEMETRY ──────────────────────────────
+    // Crash reports from the app (ErrorReportingService). Rows carry stack
+    // traces, device models and sanitized request data for EVERY user who hit
+    // the same bug, so reads stay admin-only — the client only ever writes and
+    // must never be able to read back someone else's stack trace.
+    match /system_errors/{errorId} {
+      allow read: if isAdmin();
+
+      // The client is the only writer and is not trusted: the payload is pinned
+      // to the fields the reporter actually populates and the free-text blobs
+      // (stack trace, technical error) are size-capped, so error reporting can
+      // never be used as general-purpose storage.
+      allow create: if request.resource.data.keys().hasAll([
+          'errorId', 'fingerprint', 'timestamp', 'severity', 'environment'
+        ])
+        && request.resource.data.errorId is string
+        && request.resource.data.errorId.size() <= 64
+        && request.resource.data.fingerprint is string
+        && request.resource.data.fingerprint.size() <= 300
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.get('severity', '') is string
+        && request.resource.data.get('environment', '') is string
+        && request.resource.data.get('stackTrace', '') is string
+        && request.resource.data.get('stackTrace', '').size() <= 4000
+        && request.resource.data.get('sanitizedTechnicalError', '') is string
+        && request.resource.data.get('sanitizedTechnicalError', '').size() <= 1000;
+
+      // De-dupe counters only, and only ever moving forward: occurrenceCount
+      // drives admin triage priority, so a client must not be able to zero it
+      // out, rewrite the report body, or re-point it at another user.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['occurrenceCount', 'lastSeen', 'status'])
+        && request.resource.data.occurrenceCount
+             == resource.data.get('occurrenceCount', 0) + 1;
+
+      allow delete: if isAdmin();
     }
 
     // ─── AUDIT LOG ──────────────────────────────────────────
     match /audit_log/{logId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    // ─── SEARCH INDEX (server-only) ─────────────────────────
+    match /search_index_products/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /search_index_users/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /search_index_categories/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── SEARCH ANALYTICS (server-only) ─────────────────────
+    match /search_analytics/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /search_trending/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── USER ANALYTICS (server-only) ───────────────────────
+    match /user_analytics/{docId} {
+      allow read, write: if isAdmin();
+
+      match /search_history/{historyId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // ─── SMS LOGS (server-only) ─────────────────────────────
+    match /sms_logs/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── OTP CODES (server-only) ────────────────────────────
+    match /otp_codes/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── WEBHOOK LOGS (server-only) ─────────────────────────
+    match /whatsapp_webhook_logs/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── CONSENT RECORDS (Tanzania PDPA 2022 evidence) ────────
+    // Doc ID equals userId; only the owner writes their own consent
+    // evidence. Users may read their own record; admins read all.
+    match /consentRecords/{userId} {
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // ─── LANDING WAITLIST (sokovibe.co.tz coming-soon page) ─────
+    // Doc id = normalized email, so a second signup is rejected by the
+    // exists() guard (public create only). Emails stay private: reads are
+    // admin-only to avoid email harvesting via doc-id enumeration.
+    match /landing_waitlist/{email} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasAll(['email', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 5
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.email == email
+        && request.resource.data.createdAt is timestamp
+        && !exists(/databases/$(database)/documents/landing_waitlist/$(email));
+    }
+
+    // ─── LANDING FEATURE SUGGESTIONS ─────────────────────────────
+    // Public create from the landing page; content is private (admin-only
+    // reads) because some rows carry contact details.
+    match /landing_feature_suggestions/{suggestionId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasAll(['createdAt'])
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.keys().hasAny(['features', 'details'])
+        && request.resource.data.features is list
+        && request.resource.data.get('details', '') is string
+        && request.resource.data.get('details', '').size() <= 1500;
+    }
+
+    // ─── LANDING COMMENTS ─────────────────────────────────────────
+    // Public create + read: the coming-soon page renders recent comments
+    // for anyone. The submitter's optional contact EMAIL is NOT stored here —
+    // it lives in the admin-only landing_comment_contacts collection so a
+    // comment's PII is never world-readable. Moderation/deletes are admin-only.
+    match /landing_comments/{commentId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'text', 'createdAt'])
+        && !('email' in request.resource.data.keys())
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 3
+        && request.resource.data.text.size() <= 1000;
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── LANDING COMMENT CONTACTS (PII, admin-only) ───────────────
+    // Keyed by the parent comment id so an admin can look the contact up.
+    // Anonymous create is allowed (the landing page is not signed in); the
+    // read side — and therefore PII exposure — is admin-only.
+    match /landing_comment_contacts/{commentId} {
+      allow create: if request.resource.data.keys().hasAll(['email', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ─── SESSION REVOCATIONS (logout-all) ───────────────────
+    // Written ONLY by the Admin SDK (logout-all endpoint, password-reset
+    // recovery, admin suspension). No client path: a caller who could write
+    // their own stamp could never be logged out, and one who could write
+    // others' could log anyone out.
+    match /session_revocations/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── AI CHAT (server-written only) ──────────────────────────────
+    // These collections are written exclusively through the Node server using the
+    // Admin SDK, which bypasses these rules entirely. The rules below exist to
+    // guarantee that a compromised client cannot read or write another user's AI
+    // transcript, memories or preferences, and to stop a client from forging a
+    // memory row that the extractor never produced.
+    match /ai_conversations/{conversationId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_messages/{messageId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_memory/{memoryId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /user_ai_preferences/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow create, update: if isSignedIn() && uid == request.auth.uid
+        && request.resource.data.memoryEnabled is bool
+        && request.resource.data.chatHistoryEnabled is bool
+        && request.resource.data.voiceEnabled is bool;
+      allow delete: if false;
+    }
+
+    // ─── AI CHAT (server-written only) ──────────────────────────────
+    // These collections are written exclusively through the Node server using the
+    // Admin SDK, which bypasses these rules entirely. The rules below exist to
+    // guarantee that a compromised client cannot read or write another user's AI
+    // transcript, memories or preferences, and to stop a client from forging a
+    // memory row that the extractor never produced.
+    match /ai_conversations/{conversationId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_messages/{messageId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /ai_memory/{memoryId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+    }
+    match /user_ai_preferences/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow create, update: if isSignedIn() && uid == request.auth.uid
+        && request.resource.data.memoryEnabled is bool
+        && request.resource.data.chatHistoryEnabled is bool
+        && request.resource.data.voiceEnabled is bool;
+      allow delete: if false;
+    }
+    // Subscription data — server-written only, client reads own.
+    match /ai_subscriptions/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow write: if false;
+    }
+    match /ai_entitlements/{uid} {
+      allow read: if isSignedIn() && uid == request.auth.uid;
+      allow write: if false;
+    }
+    match /ai_usage/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // ─── BANNER CAMPAIGNS (admin-managed marketing banners) ─────
+  match /banner_campaigns/{campaignId} {
+    // Public read so marketing banners can render for all visitors.
+    allow read: if true;
+    allow create, update, delete: if isAdmin();
+  }
+
+  match /banner_impressions/{eventId} {
+    allow create: if isSignedIn()
+      && request.resource.data.userId == request.auth.uid;
+    allow read: if isAdmin()
+      || (isSignedIn() && resource.data.userId == request.auth.uid);
+    allow update, delete: if isAdmin();
+  }
+
+  match /banner_clicks/{eventId} {
+    allow create: if isSignedIn()
+      && request.resource.data.userId == request.auth.uid;
+    allow read: if isAdmin()
+      || (isSignedIn() && resource.data.userId == request.auth.uid);
+    allow update, delete: if isAdmin();
+  }
+
+  // ─── SMOKE: deny-all fallback for any undocumented collection ──
+    // COMPANY OS (server-written only)
+    // All access goes through the authenticated /api/v1/company backend using
+    // the Admin SDK, which bypasses these rules. Client SDK access is denied.
+    match /company_memberships/{uid} {
+      allow read, write: if false;
+    }
+    match /company_legal_entities/{id} {
+      allow read, write: if false;
+    }
+    match /company_audit_events/{id} {
+      allow read, write: if false;
+    }
+    match /company_settings/{id} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

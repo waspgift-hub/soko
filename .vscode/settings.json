@@ -1,3 +1,4 @@
 {
-    "CodeGPT.apiKey": "Ollama"
+    "CodeGPT.apiKey": "Ollama",
+    "cmake.sourceDirectory": "C:/Users/user/Desktop/SOKO VIBE/ttr/soko_langu/windows/flutter"
 }

@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../data/marketplace_taxonomy.dart';
+import '../utils/category_icons.dart';
+
 class Category {
   final String id;
   final String name;
@@ -21,6 +24,22 @@ class Category {
     this.order = 0,
   });
 
+  /// Remote artwork URL for this category, or null when there is none.
+  ///
+  /// Only an `http(s)`/`//` value qualifies. The legacy `icon` column has
+  /// carried both CDN URLs and Flutter bundle paths, and a bundle path is not
+  /// artwork — accepting one here made every category tile attempt a load of
+  /// a file that no longer exists and fall through to the icon, which is what
+  /// kept the installed artwork pack invisible. Category photographs are
+  /// resolved by taxonomy id through `CategoryArtworkService` instead.
+  String? get displayImage {
+    final v = image?.trim() ?? '';
+    if (v.isNotEmpty && (v.startsWith('http') || v.startsWith('//'))) return v;
+    final i = icon.trim();
+    if (i.startsWith('http') || i.startsWith('//')) return i;
+    return null;
+  }
+
   factory Category.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
@@ -37,7 +56,7 @@ class Category {
       id: doc.id,
       name: data['name'] ?? '',
       nameSw: data['nameSw'] ?? '',
-      icon: data['icon'] ?? '📦',
+      icon: data['icon'] ?? CategoryIconNames.package,
       image: data['image'],
       subcategories: subs,
       isActive: data['isActive'] ?? true,
@@ -86,259 +105,32 @@ class SubCategory {
   };
 }
 
+/// Default categories built from the single taxonomy source, plus a
+/// hidden legacy catch-all so old products still resolve.
+/// Maps one taxonomy entry to its Firestore-shaped [Category].
+Category categoryFromTaxonomy(TaxonomyCategory t) {
+  return Category(
+    id: t.id,
+    name: t.name,
+    nameSw: t.nameSw,
+    icon: t.icon,
+    image: t.image,
+    subcategories: [
+      for (final s in t.subs)
+        SubCategory(id: s.id, name: s.name, nameSw: s.nameSw),
+    ],
+    order: t.order,
+  );
+}
+
 List<Category> getDefaultCategories() {
-  return [
-    // Electronics
-    Category(
-      id: 'electronics',
-      name: 'Electronics',
-      nameSw: 'Vifaa vya Umeme',
-      icon: '📱',
-      subcategories: [
-        SubCategory(
-          id: 'phones',
-          name: 'Phones & Tablets',
-          nameSw: 'Simu na Tableti',
-        ),
-        SubCategory(
-          id: 'computers',
-          name: 'Computers & Laptops',
-          nameSw: 'Kompyuta na Laptops',
-        ),
-        SubCategory(id: 'tv_audio', name: 'TV & Audio', nameSw: 'TV na Sauti'),
-        SubCategory(
-          id: 'accessories',
-          name: 'Accessories',
-          nameSw: 'Vifaa vya Ziada',
-        ),
-      ],
-      order: 1,
-    ),
-    // Fashion
-    Category(
-      id: 'fashion',
-      name: 'Fashion',
-      nameSw: 'Mavazi',
-      icon: '👕',
-      subcategories: [
-        SubCategory(
-          id: 'mens',
-          name: "Men's Clothing",
-          nameSw: 'Mavazi ya Wanaume',
-        ),
-        SubCategory(
-          id: 'womens',
-          name: "Women's Clothing",
-          nameSw: 'Mavazi ya Wanawake',
-        ),
-        SubCategory(id: 'shoes', name: 'Shoes', nameSw: 'Viatu'),
-        SubCategory(
-          id: 'bags',
-          name: 'Bags & Luggage',
-          nameSw: 'Mikoba na Mashine',
-        ),
-        SubCategory(id: 'jewelry', name: 'Jewelry', nameSw: 'Vidhuru'),
-      ],
-      order: 2,
-    ),
-    // Home & Garden
-    Category(
-      id: 'home_garden',
-      name: 'Home & Garden',
-      nameSw: 'Nyumba na Bustani',
-      icon: '🏠',
-      subcategories: [
-        SubCategory(id: 'furniture', name: 'Furniture', nameSw: 'Samani'),
-        SubCategory(id: 'kitchen', name: 'Kitchen & Dining', nameSw: 'Jikoni'),
-        SubCategory(
-          id: 'decor',
-          name: 'Home Decor',
-          nameSw: 'Mapambo ya Nyumba',
-        ),
-        SubCategory(id: 'garden', name: 'Garden & Outdoor', nameSw: 'Bustani'),
-        SubCategory(
-          id: 'tools',
-          name: 'DIY Tools',
-          nameSw: 'Zana za Kushonaji',
-        ),
-      ],
-      order: 3,
-    ),
-    // Automotive
-    Category(
-      id: 'automotive',
-      name: 'Automotive',
-      nameSw: 'Magari',
-      icon: '🚗',
-      subcategories: [
-        SubCategory(
-          id: 'car_parts',
-          name: 'Car Parts',
-          nameSw: 'Viwango vya Gari',
-        ),
-        SubCategory(
-          id: 'accessories',
-          name: 'Car Accessories',
-          nameSw: 'Vifaa vya Gari',
-        ),
-        SubCategory(
-          id: 'tools',
-          name: 'Tools & Equipment',
-          nameSw: 'Zana na Vifaa',
-        ),
-        SubCategory(id: 'motorcycles', name: 'Motorcycles', nameSw: 'Pikipiki'),
-      ],
-      order: 4,
-    ),
-    // Health & Beauty
-    Category(
-      id: 'health',
-      name: 'Health & Beauty',
-      nameSw: 'Afya na Urembo',
-      icon: '💄',
-      subcategories: [
-        SubCategory(
-          id: 'skincare',
-          name: 'Skincare',
-          nameSw: 'Utunzaji wa Ngozi',
-        ),
-        SubCategory(
-          id: 'hair',
-          name: 'Hair Care',
-          nameSw: 'Utunzaji wa Nywele',
-        ),
-        SubCategory(id: 'makeup', name: 'Makeup', nameSw: 'Vipodozi'),
-        SubCategory(
-          id: 'cosmetics',
-          name: 'Cosmetics',
-          nameSw: 'Cosmetics',
-        ),
-        SubCategory(
-          id: 'supplements',
-          name: 'Supplements',
-          nameSw: 'Vidonge vya Afya',
-        ),
-      ],
-      order: 5,
-    ),
-    // Sports & Entertainment
-    Category(
-      id: 'sports',
-      name: 'Sports & Entertainment',
-      nameSw: 'Michezo na Burudani',
-      icon: '⚽',
-      subcategories: [
-        SubCategory(id: 'fitness', name: 'Fitness', nameSw: 'Mazoezi'),
-        SubCategory(
-          id: 'outdoor',
-          name: 'Outdoor Sports',
-          nameSw: 'Michezo ya Nje',
-        ),
-        SubCategory(
-          id: 'games',
-          name: 'Games & Toys',
-          nameSw: 'Michesho na Vifaa',
-        ),
-        SubCategory(
-          id: 'books',
-          name: 'Books & Media',
-          nameSw: 'Vitabu na Vyombo',
-        ),
-      ],
-      order: 6,
-    ),
-    // Business & Industrial
-    Category(
-      id: 'business',
-      name: 'Business & Industrial',
-      nameSw: 'Biashara na Viwanda',
-      icon: '🏭',
-      subcategories: [
-        SubCategory(id: 'machinery', name: 'Machinery', nameSw: 'Mashine'),
-        SubCategory(id: 'construction', name: 'Construction', nameSw: 'Ujenzi'),
-        SubCategory(id: 'agriculture', name: 'Agriculture', nameSw: 'Kilimo'),
-        SubCategory(
-          id: 'office',
-          name: 'Office Supplies',
-          nameSw: 'Vifaa vya Ofisi',
-        ),
-      ],
-      order: 7,
-    ),
-    // Food & Beverages
-    Category(
-      id: 'food',
-      name: 'Food & Beverages',
-      nameSw: 'Chakula na Vinywaji',
-      icon: '🍔',
-      subcategories: [
-        SubCategory(
-          id: 'groceries',
-          name: 'Groceries',
-          nameSw: 'Mboga na Matunda',
-        ),
-        SubCategory(id: 'snacks', name: 'Snacks & Sweets', nameSw: 'Vitafunio'),
-        SubCategory(id: 'beverages', name: 'Beverages', nameSw: 'Vinywaji'),
-        SubCategory(id: 'spices', name: 'Spices & Herbs', nameSw: 'Viungo'),
-      ],
-      order: 8,
-    ),
-    // Maternal & Kids
-    Category(
-      id: 'maternal',
-      name: 'Maternal & Kids',
-      nameSw: 'Mama na Watoto',
-      icon: '👶',
-      subcategories: [
-        SubCategory(
-          id: 'baby_care',
-          name: 'Baby Care',
-          nameSw: 'Utunzaji wa Mtoto',
-        ),
-        SubCategory(
-          id: 'kids_fashion',
-          name: 'Kids Fashion',
-          nameSw: 'Mavazi ya Watoto',
-        ),
-        SubCategory(
-          id: 'toys',
-          name: 'Kids Toys',
-          nameSw: 'Michesho ya Watoto',
-        ),
-      ],
-      order: 9,
-    ),
-    // Services
-    Category(
-      id: 'services',
-      name: 'Services',
-      nameSw: 'Huduma',
-      icon: '🔧',
-      subcategories: [
-        SubCategory(
-          id: 'home_services',
-          name: 'Home Services',
-          nameSw: 'Huduma za Nyumbani',
-        ),
-        SubCategory(
-          id: 'repair',
-          name: 'Repair & Maintenance',
-          nameSw: 'Ukarabati',
-        ),
-        SubCategory(
-          id: 'education',
-          name: 'Education & Training',
-          nameSw: 'Elimu',
-        ),
-      ],
-      order: 10,
-    ),
-    // Others
+  final cats = [
+    for (final t in kMarketplaceTaxonomy) categoryFromTaxonomy(t),
     Category(
       id: 'others',
       name: 'Others',
       nameSw: 'Nyingine',
-      icon: '📦',
+      icon: CategoryIconNames.package,
       subcategories: [
         SubCategory(id: 'other', name: 'Other', nameSw: 'Nyingine'),
         SubCategory(
@@ -352,7 +144,9 @@ List<Category> getDefaultCategories() {
           nameSw: 'Haina Kategoria',
         ),
       ],
-      order: 11,
+      isActive: false,
+      order: 999,
     ),
   ];
+  return cats;
 }

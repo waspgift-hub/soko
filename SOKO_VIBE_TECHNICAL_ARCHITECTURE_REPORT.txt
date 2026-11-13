@@ -1,0 +1,2556 @@
+================================================================================
+================================================================================
+  SOKO VIBE - TECHNICAL SYSTEM DOCUMENTATION & ARCHITECTURE REPORT
+  Tanzanian Multi-Vendor Trust-Commerce Marketplace Platform
+================================================================================
+================================================================================
+
+  Document Version : 2.0.0  (Trust-Commerce Edition)
+  Date             : 2026-09-24
+  Status           : Production - Live
+  Stack            : Flutter 3.41.9 | Node.js 20 | Express 4 | Firebase
+                     Firestore + Auth/FCM/AppCheck | Redis + BullMQ
+                     ClickPesa (USSD/BillPay/Payout) | OneSignal | Meseji SMS
+                     Cloudinary + Cloudflare R2 | Groq AI | Cloudflare Edge
+  Domain           : https://sokovibe.co.tz | https://api.sokovibe.co.tz
+  Origin           : https://soko-langu-server.onrender.com (Render Frankfurt)
+  Package Name     : com.sokovibe.app (Android) / Soko Vibe (iOS)
+  Firebase Project : sokonimoko-8c171-a8d14
+  Authors          : Senior System Architecture Team - Soko Vibe
+  Classification   : Internal / Investor / Engineering
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+  1. Executive Summary & System Overview ............................ [Sec 1]
+  2. Frontend Architecture (Flutter / Dart) ........................ [Sec 2]
+  3. Backend Architecture & Database Design ........................ [Sec 3]
+  4. Payment Gateways & Escrow Integration ......................... [Sec 4]
+  5. End-to-End User Flows ......................................... [Sec 5]
+  6. Security, Firestore Rules & Error Handling ..................... [Sec 6]
+  7. Deployment & DevOps Infrastructure ............................ [Sec 7]
+  A. Appendix - Firestore Composite Indexes ........................ [App A]
+  B. Appendix - Environment Variables Reference ..................... [App B]
+  C. Appendix - Glossary & Acronyms ............................... [App C]
+
+  Conventions:
+    - All diagrams are pure ASCII for .txt portability.
+    - Code snippets are production excerpts with file_path:line_number refs.
+    - Monetary values are in TZS unless stated; exchange display via live rates.
+    - Business Rule Tags: [BR-xxx] denote product/legal requirements.
+
+================================================================================
+================================================================================
+  1. EXECUTIVE SUMMARY & SYSTEM OVERVIEW
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  1.1 VISION & MARKET CONTEXT
+--------------------------------------------------------------------------------
+
+  Soko Vibe ("Soko Langu") is a Tanzania-first multi-vendor e-commerce
+  marketplace. It replaces informal WhatsApp/Instagram commerce with a
+  trust-guaranteed transaction layer: escrow-held payments, KYC-verified
+  sellers, and real-time buyer-seller communication. No live-streaming,
+  no ride-hailing, no mandatory buyer subscription - revenue is strictly
+  transactional.
+
+  Target geography: Tanzania (26 regions, all districts selectable at
+  checkout). Language: Swahili (primary), English, Chinese (zh). Currency:
+  TZS stored canonically; 9 display currencies via ExchangeRateService.
+
+  Platform primitives:
+    - Product listing with variant/wholesale support
+    - Search + Discovery (For You / Nearby / Trending)
+    - Buyer Requests (reverse marketplace: buyer posts need, sellers bid)
+    - Pay-to-Boost (sponsored placement)
+    - Escrow checkout with OTP handover
+    - In-app chat + WhatsApp deep-link fallback
+    - Flash sales & price-drop broadcasts
+
+--------------------------------------------------------------------------------
+  1.2 CORE BUSINESS MODEL
+--------------------------------------------------------------------------------
+
+  +----------------------------+-----------------------------------------------+
+  | Revenue Stream             | Mechanism                                     |
+  +----------------------------+-----------------------------------------------+
+  | Platform Commission        | 3.5% of productPrice on every completed       |
+  |                            escrow release. Recorded in                    |
+  |                            revenue_transactions (type: commission).       |
+  +----------------------------+-----------------------------------------------+
+  | Pay-to-Boost (Ads)         | 3 tiers: Bronze 1,500 TZS/3d, Silver 3,000  |
+  |                            TZS/7d, Gold 10,000 TZS/30d. Product gets     |
+  |                            isBoosted=true + boostExpiresAt. Recorded     |
+  |                            as revenue_transactions (type: boost).         |
+  +----------------------------+-----------------------------------------------+
+  | AdMob Monetization         | Banner + Interstitial (20m cooldown) +        |
+  |                            Rewarded gates. Ad views -> ad_views docs.    |
+  |                            Estimated 15 TZS/view; actual via AdMob console|
+  +----------------------------+-----------------------------------------------+
+  | Payout Fees (pass-through) | 2,000 TZS flat deducted from seller on        |
+  |                            withdrawal + ClickPesa tiered payout fees      |
+  |                            absorbed in sellerReceives calculation.        |
+  +----------------------------+-----------------------------------------------+
+  | Collection Fees            | 180 TZS Mongike legacy OR ClickPesa tiered   |
+  |                            (54-7,960 TZS) - platform absorbs; shown as   |
+  |                            "Bure" (Free) at checkout.                    |
+  +----------------------------+-----------------------------------------------+
+
+  Explicitly EXCLUDED from business model (out of scope):
+    - Live-stream selling (no WebRTC/RTMP)
+    - Ride-hailing / logistics fleet (seller arranges bus/bodaboda; proof only)
+    - Buyer subscription paywall (all buyer features free)
+
+--------------------------------------------------------------------------------
+  1.3 TARGET USERS & ROLES
+--------------------------------------------------------------------------------
+
+  +----------------+-----------------------------------------------------------+
+  | Role           | Capabilities & Gating                                     |
+  +----------------+-----------------------------------------------------------+
+  | Buyer          | Browse, search, wishlist, buyer requests, place orders,  |
+  | (unauth ok)    | wallet deposit, chat sellers, confirm delivery, disputes |
+  +----------------+-----------------------------------------------------------+
+  | Seller/Merchant| All buyer caps + create products (KYC gate), manage      |
+  | (KYC gated)    | orders (quote/dispatch), flash sales, boost, analytics,  |
+  |                | withdrawals, seller statement. Requires KYC approved.    |
+  +----------------+-----------------------------------------------------------+
+  | Administrator  | Full financial view (finance-summary), KYC review/revoke,|
+  | (isAdmin flag) | user suspend/delete, product feature/delete, broadcast  |
+  |                | notifications, ad revenue logging, dispute resolution,   |
+  |                | cron autorelease. Auth via Firebase isAdmin OR            |
+  |                | x-admin-secret OR Bearer+isAdmin.                        |
+  +----------------+-----------------------------------------------------------+
+  | Guest          | Home/discovery/product detail/read-only. Buy/chat/sell   |
+  |                | redirected to /login via GoRouter _authRequiredRoutes.   |
+  +----------------+-----------------------------------------------------------+
+
+--------------------------------------------------------------------------------
+  1.4 TECHNOLOGY STACK SUMMARY
+--------------------------------------------------------------------------------
+
+  +------------+----------------------------------------------------------------+
+  | Layer      | Technology                                                     |
+  +------------+----------------------------------------------------------------+
+  | Frontend   | Flutter 3.41.9, Dart 3.11, Provider, GoRouter 17, Hive 2,     |
+  |            | SharedPreferences, firebase_* (core/auth/firestore/app_check  |
+  |            | /crashlytics/performance), OneSignal 5, google_mobile_ads 8,  |
+  |            | geolocator/geocoding, cached_network_image, pdf/printing,    |
+  |            | qr_flutter, safe_text, dynamic_color                          |
+  +------------+----------------------------------------------------------------+
+  | Backend    | Node 20, Express 4, firebase-admin 11, ioredis 5, BullMQ 5,  |
+  |            | helmet, cors, compression, zod, @aws-sdk/s3 (R2), axios,     |
+  |            | nodemailer, bcryptjs                                          |
+  +------------+----------------------------------------------------------------+
+  | Database   | Cloud Firestore (primary - 20+ collections, 43 composite     |
+  |            | indexes). PostgreSQL/Prisma schema exists in server/prisma   |
+  |            | (v2 plan) but runtime is Firestore-only via getStore() seam.  |
+  +------------+----------------------------------------------------------------+
+  | Cache/Q    | Redis (Upstash/Render) - rate-limit windows, idempotency     |
+  |            | SETNX locks, BullMQ queues (media, finance)                  |
+  +------------+----------------------------------------------------------------+
+  | Payments   | ClickPesa PRIMARY (USSD Push + BillPay + Payouts). Mongike   |
+  |            | legacy wrapper (mongike.js) maintained for fallback. AzamPay |
+  |            | / Flutterwave via provider factory (planned, interface ready) |
+  +------------+----------------------------------------------------------------+
+  | Comms      | OneSignal (push), FCM fallback topic user_{uid}, Meseji.co.tz|
+  |            | SMS (sender SOKOVIBE->MESEJI), flutter_local_notifications   |
+  |            | (heads-up foreground), in-app Firestore notifications        |
+  +------------+----------------------------------------------------------------+
+  | Media      | Cloudinary (legacy, cloudName dgbsohnl4, signed uploads via  |
+  |            | POST /api/cloudinary/sign) + Cloudflare R2 (v2 pre-signed   |
+  |            | PUT, buckets: images/videos/thumbnails/backups)              |
+  +------------+----------------------------------------------------------------+
+  | AI         | Groq API (openai/gpt-oss-120b primary, fallback gpt-oss-20b, |
+  |            | whisper-large-v3-turbo). Server proxies; key never on client.|
+  +------------+----------------------------------------------------------------+
+  | Edge/Host  | Cloudflare Worker (api.sokovibe.co.tz) + Render (Frankfurt)  |
+  |            | + Railway (alt Dockerfile). GitHub Actions CI -> APK/AAB.    |
+  +------------+----------------------------------------------------------------+
+
+--------------------------------------------------------------------------------
+  1.5 HIGH-LEVEL ARCHITECTURE DIAGRAM
+--------------------------------------------------------------------------------
+
+                        +-----------------------------+
+                        |   Flutter App (Android/iOS |
+                        |   /Web) 55 screens,        |
+                        |   52 services, 40 widgets, |
+                        |   25 models, Hive cache    |
+                        +-------------+---------------+
+                                      |
+                                      | HTTPS JSON (never direct external)
+                                      v
+                        +-----------------------------+
+                        |  Cloudflare Worker          |
+                        |  api.sokovibe.co.tz         |
+                        |  - Edge cache (catalog)     |
+                        |  - Region routing (10M tier)|
+                        |  - Stale-while-revalidate   |
+                        +-------------+---------------+
+                                      |
+                                      v
+  +-----------------+   +-----------------------------------------------+
+  | Firebase        |<->|  Node.js Server (Express)                     |
+  | - Auth          |   |  src/index.js (v2) + legacy-compat mounts     |
+  | - Firestore     |   |  83 endpoints | 5,688+ lines (legacy index.js)|
+  | - FCM           |   |  Middleware: loadShedder, helmet, cors,        |
+  | - App Check     |   |  rateLimit, auth, webhookSecret, timeout 20s   |
+  | - Crashlytics   |   +-----+-----------------------------------------+
+  | - Performance   |         |
+  +-----------------+         |  +----------+  +-----------+  +----------+
+                              |  | Redis    |  | Firestore |  | R2       |
+                              +->| BullMQ   |<-+| (Primary) |  | (Media)  |
+                              |  | Cache/Q  |  |           |  |          |
+                              |  +----------+  +-----------+  +----------+
+                              |
+              +---------------+---------------+----------------+
+              |               |               |                |
+              v               v               v                v
+        +-----------+   +-----------+   +-----------+   +-----------+
+        | ClickPesa |   | Meseji    |   | Groq AI   |   | Cloudinary|
+        | USSD/     |   | SMS OTP & |   | Chat +    |   | Images    |
+        | BillPay/  |   | Tx Alerts |   | Whisper   |   | Videos    |
+        | Payout    |   |           |   |           |   |           |
+        +-----------+   +-----------+   +-----------+   +-----------+
+              |
+              v
+        +-----------+
+        | OneSignal |
+        | Push      |
+        +-----------+
+
+  Request flow (soko_langu/lib/services/api_config.dart + server/src/app.js):
+
+    App Service (e.g., MongikeService / ClickPesaService)
+      -> HTTP POST https://api.sokovibe.co.tz/api/...  (Worker cache check)
+           -> Render origin (Express)
+              -> rateLimiter -> authMiddleware (Firebase verifyIdToken)
+              -> Firestore / Redis / external provider
+              -> JSON response + auditLog
+      <- UI via setState / Provider.notifyListeners() / StreamBuilder
+
+  Webhook flow (ClickPesa -> Backend):
+
+    ClickPesa -> POST /api/clickpesa/webhook
+                  header x-webhook-secret, IP allowlist, checksum
+                  -> verifyWebhook middleware (403 on mismatch)
+                  -> Redis SETNX idempotency lock
+                  -> Firestore transaction (status + balances + revenue)
+                  -> OneSignal + Meseji + in-app notification
+                  -> 200 OK
+
+  Listener process (server/listener.js - optional sidecar):
+
+    Firestore onSnapshot (transactions, messages, products)
+      -> in-memory dedup Map/Set
+      -> FCM + SMS fan-out (supplements webhook notifications)
+
+================================================================================
+================================================================================
+  2. FRONTEND ARCHITECTURE (FLUTTER / DART)
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  2.1 PROJECT STRUCTURE & FOLDER ORGANIZATION
+--------------------------------------------------------------------------------
+
+  soko_langu/
+  |-- lib/
+  |   |-- main.dart                    // bootstrap, DI, overlay stack
+  |   |-- firebase_options.dart        // project sokonimoko-8c171-a8d14
+  |   |-- app/
+  |   |   |-- router.dart              // GoRouter 54 routes, guards
+  |   |   |-- routes.dart              // path constants
+  |   |   +-- app_state_notifier.dart  // refreshListenable for router
+  |   |-- screens/                     // 55 files, 18 domains
+  |   |   |-- auth/                    // login, register, phone OTP, magic link
+  |   |   |-- home/                    // home_screen, product_detail, discovery
+  |   |   |-- orders/                  // checkout, order_detail, my_purchases,
+  |   |   |                              seller_orders, seller_quote/dispatch
+  |   |   |-- chat/                    // chat_page, inbox, group_chat
+  |   |   |-- profile/                 // profile, edit_profile, seller dashboard
+  |   |   |-- kyc/                     // kyc_submit, kyc_status
+  |   |   |-- admin/                   // dashboard (12 tabs), users, wallet
+  |   |   |-- notification/            // notification_screen, preferences
+  |   |   |-- ai/                      // ai_assistant_screen
+  |   |   |-- boost/                   // product_boost_screen, receipt
+  |   |   |-- buyer/ requests/         // buyer_requests, post_request
+  |   |   |-- wallet/                  // wallet_screen, deposit/withdraw sheets
+  |   |   |-- status/ sponsored/ legal/ report/
+  |   |-- services/                    // 52 services (business logic)
+  |   |   |-- api_config.dart          // baseUrl resolver (Cloudflare -> Render)
+  |   |   |-- auth_service.dart
+  |   |   |-- product_service.dart     // Firestore direct (client)
+  |   |   |-- clickpesa_service.dart   // 245 lines, fee tiers, USSD/BillPay
+  |   |   |-- cloudinary_service.dart  // signed upload via /api/cloudinary/sign
+  |   |   |-- chat_service.dart, group_service.dart
+  |   |   |-- notification_service.dart // OneSignal + local heads-up
+  |   |   |-- kyc_service.dart, order_api.dart, wallet_api.dart
+  |   |   |-- groq_service.dart, voice_search_service.dart
+  |   |   |-- analytics_service.dart, fraud_prevention_service.dart
+  |   |   |-- ... (74 total including local_cache, exchange_rate, etc)
+  |   |-- models/                      // 25-30 models (serialization)
+  |   |   |-- product_model.dart       // 245 lines
+  |   |   |-- transaction_model.dart
+  |   |   |-- order_model.dart
+  |   |   |-- wallet_model.dart
+  |   |   |-- flash_sale_model.dart
+  |   |   |-- boost_tier.dart
+  |   |   +-- ...
+  |   |-- widgets/                     // 40 reusable + ds/ design system (25)
+  |   |   |-- ds/                      // DsButton, DsCard, DsEscrowShield, etc
+  |   |   |-- glassmorphism, product_card, banners, timelines, skeletons
+  |   |   |-- connectivity_wrapper.dart, app_lock_overlay.dart
+  |   |-- providers/ notifiers/        // ProductFeedProvider, AuthNotifier
+  |   |-- repositories/                // ProductRepository, ChatRepository
+  |   |-- theme/                       // Material 3, AppColors, AppDimens
+  |   |-- utils/                       // validators, phone_utils, geohash,
+  |   |                                  responsive, network_error
+  |   |-- extensions/                  // context.tr(), price formatting
+  |   |-- constants/                   // tanzania_districts.dart, boost_tiers
+  |   +-- shared/
+  |   |-- data/, firebase_options.dart
+  |-- assets/ fonts/                   // Inter, Space Grotesk, JetBrains Mono
+  |-- android/ ios/ web/ linux/ macos/ windows/
+  |-- server/                          // Node backend (see Sec 3)
+  |-- cf-worker/                       // Cloudflare Worker (worker.js)
+  |-- functions/                       // Firebase Functions (optional)
+  |-- firestore.rules                  // 641 lines, strict field guards
+  |-- firestore.indexes.json           // 43 composite indexes
+  |-- firebase.json, .firebaserc
+  |-- pubspec.yaml                     // 1.0.1+2, sdk ^3.11.5
+  +-- analysis_options.yaml
+
+  Pattern: Modified Clean Architecture + MVVM via Provider.
+    - View (screens/widgets) observes ViewModel (Provider/Notifier) which
+      delegates to Service (business logic) which hits Repository (Firestore)
+      or HTTP (backend). No direct external API from View.
+
+--------------------------------------------------------------------------------
+  2.2 ARCHITECTURAL PATTERN - CLEAN + MVVM
+--------------------------------------------------------------------------------
+
+  +---------------------+   observes   +----------------------+
+  | View                | <------------| ViewModel (Provider) |
+  | - Screens           |  notify      | - AuthNotifier       |
+  | - Widgets (ds/)     |  Listeners() | - ProductFeedProvider|
+  | - StreamBuilder     |              | - ThemeManager       |
+  +----------+----------+              +----------+-----------+
+             |                                   |
+             | calls                             | delegates
+             v                                   v
+  +---------------------+              +----------------------+
+  | Service Layer       |              | Repository Layer     |
+  | - ClickPesaService  | ------------->| - ProductRepository  |
+  | - OrderApi          |  Firestore/  | - ChatRepository     |
+  | - WalletApi         |  HTTP        | - UserService        |
+  | - GroqService       |              +----------------------+
+  +----------+----------+                       |
+             |                                 | Hive cache
+             v                                 v
+  +---------------------+              +----------------------+
+  | Backend / Firestore |              | LocalCacheService    |
+  | - Express API       |              | (Hive boxes)         |
+  | - Firestore SDK     |              +----------------------+
+  +---------------------+
+
+  Why this split:
+    - App NEVER calls ClickPesa/Meseji/Groq directly; all proxied via
+      backend (keeps secrets server-side, allows fee logic centralization).
+    - Product reads are client-direct to Firestore (realtime, offline-first).
+    - Financial writes are server-only (admin SDK bypasses rules).
+
+--------------------------------------------------------------------------------
+  2.3 CORE UI SCREENS BREAKDOWN
+--------------------------------------------------------------------------------
+
+  [A] HOME SCREEN (lib/screens/home/home_screen.dart)
+  ----------------------------------------------------------------------------
+  Components:
+    - PremiumBackground + glassmorphism header
+    - Hero Banners: carousel_slider, 75% image ratio for flash sale banners
+    - Category Carousels: 11 default categories (CategoryService) with
+      subcategory chips; horizontal scroll
+    - Sponsored Listings: boosted products first (isBoosted sort), Gold badge
+      distinct; non-boosted last. Boost badge = DsBoostBadge (bronze/silver/gold)
+    - Latest Products: paginated feed (15/page), ProductFeedProvider,
+      pull-to-refresh, infinite scroll, skeleton loaders (DsSkeleton)
+    - AdBanner (AdMob banner ca-app-pub-3796499857968162/6300978111) mid-feed
+    - Voice search FAB -> VoiceSearchService -> /api/ai/transcribe
+    - Currency picker (9 currencies), language toggle
+
+  Data source: Firestore .collection('products').where(isActive==true)
+               orderBy createdAt desc, client-side boosted-first re-sort.
+
+  ----------------------------------------------------------------------------
+  [B] DISCOVERY SCREEN (lib/screens/home/discovery_screen.dart)
+  ----------------------------------------------------------------------------
+  Three feeds (tabbed):
+    - For You: AI-ranked via Groq summaries + collaborative (view history)
+    - Nearby: geohash filtering (utils/geohash.dart), distance via
+      Geolocator.distanceBetween, map pin selector (location_map_widget.dart)
+    - Trending: search_analytics trending aggregation (server/search.js)
+
+  Filters: Search bar + DiscoveryFilters (category, price min/max, location
+  region/district, condition new/used, sort: price, newest, rating)
+  Powered by ProductSearchService (prefix match name/brand/category) + server
+  POST /api/search/global-search (cached 60s at edge).
+
+  ----------------------------------------------------------------------------
+  [C] PRODUCT & SELLER DETAILS PAGE (product_detail.dart)
+  ----------------------------------------------------------------------------
+  Sections top-to-bottom:
+    - Image carousel (Cloudinary URLs) + stock indicator (DsStockIndicator)
+    - Title, DsPrice (TZS + converted), compareAtPrice (strike-through)
+    - Condition chip, category/subcategory, brand
+    - Variants (Variant selector) + WholesaleTiers table
+    - Flash sale banner (if active) - 75% image, discountPercent, countdown
+    - Seller card: Avatar (DsAvatar), VerifiedBadge (sellerKycApproved),
+      "Angalia Duka" -> /public-profile/:userId, "Mpigie Muuzaji"
+      (CallSellerButton tel: scheme), "Chat" -> /chat/:sellerId
+    - Action row: Wishlist (wishlist_service -> SharedPreferences), Share
+      (share_plus), Buy Now (DsButton commerce green) -> checkout
+    - Like (likedBy array, notifies seller), Report (reports collection)
+    - ReviewSection (products/{id}/reviews, helpful votes, sellerReply)
+    - CommentSection (products/{id}/comments + replies subcollection)
+    - AdBanner footer
+
+  Guards: logged out Buy/Chat -> /login; own product -> cannot_buy_own;
+          sellerId empty -> seller_unknown_error snackbar.
+
+  ----------------------------------------------------------------------------
+  [D] BUYER REQUESTS SCREEN (lib/screens/requests/buyer_requests_screen.dart)
+  ----------------------------------------------------------------------------
+  Reverse marketplace: buyers post what they seek; sellers bid via unlock.
+  - Post: buyer creates doc in BuyerRequests (buyerUid, buyerName, title,
+    budget, description, whatsapp wa.me link normalized 0->255, isLocked=true,
+    unlockedBy: [])
+  - List: stream orderBy createdAt desc (BuyerRequestsScreen)
+  - Merchant action: unlockContact -> arrayUnion(uid) on unlockedBy
+    (permanent unlock, seller then contacts via WhatsApp/phone)
+  - Ad gate: RewardedAdGate.require() before posting (optional)
+
+  ----------------------------------------------------------------------------
+  [E] CHAT & MESSAGING MODULE (lib/screens/chat/)
+  ----------------------------------------------------------------------------
+  Two surfaces:
+    - 1-on-1: chat_page.dart, roomIdFor(uid1,uid2) = sorted join '_'
+      getOrCreateRoom -> chat_rooms/{roomId} + messages subcollection
+    - Group: create_group_screen + group_chat_screen (GroupService 393 lines)
+
+  Features: optimistic tempId messages, dedup (60s window same sender+content),
+  typing indicators (conversations/{convId} typing_{uid}), presence
+  (users/{uid}.lastActive every 30s), reactions (6 emojis, tx toggle),
+  reply (swipe/long-press), delete, media share (Cloudinary), WhatsApp deep-link
+  (wa.me), Block (users/{uid}.blockedUsers arrayUnion), unread badges,
+  All/Unread filters.
+
+  Realtime: Firestore onSnapshot limit 100 + Hive cache; loadOlderMessages
+  pagination; notifications via OneSignal type 'chat'.
+
+  ----------------------------------------------------------------------------
+  [F] USER & SELLER PROFILE (lib/screens/profile/)
+  ----------------------------------------------------------------------------
+  ProfileScreen:
+    - Avatar, displayName, username (unique check), bio, location (reverse
+      geocode via geocoding), shopAccentColor
+    - Stats: mauzo (totalSales), ratings (RatingService), followers
+    - Action grid: KYC, My Ads, Purchases, Seller Dashboard, Wallet,
+      Seller Statement, Analytics, Settings, Admin (if isAdmin)
+    - KYC badge (pending/approved/rejected), Verified seller flag propagation
+      to products.sellerKycApproved
+    - Account switching: AccountManager (SharedPreferences saved_accounts)
+      -> AccountSwitcherSheet
+
+  My Ads: filtered products where sellerId==uid, tabs active/inactive/boosted
+  Purchases: MyPurchasesScreen stream transactions where buyerId==uid
+  Seller Dashboard: seller_orders_screen, seller_analytics_screen, earnings
+
+  Account Settings: language (EN/SW/ZH), currency (9), SMS language, dark mode,
+  notification_preferences/{uid}, PIN lock (sha256 -> SecureStorage)
+
+  ----------------------------------------------------------------------------
+  [G] SPONSORED DASHBOARD (lib/screens/sponsored/ + boost/)
+  ----------------------------------------------------------------------------
+  Campaign management (server-owned Firestore sponsoredCampaigns):
+    - Create: select product + tier + payment method (USSD/BillPay) ->
+      POST /api/boost-product (Bearer) OR /api/v1/sponsored (v2)
+    - Status: Firestore watch isBoosted==true polling 10x/500ms
+    - Receipt: boost_receipt_screen, budget spend tracking
+    - Analytics: boost_analytics/{productId}/impressions
+    - Admin: sponsoredCampaigns CRUD server-only (bid fraud prevention)
+
+  Legacy boost vs v2 sponsored: same UX, different backing store; app uses
+  legacy path currently.
+
+--------------------------------------------------------------------------------
+  2.4 STATE MANAGEMENT STRATEGY
+--------------------------------------------------------------------------------
+
+  Primary: Provider (provider ^6.1.5+1) + ChangeNotifier
+  Secondary: StreamBuilder for Firestore realtime, setState for local UI.
+
+  +--------------------------+------------------+------------------------------+
+  | Notifier / Provider      | Type             | Responsibility               |
+  +--------------------------+------------------+------------------------------+
+  | AuthNotifier             | ChangeNotifier   | AuthStatus {loading,         |
+  | lib/notifiers/           | + Firebase       | unauthenticated,             |
+  |                          | AuthState stream | authenticated}, restore     |
+  |                          |                  | user, isAdmin, suspension   |
+  +--------------------------+------------------+------------------------------+
+  | ProductFeedProvider      | ChangeNotifier   | Feed pagination (15/page),  |
+  | lib/providers/           | + Firestore      | realtime sub, fromCache,    |
+  |                          |   subscription   | connectivity recovery       |
+  +--------------------------+------------------+------------------------------+
+  | ThemeManager             | ChangeNotifier   | Dark/light, seed color,     |
+  | lib/theme/               | + SharedPrefs    | Material 3 tokens           |
+  +--------------------------+------------------+------------------------------+
+  | BalancePrivacyService    | ChangeNotifier   | Hide/show wallet balances   |
+  +--------------------------+------------------+------------------------------+
+  | AppStateNotifier         | Listenable       | Router refresh,              |
+  | lib/app/app_state..      |                  | appInitialized flag         |
+  +--------------------------+------------------+------------------------------+
+  | LocalCacheService        | Hive singleton   | Offline cache orchestration |
+  +--------------------------+------------------+------------------------------+
+
+  No Bloc/Riverpod - intentional simplicity; Provider covers 95% cases.
+  Future migration path: Riverpod if provider count exceeds 10+.
+
+  Example - AuthNotifier skeleton (lib/notifiers/auth_notifier.dart):
+
+    class AuthNotifier extends ChangeNotifier {
+      AuthStatus _status = AuthStatus.loading;
+      User? _user;
+      bool _isAdmin = false;
+
+      Future<void> initialize() async {
+        _user = FirebaseAuth.instance.currentUser;
+        if (_user != null) {
+          final doc = await FirebaseFirestore.instance
+              .collection('users').doc(_user!.uid).get();
+          _isAdmin = doc.data()?['isAdmin'] == true;
+          _status = AuthStatus.authenticated;
+        } else {
+          _status = AuthStatus.unauthenticated;
+        }
+        notifyListeners();
+      }
+      // login/register/OTP -> Firebase + Firestore users/{uid} doc
+    }
+
+--------------------------------------------------------------------------------
+  2.5 NAVIGATION ROUTING (GoRouter 17.2.3)
+--------------------------------------------------------------------------------
+
+  File: lib/app/router.dart (54 routes) + routes.dart constants
+  Refresh: AppStateNotifier (auth state drives redirects)
+
+  Guards:
+    _authRequiredRoutes (26): /checkout, /kyc, /add-product, /profile,
+      /settings, /edit-profile, /shop-customize, /wishlist, /my-ads,
+      /seller*, /my-purchases, /product-boost, /notifications, /chats,
+      /chat*, /create-group, /group-chat, /create-flash-sale, /receipt,
+      /order-detail, /report, /buyer-requests, /post-buyer-request
+      -> unauthenticated => redirect /login
+
+    _adminOnlyRoutes (5): /admin, /admin/user/:uid, /admin/reports,
+      /admin/kyc, /admin/broadcast
+      -> not authed => /login, not admin => /
+
+    Authed on /login|/register => redirect /
+
+  Transition wrapper: _premiumPage() (fade+slide, Ds tokens)
+
+  Key routes table:
+
+  +----------------------------------+----------------------------------------+
+  | Path                             | Screen                                 |
+  +----------------------------------+----------------------------------------+
+  | /                                | MainScreen (5-tab bottom nav)          |
+  | /login, /register, /onboarding   | Auth flow + ProfileSetupScreen         |
+  | /home, /discovery, /search       | Browse & search                        |
+  | /category/:id                    | CategoryScreen                         |
+  | /product/:id                     | ProductDetail                          |
+  | /checkout/:productId             | CheckoutScreen (address + payment)     |
+  | /orders/:docId, /order-detail/:id| OrderDetail timeline                   |
+  | /my-purchases, /seller-orders    | Purchase dashboards                    |
+  | /seller-quote, /seller-dispatch  | Seller escrow actions                  |
+  | /chat, /chat/:receiverId         | Chat inbox + room                      |
+  | /notifications, /settings, /kyc  | Utility                                |
+  | /wallet, /receipt/:orderId       | Finance                                |
+  | /admin, /admin/wallet            | Admin (12-tab dashboard)               |
+  | /ai-assistant, /flash-sale       | AI & promotions                        |
+  +----------------------------------+----------------------------------------+
+
+  Deep links: DeepLinkService + MethodChannel soko_lang/navigate +
+    AppLinks (sokonimoko-8c171-a8d14.web.app/magic-link, assetlinks.json)
+
+  Bottom nav (lib/widgets/bottom_nav_bar.dart): Home | Discovery | Sell (+)
+    | Chat (badge) | Profile. Interstitial ad timer every 1 min.
+
+  Notification tap routing (main.dart):
+    type order        -> /order-detail/:id
+    type boost        -> /product/:id
+    type payment      -> /receipt/:orderId
+    type chat         -> /chat/:receiverId
+    type flash_sale   -> /flash-sale
+    type product      -> /product/:id
+
+--------------------------------------------------------------------------------
+  2.6 DESIGN SYSTEM & THEMING
+--------------------------------------------------------------------------------
+
+  lib/widgets/ds/ - 25 commerce-green primitives:
+
+    DsButton, DsCard, DsTextField, DsChip, DsBadge, DsSheet, DsDivider,
+    DsAvatar, DsPrice, DsQuantitySelector, DsRatingStars, DsVerifiedCheck,
+    DsEscrowShield, DsPaymentStatusTimeline, DsLikeButton, DsBoostBadge,
+    DsSkeleton, DsEmptyState, DsStockIndicator, DsChatBubble, DsLoadingDots,
+    DsConfetti, DsCelebrationRain, DsMicroburst, DsReportDialog
+
+  Tokens: theme/app_colors.dart (AppInsets, AppFontSize, AppRadius, seed
+          commerce green for buy/sell/pay CTAs), theme/app_dimens.dart
+
+  Fonts: Inter (400/500/600), Space Grotesk (600/700), JetBrains Mono (400-600)
+  Material 3, dynamic_color, dark/light mode, glassmorphism headers.
+
+  Responsive: utils/responsive.dart + web desktop constraint maxWidth 1200 +
+    Responsive.init in _appBuilder overlay stack.
+
+--------------------------------------------------------------------------------
+  2.7 OFFLINE-FIRST & PERFORMANCE
+--------------------------------------------------------------------------------
+
+  - Hive cache: LocalCacheService (116 lines) boxes cached_products,
+    cached_rooms, cached_messages_<roomId>. Firestore persistenceEnabled=true
+    (non-web). ProductFeedProvider shows cache instantly then streams live.
+  - ConnectivityWrapper + NetworkSensitiveWrapper (connectivity_plus) show
+    offline banner + guard network actions.
+  - Image cache: PaintingBinding 200MB cap (low RAM), cached_network_image,
+    SokoCacheManager.
+  - Pagination: 15/page Firestore limit, cursor-based.
+  - Keep-alive: ServerKeepAlive pings /health every 10 min (prevents Render
+    free-tier spin-down ~15min idle).
+  - Ad retry: banner retry 15s on load failure.
+
+================================================================================
+================================================================================
+  3. BACKEND ARCHITECTURE & DATABASE DESIGN
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  3.1 BACKEND TECHNOLOGY STACK : Node.js + Express RESTful
+--------------------------------------------------------------------------------
+
+  Runtime: Node >=18 (engines node >=18), --optimize-for-size --expose-gc
+  Framework: Express 4.18.2
+  Entrypoint: src/index.js (v2)  | legacy index.js (374KB, Firestore-only, kept
+                                   for reference, NOT running in prod)
+  Package: soko-langu-server@2.0.0 (server/package.json)
+
+  Dependencies:
+    firebase-admin 11.11.0  - Firestore + Auth custom tokens, FCM
+    ioredis 5.4.1           - Redis client (rate-limit, locks, BullMQ)
+    bullmq 5.12.0           - Job queues
+    @aws-sdk/client-s3 + s3-request-presigner 3.1125 - R2 media
+    express, cors, helmet, compression, dotenv, zod, axios, nodemailer,
+    bcryptjs, ip-range-check
+
+  Scripts:
+    npm start        -> node --optimize-for-size --expose-gc src/index.js
+    npm run dev      -> node src/index.js
+    npm run worker   -> node src/workers/index.js
+    npm test         -> node --test test/*.test.js (202 tests)
+    npm run lint     -> eslint src/
+
+--------------------------------------------------------------------------------
+  3.2 DUAL-MODE RUNTIME - WHY TWO SERVERS IN ONE
+--------------------------------------------------------------------------------
+
+  +------------------+---------------------------------------------------------+
+  | Mode             | Path                       | Database | Status          |
+  +------------------+---------------------------------------------------------+
+  | Legacy v1        | server/index.js            | Firestore| 5,688 lines,  |
+  | (app-facing)     | server/orders.js           | (admin)  | 83 endpoints, |
+  |                  | server/clickpesa.js        |          | handles ALL   |
+  |                  | server/search.js, etc +    |          | current app   |
+  |                  | src/modules/legacy-compat/ |          | flows via     |
+  |                  | src/modules/legacy-shop/   |          | mounts in v2  |
+  +------------------+---------------------------------------------------------+
+  | Modern v2        | server/src/app.js          | Postgres | Modular, 30   |
+  | (trust core)     | server/src/modules/* (30)  | (Prisma) | modules,      |
+  |                  | server/src/services/       | + Redis  | R2, BullMQ,   |
+  |                  | server/src/workers/        |          | finance-      |
+  |                  |                            |          | runner        |
+  +------------------+---------------------------------------------------------+
+
+  How they coexist (src/app.js mount order):
+
+    1. loadShedder (503 if eventLoop >1500ms AND heap >512MB)
+    2. compression, security headers (HSTS, CSP, nosniff, XFO, Permissions)
+    3. recordApiHit (Redis analytics)
+    4. Canonical host folding, HTTPS redirect, trailing-slash collapse
+    5. CORS (ALLOWED_ORIGINS whitelist)
+    6. express.json {limit: 10mb}, 20s timeout
+    7. Static/SEO: /.well-known, robots.txt, sitemap.xml, /admin dashboard HTML
+    8. v2 ROUTES: /health, /api/v1/* (30 modules - Postgres)
+    9. LEGACY-COMPAT MOUNTS (Firestore - what the Flutter app actually hits):
+         /api/payouts, /api/orders, /api/search, /api/notification(s),
+         /api (feature-compat), /api/escrow, /api (orders-compat),
+         /api (trust-compat), /api/admin (admin-compat)
+       Each mirror preserves v1 contract; some Postgres orders are mirrored
+       into Firestore for app visibility.
+    10. 404 (JSON for /api, HTML else) + error handler
+
+  Config seam: server/src/config/database.js getStore()/getReadStore()
+    -> BOTH resolve to Firestore store in current runtime; pg/Prisma not
+       wired (no DATABASE_URL, no pg dep). Schema file removed after validation.
+       Design ready to swap to Postgres with <15min host change per MIGRATION.md.
+
+  Implication: Flutter app code is UNCHANGED during backend evolution; migration
+  is invisible to client.
+
+--------------------------------------------------------------------------------
+  3.3 CLOUD SERVICES
+--------------------------------------------------------------------------------
+
+  [A] Firebase Authentication
+      Methods: phone OTP (custom, NOT Firebase Phone Auth - server verifies via
+        Meseji SMS then mints Firebase customToken), email/password,
+        email OTP, magic link (sendSignInLinkToEmail + AppLinks deep link),
+        Google Sign-In (google_sign_in + signInWithCredential).
+      Server mint: firebase-admin auth.createCustomToken(uid, claims {isAdmin})
+      Client signInWithCustomToken. User doc created in users/{uid} on first
+        successful auth.
+      File: lib/services/auth_service.dart, server/src/modules/auth/
+
+  [B] Cloud Firestore (Primary Database)
+      20+ collections, realtime snapshots, offline persistence, 43 composite
+        indexes. Security rules strict (see Sec 6). Admin SDK bypasses rules.
+      See 3.4 for schemas.
+
+  [C] Firebase Cloud Messaging + OneSignal
+      Primary push: OneSignal 5 (OneSignal.login(uid)), fallback FCM topic
+        user_{uid} + users/{uid}.fcmToken direct. Foreground heads-up via
+        flutter_local_notifications with action buttons (Jibu / Lipa Sasa /
+        Thibitisha Upokeaji). In-app collection notifications fallback.
+
+  [D] Cloud Storage vs Media
+      Firebase Storage in pubspec BUT unused. Active: Cloudinary (legacy,
+        api.cloudinary.com/v1_1/dgbsohnl4, folder soko_langu, signed via
+        POST /api/cloudinary/sign sha256) + Cloudflare R2 (v2, pre-signed PUT,
+        buckets images/videos/thumbnails/backups, public media.soko-vibe.co.tz).
+
+  [E] Additional Cloud
+      - Crashlytics + Performance (native only, main.dart _initBackgroundServices)
+      - App Check (Play Integrity Android, DeviceCheck iOS, debug token in logs)
+      - Google Mobile Ads (AdMob, 3 formats)
+
+--------------------------------------------------------------------------------
+  3.4 DATA SCHEMAS & RELATIONSHIPS
+--------------------------------------------------------------------------------
+
+  Canonical store: Firestore. Field types: T=Timestamp, S=String, N=Number,
+  B=Boolean, M=Map, A=Array, R=Reference.
+
+  ----------------------------------------------------------------------------
+  [A] USERS & SELLERS COLLECTION : users/{uid}
+  ----------------------------------------------------------------------------
+  {
+    uid:                 S  // == doc id == Firebase Auth uid
+    displayName:          S  // e.g., "Juma Hassan"
+    username:             S  // unique, validated
+    email:                S  // nullable for phone-only users
+    phone:                S  // E.164 +255XXXXXXXXX (server-normalized)
+                            // display normalized 0XXXXXXXXX via PhoneUtils
+    photoUrl:             S  // Cloudinary URL
+    bio:                  S
+    location:             S  // reverse geocode string
+    shopAccentColor:      S  // hex
+    isSeller:             B
+    isAdmin:              B  // SERVER-ONLY (rules block client write)
+    isSuspended:          B  // SERVER-ONLY
+    kyc: {                // SERVER-ONLY
+      status:             S  // pending | approved | rejected
+      idType:             S  // National ID | Passport | Driver | Voter
+      idNumber:           S
+      idImageUrl:         S
+      selfieUrl:          S
+      submittedAt:        T
+      reviewedAt:         T
+      notes:              S
+    }
+    sellerKycApproved:    B  // denormalized to products for badge
+    walletBalance:        N  // SERVER-ONLY, TZS cents (int)
+    sellerBalance:        N  // SERVER-ONLY, available for withdrawal
+    pendingEscrow:        N  // SERVER-ONLY, locked awaiting delivery
+    totalSales:           N  // SERVER-ONLY, count
+    grossSalesVolume:     N  // SERVER-ONLY, TZS sum
+    totalWithdrawn:       N  // SERVER-ONLY
+    fcmToken:             S  // nullable, cleared on logout
+    lastActive:           T  // updated every 30s
+    lastSaleAt:           T  // SERVER-ONLY
+    lastLoginAt:          T  // SERVER-ONLY
+    createdAt:            T  // SERVER-ONLY on create
+    blockedUsers:         A<S> // uids
+    autoPayout:           B  // if true, escrow release triggers auto-payout
+    preferredLanguage:    S  // sw | en | zh
+    currency:             S  // TZS ...
+    blockedUsers, isAdmin, isSuspended guarded by noSensitiveFieldChanges
+  }
+
+  Related: notification_preferences/{uid}, user_sessions/{uid},
+           consentRecords/{uid} (PDPA), carts/{cartId}/items
+
+  ----------------------------------------------------------------------------
+  [B] PRODUCTS & CATEGORIES SCHEMA
+  ----------------------------------------------------------------------------
+  products/{productId}
+  {
+    id:                   S  // == doc id, auto
+    sellerId:             S  // users/{uid}, indexed
+    sellerName:           S  // denormalized
+    sellerPhone:          S  // E.164, for "Mpigie Muuzaji"
+    sellerKycApproved:    B  // denormalized from users.kyc
+    title:                S
+    description:          S
+    searchKeywords:       A<S> // tokenized title+brand+category for query
+    searchName:           S  // lowercased title for prefix
+    price:                N  // TZS int, canonical
+    compareAtPrice:       N  // nullable, for discount display
+    images:               A<S> // Cloudinary URLs
+    category:             S  // categoryId
+    subCategory:          S
+    brand:                S
+    condition:            S  // new | used
+    location: {           // seller location
+      region:             S  // e.g., "Dar es Salaam"
+      district:           S  // e.g., "Ilala" (dropdown from tanzania_districts)
+      street:             S  // free text
+    }
+    coordinates: {
+      lat:                N
+      lng:                N
+      geohash:            S  // for Nearby filter
+    }
+    variants:             A<M> // [{name, priceDelta, stock, sku}]
+    wholesaleTiers:       A<M> // [{minQty, pricePerUnit}]
+    isActive:             B  // soft visibility
+    isBoosted:            B  // SERVER-ONLY
+    boostTier:            S  // bronze | silver | gold, SERVER-ONLY
+    boostedUntil:         T  // SERVER-ONLY, alias boostExpiresAt
+    featuredUntil:        T  // alias for legacy featured
+    isFeatured:           B
+    stock:                N
+    soldCount:            N  // SERVER increments
+    viewCount:            N  // any signed-in can bump +1
+    likedBy:              A<S> // uids
+    rating:               N  // 0-5 avg
+    reviewCount:          N
+    createdAt:            T
+    updatedAt:            T
+  }
+
+  categories/{categoryId}
+  {
+    id:                   S
+    name:                 S  // 11 defaults seeded via POST /api/categories/add-defaults
+    nameSw:               S
+    icon:                 S
+    subcategories:        A<S>
+    productCount:         N
+  }
+  Defaults (category_model.dart 358 lines): 11 categories w/ subcats; fallback
+  built into CategoryService if Firestore empty.
+
+  flash_sales/{saleId}
+  {
+    productId:            S
+    sellerId:             S
+    sellerPhone:          S
+    salePrice:            N
+    originalPrice:        N
+    discountPercent:      N
+    stock:                N
+    soldCount:            N
+    startTime:            T
+    endTime:              T
+    isActive:             B  // auto-deactivated every 60 min sweep
+  }
+
+  ----------------------------------------------------------------------------
+  [C] ORDERS & ESCROW TRANSACTIONS SCHEMA
+  ----------------------------------------------------------------------------
+  orders/{orderId}  - buyer/seller facing timeline + address
+  {
+    orderId:              S  // == doc id
+    buyerId:              S  // indexed
+    buyerName:            S
+    sellerId:             S  // indexed
+    sellerName:           S
+    sellerPhone:          S
+    productId:            S
+    productName:          S
+    productImage:         S
+    quantity:             N  // default 1
+    variantId:            S  // nullable
+    unitPrice:            N
+    productPrice:         N  // unitPrice * quantity
+    shippingCost:         N  // 0 until quoted, then added
+    totalAmount:          N  // productPrice + shippingCost
+    paymentMethod:        S  // wallet | ussd_push | billpay
+    status:               S  // state machine (see below)
+    address: {
+      region:             S
+      district:           S  // dropdown filtered by region
+      street:             S
+      landmarks:          S
+      lat:                N
+      lng:                N
+    }
+    deliveryType:         S  // local | regional
+    estimatedDelivery:    T
+    dispatchProof: {
+      tracking:           S
+      receiptUrl:         S
+      photoUrl:           S
+      busName:            S
+      plateNumber:        S
+      dispatchedAt:       T
+    }
+    deletedForBuyer:      B
+    deletedForSeller:     B
+    createdAt:            T
+    updatedAt:            T
+    // OTP hash on parent, plaintext in subcollection delivery_otp/{doc}
+    otpHash:              S
+  }
+  orders/{orderId}/delivery_otp/{otpDoc} // plaintext visible ONLY to buyer
+  {
+    otp:                  S  // 6-digit, buyer readable; seller never reads
+    buyerId:              S
+    createdAt:            T
+    expiresAt:            T
+  }
+
+  transactions/{txId}  - payment/escrow ledger (mirrors order lifecycle)
+  {
+    txId / orderId:       S  // often == orders/{orderId} for 1:1 mirroring
+    type:                 S  // purchase | boost | deposit | payout | refund
+    status:               S  // pending | awaiting_shipping_quote | quoted |
+                            // paid | paid_escrow_hold | escrow_hold |
+                            // dispatched | delivered | delivery_confirmed |
+                            // completed | failed | cancelled | disputed |
+                            // refunded | walletCredited | payoutPending |
+                            // payoutComplete
+    buyerId:              S  // indexed buyerId+status+createdAt
+    sellerId:             S  // indexed sellerId+createdAt
+    productId:            S
+    productName:          S
+    productPrice:         N
+    shippingCost:         N
+    totalAmount:          N
+    platformFee:          N  // 3.5% of productPrice, int
+    processingFee:        N  // ClickPesa USSD tier OR BillPay %
+    sellerReceives:       N  // productPrice + shippingCost (payout amount)
+    paymentMethod:        S
+    phoneNumber:          S  // normalized 255XXXXXXXXX
+    escrowHeldAt:         T
+    escrowExpiresAt:      T  // + ESCROW_AUTO_RELEASE_DAYS (14d default)
+    escrowReleased:       B
+    escrowReleasedAt:     T
+    completedAt:          T
+    clickpesaReference:   S
+    ussdSent:             B
+    ussdFailed:           B
+    ussdError:            S
+    billPayNumber:        S  // control number for BillPay
+    payoutStatus:         S  // processing | completed | failed_retry
+    source:               S  // boost | flash_sale | etc (indexed)
+    orderId:              S  // for wallet purchase mirror (auto-id tx -> order)
+    createdAt:            T
+    updatedAt:            T
+    deletedForBuyer/Seller B
+  }
+
+  ORDER STATE MACHINE (server/orders.js ORDER_STATUS):
+
+    pending
+      -> awaiting_shipping_quote  [after POST /api/orders/create mirror]
+        -> quoted                [seller sets shipping via POST /api/orders/transition]
+          -> paid / paid_escrow_hold / escrow_hold  [webhook confirms payment]
+            -> dispatched        [seller POST /api/escrow/dispatch with proof]
+              -> delivered       [buyer confirms arrival]
+                -> delivery_confirmed -> completed [POST /api/escrow/release, funds move]
+              -> disputed        [POST /api/escrow/dispute -> admin resolve]
+              -> cancelled/refunded [buyer cancel before dispatch -> payout refund]
+            -> failed            [payment failed, retry via /api/retry-payment]
+          -> awaiting_shipping_quote (loop if quote rejected)
+      -> failed (immediate if validation fails)
+
+  Escrow sub-states: escrow_hold holds pendingEscrow (locked); completed moves
+  to sellerBalance (available). Auto-release sweeps escrow_hold where
+  escrowExpiresAt <= now (60 min interval + external cron).
+
+  Related: revenue_transactions/{id} (commission/boost/refund legs),
+           payouts/{id}, withdrawals/{id}, admin_withdrawals/{id},
+           audit_log/{id}, deposits/{depositRef}
+
+  ----------------------------------------------------------------------------
+  [D] BUYER REQUESTS SCHEMA
+  ----------------------------------------------------------------------------
+  BuyerRequests/{requestId}
+  {
+    id:                   S  // == doc id
+    buyerUid:             S  // indexed, creator
+    buyerName:            S
+    title:                S
+    description:          S
+    budget:               N  // TZS
+    category:             S  // optional
+    whatsapp:             S  // wa.me link, normalized 0->255
+    phone:                S
+    isLocked:             B  // true until seller unlocks
+    unlockedBy:           A<S> // uids of sellers who paid/viewed (arrayUnion)
+    createdAt:            T  // orderBy desc
+    status:               S  // open | closed
+  }
+  Write rule: create if buyerUid==auth.uid; update only unlockedBy (any seller)
+  or admin.
+
+  ----------------------------------------------------------------------------
+  [E] BOOST / AD CAMPAIGNS SCHEMA
+  ----------------------------------------------------------------------------
+  Legacy boost (products fields):
+    isBoosted, boostedUntil, boostTier on products/{id} (server-owned)
+
+  Sponsored (v2, server-owned):
+  sponsoredCampaigns/{campaignId}
+  {
+    campaignId:           S
+    sellerId:             S  // readable only by owner
+    productId:            S
+    tier:                 S  // bronze | silver | gold
+    priceTzs:             N  // 1500 | 3000 | 10000
+    durationDays:         N  // 3 | 7 | 30
+    status:               S  // pending_payment | active | expired | cancelled
+    impressions:          N
+    clicks:               N
+    budgetSpent:          N
+    startsAt:             T
+    endsAt:               T  // startsAt + durationDays
+    paymentRef:           S  // ClickPesa reference
+    createdAt:            T
+  }
+  Subcollections: placements, impressions, clicks, payments, audit (admin only)
+
+  boost_analytics/{productId}/impressions/{impId}
+    { buyerId, timestamp, processed }
+
+  product_analytics/{productId}/views/{viewId}
+    { buyerId, timestamp }
+
+  Billing: POST /api/boost-product (legacy) OR /api/v1/sponsored (v2),
+           Mongike/ClickPesa USSD push, webhook activates.
+
+  ----------------------------------------------------------------------------
+  [F] CHAT, NOTIFICATIONS, & OTHER COLLECTIONS (summary)
+  ----------------------------------------------------------------------------
+  chat_rooms/{roomId}  // roomId = sorted(uid1,uid2).join('_')
+    { participants: A<S>, last_message, last_timestamp, unread_count_buyer,
+      unread_count_seller, product_id, product_title, updatedAt }
+
+  chat_rooms/{roomId}/messages/{msgId}
+    { sender_id, receiver_id, text, timestamp, is_read, is_delivered,
+      product_id, product_name, reply_to, reactions: M, deleted }
+
+  conversations/{convId} // typing indicators, same id scheme
+    { typing_{uid}: T, participants: A<S> }
+
+  groups/{groupId}
+    { participantIds: A<S>, adminIds: A<S>, createdBy, name, photoUrl,
+      lastMessage, lastMessageTime, unreadCount }
+
+  notifications/{notifId}
+    { userId, title, body, isRead, data: {type, orderId, transactionId,
+      productId, roomId, payoutId, depositRef}, createdAt }
+
+  Other: reviews/{id}, reports/{id}, fraud_alerts/{id}, ad_views/{id},
+         price_drops/{id}, statuses/{id}, product/boost_analytics, user_sessions,
+         admin_*, search_index_*, landing_*, consentRecords, app_settings
+
+  ----------------------------------------------------------------------------
+  [G] ENTITY-RELATIONSHIP (ASCII)
+  ----------------------------------------------------------------------------
+
+    users 1----* products 1----* reviews
+      |          |               |
+      |          |               *-- comments -> replies
+      |          |
+      |          *---- flash_sales
+      |
+      +----* orders 1----1 transactions
+      |      |              |
+      |      |              *-- revenue_transactions
+      |      +-- orderTimeline
+      |      +-- delivery_otp
+      |
+      +----* BuyerRequests
+      |
+      +----* chat_rooms 1----* messages
+      |      |
+      |      +-- conversations (typing)
+      |
+      +----* groups 1----* messages
+      |
+      +----* notifications
+      |
+      +----* payouts / withdrawals / deposits
+      |
+      +----* sponsoredCampaigns 1----* impressions/clicks
+
+  ----------------------------------------------------------------------------
+  [H] POSTGRESQL PLANNED SCHEMA (v2 SEAM, NOT YET RUNTIME)
+  ----------------------------------------------------------------------------
+  File: server/src/config/database.js seam ready; schema concept:
+    User(firebaseUid unique, phone unique, role, accountStatus, emailVerified,
+         phoneVerified, preferredLanguage/Currency, timezone)
+    SellerProfile(userId FK, kycStatus, shopAccentColor, totalSales...)
+    Product(id, sellerId FK, title, price, isActive, isBoosted...)
+    ProductMedia(productId FK, r2Key, kind image|video)
+    Order(id, buyerId FK, sellerId FK, productId FK, status state machine...)
+    OrderTimeline(orderId FK, fromStatus, toStatus, actorId, note)
+    Transaction(id, orderId FK, type, status, platformFee, processingFee...)
+    Wallet(userId FK, balance, pendingEscrow)
+    LedgerAccount / LedgerEntry (double-entry)
+    Payout, Withdrawal, Dispute, DisputeEvidence, Refund, Referral,
+    TrustPassport, HandoverOTP
+  Migration strategy (MIGRATION.md): Postgres primary, Firestore mirror for
+  app compatibility, Redis re-warm, R2 bucket keys stable, Firebase not moved.
+  Zero-downtime host swap via Cloudflare ORIGIN_URL.
+
+--------------------------------------------------------------------------------
+  3.5 API SURFACE (Express)
+--------------------------------------------------------------------------------
+
+  Total: 83 endpoints (legacy 1:1 + v2 /api/v1). Auth patterns:
+    - Public: GET /health, GET /api/v1/products/*, POST /api/search/*,
+      Firestore direct reads (products, categories)
+    - Firebase Bearer: POST /api/boost-product, /api/create-marketplace-
+      payment-link, /api/create-payout, /api/chat/send, /api/transactions/create,
+      /api/cloudinary/sign, /api/ai/chat|transcribe, DELETE /api/products/:id,
+      /api/flash-sale/create, /api/kyc/submit, etc.
+    - x-admin-secret: GET/PUT/DELETE /api/admin/*, POST /api/admin/kyc/review
+    - Bearer+isAdmin: POST /api/admin/retro-boost, /api/notifications/broadcast,
+      /api/escrow/admin-resolve-dispute, /api/release-expired-escrows
+    - x-cron-secret: POST /api/cron/release-escrows
+    - x-webhook-secret + IP allowlist + checksum: POST /api/clickpesa/webhook
+
+  Key groups (server/APP_FLOWS.txt Sec 23):
+
+    AUTH/OTP:  POST /api/auth/send-otp | verify-otp | check-phone | check-email
+                     | reset-password-by-phone | phone-login | send-email-otp
+    SMS:       POST /api/sms/send
+    CHAT:      POST /api/chat/send
+    PAYMENTS:  POST /api/wallet/deposit | /api/wallet/purchase |
+                     /api/payment-methods | calc-fee | create-marketplace-payment-link
+                     GET /api/transaction-status/:orderId
+                     POST /api/clickpesa/webhook | /api/mongike/webhook (legacy)
+                     POST /api/retry-payment
+    ESCROW:    POST /api/escrow/release | dispatch | dispute | admin-release |
+                     admin-resolve-dispute | retry-payout |
+                     POST /api/release-expired-escrows | POST /api/cron/release-escrows
+    ORDERS:    POST /api/orders/create | transition | GET /api/orders/:id |
+                     /timeline | /status | DELETE /api/admin/orders/:id
+    SELLER:    GET /api/seller-balance | withdraw | admin-withdraw |
+                     GET /api/seller-statement/:sellerId | seller-analytics
+    KYC:       POST /api/kyc/submit | GET /api/kyc/status/:userId |
+                     POST /api/admin/kyc/review|revoke|delete |
+                     GET /api/admin/kyc/pending|all
+    FLASH:     POST /api/flash-sale/create | scan | notify
+    BOOST:     POST /api/boost-product | /api/v1/sponsored | retry
+    NOTIFS:    POST /api/send-notification | notifications/broadcast |
+                     admin/broadcast-notification | send-bulk-notification
+    AI:        POST /api/ai/chat | transcribe
+    ADMIN:     GET /api/admin/analytics | finance-summary | PATCH/DELETE users |
+                     POST unsuspend | DELETE full-delete | DELETE products |
+                     POST delete-doc | POST /api/cloudinary/sign | POST /api/reports
+
+  Example - payment link (server/src/modules/legacy-shop/):
+
+    // POST /api/create-marketplace-payment-link  (Bearer, rateLimit 5/60s)
+    // Body: { productPrice, productName, productId, sellerId, email, phone,
+    //         buyerId, buyerName, deliveryType, paymentMethod, shippingCost,
+    //         existingTransactionId? }
+    // Validates: seller not suspended, no duplicate pending tx,
+    //            daily limit 5,000,000 TZS, phone E.164
+    // Creates transactions/{docId} status pending -> async clickpesaCollect()
+    // Returns { order_id, totalCharge, feeBreakdown }
+
+--------------------------------------------------------------------------------
+  3.6 CACHING & QUEUES (Redis + BullMQ)
+--------------------------------------------------------------------------------
+
+  Redis (ioredis, REDIS_URL):
+    - 2-tier cache: memory Map + Redis (server/cache.js, src/config/redis.js)
+    - Rate limiting: sliding window 30 req/60s general, 5/60s payment,
+      3 OTP/15m per phone, 10/min/IP payouts/search
+    - Idempotency: ClickPesa webhook SETNX lock (txnId), BullMQ jobId dedup
+      payment:{txn_id}, DB unique transactionId
+    - Search cache: cache.setRedisClient for /api/search/*
+
+  BullMQ (src/workers/index.js):
+    - media queue (concurrency 1): image (sharp) / video (ffmpeg) - stubs if
+      missing libs
+    - finance-runner: scheduleFinanceJobs(), startFinanceWorker()
+      FINANCE_WORKER_IN_PROCESS=false on Render web (dedicated worker service)
+      Graceful degradation if Redis unreachable.
+
+  Finance safety-net (src/services/finance-runner.js):
+    Auto-release escrow after ESCROW_AUTO_RELEASE_DAYS (14d), withdrawal
+    auto-process (15m), stuck detection (48h), reconciliation window (24h),
+    dispute SLA (72h).
+
+================================================================================
+================================================================================
+  4. PAYMENT GATEWAYS & ESCROW INTEGRATION
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  4.1 PAYMENT INFRASTRUCTURE - PROVIDER ABSTRACTION
+--------------------------------------------------------------------------------
+
+  Primary gateway: ClickPesa (mobile money Tanzania)
+    Endpoints: clickpesa.js + server/src/modules/payments/
+    Auth: CLICKPESA_API_KEY (x-api-key), checksum, IP allowlist
+    Capabilities: USSD Push collect, BillPay (control number), Payout withdraw,
+                  balance, webhook callback.
+
+  Legacy gateway: Mongike (mongike.js)
+    Base: https://mongike.com/api/v1, header x-api-key (MONGIKE_API_KEY)
+    Functions: mongikeCollect({amount, orderId, buyerPhone, buyerName,
+               buyerEmail, feePayer, callbackUrl}) -> POST /payments/mobile-money/tanzania
+               mongikePayout({amount, recipientPhone, recipientName, narration,
+               externalReference}) -> POST /payouts/withdraw
+               mongikeBalance() -> GET /wallet/balance
+    Fees legacy: COLLECTION_FEE 180 TZS (platform absorbs), PAYOUT_FEE 2,000
+    Status: maintained but ClickPesa is active path.
+
+  Planned gateways (interface ready, provider factory):
+    - AzamPay (AzamPesa) - USSD + checkout
+    - Flutterwave - cards + mobile money fallback
+    Abstraction: server/src/modules/payments/providerFactory.js selects
+    provider by paymentMethod + region; all implement collect/payout/balance.
+
+  Callback URLs:
+    https://soko-langu-server.onrender.com/api/clickpesa/webhook
+    https://soko-langu-server.onrender.com/api/mongike/webhook (legacy)
+    Via Cloudflare: https://api.sokovibe.co.tz/api/clickpesa/webhook
+
+  +----------------+----------+------------------+-------------------------------+
+  | Provider       | Collect  | Payout           | Notes                         |
+  +----------------+----------+------------------+-------------------------------+
+  | ClickPesa      | USSD Push| Mobile money +   | Active; tiered fees; KYC    |
+  |                | BillPay  | Bank EFT/TISS    | limit 100k pre-KYC, 25k KYC|
+  +----------------+----------+------------------+-------------------------------+
+  | Mongike        | Mobile   | Withdraw         | Legacy; 180 + 2,000 fixed  |
+  |                | money TZ |                  |                               |
+  +----------------+----------+------------------+-------------------------------+
+  | AzamPay*       | USSD     | Payout           | Planned - factory stub      |
+  +----------------+----------+------------------+-------------------------------+
+  | Flutterwave*   | Cards/MM | Payout           | Planned - 4.85% card fee   |
+  +----------------+----------+------------------+-------------------------------+
+
+  * Planned - provider interface exists, not yet wired in production checkout.
+
+--------------------------------------------------------------------------------
+  4.2 FEE TABLES (ClickPesa Official Pricing)
+--------------------------------------------------------------------------------
+
+  USSD Push (charged to payer, tiered FIXED):
+
+  Amount Range (TZS)        Fee (TZS)
+  -------------------       ---------
+  500   -    899            54
+  900   -  1,999            92
+  2,000 -  2,999           124
+  3,000 -  3,999           230
+  4,000 -  4,399           380
+  4,400 -  8,999           580
+  9,000 - 19,999           920
+  20,000 - 39,999         1,150
+  40,000 - 49,999         1,572
+  50,000 - 95,999         2,136
+  96,000 -199,999         3,240
+  200,000-299,999         3,660
+  300,000-399,999         4,080
+  400,000-499,999         4,340
+  500,000-599,999         4,820
+  600,000-799,999         5,230
+  800,000-999,999         6,146
+  1,000,000-1,999,999     7,210
+  2,000,000-3,000,000     7,960
+
+  BillPay (collection):
+    M-Pesa/Airtel/Mixx 1% (min 500 - max 5,000,000)
+    HaloPesa 2%, CRDB 1%, TanQR 2%, Cards 4.85%
+
+  Payouts (mobile money FIXED):
+
+  100   -    999            52
+  1,000 -  1,999            72
+  2,000 -  2,999           104
+  3,000 -  3,999           116
+  4,000 -  4,999           168
+  5,000 -  6,999           234
+  7,000 -  7,999           360
+  8,000 -  9,999           430
+  10,000 -14,999           642
+  15,000 -19,999           680
+  20,000 -29,999           700
+  30,000 -39,999           980
+  40,000 -49,999         1,038
+  50,000 -99,999          1,460
+  100,000-199,999         1,868
+  200,000-299,999         2,220
+  300,000-399,999         3,180
+  400,000-499,999         3,764
+  500,000-599,999         4,672
+  600,000-699,999         5,712
+  700,000-799,999         6,560
+  800,000-899,999         7,800
+  900,000-1,000,000       8,508
+  1,000,000-3,000,000     9,346
+  3,000,000-5,000,000     9,890
+
+  Platform Commission: 3.5% of productPrice (platformCommissionPercent)
+    Recorded: revenue_transactions/{id} {type: commission, amount, orderId}
+    Display: service fee row at checkout (included in total, not added as line
+             if using legacy Mongike 180 absorbed as "Bure")
+
+  At checkout (checkout_screen.dart):
+    productPrice + serviceFee (3.5%) = total (Mongike fee hidden as Free)
+    ClickPesa flow: totalCharge = amount + processingFee (USSD tier or BillPay %)
+    is shown in confirm dialog breakdown.
+
+--------------------------------------------------------------------------------
+  4.3 ESCROW WORKFLOW ARCHITECTURE
+--------------------------------------------------------------------------------
+
+  Escrow is the trust primitive: buyer funds are HELD server-side until OTP
+  delivery confirmation, then atomically released to sellerBalance.
+
+  States: pending -> escrow_hold -> dispatched -> delivered -> completed
+                    \-> disputed (admin)  \-> cancelled (pre-dispatch)
+                    \-> failed
+
+  ASCII Sequence - Happy Path:
+
+  Buyer         App (Flutter)         Backend (Express)       ClickPesa    Seller App
+   |                |                        |                  |              |
+   | Buy Now        |                        |                  |              |
+   +--------------->| POST /api/orders/create|                  |              |
+   |                +----------------------->| Firestore orders  |              |
+   |                |  transactions pending | awaiting_shipping |              |
+   |                |<-----------------------+                  |              |
+   |                |                        |  notify seller   |              |
+   |                |                        +------------------------------->|
+   |                |                        |                  |              |
+   |                |  (seller quotes)       | POST /api/orders/transition    |
+   |                |                        | quoted + shippingCost          |
+   |   "Lipa Sasa"  |  POST /create-marketplace-payment-link (Bearer, 5/60s)  |
+   +--------------->|  + amount calc (processingFee)                           |
+   |                +----------------------->| validate (suspended, duplicate,|
+   |  PaymentBanner |                        |  daily limit 5M)               |
+   |  "Check phone" |                        |  transactions pending          |
+   |                |                        |  clickpesaCollect(phone)       |
+   |                |                        +----------------->| USSD Push    |
+   |  Enter PIN     |                        |                  |----->|       |
+   |  on phone      |                        |                  | PIN ok       |
+   |                |                        |<-----------------+             |
+   |                |                        | POST /api/clickpesa/webhook   |
+   |                |                        |  (IP+checksum+SETNX lock)     |
+   |                |                        |  Firestore tx:                 |
+   |                |                        |   status=escrow_hold           |
+   |                |  Realtime StreamBuilder|   escrowHeldAt=now             |
+   |                |<-- snapshot -- escrow |   escrowExpiresAt=now+14d       |
+   |  "Escrow held" |                        |   pendingEscrow += amount      |
+   |  FCM+SMS       |                        |   revenue commission 3.5%      |
+   |                |                        |   FCM+SMS both parties         |
+   |                |                        |                  |  "New order |
+   |                |                        |                  |   escrow"   |
+   |                |                        |  POST /api/escrow/dispatch     |
+   |                |                        |<------------------------------+
+   |                |                        |  status=dispatched             |
+   |  FCM+SMS       |<--- dispatched snapshot|  proof {bus,plate,photo}       |
+   |  "On the way"  |   bus details SMS      |                  |              |
+   |                |                        |                  |              |
+   | Confirm        |  POST /api/escrow/release (buyer, dispatched only)     |
+   | Delivery OTP   |  or /api/orders/verify-delivery OTP                    |
+   +--------------->+----------------------->| Firestore tx atomic:           |
+   |                |<-- completed snapshot |  pendingEscrow -= sellerReceives|
+   |  Receipt PDF   |                        |  sellerBalance += sellerReceives|
+   |  confetti      |                        |  status=completed              |
+   |                |                        |  auditLog + revenue            |
+   |                |                        |  FCM+SMS both                  |
+   |                |                        |  auto-payout if seller.autoPayout
+   |                |                        |                  |  "Payout"   |
+   |                |                        |  clickpesaPayout (2,000 fee)   |
+   |                |                        |  -> payouts/{id}               |
+
+  Code - Escrow Release (server/src/modules/escrow/ - simplified):
+
+    // POST /api/escrow/release  {orderId, userId}  (Buyer, dispatched only)
+    const tx = await db.runTransaction(async (t) => {
+      const orderSnap = await t.get(ordersRef.doc(orderId));
+      if (orderSnap.data().status !== 'dispatched') throw new Error('INVALID_STATE');
+      if (orderSnap.data().buyerId !== userId) throw new Error('FORBIDDEN');
+      // atomic ledger move
+      t.update(usersRef.doc(sellerId), {
+        pendingEscrow: FieldValue.increment(-sellerReceives),
+        sellerBalance: FieldValue.increment(sellerReceives),
+        grossSalesVolume: FieldValue.increment(sellerReceives),
+        totalSales: FieldValue.increment(1)
+      });
+      t.update(ordersRef.doc(orderId), { status: 'completed', completedAt: now });
+      t.update(transactionsRef.doc(orderId), { status: 'completed', escrowReleased: true });
+      t.set(revenueRef.doc(), { type: 'commission', amount: platformFee, orderId });
+      t.set(auditLogRef.doc(), { action: 'escrow_release', orderId, actor: userId, at: now });
+    });
+    // after tx: sendOneSignal + sendSms (localized via notif_lang)
+
+  Code - ClickPesa webhook guard (server/clickpesa.js / src/modules/payments/):
+
+    router.post('/api/clickpesa/webhook', async (req, res) => {
+      if (!verifyIp(req.ip)) return res.status(403).send('IP not allowed');
+      if (!verifyChecksum(req.body)) return res.status(403).send('bad checksum');
+      // Redis SETNX double-spend lock
+      const lock = await redis.set(`webhook:${txnId}`, '1', 'NX', 'EX', 3600);
+      if (!lock) return res.status(200).send('already processed');
+      // ... Firestore status update + notifications
+      res.status(200).send('ok');
+    });
+
+  Holding periods:
+    ESCROW_AUTO_RELEASE_DAYS env default 14 days
+    Local delivery constant 3 days (internal), regional 7 days (separate)
+    Admin force: POST /api/escrow/admin-release (x-admin-secret)
+    Retry failed payout: POST /api/escrow/retry-payout
+
+  Auto-release (two mechanisms):
+
+    a) Internal setInterval every 60 min (first run 60s after boot):
+         query transactions where (status==escrow_hold OR dispatched)
+               AND escrowExpiresAt <= now
+         -> for each: status completed, sellerBalance += sellerReceives,
+            notify buyer "Escrow Imetolewa Kiotomatiki", seller "Malipo Yamekamilika"
+
+    b) External cron endpoints:
+         POST /api/release-expired-escrows (Bearer+isAdmin)
+         POST /api/cron/release-escrows (x-cron-secret = ADMIN_SECRET)
+         -> for cron-job.org / GitHub Actions hourly
+
+--------------------------------------------------------------------------------
+  4.4 REFUND & DISPUTE RESOLUTION WORKFLOWS
+--------------------------------------------------------------------------------
+
+  [CANCEL] Before dispatch (buyer, escrow_hold):
+
+    POST /api/escrow/cancel {orderId, userId}
+      Validate: status escrow_hold, caller is buyer
+      Action: mongikePayout/clickpesaPayout REFUND productPrice - PAYOUT_FEE 2000
+              to buyer phone; seller pendingEscrow decremented; status cancelled
+              (or refunded)
+      Notify: FCM+SMS both parties
+      Audit: audit_log refund entry
+
+  [DISPUTE] After dispatch but before confirm:
+
+    POST /api/escrow/dispute {orderId, userId, reason, evidenceUrls}
+      -> status disputed, funds stay held (pendingEscrow untouched)
+      -> FCM to seller + all admins (admin_notifications)
+      Evidence: disputeEvidence subcollection (planned) or evidenceUrls array
+
+    Admin resolution:
+
+      POST /api/escrow/admin-resolve-dispute {orderId, resolution} (admin)
+        resolution 'release' -> status completed, sellerBalance += (funds to seller)
+        resolution 'refund'  -> clickpesaPayout productPrice to buyer
+                               + penalties to seller (revenue reversal)
+                               + status refunded, pendingEscrow decremented
+        SLA: FINANCE_DISPUTE_SLA_HOURS 72 (finance-runner monitor)
+
+  [FAILED] Payment failed path:
+
+    Webhook sets status failed; ussdFailed=true, ussdError string
+    Client RealtimePaymentBanner shows FAILED instantly (no infinite loading)
+    Buyer may retry: POST /api/retry-payment {orderId} (stale pending boosts
+    also swept via cron every 60 min -> mark failed).
+
+  Idempotency: every financial mutation uses Firestore atomic transaction +
+               Redis lock + unique transactionId to prevent double credit.
+
+================================================================================
+================================================================================
+  5. END-TO-END USER FLOWS
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  5.1 FLOW 1: USER ONBOARDING, AUTHENTICATION & KYC VERIFICATION
+--------------------------------------------------------------------------------
+
+  Steps:
+
+  1. Splash -> AuthGate decides:
+       appInitialized==false -> splash
+       !onboardingComplete   -> /onboarding (5 pages + tier selection)
+       !authenticated        -> /login
+       isSuspended           -> suspended screen
+       !profileComplete      -> /profile-setup
+
+  2. Registration options:
+
+     a) Email/Password:
+        POST check-email -> Firebase createUserWithEmailAndPassword
+        -> Firestore users/{uid} {displayName, email, phone, isSeller, createdAt}
+
+     b) Phone + OTP (primary TZ flow):
+        Input 0XXXXXXXXX -> sanitize -> POST /api/auth/send-otp
+          Server: rate 3/15min, generate 6-digit, sha256 hash -> otp_codes/{phone}
+                  {hash, expiry 10m, used false}, send via Meseji (local 07...)
+          Input OTP -> POST /api/auth/verify-otp -> verify hash+expiry
+          -> POST /api/phone-login {phone, otp} -> server lookup by phone
+             if not found: admin.auth().createUser({email: phone_XXX@soko-vibe.com,
+                        password: deterministic, phoneNumber: +255...})
+                        + Firestore users/{uid}
+             returns Firebase customToken -> client signInWithCustomToken
+        Phone normalized E.164 (+255) server-side; validators 0[67]XXXXXXXX.
+
+     c) Google Sign-In:
+        google_sign_in -> signInWithCredential -> Firestore doc on first
+
+     d) Magic Link:
+        sendSignInLinkToEmail -> deep link via app_links
+        apple-app-site-association + assetlinks.json configured
+
+  3. Post-auth: AuthNotifier.initialize() restores user + isAdmin, syncs phone
+     to Firestore, loads PIN, init notification callbacks.
+
+  4. KYC Submission (seller gating):
+
+     Client: KycService.submitKyc -> POST /api/kyc/submit {userId, fullName,
+             idType, idNumber, idImageUrl (Cloudinary), selfieUrl}
+       Validations (server):
+         fullName >=2 parts
+         National ID ==20 digits OR other >=6 chars
+         idImage + selfie required
+       Result: status pending (auto-approves if strict pass; else manual)
+       On approval: updateSellerKycOnProducts (all products sellerKycApproved=true)
+       Audit log entry.
+
+  5. Admin Review:
+
+     GET /api/admin/kyc/pending (requireAdmin) list
+     POST /api/admin/kyc/review {userId, status approved|rejected, notes}
+       -> on approved: products sellerKycApproved true
+       -> notify user via in-app + FCM (localized)
+     Additional: POST /api/admin/kyc/revoke, DELETE /api/admin/kyc/delete
+
+  6. KYC Impact: VerifiedBadge on product_detail seller card; listing gated
+     (AddProduct rejects if KYC not approved - catches "KYC" error).
+
+  ASCII:
+
+    User --> AuthScreen -- phone --> /api/auth/send-otp --> Meseji SMS
+                  |                         |
+                  +-- OTP --> /api/auth/verify-otp --> ok --> /api/phone-login
+                                                              -> customToken
+                                                              -> Firebase signIn
+                                                              -> Firestore user
+                                                              -> /kyc/submit
+                                                              -> admin review
+                                                              -> Verified
+
+--------------------------------------------------------------------------------
+  5.2 FLOW 2: PRODUCT SEARCH, FILTERING & DISCOVERY
+--------------------------------------------------------------------------------
+
+  Entry: HomeScreen featured + categories OR DiscoveryScreen tabs
+         OR SearchScreen explicit query
+
+  Client path (no auth needed):
+
+  1. User types query "mavazi ya watoto"
+     -> ProductSearchService.searchProducts() does:
+        tokens = query.split(' ') lowercased
+        q = Firestore .collection('products').where(isActive==true).get()
+            // composite index isActive+searchKeywords / searchName required
+        client filter: product.searchKeywords containsAny tokens OR
+                       searchName startsWith token
+        sort: exact name match first, then soldCount desc, boosted first
+
+  2. Filters (DiscoveryFilters):
+     category (11 defaults), subCategory, price min/max (slider),
+     location region/district (tanzania_districts.dart dropdown),
+     condition new/used, sort newest|priceLowHigh|rating, distance Nearby
+
+  3. Pagination: limit 15, cursor startAfter last doc; ProductFeedProvider
+     handles fromCache flag + realtime subscription via watchProductsRealtime
+     (onSnapshot filtered isActive).
+
+  Server path (edge cached):
+
+    POST /api/search/global-search {query, filters}  TTL 60s edge
+    POST /api/search/autocomplete {prefix}           TTL 90s
+    POST /api/search/trending                        TTL 300s
+    POST /api/search/most-rated                      TTL 600s
+    -> server/search.js + query-intent.js parses intent (category, price range,
+       location) -> Firestore or search_index_products (admin-only) -> cache
+       setRedisClient -> response
+
+  Most Rated extensions (SOKO_VIBE_REQUIREMENTS_GUIDE):
+    Search empty -> boosted products first, non-boosted last (client reorder)
+    Most Rated Products + Most Rated Sellers sections (RatingService agg)
+
+  Geolocation: Nearby tab -> geolocator getCurrentPosition -> geohash
+               encode -> Firestore geohash prefix query -> distance calc
+               Geolocator.distanceBetween for chip display.
+
+  Result tap -> /product/:id (product_detail)
+
+--------------------------------------------------------------------------------
+  5.3 FLOW 3: ORDER PLACEMENT, PAYMENT PROCESSING & ESCROW HOLDING
+--------------------------------------------------------------------------------
+
+  Sequence (buyer perspective, see also 4.3):
+
+  1. Product detail -> "Buy Now" -> CheckoutScreen (/checkout/:productId)
+     - Address form: "Get My Location" (geolocator) OR manual region dropdown
+       (filtered district dropdown) + street + landmarks + lat/lng reverse
+       geocode. District select via tanzania_districts.dart.
+     - Delivery type: local (3d) / regional (7d)
+     - Payment method radio: Wallet | M-Pesa USSD | BillPay
+
+  2. Price breakdown:
+     Product price (TZS) + Service fee 3.5% = Subtotal
+     Mongike fee "Bure" (Free) row (ClickPesa processingFee shown in confirm
+     dialog as totalCharge = amount + fee tier)
+
+  3. Submit -> client creates Firestore orders/{orderId} + mirrors
+     transactions/{orderId} with status awaiting_shipping_quote (NOT paid yet).
+     Fields: buyerId, sellerId, productId, quantity, variantId, unitPrice,
+     productPrice, shippingCost 0, totalAmount productPrice, status pending ->
+
+  4. Seller quote required before pay (updated 2026-08 fix):
+     - Buyer sees "Inasuburi Gharama ya Usafirishaji" disabled button (my_purchases)
+       + wait message (order_detail) until status quoted.
+     - canPay = status quoted OR awaiting_payment.
+
+  5. Seller sets shipping (see Flow 4) -> order status quoted, totalAmount
+     += shippingCost, transactions shippingCost updated, buyer notified
+     "Gharama Imewekwa! Lipa sasa" (FCM+in-app).
+
+  6. Buyer taps Pay -> ClickPesaService.initiateMarketplacePayment:
+     POST /api/create-marketplace-payment-link
+       Body: {productPrice, productName, productId, sellerId, sellerName, email,
+              phone (255...), buyerId, buyerName, deliveryType, paymentMethod,
+              shippingCost, existingTransactionId}
+       Auth Bearer, RateLimit 5/60s, validations (suspended, duplicate, 5M daily)
+       Server: calc processingFee = getUssdPushFee(amount) or BillPay 1%
+               totalCharge = amount + fee; create transactions doc status pending
+               -> clickpesaCollect async (USSD push or BillPay control number)
+       Returns: {order_id, billPayNumber? if billpay, feeBreakdown}
+
+  7. PaymentBanner overlay (modal blocking, 1 min safety timeout):
+     USSD: "Complete payment on your phone via USSD push" + StreamBuilder on
+           transactions/{orderId} + poll GET /api/transaction-status/:orderId
+           every 7s (RealtimePaymentBanner also polls 3s). Confetti single.
+     BillPay: big control number + COPY button (Clipboard, "Imenakiliwa") +
+              "Kiasi: TZS ..." stream
+
+  8. User enters PIN on phone -> ClickPesa webhook confirms ->
+     Backend tx: status escrow_hold, escrowHeldAt now, escrowExpiresAt now+14d,
+     pendingEscrow += sellerReceives, revenue commission 3.5%, flash stock decr,
+     notifyBoth (FCM+SMS+Meseji localized) -> client stream moves to escrow_hold.
+
+  9. Wallet path alternative:
+     If paymentMethod wallet: balance check users/{uid}.walletBalance
+     -> transactions doc MERGE (reuse orderId, not new auto-id) status escrow_hold
+     -> orders/{orderId} transition paid via POST /api/orders/transition
+     Guard: "Order already paid" prevents duplicate My Purchases rows.
+
+--------------------------------------------------------------------------------
+  5.4 FLOW 4: SELLER ORDER PROCESSING, SHIPPING, OTP DELIVERY & PAYOUT RELEASE
+--------------------------------------------------------------------------------
+
+  Seller surfaces: seller_orders_screen, seller_quote_screen, seller_dispatch
+
+  1. Seller receives order (tx status awaiting_shipping_quote) -> notification
+     "Order mpya: {product} from {buyer} in {region/district/street/kijiji}"
+     Seller sees buyer location details + product variant.
+
+  2. Quote shipping:
+     seller_quote_screen._submitQuote:
+       Set Firestore transactions/{orderId} {shippingCost, totalAmount += ship,
+         status quoted}
+       POST /api/orders/transition {orderId, newStatus: quoted,
+         note: {shippingCost}} -> timeline + buyer notify
+     seller_orders_screen quote dialog also syncs tx doc after transition
+     (source of truth for buyer's _mergeDocs).
+
+  3. After buyer pays (escrow_hold), seller Dispatch:
+
+     POST /api/escrow/dispatch {orderId, userId, tracking?, receiptUrl?,
+       photo?, busName?, plateNumber?}
+       Validate: seller owns tx, status escrow_hold
+       Update: status dispatched, dispatchProof {busName, plateNumber,
+         tracking, receiptUrl, photo, dispatchedAt}
+       Notify buyer FCM "Your order has been shipped" + SMS with bus details
+
+  4. Buyer receives product -> Buyer taps "Thibitisha Upokeaji" (Confirm Delivery)
+
+     Option A (legacy escrow):
+       POST /api/escrow/release {orderId, userId} buyer, dispatched only
+       -> atomic move pendingEscrow -> sellerBalance, status completed
+
+     Option B (OTP handover, legacy-shop/delivery_otp):
+       POST /api/orders/verify-delivery {orderId, otp}
+       POST /api/orders/delivery-arrival
+       OTP generated server-side at dispatch (hash on order, plaintext in
+       delivery_otp subcollection visible only to buyer). Buyer hands OTP to
+       seller's courier; seller submits OTP to release.
+
+  5. On release:
+     - Update orders+transactions completed, escrowReleased true, completedAt now
+     - Revenue already recorded, grossSalesVolume + totalSales incremented
+     - Notify both FCM+SMS, show receipt PDF (receipt_pdf_service, A4, QR JSON
+       type soko_vibe_receipt, price breakdown, signatures)
+     - If seller.autoPayout true -> auto POST /api/payouts/seller/withdraw
+
+  6. Payout withdrawal (seller earnings):
+
+     seller_earnings_screen -> Withdraw dialog amount+phone -> POST
+     /api/payouts/seller/withdraw or /api/seller/withdraw
+       Validate: amount min 5,000 (UI) / 2,001 admin, sufficient sellerBalance
+       Atomic deduct (amount + 2,000 PAYOUT_FEE) + create payouts/{id} status
+       processing -> clickpesaPayout() -> webhook
+         SUCCESS: payout completed, notify seller
+         FAILED: reverse deduction -> sellerBalance, auto-retry
+
+  7. Timeline widget (DsPaymentStatusTimeline) shows every state with TZS
+     breakdown, bus photo, receipt image, OTP field.
+
+--------------------------------------------------------------------------------
+  5.5 FLOW 5: BUYER REQUEST CREATION & MERCHANT BIDDING FLOW
+--------------------------------------------------------------------------------
+
+  Actors: Buyer (posts need) -> Sellers (unlock + contact)
+
+  1. Buyer navigates /buyer-requests (BuyerRequestsScreen)
+     List: stream BuyerRequests orderBy createdAt desc
+     Tap "Post Request" -> /post-buyer-request
+
+  2. Form: title, description, budget (TZS), category optional,
+     WhatsApp link (auto 0->255 normalization via PhoneUtils),
+     phone. Ad gate: RewardedAdGate.require() optional before submit.
+
+  3. Submit -> Firestore BuyerRequests/{autoId} {
+       buyerUid, buyerName, title, budget, description, whatsapp wa.me,
+       isLocked true, unlockedBy [], createdAt now, status open
+     }
+     Notify sellers via FCM broadcast? (currently via in-app + potential
+     OneSignal segment).
+
+  4. Seller browsing requests:
+     Sees locked contact ("Tazama Mawasiliano" button). Tap ->
+       unlockContact -> Firestore update BuyerRequests/{id}
+         arrayUnion(sellerUid) on unlockedBy (permanent, client rule allows
+         only this field change if not admin)
+       After unlock, reveal whatsapp link + phone, enable wa.me deep-link
+       + CallSellerButton alternative.
+
+  5. Seller contacts buyer off-platform (WhatsApp). No in-app bidding thread
+     required; simplicity over formality. Future: integrated quote replies
+     via BuyerRequests/{id}/replies subcollection (not yet).
+
+  6. Buyer manages: close request (status closed), delete (admin only),
+     views unlockedBy count (interest metric).
+
+  Rules: create if buyerUid==auth.uid, read if signedIn notSuspended,
+         update only unlockedBy.
+
+--------------------------------------------------------------------------------
+  5.6 FLOW 6: PAY-TO-BOOST CAMPAIGN CREATION & AD PLACEMENT
+--------------------------------------------------------------------------------
+
+  Tiers (boost_tier.dart):
+
+    Tier   | Price (TZS) | Duration   | Badge | Visibility
+    -------+-------------+------------+-------+-----------------------------
+    Bronze |   1,500     |  3 days    |  Bz   | Feed bump, carousel slot
+    Silver |   3,000     |  7 days    |  Sv   | Higher rank, home priority
+    Gold   |  10,000     | 30 days    |  Gd   | Top feed + search first
+
+  Creation (product_boost_screen.dart):
+
+  1. Seller selects product (from My Ads where sellerId==uid)
+     + tier radio -> amount + durationDays resolved from boost_tier config.
+
+  2. Phone input (2557XXXXXXXX) + payment method USSD/BillPay.
+
+  3. Initiate:
+
+     POST /api/boost-product  (Bearer REQUIRED since recent fix)
+       Body: {productId, tier, amount, durationDays, phone, userId}
+       Validate: seller not suspended, no duplicate active boost,
+                 product owned, tier exists
+       Create transactions/{docId} {type boost, status pending, buyerId==sellerId,
+         productId, amount, durationDays, billPayNumber/future USSD}
+       -> async mongikeCollect / clickpesaCollect USSD push
+
+     OR v2: POST /api/v1/sponsored {productId, tier} -> sponsoredCampaigns
+            pending_payment (server-owned)
+
+  4. Seller enters PIN (USSD) or pays BillPay control number. Poll + stream:
+
+     Client polls Firestore products/{id} isBoosted==true 10x/500ms +
+       StreamBuilder transactions where productId==id && status pending.
+
+  5. Webhook confirms -> Server tx:
+       transactions status completed,
+       products/{id} {isBoosted true, boostedUntil / boostExpiresAt = now+durationDays,
+         boostTier = tier}
+       revenue_transactions {type boost, amount}
+       broadcast FCM+in-app to all users ("{seller} boosted {product}!")
+       boost_analytics impression seed
+
+  6. Ad placement:
+     Home feed sorting: boostedFirst comparator -> boosted products at top;
+     Gold > Silver > Bronze within boosted. Sponsored listings carousel
+     pulls isBoosted orderBy boostedUntil desc.
+     Search empty state: boosted first cascade.
+     ProductCard DsBoostBadge visible.
+
+  7. Expiry: setInterval 60 min sweep deactivates flash sales + Finance-runner
+     style sweep also clears isBoosted where boostedUntil <= now (implied).
+
+  8. Retro-fix (admin):
+     POST /api/admin/retro-boost (Bearer+isAdmin)
+       Iterate boost transactions completed but product missing boost fields
+       -> apply isBoosted + boostedUntil. Recovers from webhook race where
+       payment succeeded but product update missed.
+
+  9. Analytics:
+     boost_analytics/{productId}/impressions {impId} created on view
+     SellerAnalyticsScreen aggregates per-seller boost impressions vs
+     order conversion.
+
+================================================================================
+================================================================================
+  6. SECURITY, FIRESTORE RULES & ERROR HANDLING
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  6.1 FIREBASE FIRESTORE SECURITY RULES (firestore.rules:641 lines)
+--------------------------------------------------------------------------------
+
+  Version: rules_version = '2'
+  Service: cloud.firestore /databases/{database}/documents
+
+  Helpers:
+
+    isSignedIn()     -> request.auth != null
+    isOwner(userId)  -> isSignedIn() && request.auth.uid == userId
+    isAdmin()        -> isSignedIn() && exists(users/{auth.uid}) &&
+                        get(...).data.isAdmin == true
+    notSuspended()   -> isSignedIn() && (!exists(...) ||
+                        get(...).data.isSuspended != true)
+
+  Field-level guards (critical - prevents client tampering):
+
+    noSensitiveFieldChanges()  // for UPDATE (diff)
+      Affects: walletBalance, sellerBalance, pendingEscrow, totalSales,
+               grossSalesVolume, totalWithdrawn, isAdmin, isSuspended, kyc,
+               isBoosted, boostedUntil, boostTier, createdAt, lastSaleAt,
+               lastLoginAt, fcmToken
+      Logic: diff(resource).affectedKeys().hasAny(SENSITIVE) -> REJECT
+             Exception: single-field fcmToken == null delete allowed (logout)
+
+    noSensitiveCreateFields()  // for CREATE (incoming keys)
+      Reject if incoming hasAny {walletBalance, pendingEscrow, totalSales,
+        grossSalesVolume, totalWithdrawn, kyc, isBoosted, boostedUntil,
+        boostTier, lastSaleAt, lastLoginAt, fcmToken}
+             OR sellerBalance !=0 OR isAdmin != false OR isSuspended != false
+
+  Collection rules excerpts:
+
+    /users/{userId}
+      read: isSignedIn()
+      create: isOwner(userId) && noSensitiveCreateFields()
+      update: (isOwner && noSensitiveFieldChanges()) || isAdmin()
+      delete: isOwner || isAdmin
+
+    /products/{productId}
+      read: true (public catalog)
+      create: isSignedIn() && notSuspended() && sellerId==auth.uid
+              && !keys.hasAny([isBoosted,boostedUntil,boostTier,
+                               isFeatured,featuredUntil,soldCount])
+              && rating==0 && reviewCount==0
+      update: isSignedIn() && notSuspended() && (
+                (sellerId==auth.uid && !diff.hasAny([isBoosted,...isFeatured]))
+                || diff.hasOnly([viewCount])          // any user bump views
+                || diff.hasOnly([likedBy])             // like/unlike
+                || diff.hasOnly([rating,reviewCount])  // review aggregate
+                || diff.hasOnly([soldCount])           // server sold
+                || isAdmin())
+      delete: (sellerId==auth.uid && notSuspended) || isAdmin
+
+    /orders/{orderId}
+      read: isSignedIn() && (buyerId==auth.uid || sellerId==auth.uid || isAdmin)
+      create: isSignedIn() && buyerId==auth.uid
+      update: (buyer==auth.uid && diff.hasOnly([deletedForBuyer]))
+              || (seller==auth.uid && diff.hasOnly([deletedForSeller,
+                   shippingCost,totalAmount]))  // quote allow
+              || isAdmin
+      delete: isAdmin
+      /delivery_otp/{doc}: read if buyerId==auth.uid; write false (server only)
+
+    /transactions/{txId}
+      read/create/update mirrored to orders participant model
+      -> client may only soft-delete own row or seller shippingCost
+      -> status/money server-owned (webhook/Admin SDK)
+
+    /chat_rooms/{roomId}
+      read/create/update: participants.hasAny([auth.uid]) || isAdmin
+      messages subcollection: get(parent).data.participants.hasAny([auth.uid])
+
+    /BuyerRequests/{requestId}
+      read: isSignedIn() && notSuspended()
+      create: buyerUid==auth.uid
+      update: isAdmin() || diff.hasOnly([unlockedBy])
+      delete: isAdmin()
+
+    /notifications/{notifId}
+      read: userId==auth.uid || isAdmin
+      create: (userId==auth.uid || isAdmin) && keys.hasAll([title,body,userId])
+      update: userId==auth.uid && diff.hasOnly([isRead])
+      delete: userId==auth.uid
+
+    /sponsoredCampaigns/{campaignId}
+      read: sellerId==auth.uid || isAdmin
+      create/update/delete: isAdmin  // server-owned, prevents bid fraud
+      /{doc=**} sub: admin only
+
+    Catch-all: match /{document=**} { allow read, write: if false; }
+      -> Closed by default; undiscovered collections are denied.
+
+  Indexes enforcement: queries without composite indexes throw
+    "index missing" (handled by network_error mapper -> user-friendly SW msg).
+
+--------------------------------------------------------------------------------
+  6.2 SECURE API AUTHENTICATION (JWT / Firebase Auth Tokens)
+--------------------------------------------------------------------------------
+
+  Firebase ID token (JWT RS256) -> Bearer header:
+
+    Authorization: Bearer <Firebase ID token>
+
+  Middleware (server/src/middleware/auth.js, legacy index.js):
+
+    async function requireAuth(req,res,next) {
+      const token = req.headers.authorization?.split('Bearer ')[1];
+      if (!token) return res.status(401).json({error:'Missing token'});
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.user = decoded; // {uid, email, isAdmin claim?}
+        // optional isAdmin check: fetch users/{uid}.isAdmin
+        next();
+      } catch (e) {
+        return res.status(401).json({error:'Invalid token'});
+      }
+    }
+
+  Admin patterns:
+
+    x-admin-secret: ADMIN_SECRET env, checked plaintext for dashboard &
+                    legacy admin CRUD. Used by Render dashboard curl & scripts.
+
+    Bearer+isAdmin: verifyIdToken + fetch users/{uid}.isAdmin==true
+                    (used for sensitive admin: retro-boost, broadcast, escrow
+                     admin-resolve).
+
+    x-cron-secret: ADMIN_SECRET for POST /api/cron/release-escrows
+                   (cron-job.org hourly).
+
+    x-webhook-secret: WEBHOOK_SECRET for Mongike/ClickPesa webhooks
+                      Mismatch -> 403 {error:"Invalid webhook secret",code:"INVALID_SECRET"}
+                      (fixed from prior warning-only accept).
+
+  Protected groups:
+
+    Firebase Bearer: boost-product, create-marketplace-payment-link,
+                     create-payout, release-expired-escrows, chat/send,
+                     reports, transactions/create, cloudinary/sign,
+                     ai/chat|transcribe, flash-sale/create
+
+    Admin secret: most GET/PUT/DELETE /api/admin/*, categories/add-defaults
+
+    Bearer+isAdmin: retro-boost, notifications/broadcast,
+                    escrow/admin-resolve-dispute
+
+  Example - client header (lib/services/clickpesa_service.dart):
+
+    final idToken = await FirebaseAuth.instance.currentUser!.getIdToken();
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/create-marketplace-payment-link'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      },
+      body: jsonEncode({...})
+    );
+
+--------------------------------------------------------------------------------
+  6.3 ADDITIONAL SECURITY LAYERS
+--------------------------------------------------------------------------------
+
+  Firebase App Check:
+    Play Integrity (Android prod) + DeviceCheck (iOS prod), debug token logged
+    in debug console. Server verifies via admin.appCheck() if enabled.
+
+  Device Integrity (SecurityService 110 lines):
+    root detection (Android), jailbreak (iOS), emulator detection.
+    Action: soft flag, not hard block; risk score influences fraud alerts.
+
+  App Lock:
+    AppLockService - PIN overlay on background resume, pin sha256 stored in
+    SecureStorage app_lock_pin, lifecycle observer.
+
+  Rate Limiting (Redis sliding window, ioredis):
+
+    general:          30 req / 60s  (per IP)
+    payment:           5 req / 60s  (per IP+path)
+    OTP send:          3     /15min (per phone, otp_codes collection)
+    search:           20 /min /IP
+    payouts:          10 /min /IP
+
+    Middleware returns 429 + Retry-After.
+
+  Security Headers (helmet + src/app.js):
+
+    Strict-Transport-Security, Content-Security-Policy,
+    X-Content-Type-Options nosniff, X-Frame-Options DENY,
+    Permissions-Policy, x-soko-edge stamps
+
+  CORS: ALLOWED_ORIGINS whitelist (Render, Railway, localhost, Capacitor
+        scheme). Reject else.
+
+  Request timeout: 20s (504) via timeout middleware.
+
+  Load shedding: SHED_LOAD=true -> 503 + Retry-After if eventLoop lag >1500ms
+                 AND heap >512MB (src/middleware/loadShedder.js).
+
+  Encryption: passwords deterministic for phone users (not user-chosen), OTP
+              hash sha256, PIN sha256, Cloudinary signature sha256, webhook
+              checksum verification.
+
+  PDPA 2022: consentRecords/{userId} doc per user, owner write; auditable.
+
+--------------------------------------------------------------------------------
+  6.4 ERROR HANDLING FRAMEWORK
+--------------------------------------------------------------------------------
+
+  Philosophy: Every exception maps to Swahili+English user message; never
+  raw "Error: $e" shown.
+
+  Utility: lib/utils/network_error.dart  NetworkError.translateError(e)
+
+    classify:
+      - SocketException / TimeoutException -> "Hakuna mtandao / No internet"
+      - FirebaseException code permission-denied -> "Huna ruhusa"
+      - FirebaseException code failed-precondition (missing index)
+        -> "Jaribu tena baadaye (index)"
+      - HttpException 401 -> "Tafadhali ingia tena"
+      - 403 -> "Umezuiliwa / Suspended"
+      - 404 -> "Haijapatikana"
+      - 429 -> "Jaribu tena baada ya muda"
+      - 500/503 -> "Hitilafu ya seva / Server error"
+      - Unknown -> localized fallback
+
+  All service calls wrapped:
+
+    try {
+      await _apiCall();
+    } catch (e) {
+      throw translateError(e); // returns localized String
+    }
+
+  Applied to: checkout_screen, mongike_service, clickpesa_service,
+              kyc_service, product_boost_screen, payment_banner,
+              add_product_screen, my_purchases_screen, order_detail_screen,
+              seller_dispatch_screen, seller_quote_screen, edit_profile_screen,
+              profile_screen, account_switcher_sheet, review_section
+
+  UI patterns:
+
+    - Offline banner: ConnectivityWrapper shows "Hakuna mtandao" banner,
+      auto-recovery on reconnect resubscribes Firestore streams.
+    - PaymentBanner modal: blocks interaction until pending -> success/failed.
+      Failed shows ussdError + Retry button (POST /api/retry-payment).
+      Success single confetti + receipt. Safety timeout 1 min releases block.
+    - RealtimePaymentBanner: StreamBuilder + poll GET /api/transaction-status
+      every 3s/7s; if webhook missed, poll becomes source of truth.
+    - Firestore fallback for notifications: if OneSignal push denied flag
+      _pushDenied, listener on notifications where userId==uid && isRead==false
+      && createdAt > now-2min shows heads-up same as push.
+
+  Server error handler (src/app.js final):
+
+    app.use((err, req, res, next) => {
+      console.error(err);
+      res.status(err.status || 500).json({
+        error: err.message,
+        ...(process.env.NODE_ENV==='development' && {stack: err.stack})
+      });
+    });
+    404 handler distinguishes JSON vs HTML.
+
+  Audit & fraud:
+
+    - Every financial tx writes audit_log/{id} {action, orderId, actor, at, before, after}
+    - fraud_alerts collection from FraudPreventionService (210 lines):
+      suspicious amounts, duplicate listings same image/text, price spikes,
+      rapid account creation same device, high-velocity transactions.
+    - Daily limit 5,000,000 TZS enforced at create-marketplace-payment-link
+    - Risk score: POST /api/fraud/risk/:sellerId (KYC + age + alerts)
+
+  Example - unified error widget (ds/DsEmptyState + DsSkeleton):
+
+    if (snapshot.hasError) {
+      return DsEmptyState(
+        icon: Icons.wifi_off,
+        title: context.tr('network_error_title'),
+        subtitle: translateError(snapshot.error!),
+        actionLabel: context.tr('retry'),
+        onAction: () => refetch(),
+      );
+    }
+
+================================================================================
+================================================================================
+  7. DEPLOYMENT & DEVOPS INFRASTRUCTURE
+================================================================================
+================================================================================
+
+--------------------------------------------------------------------------------
+  7.1 HOSTING - RENDER / RAILWAY FOR BACKEND API
+--------------------------------------------------------------------------------
+
+  Primary: Render.com (Frankfurt, starter plan, autoscale)
+
+    Config: server/render.yaml (rootDir server)
+
+      soko-langu-api (web)
+        runtime: node
+        plan: starter
+        buildCommand: npm ci
+        startCommand: node --optimize-for-size --expose-gc src/index.js
+        healthCheckPath: /health  -> {version 2.0.0, db ok, redis ok}
+        numInstances: 1  scaling min 1 max 6 targetMemory 75% targetCPU 70%
+        env: NODE_ENV production
+             FINANCE_WORKER_IN_PROCESS false  // dedicated worker split
+             PORT 10000
+             SHED_LOAD true
+             UV_THREADPOOL_SIZE 10
+             NODE_OPTIONS --max-old-space-size=1024
+        disk: tmp 1GB @ /tmp
+
+      soko-langu-worker (worker)
+        runtime: node
+        plan: starter
+        buildCommand: npm ci
+        startCommand: npm run worker  // src/workers/index.js
+        numInstances: 1
+        env: NODE_ENV production, FINANCE_WORKER_IN_PROCESS false
+
+    Legacy origin direct: https://soko-langu-server.onrender.com
+    Edge origin: https://api.sokovibe.co.tz (Cloudflare Worker proxy)
+
+    Self-ping keep-alive: ServerKeepAlive (lib/services/server_keep_alive.dart)
+      every 10 min GET /health or /ping when RENDER_EXTERNAL_URL set;
+      prevents free-tier spin-down (~15min idle). Also server internal
+      setInterval self-ping 10 min if RENDER_EXTERNAL_URL env present.
+
+  Alternative: Railway.app
+
+    Dockerfile (node:20-slim, npm ci --omit=dev, node index.js)  // legacy
+    railway.json + .railwayignore
+    Start: node index.js (legacy) OR node src/index.js (v2, requires update
+           if deploying via Dockerfile - current Dockerfile uses legacy entry;
+           blueprint uses src/index.js directly)
+    No sleep, 1 replica recommended starter
+    Env same as Render; PORT 3000 internal
+
+  Local dev:
+
+    npm run dev  // nodemon optional, otherwise node src/index.js
+    .env file at server/.env (see App B)
+    Firestore emulator optional; otherwise uses live project with
+      FIREBASE_SERVICE_ACCOUNT_JSON single-line env.
+
+  Health:
+
+    GET /health  (public)
+      200 {status:"ok", version:"2.0.0", database:"ok", redis:"ok", uptime:123}
+    GET /ping    (keep-alive lite)
+
+--------------------------------------------------------------------------------
+  7.2 CLOUDFLARE EDGE - API CACHING & REGIONAL ROUTING
+--------------------------------------------------------------------------------
+
+  Worker: cf-worker/worker.js + wrangler.toml
+  Route: api.sokovibe.co.tz/* zone sokovibe.co.tz (Proxy ON)
+  Origin: ORIGIN_URL env default soko-langu-server.onrender.com
+
+  Cache rules (first match wins, else passthrough never cache):
+
+    GET  /api/trust/passport/:sellerId        TTL 300s  key path
+    GET  /api/v1/trust/sellers/:id/passport    TTL 300s  key path
+    GET  /api/transaction-status/:id           TTL 15s   key path+auth-hash
+    GET  /api/v1/products/categories           TTL 3600s key path
+    GET  /api/v1/products                      TTL 30s   key path+query
+    GET  /api/v1/products/:idOrSlug            TTL 30s   key path
+    POST /api/search/global-search             TTL 60s   key path+body-hash
+    POST /api/search/autocomplete              TTL 90s   key path+body-hash
+    POST /api/search/trending                  TTL 300s  key path+body-hash
+    POST /api/search/most-rated                TTL 600s  key path+body-hash
+    * all other -> passthrough (stateful/auth/payment never cached)
+
+  Stale-while-revalidate:
+    expired entry served instantly; ctx.waitUntil(revalidateAndStore) refreshes
+    in background; thundering herd never hits Render.
+
+  Regional routing (10M tier, env REGION_ORIGIN_AF/EU/AS/NA):
+    Only GET /api/v1/products + POST trending/most-rated are region-routable;
+    auth/escrow/payment paths always primary origin.
+    Cache keys include origin (regions don't collide).
+
+  Headers: x-soko-edge:1, x-edge-fetch-at timestamp, x-soko-origin,
+           x-forwarded-proto/host, Cache-Control public.
+
+  Deploy: npx wrangler deploy --env production
+          DNS CNAME api -> soko-api-edge.<sub>.workers.dev (Proxy ON)
+
+  R2 media (Cloudflare):
+    buckets soko-vibe-images, soko-vibe-videos, soko-vibe-thumbnails,
+            soko-vibe-backups
+    v2 flow: server POST /api/v1/media/sign -> pre-signed PUT URL
+             client PUT directly to R2 (image max 50MB, video 500MB)
+             public https://media.soko-vibe.co.tz/* (CNAME)
+
+  Legacy Cloudinary: res.cloudinary.com/dgbsohnl4 still serves product images;
+                    getThumbnailUrl() rewrite w_300,c_fill; signature via
+                    POST /api/cloudinary/sign
+
+--------------------------------------------------------------------------------
+  7.3 DOMAIN CONFIGURATION & SEARCH ENGINE INDEXING
+--------------------------------------------------------------------------------
+
+  Domains:
+
+    Frontend web / landing: https://sokovibe.co.tz
+      Host: Vercel or Firebase Hosting (hosting/ folder) OR Cloudflare Pages
+      DNS: A/CNAME via Cloudflare (Proxy ON for edge + SSL)
+      SSL: Cloudflare Universal (Full strict -> origin Render supports TLS)
+
+    API: https://api.sokovibe.co.tz
+      CNAME api -> workers.dev (Cloudflare Worker)
+      SSL: Cloudflare edge cert, origin Render auto-cert
+
+    Alternative origin direct (non-edge): https://soko-langu-server.onrender.com
+
+  SEO & indexing:
+
+    - sitemap.xml (server/src/seo/sitemap.js) dynamic from Firestore products
+      + static pages; robots.txt allow
+    - public/ + hosting/ contains landing HTML with OG tags
+    - Sharing: POST /api/v1/share + server/src/seo/ogGenerator.js creates
+      OG images for product links
+    - Google Search Console: verify sokovibe.co.tz via DNS TXT + HTML meta
+      Search Console sitemap submit https://sokovibe.co.tz/sitemap.xml
+    - Canonical host folding in src/app.js handles www.sokovibe.co.tz
+      -> sokovibe.co.tz; HTTP->HTTPS redirect for domain hosts
+    - Firebase Hosting deep links: assetlinks.json (Android) + 
+      apple-app-site-association (iOS) served at /.well-known
+
+  Landing waitlist (hosting/ coming-soon):
+
+    Firestore landing_waitlist/{email} (email==docId, exists guard prevents dup)
+    landing_feature_suggestions, landing_comments subcollection
+    Public create, admin read; harvesting prevented via admin-only reads.
+
+--------------------------------------------------------------------------------
+  7.4 BUILD & PUBLISHING PIPELINES (Android APK/AAB)
+--------------------------------------------------------------------------------
+
+  CI: .github/workflows/build.yml (GitHub Actions)
+
+    trigger: push to main/master
+    runs-on: ubuntu-latest
+    steps:
+      - checkout
+      - setup Java (17)
+      - setup Flutter 3.29.0 (NOTE: local 3.41.9 drift -> update to 3.41.9
+        in build.yml for parity)
+      - flutter pub get
+      - echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
+        (storeFile, storePassword, keyAlias, keyPassword from secrets)
+      - flutter build apk --release  -> build/app/outputs/flutter-apk/app-release.apk
+      - flutter build appbundle --release -> build/app/outputs/bundle/release/app-release.aab
+      - upload artifact
+
+  Local build:
+
+    Debug APK:  flutter build apk --debug   (debug keystore)
+    Release APK: flutter build apk --release --build-name=1.0.1 --build-number=2
+    Release AAB: flutter build appbundle --release  // for Play Console
+    Helper: soko_langu/build_release.bat
+
+  Signing:
+
+    android/key.properties (gitignored) references keystore.jks
+    android/app/build.gradle reads singingConfigs.release
+
+  Versioning: pubspec.yaml version 1.0.1+2 -> versionName 1.0.1, versionCode 2
+              Overridden via --build-name/--build-number
+
+  Publishing:
+
+    Google Play Console -> Soko Vibe app -> Production track -> upload AAB
+    Required: privacy policy (privacy-policy.html), data safety form,
+              content rating, screenshots. Crashlytics auto-linked.
+
+  Pre-release checks:
+
+    flutter analyze  (must catch Deprecated, unused imports, dead code)
+    dart format --set-exit-if-changed .
+    npm run lint (server)
+    node --test test/*.test.js (202 tests)
+    firebase emulators:exec "npm test" (optional)
+
+  Artifacts: build/, build_error.log, build_output.log kept locally for
+             failure triage.
+
+--------------------------------------------------------------------------------
+  7.5 ENVIRONMENT VARIABLES REFERENCE
+--------------------------------------------------------------------------------
+
+  Server (Render dashboard + server/.env.example):
+
+    REQUIRED:
+      MONGIKE_API_KEY               // legacy collect fallback
+      CLICKPESA_API_KEY             // primary payments (x-api-key)
+      CLICKPESA_CHECKSUM_KEY        // webhook checksum
+      CLICKPESA_ALLOWED_IPS         // comma list allowlist
+      FIREBASE_SERVICE_ACCOUNT_JSON // single-line JSON (admin SDK)
+      ADMIN_SECRET                  // x-admin-secret + x-cron-secret
+      WEBHOOK_SECRET                // x-webhook-secret (Mongike legacy)
+
+    OPTIONAL / TUNING:
+      PORT                          // default 3000 local, 10000 Render
+      NODE_ENV                      // production|development
+      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS // OTP email fallback
+      ESCROW_AUTO_RELEASE_DAYS      // default 14
+      MAX_DAILY_SALE_AMOUNT         // default 5,000,000 TZS
+      MESEJI_API_KEY, MESEJI_SENDER_ID // SMS (default MESEJI->SOKOVIBE fallback)
+      NOTIFY_API_KEY                // alternative SMS provider
+      CLOUDINARY_API_KEY/SECRET, CLOUDINARY_CLOUD_NAME // dgbsohnl4
+      CLOUDINARY_DESTROY_URL        // cleanup
+      GROQ_API_KEY                  // AI, server only
+      REDIS_URL                     // ioredis (optional, graceful degrade)
+      R2_* (AWS SDK S3 compat)      // R2 media buckets
+      ONESIGNAL_APP_ID, ONESIGNAL_API_KEY
+      DATABASE_URL, DATABASE_URL_REPLICA, DATABASE_POOL_LIMIT // v2 future
+      ALLOWED_ORIGINS               // CORS whitelist
+      ORIGIN_URL, REGION_ORIGIN_*   // Cloudflare Worker origins
+      FINANCE_WORKER_IN_PROCESS     // false on web, true on worker
+      SHED_LOAD                     // true
+      UV_THREADPOOL_SIZE            // 10
+      ESCROW_AUTO_RELEASE_DAYS, FINANCE_WITHDRAWAL_* // finance-runner
+
+  Flutter (.env.example, at soko_langu/.env):
+
+    Not needed runtime (Firebase options baked in firebase_options.dart).
+    Web landing env: VITE_API_URL etc for hosting/.
+
+  Cloudflare Worker (wrangler.toml vars):
+
+    ORIGIN_URL, REGION_ORIGIN_AF/EU/AS/NA, CACHE_TTLS map
+
+  GitHub Secrets (build.yml):
+
+    KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD,
+    FIREBASE_SERVICE_ACCOUNT_JSON (for deploy), ONESIGNAL ids
+
+--------------------------------------------------------------------------------
+  7.6 MONITORING, LOGGING & OBSERVABILITY
+--------------------------------------------------------------------------------
+
+  Health: GET /health returns {version, database, redis, uptime, memory,
+          eventLoopLag}; used by Render healthCheck + keep-alive.
+
+  Logs:
+    server/server.log + server.log (stdout), server.err (stderr),
+    server/src handles console.error for 5xx; Activity recordApiHit per
+    min/hour/day/month/year in Redis (src/middleware/recordApiHit.js).
+
+  Load shedder: 503 + Retry-After when lag>1500ms && heap>512MB
+
+  Client:
+    Crashlytics (native crashes, recordFatal handler in main.dart)
+    Performance (native traces)
+    App Check (attestation success/failure logged)
+
+  Alerts (planned):
+    - Webhook failure -> fraud_alerts + retry queue
+    - Auto-release count logged
+    - Payout stuck 48h -> admin_notifications
+
+  Backup:
+    Firestore scheduled export via Cloud Function (if enabled) -> R2 backups bucket
+    R2 versioning for media
+
+================================================================================
+================================================================================
+  APPENDIX A - REQUIRED FIRESTORE COMPOSITE INDEXES
+================================================================================
+================================================================================
+
+  File: firestore.indexes.json (43 indexes). Console: Firestore -> Indexes
+  Failure symptom: query throws "The query requires an index" -> NetworkError
+                   mapping shows "Jaribu tena...".
+
+  Mandatory for production ( excerpt ):
+
+  transactions:
+    - sellerId ASC, createdAt DESC               // seller orders list
+    - buyerId ASC, createdAt DESC                // my purchases
+    - buyerId ASC, status ASC, createdAt DESC    // filtered purchases
+    - type ASC, productId ASC, userId ASC, status ASC
+    - type ASC, productId ASC, userId ASC, paymentMethod ASC
+    - status ASC, escrowExpiresAt ASC            // auto-release sweep
+    - status ASC, escrowReleased ASC, escrowExpiresAt ASC
+    - source ASC, status ASC                     // boost payments
+
+  products:
+    - isActive ASC, createdAt DESC               // home feed pagination
+    - sellerId ASC, isActive ASC, createdAt DESC // My Ads
+    - isActive ASC, searchKeywords array-contains // search (requires manual)
+    - isActive ASC, searchName ASC               // prefix search
+
+  orders:
+    - sellerId ASC, status ASC, createdAt DESC   // seller dashboard
+    - buyerId ASC, status ASC, createdAt DESC    // buyer timeline
+
+  notifications: userId ASC, isRead ASC, createdAt DESC
+  chat_rooms: participants array-contains, updatedAt DESC
+  kyc: status ASC, submittedAt DESC              // admin list
+  conversations / flash_sales / reviews / statuses / fraud_alerts /
+    payouts / withdrawals / price_drops -> per firestore.indexes.json
+
+  Deploy via: firebase deploy --only firestore:indexes
+
+================================================================================
+================================================================================
+  APPENDIX B - KEY FILE MAP (ENGINEERING REFERENCE)
+================================================================================
+================================================================================
+
+  lib/main.dart:15                 // Firebase init + Hive + Crashlytics + AppCheck
+  lib/app/router.dart:1            // GoRouter 54 routes + guards
+  lib/providers/product_feed_provider.dart
+  lib/notifiers/auth_notifier.dart
+  lib/models/product_model.dart:1  // 245 lines, variants, wholesale, boost fields
+  lib/models/transaction_model.dart
+  lib/models/order_model.dart
+  lib/services/clickpesa_service.dart:1  // USSD tier table, BillPay calc
+  lib/services/cloudinary_service.dart
+  lib/services/chat_service.dart
+  lib/services/kyc_service.dart
+  lib/screens/home/home_screen.dart
+  lib/screens/home/product_detail.dart
+  lib/screens/orders/checkout_screen.dart  // address dropdown, fee "Bure"
+  lib/screens/orders/order_detail.dart
+  lib/screens/chat/chat_page.dart
+  lib/screens/boost/product_boost_screen.dart
+  lib/screens/wallet/wallet_screen.dart
+  server/src/app.js:1              // middleware stack, mount order
+  server/src/index.js:1            // v2 entry
+  server/src/config/database.js    // Firestore seam
+  server/src/config/redis.js       // ioredis client
+  server/index.js:1                // legacy 374KB (reference only)
+  server/clickpesa.js:1            // ClickPesa integration
+  server/mongike.js:1              // Mongike legacy
+  server/orders.js                 // order state machine
+  server/search.js                 // search + query-intent
+  server/notification.js           // OneSignal + FCM
+  server/groq.js                   // Groq proxy
+  server/src/modules/payments/     // provider factory
+  server/src/modules/escrow/       // escrow release/dispatch/dispute
+  server/src/modules/orders/       // orders compat
+  server/src/workers/index.js      // BullMQ + finance-runner
+  server/render.yaml:1             // Render blueprint
+  firestore.rules:1                // 641 lines
+  firestore.indexes.json           // 43 indexes
+  cf-worker/worker.js              // edge cache + region routing
+  pubspec.yaml:1                   // 1.0.1+2 deps
+  analysis_options.yaml
+
+================================================================================
+================================================================================
+  APPENDIX C - GLOSSARY & ACRONYMS
+================================================================================
+================================================================================
+
+  TZS        Tanzanian Shilling (canonical store)
+  USSD Push  Mobile money prompt sent to phone (user enters PIN)
+  BillPay    Control number payment (user dials USSD menu)
+  Escrow     Funds held server-side until delivery confirmed
+  KYC        Know Your Customer (ID + selfie verification)
+  FCM        Firebase Cloud Messaging (push fallback)
+  OneSignal  Primary push provider
+  Meseji     SMS provider (meseji.co.tz, sender SOKOVIBE)
+  App Check  Firebase device attestation (Play Integrity/DeviceCheck)
+  Hive       Local NoSQL cache on device
+  R2         Cloudflare object storage (media buckets)
+  BullMQ     Redis-based job queue
+  PDPA 2022  Tanzania Personal Data Protection Act (consentRecords)
+  OTP        One-Time Password (6-digit, hashed server-side)
+  AAB        Android App Bundle (Play publishing)
+  APK        Android Package (sideload)
+  OG         Open Graph (share preview)
+  SLA        Service Level Agreement (dispute 72h)
+  Idempotent Safe to retry without double effect (SETNX + txn guard)
+
+================================================================================
+  END OF REPORT
+================================================================================
+
+  This document is the single source of truth for Soko Vibe architecture as
+  verified against live code (2026-09-24). For changes, update via PR with
+  code + doc diff and notify architecture channel.
+
+  Generated for .txt direct-save. Print with monospaced font (e.g., Courier
+  11pt) for diagram alignment. Keep line length <=100 for code, 80 for comments
+  per Soko Vibe Dart Comment Conventions (AGENTS.md).
+
+================================================================================

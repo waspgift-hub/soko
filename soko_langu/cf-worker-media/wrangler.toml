@@ -1,0 +1,49 @@
+name = "soko-media"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# All four R2 buckets behind ONE hostname. The worker picks the bucket from the
+# first path segment (`images/`, `videos/`, `thumbnails/`, `backups/`) so the
+# storage layout never leaks into URLs and one cache serves every kind.
+#
+# There is deliberately NO binding for the KYC identity bucket
+# (soko-vibe-kyc). Identity documents are not public media: they are read only
+# through short-lived presigned GET URLs that the API mints after authorising the
+# caller. Leaving the bucket unbound here means this Worker cannot serve those
+# objects even if its routing logic were changed by mistake — the deny is
+# structural, not just a check in worker.js. Do not add a KYC binding to this
+# file.
+#
+# DNS: a proxied CNAME for `media` must exist on the zone; this Worker route
+# intercepts the request at the edge, so the CNAME target is never contacted.
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "soko-vibe-images"
+
+[[r2_buckets]]
+binding = "VIDEOS"
+bucket_name = "soko-vibe-videos"
+
+[[r2_buckets]]
+binding = "THUMBNAILS"
+bucket_name = "soko-vibe-thumbnails"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "soko-vibe-backups"
+
+# Optional post-install "Category Artwork Pack" (category + subcategory photos).
+# Public application data on purpose: the app downloads it without credentials,
+# and it is not user media, so it must not share a bucket with product uploads
+# whose keys follow the owner-scoped convention.
+#
+# Keys are `artwork/<version>/<relative path>`; the pack's own manifest.json is
+# the only index. Never put anything private here — this bucket is served
+# publicly at media.sokovibe.co.tz/artwork/*.
+[[r2_buckets]]
+binding = "ARTWORK"
+bucket_name = "soko-vibe-artwork"
+
+[[routes]]
+pattern = "media.sokovibe.co.tz/*"
+zone_name = "sokovibe.co.tz"

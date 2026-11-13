@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/flash_sale_model.dart';
-import '../services/price_drop_service.dart';
+import 'banners/soko_banner_theme.dart';
 import 'flash_sale_banner.dart';
-import 'price_drop_banner.dart';
 import 'dynamic_banner.dart';
 
+/// Rotates in-app promotional sections on the home feed (ads removed).
 class BannerRotator extends StatefulWidget {
   final List<FlashSale> flashSales;
   const BannerRotator({super.key, required this.flashSales});
@@ -17,47 +17,77 @@ class BannerRotator extends StatefulWidget {
 class _BannerRotatorState extends State<BannerRotator> {
   int _current = 0;
   Timer? _timer;
-  bool _hasPriceDrops = false;
-  StreamSubscription? _priceSub;
+  bool _userInteracting = false;
+  late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    _priceSub = PriceDropService()
-        .getActivePriceDrops()
-        .listen((drops) {
-      if (mounted) setState(() => _hasPriceDrops = drops.isNotEmpty);
-    });
+    _pageController = PageController();
   }
 
   @override
   void didUpdateWidget(BannerRotator old) {
     super.didUpdateWidget(old);
-    final changed = old.flashSales.length != widget.flashSales.length ||
+    final changed =
+        old.flashSales.length != widget.flashSales.length ||
         (widget.flashSales.isNotEmpty &&
             old.flashSales.isNotEmpty &&
             old.flashSales.first.id != widget.flashSales.first.id);
     if (changed) {
       _timer?.cancel();
       _timer = null;
-      if (mounted) setState(() { _current = 0; _startTimer(); });
+      if (mounted) {
+        setState(() => _current = 0);
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(0);
+        }
+        _startTimer();
+      }
     }
   }
 
   void _startTimer() {
-    if (_timer != null) return;
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (!mounted) return;
-      final c = _banners().length;
-      if (c <= 1) { _timer?.cancel(); _timer = null; return; }
-      setState(() => _current = (_current + 1) % c);
+    if (_timer != null || _userInteracting) return;
+    _scheduleNext();
+  }
+
+  void _scheduleNext() {
+    _timer?.cancel();
+    if (_userInteracting) return;
+    final banners = _banners();
+    if (banners.length <= 1) {
+      _timer = null;
+      return;
+    }
+    final isFlashSection = _current == 0 && widget.flashSales.isNotEmpty;
+    final seconds = isFlashSection ? 30 * widget.flashSales.length : 30;
+    _timer = Timer(Duration(seconds: seconds), () {
+      if (!mounted || _userInteracting) return;
+      final count = _banners().length;
+      if (count <= 1) return;
+      final next = (_current + 1) % count;
+      final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      setState(() => _current = next);
+      if (_pageController.hasClients) {
+        if (reduceMotion) {
+          _pageController.jumpToPage(next);
+        } else {
+          _pageController.animateToPage(
+            next,
+            duration: const Duration(milliseconds: 360),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
+      _scheduleNext();
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _priceSub?.cancel();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -66,15 +96,18 @@ class _BannerRotatorState extends State<BannerRotator> {
     if (widget.flashSales.isNotEmpty) {
       list.add(FlashSaleBanner(key: const ValueKey('flash_banner'), sales: widget.flashSales));
     }
-    if (_hasPriceDrops) {
-      list.add(const PriceDropBanner(key: ValueKey('price_drop_banner')));
-    }
     list.add(const DynamicBanner(key: ValueKey('dynamic_banner')));
     return list;
   }
 
+  void _onPageChanged(int index) {
+    setState(() => _current = index);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final banners = _banners();
     final count = banners.length;
 
@@ -85,41 +118,61 @@ class _BannerRotatorState extends State<BannerRotator> {
       return banners.first;
     }
 
-    final idx = _current < count ? _current : 0;
+    final idx = _current.clamp(0, count - 1);
     _startTimer();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 500),
-          switchInCurve: Curves.easeInOut,
-          switchOutCurve: Curves.easeInOut,
-          child: KeyedSubtree(
-            key: ValueKey('banner_$idx'),
-            child: banners[idx],
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(count, (i) {
-            final active = i == idx;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 22 : 8,
-              height: 6,
-              decoration: BoxDecoration(
-                color: active
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(3),
+    return SokoBannerFrame(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            label: 'Promotional banners, ${idx + 1} of $count',
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                if (n is ScrollStartNotification && n.dragDetails != null) {
+                  _userInteracting = true;
+                  _timer?.cancel();
+                  _timer = null;
+                } else if (n is ScrollEndNotification) {
+                  _userInteracting = false;
+                  _startTimer();
+                }
+                return false;
+              },
+              child: SizedBox(
+                height: SokoBannerTheme.minHeight,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: count,
+                  onPageChanged: _onPageChanged,
+                  physics: const BouncingScrollPhysics(),
+                  itemBuilder: (context, i) => banners[i],
+                ),
               ),
-            );
-          }),
-        ),
-      ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          ExcludeSemantics(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(count, (i) {
+                final active = i == idx;
+                return AnimatedContainer(
+                  duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: active ? 20 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: active ? cs.primary : cs.outlineVariant.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

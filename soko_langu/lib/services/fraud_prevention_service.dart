@@ -1,6 +1,8 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'api_config.dart';
 
 class FraudAlert {
@@ -95,22 +97,61 @@ class FraudPreventionService {
     required String description,
     String? productId,
   }) async {
-    await _db.collection('fraud_alerts').add({
-      'sellerId': sellerId,
-      'sellerName': sellerName,
-      'type': type,
-      'severity': severity,
-      'description': description,
-      'productId': productId,
-      'resolved': false,
-      'detectedAt': FieldValue.serverTimestamp(),
-    });
-    debugPrint('FRAUD ALERT [$severity]: $description');
+    // fraud_alerts is admin-only in Firestore rules, so a direct client write
+    // is rejected. Route through the server endpoint instead — the server admin
+    // SDK owns the collection and applies a 1h dedupe window per seller+type.
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/fraud/alerts'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'sellerId': sellerId,
+          'sellerName': sellerName,
+          'type': type,
+          'severity': severity,
+          'description': description,
+          'productId': productId,
+        }),
+      );
+      debugPrint('FRAUD ALERT [$severity]: $description');
+    } catch (e) {
+      debugPrint('Fraud alert delivery failed: $e');
+    }
+  }
+
+  /// Logs an alert when a seller tries to post a listing that duplicates an
+  /// already-active product (same name, price and photo).
+  Future<void> reportDuplicateListing({
+    required String sellerId,
+    required String sellerName,
+    required String productName,
+    required double price,
+    required String existingId,
+  }) async {
+    // Best-effort: server route applies a 1h dedupe window per seller+type, so
+    // a failed/duplicate delivery is non-fatal.
+    try {
+      await _raiseAlert(
+        sellerId: sellerId,
+        sellerName: sellerName,
+        type: 'duplicate_listing',
+        severity: 'medium',
+        description:
+            'Seller tried to post duplicate of "$productName" (TZS $price) matching active listing $existingId',
+      );
+    } catch (e) {
+      debugPrint('Fraud reportDuplicateListing error: $e');
+    }
   }
 
   Future<void> checkNewSeller(String sellerId, String sellerName) async {
     try {
-      final userDoc = await _db.collection('users').doc(sellerId).get();
+      final userDoc = await _db.collection('userPublic').doc(sellerId).get();
       final data = userDoc.data();
       if (data == null) return;
 
@@ -194,8 +235,12 @@ class FraudPreventionService {
         );
       }
 
-      final sellerDoc = await _db.collection('users').doc(sellerId).get();
-      if (sellerDoc.data()?['kyc']?['approved'] != true && amount > 100000) {
+      // Coarse `kycApproved` from the public projection. The full KYC object lives
+      // on the owner's private `users` doc, which this client must not read;
+      // for a "flag high-value payments from unverified sellers" heuristic the
+      // boolean is exactly what is needed.
+      final sellerDoc = await _db.collection('userPublic').doc(sellerId).get();
+      if (sellerDoc.data()?['kycApproved'] != true && amount > 100000) {
         await _raiseAlert(
           sellerId: sellerId,
           sellerName: sellerName,

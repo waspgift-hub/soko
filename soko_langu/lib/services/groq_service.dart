@@ -1,16 +1,20 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../env_config.dart';
 import 'ai/ai_service.dart';
 import 'ai/ai_tool.dart';
+import 'api_config.dart';
+import '../utils/rate_limiter.dart';
 
 class GroqService implements AiService {
-  final String _apiKey = EnvConfig.groqApiKey;
-  final String _textBaseUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  // API key is NEVER stored in the Flutter app — all calls go through server proxy.
+  // Groq iliondoa Llama/Mixtral models (2026) — hizi ndizo live sasa.
+  // Vision haipo tena Groq, kwa hiyo identifyImage itarudi tupu hadi model mpya ije.
   final String _visionModel = 'llama-3.2-90b-vision-preview';
-  final String _textModel = 'llama-3.3-70b-versatile';
-  final String _fallbackTextModel = 'mixtral-8x7b-32768';
+  final String _textModel = 'openai/gpt-oss-120b';
+  final String _fallbackTextModel = 'openai/gpt-oss-20b';
+  final String _proxyUrl = '${ApiConfig.baseUrl}/api/ai/chat';
 
   static final GroqService _instance = GroqService._internal();
   factory GroqService() => _instance;
@@ -198,14 +202,16 @@ Ikiwa swali linahusu bidhaa na hakuna data iliyopewa, toa mwongozo wa nje kwa mu
 ''';
   }
 
-  static String buildNotFoundCatalogContext(String query) => '''
+  static String buildNotFoundCatalogContext(String query) =>
+      '''
 DATA YA Soko Vibe: tupu — hakuna matokeo kwa "$query".
 
 Kumbuka: chochote utakachosema kuhusu muuzaji, eneo, au bei ya nje YA APP lazima kiwe na lebo:
 "Hii taarifa HAITOKEI kwenye Soko Vibe — ni mwongozo wa nje ya app."
 ''';
 
-  static String buildInAppCatalogContext(String richProductBlocks) => '''
+  static String buildInAppCatalogContext(String richProductBlocks) =>
+      '''
 DATA YA Soko Vibe (HALISI — kutoka Firestore):
 $richProductBlocks
 ''';
@@ -220,6 +226,35 @@ $richProductBlocks
   @override
   List<String> get userPreferences => List.unmodifiable(_userPreferences);
 
+  Future<String> _proxyCall({
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    double? temperature,
+    int? maxTokens,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Not authenticated');
+    final token = await user.getIdToken();
+    final resp = await http
+        .post(
+          Uri.parse(_proxyUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'model': model,
+            'messages': messages,
+            'temperature': ?temperature,
+            'max_tokens': ?maxTokens,
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
+    debugPrint('Groq proxy [$model] ${resp.statusCode}: ${resp.body}');
+    if (resp.statusCode == 200) return resp.body;
+    throw Exception('Status ${resp.statusCode}');
+  }
+
   @override
   Future<String> sendMessage(
     String userMessage, {
@@ -228,6 +263,14 @@ $richProductBlocks
     String? searchQuery,
     String locale = 'sw',
   }) async {
+    await RateLimiter.incrementAttempt(
+      'ai_chat',
+      maxAttempts: 30,
+      window: const Duration(minutes: 60),
+    );
+    if (!await RateLimiter.isWithinLimit('ai_chat', maxAttempts: 30)) {
+      throw Exception('Rate limit exceeded. Please try again later.');
+    }
     _chatHistory.add({'role': 'user', 'content': userMessage});
     if (_chatHistory.length > 40) {
       _chatHistory.removeRange(0, _chatHistory.length - 40);
@@ -239,38 +282,29 @@ $richProductBlocks
     final temperature = productContext != null && productContext.isNotEmpty
         ? 0.35
         : catalogStatus == AiCatalogStatus.notFoundInApp
-            ? 0.5
-            : 0.7;
+        ? 0.5
+        : 0.7;
 
     Future<String> tryModel(String model) async {
-      final resp = await http.post(
-        Uri.parse(_textBaseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': model,
-          'messages': [
-            {
-              'role': 'system',
-              'content': _buildSystemPrompt(
-                    productContext: productContext,
-                    catalogStatus: catalogStatus,
-                    userQuery: searchQuery ?? userMessage,
-                    locale: locale,
-                  ) +
-                  preferencesInfo,
-            },
-            ..._chatHistory,
-          ],
-          'temperature': temperature,
-          'max_tokens': 2000,
-        }),
+      return _proxyCall(
+        model: model,
+        messages: [
+          {
+            'role': 'system',
+            'content':
+                _buildSystemPrompt(
+                  productContext: productContext,
+                  catalogStatus: catalogStatus,
+                  userQuery: searchQuery ?? userMessage,
+                  locale: locale,
+                ) +
+                preferencesInfo,
+          },
+          ..._chatHistory,
+        ],
+        temperature: temperature,
+        maxTokens: 2000,
       );
-      debugPrint('Groq API [$model] ${resp.statusCode}: ${resp.body}');
-      if (resp.statusCode == 200) return resp.body;
-      throw Exception('Status ${resp.statusCode}');
     }
 
     try {
@@ -286,7 +320,9 @@ $richProductBlocks
       return reply;
     } catch (e) {
       final msg = e.toString();
-      if (msg.contains('401') || msg.contains('Unauthorized') || msg.contains('Invalid API key')) {
+      if (msg.contains('401') ||
+          msg.contains('Unauthorized') ||
+          msg.contains('Invalid API key')) {
         return locale == 'en'
             ? 'AI service is not configured. Please contact the admin to set up the Groq API key.'
             : 'Huduma ya AI haijasanidiwa. Tafadhali wasiliana na admin kuweka Groq API key.';
@@ -297,45 +333,133 @@ $richProductBlocks
     }
   }
 
+  String _buildSummaryPrompt({
+    required String query,
+    required String groundedContext,
+    required int total,
+    String locale = 'sw',
+  }) {
+    if (locale == 'en') {
+      return '''
+You are the "Soko Vibe AI Broker" writing a COMPACT summary of search results. Spec §62: the summary must never be longer than the result list itself.
+
+STRICT GROUNDING:
+- Use ONLY the "SEARCH RESULTS DATA" below. Never invent prices, sellers, locations, ratings, or counts.
+- The real total ("X products") must come ONLY from the total given.
+
+FORMAT (at most 2 short paragraphs, plain text, no heavy markdown):
+1) One line: how many relevant products were found for "$query", plus the price/location scope if provided.
+2) "Best matches:" with 2-3 short lines — product name — real price — real seller or location, ordered by a stated combination of price, rating, and verified seller.
+
+SEARCH RESULTS DATA:
+$groundedContext
+''';
+    }
+    return '''
+Wewe ni "Soko Vibe AI Dalali" unayeandika MUHTASARI MUFUPI wa matokeo ya utafiti. Spec §62: muhtasari usizidi matokeo kwa urefu.
+
+KANUNI KALI YA WHOLE:
+- Tumia TU "DATA YA MATOKEO" hapa chini. Usibuni bei, wauzaji, eneo, rating, wala hesabu.
+- Idadi halisi ("bidhaa X") chukua tu kutoka total iliyotolewa.
+
+MUUNDO (aya 2 fupi tu, hakuna markdown nzito):
+1) Mstari mmoja: kuna bidhaa ngapi zinazofaa kwa "$query", pamoja na eneo/bei scope ikitolewa.
+2) "Best matches:" mstari 2-3 — jina — bei halisi — muuzaji au eneo halisi, zimepangiwa kwa mchanganyiko wa bei, rating, na muuzaji aliyethibitishwa.
+
+DATA YA MATOKEO:
+$groundedContext
+''';
+  }
+
+  @override
+  Future<String> generateSearchSummary({
+    required String query,
+    required String groundedContext,
+    required int total,
+    String locale = 'sw',
+  }) async {
+    // Separate, more generous budget than chat so normal searching is not
+    // throttled by the 30/60min AI-chat limit.
+    await RateLimiter.incrementAttempt(
+      'ai_search_summary',
+      maxAttempts: 60,
+      window: const Duration(minutes: 60),
+    );
+    if (!await RateLimiter.isWithinLimit(
+      'ai_search_summary',
+      maxAttempts: 60,
+    )) {
+      throw Exception('Rate limit exceeded for summary generation.');
+    }
+
+    Future<String> tryModel(String model) async {
+      return _proxyCall(
+        model: model,
+        messages: [
+          {
+            'role': 'system',
+            'content': _buildSummaryPrompt(
+              query: query,
+              groundedContext: groundedContext,
+              total: total,
+              locale: locale,
+            ),
+          },
+          {
+            'role': 'user',
+            'content':
+                'Nimepata $total matokeo kwa "$query". Andika muhtasari mfupi kulingana na DATA YA MATOKEO.',
+          },
+        ],
+        temperature: 0.3,
+        maxTokens: 200,
+      );
+    }
+
+    try {
+      String body;
+      try {
+        body = await tryModel(_textModel);
+      } catch (_) {
+        body = await tryModel(_fallbackTextModel);
+      }
+      final data = jsonDecode(body);
+      return data['choices'][0]['message']['content'].toString().trim();
+    } catch (e) {
+      if (e.toString().contains('Rate limit')) rethrow;
+      throw Exception('Summary generation failed: $e');
+    }
+  }
+
   @override
   Future<String> identifyImage(String base64Image) async {
     try {
-      final response = await http.post(
-        Uri.parse(_textBaseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': _visionModel,
-          'messages': [
-            {
-              'role': 'user',
-              'content': [
-                {
-                  'type': 'text',
-                  'text':
-                      'Chambua picha hii ya bidhaa. Jibu kwa Kiswahili au Kiingereza:\n'
-                      '1) Jina la bidhaa (kifupi)\n'
-                      '2) Brand ikiwepo\n'
-                      '3) Rangi/aina ikionekana\n'
-                      'Muundo: "Jina | brand | maelezo mafupi" — maneno 15 tu, hakuna sentensi ndefu.',
-                },
-                {
-                  'type': 'image_url',
-                  'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
-                },
-              ],
-            },
-          ],
-          'max_tokens': 80,
-        }),
+      final body = await _proxyCall(
+        model: _visionModel,
+        messages: [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text':
+                    'Chambua picha hii ya bidhaa. Jibu kwa Kiswahili au Kiingereza:\n'
+                    '1) Jina la bidhaa (kifupi)\n'
+                    '2) Brand ikiwepo\n'
+                    '3) Rangi/aina ikionekana\n'
+                    'Muundo: "Jina | brand | maelezo mafupi" — maneno 15 tu, hakuna sentensi ndefu.',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
+              },
+            ],
+          },
+        ],
+        maxTokens: 80,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'].toString().trim();
-      }
+      final data = jsonDecode(body);
+      return data['choices'][0]['message']['content'].toString().trim();
     } catch (_) {}
     return '';
   }

@@ -1,8 +1,11 @@
 {
   "hosting": {
     "public": "hosting",
+    "site": "sokonimoko-8c171-a8d14",
     "ignore": [
-      "firebase.json"
+      "firebase.json",
+      "**/node_modules/**",
+      ".kilo/**"
     ]
   },
   "firestore": {
@@ -37,6 +40,18 @@
           }
         }
       }
+    }
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "auth": {
+      "port": 9099
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
     }
   }
 }

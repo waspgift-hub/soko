@@ -6,9 +6,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
+import '../../services/meseji_service.dart';
+import '../../utils/phone_utils.dart';
+import '../../utils/rate_limiter.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/location_disclosure_dialog.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -26,6 +30,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneController = TextEditingController();
   final _locationController = TextEditingController();
   final _moodController = TextEditingController();
+  final _genderController = TextEditingController();
+  final _dobController = TextEditingController();
   final _picker = ImagePicker();
   final _userService = UserService();
 
@@ -35,22 +41,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _imagePath;
   double? _latitude;
   double? _longitude;
+  String _originalPhone = '';
+  bool _phoneChanged = false;
+  bool _otpSent = false;
+  bool _otpSending = false;
+  final _otpController = TextEditingController();
   List<MapEntry<TextEditingController, TextEditingController>> _paymentEntries =
       [];
 
-  static const List<String> _paymentMethodHints = ['Google Pay', 'Bank Name'];
+  static const List<(String, String)> _paymentMethodHints = [
+    ('google_pay', 'Google Pay'),
+    ('bank_name', 'Bank Name'),
+  ];
+
+  static const Map<String, String> _moodEmoji = {
+    'happy': '😊',
+    'sad': '😢',
+    'angry': '😡',
+    'tired': '😴',
+    'excited': '🤩',
+    'neutral': '😐',
+    'in_love': '❤️',
+    'grateful': '🙏',
+    'motivated': '🔥',
+    'celebrating': '🎉',
+  };
 
   static const List<String> _moodOptions = [
-    '😊 Happy',
-    '😢 Sad',
-    '😡 Angry',
-    '😴 Tired',
-    '🤩 Excited',
-    '😐 Neutral',
-    '❤️ In Love',
-    '🙏 Grateful',
-    '🔥 Motivated',
-    '🎉 Celebrating',
+    'happy',
+    'sad',
+    'angry',
+    'tired',
+    'excited',
+    'neutral',
+    'in_love',
+    'grateful',
+    'motivated',
+    'celebrating',
   ];
 
   @override
@@ -66,8 +93,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _otpController.dispose();
     _locationController.dispose();
     _moodController.dispose();
+    _genderController.dispose();
+    _dobController.dispose();
     for (final e in _paymentEntries) {
       e.key.dispose();
       e.value.dispose();
@@ -90,8 +120,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _emailController.text =
             profile?.email ?? FirebaseAuth.instance.currentUser?.email ?? '';
         _phoneController.text = profile?.phone ?? '';
+        _originalPhone = profile?.phone ?? '';
         _locationController.text = profile?.location ?? '';
-        _moodController.text = profile?.mood ?? '';
+        _moodController.text = _moodDisplay(profile?.mood ?? '');
+        _genderController.text = profile?.gender ?? '';
+        _dobController.text = profile?.dateOfBirth ?? '';
         _latitude = profile?.latitude;
         _longitude = profile?.longitude;
         _imagePath = profile?.profileImage;
@@ -119,8 +152,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!granted) return;
     final XFile? image = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 512,
-      imageQuality: 80,
+      // 800px keeps the avatar sharp for the profile-header crop even on
+      // high-DPR screens; the compressor never needs to upscale it.
+      maxWidth: 800,
+      imageQuality: 95,
     );
     if (image != null) {
       setState(() => _imagePath = image.path);
@@ -138,24 +173,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
+    final agreed = await LocationDisclosureDialog.show(context);
+    if (agreed != true) return;
+
     LocationPermission perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied) return;
     }
-    if (perm == LocationPermission.deniedForever) {
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('location_denied'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              perm == LocationPermission.deniedForever
+                  ? context.tr('location_denied')
+                  : context.tr('location_permission_denied'),
+            ),
+          ),
+        );
       }
       return;
     }
 
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      await _applyPosition(pos);
+    } catch (e) {
+      debugPrint('EditProfile getCurrentPosition: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr('imeshindwa').replaceAll('{0}', 'location'),
+            ),
+          ),
+        );
+      }
+    }
+  }
 
+  Future<void> _applyPosition(Position pos) async {
     try {
       final placemarks = await placemarkFromCoordinates(
         pos.latitude,
@@ -170,14 +232,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           p.administrativeArea,
           p.country,
         ].where((s) => s != null && s.isNotEmpty).join(', ');
-        setState(() {
-          _locationController.text = addr;
-          _latitude = pos.latitude;
-          _longitude = pos.longitude;
-        });
+        if (mounted) {
+          setState(() {
+            _locationController.text = addr;
+            _latitude = pos.latitude;
+            _longitude = pos.longitude;
+          });
+        }
+        return;
       }
     } catch (e) {
       debugPrint('EditProfile reverse geocode: $e');
+    }
+    if (mounted) {
       setState(() {
         _locationController.text = '${pos.latitude}, ${pos.longitude}';
         _latitude = pos.latitude;
@@ -200,14 +267,99 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _paymentEntries.removeAt(index));
   }
 
+  Future<void> _sendPhoneOtp() async {
+    final raw = _phoneController.text.trim();
+    if (raw.isEmpty) {
+      _showError(context.tr('phone_validator_empty'));
+      return;
+    }
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 9) {
+      _showError(context.tr('phone_validator_invalid'));
+      return;
+    }
+    if (!await RateLimiter.canProceed(
+      action: 'profile_phone_otp',
+      cooldown: const Duration(seconds: 60),
+    )) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('otp_cooldown'))),
+        );
+      return;
+    }
+    setState(() => _otpSending = true);
+    try {
+      final normalized = PhoneUtils.toE164(raw);
+      await MesejiService().sendOtp(normalized);
+      if (mounted) {
+        setState(() {
+          _otpSending = false;
+          _otpSent = true;
+        });
+        await RateLimiter.record('profile_phone_otp');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context
+                  .tr('otp_sent_to')
+                  .replaceAll('{0}', PhoneUtils.formatForDisplay(normalized)),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _otpSending = false);
+        _showError(context.trError(e));
+      }
+    }
+  }
+
+  Future<bool> _verifyPhoneOtp() async {
+    final raw = _phoneController.text.trim();
+    final otp = _otpController.text.trim();
+    if (otp.length != 6) {
+      _showError(
+        context.tr('otp_invalid_length', 'OTP lazima iwe na nambari 6'),
+      );
+      return false;
+    }
+    try {
+      final normalized = PhoneUtils.toE164(raw);
+      final resp = await MesejiService().verifyOtp(normalized, otp);
+      return resp;
+    } catch (e) {
+      if (mounted) {
+        _showError(context.trError(e));
+      }
+      return false;
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_phoneChanged && _originalPhone.isNotEmpty) {
+      if (!_otpSent) {
+        _showError(
+          context.tr('phone_otp_required', 'Thibitisha namba ya simu kwanza'),
+        );
+        return;
+      }
+      final verified = await _verifyPhoneOtp();
+      if (!verified) {
+        _showError(context.tr('auth_otp_invalid'));
+        return;
+      }
+    }
 
     setState(() => _saving = true);
 
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
       String imageUrl = _profile?.profileImage ?? '';
+      final oldImageUrl = _profile?.profileImage ?? '';
 
       if (_imagePath != null && (_profile?.profileImage != _imagePath)) {
         if (_imagePath!.startsWith('http')) {
@@ -249,14 +401,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         location: _locationController.text.trim(),
-        mood: _moodController.text.trim(),
+        mood: _moodKeyFor(_moodController.text),
         latitude: _latitude,
         longitude: _longitude,
         profileImage: imageUrl,
         paymentNumbers: paymentNumbers,
+        gender: _genderController.text.trim(),
+        dateOfBirth: _dobController.text.trim(),
       );
 
       await _userService.saveProfile(profile);
+
+      if (oldImageUrl.isNotEmpty && oldImageUrl != imageUrl) {
+        await _userService.deleteProfileImage(oldImageUrl);
+      }
 
       await FirebaseAuth.instance.currentUser?.updateDisplayName(
         profile.displayName,
@@ -272,11 +430,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
+        ).showSnackBar(SnackBar(content: Text(context.trError(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Maps a persisted mood value (localized or legacy English) to a stable key.
+  String _moodKeyFor(String stored) {
+    final t = stored.trim().toLowerCase();
+    for (final k in _moodOptions) {
+      if (t.contains(k) || t == '${_moodEmoji[k]} $k') {
+        return k;
+      }
+    }
+    return _moodOptions.contains(t) ? t : '';
+  }
+
+  String _moodDisplay(String stored) {
+    final key = _moodKeyFor(stored);
+    if (key.isEmpty) return stored;
+    return '${_moodEmoji[key]} ${context.tr('mood_$key')}';
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
   }
 
   @override
@@ -287,8 +472,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         body: const GoogleLoadingPage(),
       );
     }
-
-    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -332,16 +515,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 : FileImage(File(_imagePath!)) as ImageProvider)
                           : null,
                       child: _imagePath == null
-                          ? Text(
-                              user?.displayName != null
-                                  ? user!.displayName![0].toUpperCase()
-                                  : user?.email != null
-                                  ? user!.email![0].toUpperCase()
-                                  : "U",
-                              style: TextStyle(
-                                fontSize: 40,
-                                color: Theme.of(context).colorScheme.surface,
-                              ),
+                          ? Icon(
+                              Icons.person_outline_rounded,
+                              size: 48,
+                              color: Theme.of(context).colorScheme.surface,
                             )
                           : null,
                     ),
@@ -407,6 +584,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     border: const OutlineInputBorder(),
                   ),
                   maxLines: 3,
+                  maxLength: 500,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -414,7 +592,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('email'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email, color: Theme.of(context).colorScheme.primary),
+                    prefixIcon: Icon(
+                      Icons.email,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
@@ -425,9 +606,84 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: context.tr('phone'),
                     hintText: context.tr('phone_hint_example'),
                     border: const OutlineInputBorder(),
+                    prefixIcon: Icon(
+                      Icons.phone,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   keyboardType: TextInputType.phone,
+                  onChanged: (v) {
+                    final changed = v.trim() != _originalPhone;
+                    if (changed != _phoneChanged) {
+                      setState(() {
+                        _phoneChanged = changed;
+                        _otpSent = false;
+                        _otpController.clear();
+                      });
+                    }
+                  },
                 ),
+                if (_phoneChanged && _originalPhone.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  if (!_otpSent)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _otpSending ? null : _sendPhoneOtp,
+                        icon: _otpSending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.sms_outlined, size: 18),
+                        label: Text(
+                          _otpSending
+                              ? context.tr('sending_otp', 'Inatuma OTP...')
+                              : context.tr('send_otp', 'Tuma OTP'),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  if (_otpSent) ...[
+                    TextFormField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: InputDecoration(
+                        labelText: context.tr(
+                          'otp_code_hint',
+                          'Weka Msimbo wa OTP',
+                        ),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _otpSending ? null : _sendPhoneOtp,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: Text(context.tr('resend_otp', 'Tuma OTP Tena')),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _locationController,
@@ -440,7 +696,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     suffixIcon: IconButton(
-                      icon: Icon(Icons.my_location, color: Theme.of(context).colorScheme.primary),
+                      icon: Icon(
+                        Icons.my_location,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       onPressed: _getCurrentLocation,
                       tooltip: context.tr('get_location'),
                     ),
@@ -452,7 +711,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ],
@@ -472,12 +736,89 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         Icons.arrow_drop_down,
                         color: Theme.of(context).colorScheme.primary,
                       ),
-                      onSelected: (v) => _moodController.text = v,
-                      itemBuilder: (_) => _moodOptions
-                          .map((m) => PopupMenuItem(value: m, child: Text(m)))
-                          .toList(),
+                      onSelected: (v) => _moodController.text = _moodDisplay(v),
+                      itemBuilder: (_) => _moodOptions.map((m) {
+                        final emoji = _moodEmoji[m] ?? '';
+                        return PopupMenuItem(
+                          value: m,
+                          child: Text('$emoji ${context.tr('mood_$m')}'),
+                        );
+                      }).toList(),
                     ),
                   ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _genderController.text.isEmpty
+                      ? null
+                      : const [
+                          'male',
+                          'female',
+                          'other',
+                        ].contains(_genderController.text.toLowerCase())
+                      ? _genderController.text.toLowerCase()
+                      : null,
+                  decoration: InputDecoration(
+                    labelText: context.tr('gender'),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(
+                      Icons.wc,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'male',
+                      child: Text(context.tr('male')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'female',
+                      child: Text(context.tr('female')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'other',
+                      child: Text(context.tr('other')),
+                    ),
+                  ],
+                  onChanged: (v) => _genderController.text = v ?? '',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _dobController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('date_of_birth'),
+                    hintText: 'YYYY-MM-DD',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(
+                      Icons.calendar_today,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    suffixIcon: IconButton(
+                      tooltip: context.tr('date'),
+                      icon: Icon(
+                        Icons.date_range,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _dobController.text.isNotEmpty
+                              ? DateTime.tryParse(_dobController.text) ??
+                                    DateTime(2000)
+                              : DateTime(2000),
+                          firstDate: DateTime(1940),
+                          lastDate: DateTime.now().subtract(
+                            const Duration(days: 365 * 5),
+                          ),
+                        );
+                        if (date != null) {
+                          _dobController.text =
+                              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                        }
+                      },
+                    ),
+                  ),
+                  readOnly: true,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -517,15 +858,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       children: [
                         Expanded(
                           flex: 2,
-                          child: Autocomplete<String>(
+                          child: Autocomplete<(String, String)>(
                             optionsBuilder: (textEditingValue) {
                               if (textEditingValue.text.isEmpty) return [];
                               return _paymentMethodHints.where(
-                                (h) => h.toLowerCase().contains(
+                                (h) => h.$2.toLowerCase().contains(
                                   textEditingValue.text.toLowerCase(),
                                 ),
                               );
                             },
+                            displayStringForOption: (h) => context.tr(h.$1),
+                            onSelected: (h) => entry.key.text = h.$2,
                             fieldViewBuilder:
                                 (context, controller, focusNode, onSubmitted) {
                                   entry.key.text = controller.text;
@@ -559,6 +902,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         const SizedBox(width: 4),
                         IconButton(
+                          tooltip: context.tr('decrease'),
                           icon: Icon(
                             Icons.remove_circle,
                             color: Theme.of(context).colorScheme.error,

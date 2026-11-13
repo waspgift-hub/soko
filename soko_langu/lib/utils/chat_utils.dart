@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 import '../services/user_service.dart';
 import '../services/whatsapp_service.dart';
 
@@ -22,7 +23,7 @@ Future<void> showChatOptions({
 
   if (resolvedPhone == null || resolvedPhone.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('No phone number available for $sellerName')),
+      SnackBar(content: Text(context.tr('no_phone_number_for_seller').replaceAll('{0}', sellerName))),
     );
     return;
   }

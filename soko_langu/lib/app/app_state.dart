@@ -4,9 +4,17 @@ class AppStateNotifier extends ChangeNotifier {
   bool appInitialized = false;
   bool isAuthenticated = false;
   bool isAdmin = false;
+  bool onboardingChecked = false;
+  bool hasCompletedOnboarding = true;
 
   void setAppInitialized() {
     appInitialized = true;
+    notifyListeners();
+  }
+
+  void setOnboarding({required bool completed}) {
+    hasCompletedOnboarding = completed;
+    onboardingChecked = true;
     notifyListeners();
   }
 

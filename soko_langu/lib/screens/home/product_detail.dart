@@ -1,29 +1,47 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../services/wishlist_service.dart';
-import '../../services/ad_revenue_service.dart';
 import '../../services/category_service.dart';
-import '../../services/localization_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../widgets/ad_banner.dart';
-import '../../widgets/google_loading.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
-import '../../widgets/verified_badge.dart';
+import '../../widgets/premium_widgets.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
+import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/share_service.dart';
+import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
 import '../../services/notification_service.dart';
-import '../../utils/chat_utils.dart';
+import '../chat/chat_navigation.dart';
+import '../../widgets/ds/ds.dart';
+import '../../widgets/call_seller_button.dart';
+import '../../widgets/soko_vibe_watermark.dart';
+import '../../widgets/product_video_player.dart';
+import '../../models/seller_verification.dart';
+import '../../services/seller_verification_service.dart';
+import '../../widgets/blue_tick_badge.dart';
+
+// ignore: unused_element
+Color? _hexToColor(String? hex) {
+  if (hex == null || hex.isEmpty) return null;
+  try {
+    final clean = hex.replaceFirst('#', '');
+    if (clean.length != 6) return null;
+    return Color(int.parse('FF$clean', radix: 16));
+  } catch (_) {
+    return null;
+  }
+}
 
 class ProductDetailPage extends StatefulWidget {
   final Product product;
@@ -42,13 +60,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
-  final Map<int, double> _imageRatios = {};
+
   UserProfile? _sellerProfile;
+  SellerVerification? _sellerVerification;
+  StreamSubscription<SellerVerification?>? _kycSubscription;
   bool _processing = false;
   FlashSale? _flashSale;
   Timer? _flashTimer;
   StreamSubscription<FlashSale?>? _flashStreamSub;
   bool _viewIncremented = false;
+  int _quantity = 1;
 
   @override
   void initState() {
@@ -59,15 +80,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!_viewIncremented) {
       _viewIncremented = true;
       ProductService().incrementViewCount(widget.product.id);
+      AnalyticsService().trackProductView(widget.product.id);
     }
+    RecentlyViewedService.instance.add(widget.product.id);
+    // Set up real-time KYC status stream for this seller
+    _kycSubscription = SellerVerificationService()
+        .resolve(widget.product.sellerId)
+        .asStream()
+        .listen((verification) {
+          if (mounted) {
+            setState(() {
+              _sellerVerification = verification;
+            });
+          }
+        });
   }
 
   String _lastDisplay = '';
 
   void _loadFlashSale() {
-    _flashStreamSub = _flashSaleService
-        .streamFlashSaleByProductId(widget.product.id)
-        .listen((sale) {
+    _flashStreamSub = _flashSaleService.streamFlashSaleByProductId(widget.product.id).listen((
+      sale,
+    ) {
       if (!mounted) return;
       setState(() {
         _flashSale = sale;
@@ -77,9 +111,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         _flashTimer?.cancel();
         _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (!mounted) return;
-          final display = sale.remainingTime.isNegative
-              ? ''
-              : _fmtDuration(sale.remainingTime);
+          final display = sale.remainingTime.isNegative ? '' : _fmtDuration(sale.remainingTime);
           if (display != _lastDisplay) {
             _lastDisplay = display;
             setState(() {});
@@ -93,13 +125,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _loadSellerProfile() async {
     final profile = await _userService.getProfile(widget.product.sellerId);
-    if (mounted) setState(() => _sellerProfile = profile);
+    // Trusted verification snapshot, resolved independently of the profile read
+    // so a revocation is reflected even if the profile cache is stale.
+    final verification = await SellerVerificationService().resolve(widget.product.sellerId);
+    if (!mounted) return;
+    setState(() {
+      _sellerProfile = profile;
+      _sellerVerification = verification;
+    });
   }
 
   @override
   void dispose() {
     _flashTimer?.cancel();
     _flashStreamSub?.cancel();
+    _kycSubscription?.cancel();
     _imageController.dispose();
     super.dispose();
   }
@@ -107,20 +147,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _checkFav() async {
     final fav = await _wishlistService.isFavorite(widget.product.id);
     if (mounted) setState(() => _isFav = fav);
-  }
-
-  void _resolveImageSize(int index, ImageProvider provider) {
-    if (_imageRatios.containsKey(index)) return;
-    final stream = provider.resolve(ImageConfiguration.empty);
-    final listener = ImageStreamListener((info, _) {
-      if (!mounted) return;
-      final image = info.image;
-      final ratio = image.width / image.height;
-      if (ratio > 0 && _imageRatios[index] != ratio) {
-        setState(() => _imageRatios[index] = ratio);
-      }
-    });
-    stream.addListener(listener);
   }
 
   Future<void> _toggleFav() async {
@@ -131,9 +157,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _isFav
-                ? context.tr('added_to_wishlist')
-                : context.tr('removed_from_wishlist'),
+            _isFav ? context.tr('added_to_wishlist') : context.tr('removed_from_wishlist'),
           ),
         ),
       );
@@ -142,11 +166,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!wasFav) {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null && currentUser.uid != widget.product.sellerId) {
-        final userName =
-            currentUser.displayName ?? currentUser.email ?? 'Mtumiaji';
+        final userName = currentUser.displayName ?? currentUser.email ?? context.tr('unknown_user');
         await NotificationService().sendNotification(
           userId: widget.product.sellerId,
-          title: '$userName amependa bidhaa yako',
+          title: context.tr('like_notification_title').replaceAll('{user}', userName),
           body: widget.product.name,
           data: {
             'type': 'wishlist',
@@ -159,16 +182,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _shareProduct(Product product) {
-    final text =
-        "${product.name}\n"
-        "Price: ${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}\n"
-        "${context.tr('check_out_on')}";
-    SharePlus.instance.share(ShareParams(text: text));
+    final currentUser = FirebaseAuth.instance.currentUser;
+    ShareService.instance.shareProduct(
+      productId: product.id,
+      productName: product.name,
+      price: product.price,
+      currency: product.currency ?? 'TZS',
+      ref: currentUser?.uid,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final currentUser = FirebaseAuth.instance.currentUser;
     final product = widget.product;
     final sellerId = product.sellerId;
@@ -179,21 +206,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         actions: [
           IconButton(
             icon: Icon(Icons.share, color: cs.primary),
+            tooltip: context.tr('share'),
             onPressed: () => _shareProduct(product),
           ),
-          IconButton(
-            icon: Icon(
-              _isFav ? Icons.favorite : Icons.favorite_border,
-              color: _isFav ? cs.error : null,
-            ),
+          DsLikeButton(
+            isLiked: _isFav,
             onPressed: _toggleFav,
+            activeColor: cs.error,
+            idleColor: cs.primary,
           ),
           if (currentUser != null && currentUser.uid != sellerId)
             IconButton(
-              icon: Icon(
-                Icons.flag_outlined,
-                color: cs.error.withValues(alpha: 0.7),
-              ),
+              icon: Icon(Icons.flag_outlined, color: cs.error.withValues(alpha: 0.7)),
+              tooltip: context.tr('report_user'),
               onPressed: () => context.push(
                 AppRoutes.report,
                 extra: {
@@ -209,146 +234,220 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).padding.bottom + 20,
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Stack(
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final width = constraints.maxWidth;
-                      final ratio = _imageRatios[_currentImageIndex];
-                      final height = ratio != null
-                          ? (width / ratio).clamp(200.0, width * 1.2)
-                          : width * 0.6;
-
-                      return SizedBox(
-                        width: width,
-                        height: height,
-                        child: product.images.isNotEmpty
-                            ? PageView.builder(
-                                controller: _imageController,
-                                itemCount: product.images.length,
-                                onPageChanged: (index) {
-                                  setState(() => _currentImageIndex = index);
-                                },
-                                itemBuilder: (context, index) {
-                                  return GestureDetector(
-                                    onTap: () => _showFullScreenImage(
-                                      context,
-                                      product.images,
-                                      index,
-                                    ),
-                                    child: CachedNetworkImage(
-                                      imageUrl: product.images[index],
-                                      fit: BoxFit.contain,
-                                      imageBuilder: (context, imageProvider) {
-                                        _resolveImageSize(
-                                            index, imageProvider);
-                                        return Image(
-                                          image: imageProvider,
-                                          fit: BoxFit.contain,
-                                        );
-                                      },
-                                      placeholder: (context, url) => Container(
-                                        color: cs.surfaceContainerLow,
-                                        child: const Center(
-                                          child: GoogleLoading(
-                                            size: 24,
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                      ),
-                                      errorWidget:
-                                          (context, error, stackTrace) =>
-                                              Container(
-                                        color: cs.surfaceContainerHighest,
-                                        child: const Icon(
-                                          Icons.image,
-                                          size: 50,
-                                        ),
-                                      ),
-                                    ),
+              if (product.images.isNotEmpty || (product.videoUrl ?? '').isNotEmpty)
+                Builder(
+                  builder: (context) {
+                    final videoUrl = product.videoUrl ?? '';
+                    final hasVideo = videoUrl.isNotEmpty;
+                    final slideCount = product.images.length + (hasVideo ? 1 : 0);
+                    final onVideoSlide = hasVideo && _currentImageIndex == product.images.length;
+                    return SizedBox(
+                      width: double.infinity,
+                      height: MediaQuery.of(context).size.width,
+                      child: Stack(
+                        children: [
+                          Hero(
+                            tag: 'product-img-${product.id}',
+                            child: PageView.builder(
+                              controller: _imageController,
+                              itemCount: slideCount,
+                              onPageChanged: (index) {
+                                setState(() => _currentImageIndex = index);
+                              },
+                              itemBuilder: (context, index) {
+                                if (hasVideo && index == product.images.length) {
+                                  // keeps the seller's original file — transcode job is a stub,
+                                  // so nothing recompresses the video before playback
+                                  return ProductVideoPlayer(
+                                    url: videoUrl,
+                                    autoPlay: true,
+                                    height: MediaQuery.of(context).size.width,
                                   );
-                                },
-                              )
-                            : const SizedBox(),
-                      );
-                    },
-                  ),
-                  if (product.images.length > 1)
-                    Positioned(
-                      bottom: 12,
-                      left: 0,
-                      right: 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          product.images.length,
-                          (index) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            width: _currentImageIndex == index ? 10 : 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _currentImageIndex == index
-                                  ? cs.surface
-                                  : cs.surface.withValues(alpha: 0.5),
-                              border: Border.all(
-                                color: cs.onSurface.withValues(alpha: 0.2),
-                                width: 1,
+                                }
+                                final imageUrl = product.images[index];
+                                return Semantics(
+                                  button: true,
+                                  label: context.tr('view_full_image'),
+                                  onTap: () => _showFullScreenImage(context, product.images, index),
+                                  child: GestureDetector(
+                                    excludeFromSemantics: true,
+                                    onTap: () =>
+                                        _showFullScreenImage(context, product.images, index),
+                                    child: ProductCachedImage(
+                                      url: imageUrl,
+                                      // low-res Cloudinary preview while full quality loads;
+                                      // R2 has no on-the-fly variants yet, so those keep shimmer
+                                      placeholderUrl: imageUrl.contains('cloudinary.com')
+                                          ? getThumbnailUrl(imageUrl, width: 80)
+                                          : null,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          // Bottom gradient overlay (image legibility only — hidden while video plays)
+                          if (!onVideoSlide)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              height: 80,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 0.5),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Dot indicators
+                          if (slideCount > 1)
+                            Positioned(
+                              bottom: 12,
+                              left: 0,
+                              right: 0,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(
+                                  slideCount,
+                                  (index) => AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                                    width: _currentImageIndex == index ? 24 : 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(3),
+                                      color: _currentImageIndex == index
+                                          ? Colors.white
+                                          : Colors.white.withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Slide counter badge
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    onVideoSlide ? Icons.videocam : Icons.photo_library,
+                                    size: 12,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_currentImageIndex + 1}/$slideCount',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.9),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
+                          // Fullscreen hint (image slides only)
+                          if (!onVideoSlide)
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.fullscreen,
+                                  size: 14,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ),
+                          // Video label chip
+                          if (onVideoSlide)
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.videocam,
+                                      size: 14,
+                                      color: Colors.white.withValues(alpha: 0.8),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Video',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          // Soko Vibe watermark (image slides only)
+                          if (!onVideoSlide)
+                            Positioned(
+                              bottom: 18,
+                              left: 12,
+                              child: IgnorePointer(child: SokoVibeWatermark(compact: false)),
+                            ),
+                        ],
                       ),
-                    ),
-                  if (product.images.isNotEmpty)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${_currentImageIndex + 1}/${product.images.length}',
-                          style: TextStyle(
-                            color: cs.surface,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              if (product.images.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
+                    );
+                  },
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  height: 200,
+                  color: cs.surfaceContainerLow,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.photo_library,
-                        size: 16,
-                        color: cs.onSurfaceVariant,
+                        Icons.image,
+                        size: 48,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.3),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        context.tr('images_count').replaceAll('{0}', product.images.length.toString()),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: cs.onSurface.withValues(alpha: 0.5),
-                        ),
-                      ),
+                      const SizedBox(height: 8),
+                      Text(context.tr('no_images'), style: TextStyle(color: cs.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -359,10 +458,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   children: [
                     Text(
                       product.name,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -388,10 +486,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: cs.error,
                               borderRadius: BorderRadius.circular(10),
@@ -411,7 +506,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       Text(
                         _flashSale!.remainingTime.isNegative
                             ? context.tr('expired')
-                            : context.tr('flash_sale_ends_in').replaceAll('{0}', _fmtDuration(_flashSale!.remainingTime)),
+                            : context
+                                  .tr('flash_sale_ends_in')
+                                  .replaceAll('{0}', _fmtDuration(_flashSale!.remainingTime)),
                         style: TextStyle(
                           color: cs.error,
                           fontSize: 13,
@@ -420,19 +517,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                       Text(
                         '${context.tr('ends')} ${_fmtDate(_flashSale!.endTime)}',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
                       ),
                     ] else ...[
                       Text(
                         context.formatPrice(product.price),
-                        style: TextStyle(
-                          color: cs.secondary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: AppTypography.amount(
+                          cs.primary,
+                        ).copyWith(fontSize: 24, fontWeight: FontWeight.w700),
                       ),
                       if (_selectedVariantId != null)
                         Text(
@@ -448,16 +540,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           const SizedBox(width: 4),
                           Text(
                             "${product.rating.toStringAsFixed(1)} (${product.reviewCount} ${context.tr('reviews_count')})",
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.6),
-                            ),
+                            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             "${product.soldCount} ${context.tr('sold')}",
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.6),
-                            ),
+                            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
                           ),
                         ],
                       ),
@@ -465,10 +553,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     const SizedBox(height: 16),
                     Text(
                       context.tr('description'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -477,43 +564,33 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.6),
                         height: 1.5,
+                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('details'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildDetailRow(
-                      context.tr('category'),
-                      _getCategoryDisplay(product.category),
-                    ),
-                    if (product.brand != null)
-                      _buildDetailRow(context.tr('brand'), product.brand!),
+                    _buildDetailRow(context.tr('category'), _getCategoryDisplay(product.category)),
+                    if (product.brand != null) _buildDetailRow(context.tr('brand'), product.brand!),
                     _buildDetailRow(context.tr('condition'), product.condition),
-                    _buildDetailRow(context.tr('location'), product.location),
-                    _buildDetailRow(
-                      context.tr('stock'),
-                      "${product.stock} ${context.tr('units')}",
-                    ),
+                    _buildDetailRow(context.tr('stock'), "${product.stock} ${context.tr('units')}"),
                     if (product.isWholesale)
-                      _buildDetailRow(
-                        context.tr('wholesale'),
-                        context.tr('available'),
-                      ),
+                      _buildDetailRow(context.tr('wholesale'), context.tr('available')),
+                    const SizedBox(height: 16),
+                    _buildProtectionCard(context, cs),
                     if (product.variants.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Text(
                         context.tr('variants'),
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: cs.onSurface,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -545,6 +622,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     onSelected: (sel) {
                                       setState(() {
                                         _selectedVariantId = sel ? v.id : null;
+                                        _clampQuantity();
                                       });
                                     },
                                   );
@@ -558,282 +636,89 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       if (_selectedVariantId != null) ...[
                         _buildDetailRow(
                           context.tr('selected'),
-                          product.variants
-                              .firstWhere((v) => v.id == _selectedVariantId)
-                              .value,
+                          product.variants.firstWhere((v) => v.id == _selectedVariantId).value,
                         ),
                         _buildDetailRow(
                           context.tr('price_adjustment'),
                           context.formatPrice(
-                            _getSelectedVariant()?.priceAdjustment
-                                    ?.toDouble() ??
-                                0,
+                            _getSelectedVariant()?.priceAdjustment?.toDouble() ?? 0,
                           ),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      _buildQuantitySection(context, cs),
                     ],
                     const SizedBox(height: 20),
-                    Container(
+                    GlassCard(
+                      onTap: () {
+                        if (currentUser == null) {
+                          context.push(AppRoutes.login);
+                        } else if (sellerId.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(context.tr('seller_unknown_error'))),
+                          );
+                        } else {
+                          context.push(
+                            '${AppRoutes.publicProfile}/$sellerId',
+                            extra: product.sellerName,
+                          );
+                        }
+                      },
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: cs.primary.withValues(alpha: 0.2),
-                        ),
-                      ),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.storefront_outlined,
-                            size: 20,
-                            color: cs.primary,
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: cs.primaryContainer,
+                            backgroundImage: _sellerProfile?.profileImage.isNotEmpty == true
+                                ? NetworkImage(_sellerProfile!.profileImage)
+                                : null,
+                            child: _sellerProfile?.profileImage.isNotEmpty == true
+                                ? null
+                                : Icon(Icons.person, color: cs.surface),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: context.tr('posted_on'),
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.7,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        product.sellerName,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: cs.onSurface,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                  ),
-                                  TextSpan(
-                                    text: 'Soko Vibe',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: cs.primary,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: context.tr('posted_by'),
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: product.sellerName,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: cs.onSurface,
-                                    ),
-                                  ),
-                                  if (product.sellerKycApproved)
-                                    WidgetSpan(
-                                      child: VerifiedBadge(size: 13),
-                                    ),
-                                ],
-                              ),
+                                    // Blue Tick from trusted state, plus the word-level pill used on
+                                    // store pages so verification is
+                                    // unambiguous.
+                                    BlueTickBadge(sellerId: product.sellerId, size: 14),
+                                    const SizedBox(width: 5),
+                                    BlueTickPill(verification: _sellerVerification, compact: true),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                _buildSellerActions(context, cs),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Material(
-                      color: cs.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () {
-                          if (currentUser == null) {
-                            context.push(AppRoutes.login);
-                          } else {
-                            context.push(
-                              '${AppRoutes.publicProfile}/$sellerId',
-                              extra: product.sellerName,
-                            );
-                          }
-                        },
-                        child: Column(
-                          children: [
-                            if (_sellerProfile != null &&
-                                _sellerProfile!.shopBanner.isNotEmpty)
-                              Container(
-                                height: 100,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color:
-                                      _sellerProfile!.shopBannerColor.isNotEmpty
-                                      ? Color(
-                                          int.parse(
-                                            'FF${_sellerProfile!.shopBannerColor.replaceFirst('#', '')}',
-                                            radix: 16,
-                                          ),
-                                        )
-                                      : cs.primaryContainer,
-                                  image: DecorationImage(
-                                    image: NetworkImage(
-                                      _sellerProfile!.shopBanner,
-                                    ),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor:
-                                        _sellerProfile
-                                                ?.shopAccentColor
-                                                .isNotEmpty ==
-                                            true
-                                        ? Color(
-                                            int.parse(
-                                              'FF${_sellerProfile!.shopAccentColor.replaceFirst('#', '')}',
-                                              radix: 16,
-                                            ),
-                                          )
-                                        : cs.primaryContainer,
-                                    backgroundImage:
-                                        _sellerProfile
-                                                ?.profileImage
-                                                .isNotEmpty ==
-                                            true
-                                        ? NetworkImage(
-                                            _sellerProfile!.profileImage,
-                                          )
-                                        : null,
-                                    child:
-                                        _sellerProfile
-                                                ?.profileImage
-                                                .isNotEmpty ==
-                                            true
-                                        ? null
-                                        : Icon(
-                                            Icons.person,
-                                            color: cs.surface,
-                                          ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                product.sellerName,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
-                                                  color: cs.onSurface,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            if (product.sellerKycApproved)
-                                              VerifiedBadge(size: 14),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 6),
-                                        if (currentUser == null)
-                                          Row(
-                                            children: [
-                                              TextButton(
-                                                onPressed: () => context.push(
-                                                  AppRoutes.login,
-                                                ),
-                                                child: Text(
-                                                  context.tr('view_store'),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              ElevatedButton.icon(
-                                                style:
-                                                    ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      cs.whatsappGreen,
-                                                ),
-                                                icon: Icon(
-                                                  Icons.chat,
-                                                  color: cs.surface,
-                                                  size: 18,
-                                                ),
-                                                onPressed: _chatWithSeller,
-                                                label: Text(
-                                                  'Chat',
-                                                  style: TextStyle(
-                                                    color: cs.onPrimary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          )
-                                        else if (currentUser.uid !=
-                                            sellerId)
-                                          Row(
-                                            children: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    context.push(
-                                                  '${AppRoutes.publicProfile}/$sellerId',
-                                                  extra: product.sellerName,
-                                                ),
-                                                child: Text(
-                                                  context.tr('view_store'),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              ElevatedButton.icon(
-                                                style:
-                                                    ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      cs.whatsappGreen,
-                                                ),
-                                                icon: Icon(
-                                                  Icons.chat,
-                                                  color: cs.surface,
-                                                  size: 18,
-                                                ),
-                                                onPressed: _chatWithSeller,
-                                                label: Text(
-                                                  context.tr('chat'),
-                                                  style: TextStyle(
-                                                    color: cs.onPrimary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ReviewSection(productId: product.id),
+                      child: ReviewSection(productId: product.id, productName: product.name),
                     ),
                     const Divider(height: 32),
-                    CommentSection(productId: product.id),
-                    const Divider(height: 8),
-                    _AdViewTracker(
-                      sellerId: widget.product.sellerId,
-                      productId: widget.product.id,
-                    ),
-                    const AdBanner(),
+                    CommentSection(productId: product.id, sellerId: product.sellerId),
                   ],
                 ),
               ),
@@ -842,71 +727,88 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.whatsappGreen,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: currentUser != null && currentUser.uid == sellerId
+            ? Row(
+                children: [
+                  Expanded(
+                    child: OneUIButton(
+                      label: context.tr('edit_product', 'Hariri'),
+                      icon: Icons.edit_outlined,
+                      primary: false,
+                      onPressed: () => context.push(AppRoutes.addProduct, extra: widget.product),
+                    ),
                   ),
-                ),
-                icon: Icon(Icons.chat, color: cs.surface, size: 18),
-                onPressed: _chatWithSeller,
-                label: Text(
-                  context.tr('chat'),
-                  style: TextStyle(color: cs.surface, fontSize: 13),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.successGreen,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: OneUIButton(
+                      label: context.tr('boost_product', 'Boost Bidhaa'),
+                      icon: Icons.rocket_launch_rounded,
+                      primary: true,
+                      onPressed: () => context.push(AppRoutes.boostProduct, extra: widget.product),
+                    ),
                   ),
-                ),
-                icon: Icon(
-                  Icons.shopping_cart_checkout,
-                  color: cs.surface,
-                  size: 18,
-                ),
-                onPressed: _processing
-                    ? null
-                    : () async {
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: _chatWithSeller,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_outline_rounded, size: 19, color: cs.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              context.tr('chat'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: cs.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: DsButton(
+                      label: context.tr('buy_now'),
+                      icon: Icons.shopping_cart_checkout,
+                      loading: _processing,
+                      onPressed: () async {
                         if (currentUser == null) {
                           context.push(AppRoutes.login);
                         } else if (currentUser.uid == sellerId) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(context.tr('cannot_buy_own')),
-                            ),
-                          );
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(context.tr('cannot_buy_own'))));
                         } else {
                           await _processBuyNow();
                         }
                       },
-                label: Text(
-                  context.tr('buy_now'),
-                  style: TextStyle(color: cs.surface, fontSize: 14),
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
-  Map<String, List<ProductVariant>> _groupVariants(
-    List<ProductVariant> variants,
-  ) {
+  Map<String, List<ProductVariant>> _groupVariants(List<ProductVariant> variants) {
     final map = <String, List<ProductVariant>>{};
     for (var v in variants) {
       map.putIfAbsent(v.name, () => []).add(v);
@@ -929,12 +831,184 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return categoryName;
   }
 
+  /// Stock for the current selection (variant stock wins when present).
+  int get _availableStock {
+    final v = _getSelectedVariant();
+    return v?.stock ?? widget.product.stock;
+  }
+
+  int get _minQty {
+    final m = widget.product.minOrder;
+    return m < 1 ? 1 : m;
+  }
+
+  int get _maxQty {
+    final stock = _availableStock;
+    final cap = widget.product.maxOrder;
+    final byStock = stock < 0 ? 0 : stock;
+    if (cap == null || cap <= 0) return byStock;
+    return cap < byStock ? cap : byStock;
+  }
+
+  /// Unit price for the current quantity: flash deal wins, otherwise the
+  /// wholesale tier price (when applicable), plus variant adjustment.
+  double get _unitPrice {
+    final p = widget.product;
+    final flash = _flashSale;
+    if (flash != null && flash.salePrice > 0) return flash.salePrice;
+    final base = p.getWholesalePrice(_quantity);
+    return base + (_getSelectedVariant()?.priceAdjustment ?? 0);
+  }
+
+  void _clampQuantity() {
+    if (_quantity < _minQty) {
+      _quantity = _minQty;
+    } else if (_maxQty > 0 && _quantity > _maxQty) {
+      _quantity = _maxQty;
+    } else if (_maxQty <= 0) {
+      _quantity = _minQty;
+    }
+  }
+
+  void _onQtyLimit(bool atMin) {
+    final msg = atMin
+        ? context
+              .tr('minimum_order_x', 'Minimum order is {0}')
+              .replaceAll('{0}', '$_minQty ${widget.product.unit}')
+        : context
+              .tr('only_x_left', 'Only {0} left')
+              .replaceAll('{0}', '$_maxQty ${widget.product.unit}');
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   ProductVariant? _getSelectedVariant() {
     if (_selectedVariantId == null) return null;
-    final variants = widget.product.variants.where(
-      (v) => v.id == _selectedVariantId,
-    );
+    final variants = widget.product.variants.where((v) => v.id == _selectedVariantId);
     return variants.isNotEmpty ? variants.first : null;
+  }
+
+  Widget _buildProtectionCard(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const DsEscrowShield(label: 'Buyer Protection', compact: true),
+          const SizedBox(height: 10),
+          _protectionStep(cs, '1', 'Pay securely through Soko Vibe'),
+          _protectionStep(cs, '2', 'Money is held safely until you receive'),
+          _protectionStep(cs, '3', 'Confirm delivery to release payment'),
+        ],
+      ),
+    );
+  }
+
+  Widget _protectionStep(ColorScheme cs, String n, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+            child: Text(n, style: const TextStyle(color: Colors.white, fontSize: 11)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 13, color: cs.onSurface)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuantitySection(BuildContext context, ColorScheme cs) {
+    final p = widget.product;
+    final stock = _availableStock;
+    final tiers = List<WholesaleTier>.from(p.wholesaleTiers)
+      ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
+    final baseUnit = p.price + (_getSelectedVariant()?.priceAdjustment ?? 0);
+    final unit = _unitPrice;
+    final subtotal = unit * _quantity;
+    final saved = baseUnit > unit ? (baseUnit - unit) * _quantity : 0.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              '${context.tr('quantity', 'Quantity')}${p.unit.isNotEmpty ? ' (${p.unit})' : ''}',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const Spacer(),
+            DsStockIndicator(stock: stock),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            DsQuantitySelector(
+              value: _quantity,
+              min: _minQty,
+              max: _maxQty <= 0 ? _minQty : _maxQty,
+              onChanged: (v) => setState(() => _quantity = v),
+              onLimit: _onQtyLimit,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$_quantity × ${context.formatPrice(unit)}',
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                  ),
+                  Text(context.formatPrice(subtotal), style: AppTypography.amount(cs.primary)),
+                  if (saved > 0)
+                    Text(
+                      '${context.tr('you_save', 'You save')} ${context.formatPrice(saved)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.tertiary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (p.minOrder > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              context
+                  .tr('minimum_order_x', 'Minimum order is {0}')
+                  .replaceAll('{0}', '${p.minOrder} ${p.unit}'),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ),
+        if (tiers.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ...tiers.map(
+            (t) => Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '${t.minQuantity}+ : ${context.formatPrice(t.pricePerUnit)} / ${p.unit}',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -944,11 +1018,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         children: [
           Text(
             "$label: ",
-            style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
           ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
@@ -956,21 +1026,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  void _showFullScreenImage(
-    BuildContext context,
-    List<String> images,
-    int initialIndex,
-  ) {
+  void _showFullScreenImage(BuildContext context, List<String> images, int initialIndex) {
     final cs = Theme.of(context).colorScheme;
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
         barrierColor: cs.onSurface,
         pageBuilder: (context, animation, secondaryAnimation) {
-          return _FullScreenImageViewer(
-            images: images,
-            initialIndex: initialIndex,
-          );
+          return _FullScreenImageViewer(images: images, initialIndex: initialIndex);
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -981,18 +1044,95 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _processBuyNow() async {
     if (!mounted) return;
-    context.push(AppRoutes.checkout, extra: widget.product);
+    if (_availableStock <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('out_of_stock', 'Out of stock'))));
+      return;
+    }
+    _clampQuantity();
+    context.push(
+      AppRoutes.checkout,
+      extra: {
+        'product': widget.product,
+        'quantity': _quantity,
+        'variantId': _selectedVariantId,
+        'unitPrice': _unitPrice,
+      },
+    );
   }
 
   void _chatWithSeller() {
-    showChatOptions(
-      context: context,
-      sellerId: widget.product.sellerId,
-      sellerName: widget.product.sellerName,
-      phone: _sellerProfile?.phone,
+    ChatNavigation.openSellerChat(
+      context,
+      widget.product.sellerId,
+      widget.product.sellerName,
+      productId: widget.product.id,
       productName: widget.product.name,
-      productPrice: widget.product.price,
-      currency: widget.product.currency,
+    );
+  }
+
+  Widget _buildSellerActions(BuildContext context, ColorScheme cs) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final sellerId = widget.product.sellerId;
+    final product = widget.product;
+    final isGuest = currentUser == null;
+    final isOwn = !isGuest && currentUser.uid == sellerId;
+    if (isOwn) return const SizedBox.shrink();
+
+    void openStore() {
+      if (isGuest) {
+        context.push(AppRoutes.login);
+      } else if (sellerId.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('seller_unknown_error'))));
+      } else {
+        context.push('${AppRoutes.publicProfile}/$sellerId', extra: product.sellerName);
+      }
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cs.primary,
+              side: BorderSide(color: cs.primary.withValues(alpha: 0.4), width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+            ),
+            icon: const Icon(Icons.storefront_outlined, size: 18),
+            onPressed: openStore,
+            label: Text(
+              context.tr('view_store'),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        CallSellerButton(phone: _sellerProfile?.phone ?? '', iconOnly: true),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SizedBox(
+            height: 46,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.whatsappGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              icon: const Icon(Icons.chat, size: 18),
+              onPressed: _chatWithSeller,
+              label: Text(
+                context.tr('chat'),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1012,10 +1152,7 @@ class _FullScreenImageViewer extends StatefulWidget {
   final List<String> images;
   final int initialIndex;
 
-  const _FullScreenImageViewer({
-    required this.images,
-    required this.initialIndex,
-  });
+  const _FullScreenImageViewer({required this.images, required this.initialIndex});
 
   @override
   State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
@@ -1068,20 +1205,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   minScale: 1.0,
                   maxScale: 5.0,
                   child: Center(
-                    child: CachedNetworkImage(
-                      imageUrl: widget.images[index],
-                      fit: BoxFit.contain,
-                      placeholder: (context, url) => const Center(
-                        child: GoogleLoading(size: 32, strokeWidth: 2),
-                      ),
-                      errorWidget: (context, error, stackTrace) => Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          color: cs.surface,
-                          size: 80,
-                        ),
-                      ),
-                    ),
+                    child: ProductCachedImage(url: widget.images[index], fit: BoxFit.contain),
                   ),
                 ),
               );
@@ -1110,38 +1234,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ),
               ),
             ),
+          Positioned(
+            bottom: 16,
+            left: 12,
+            child: IgnorePointer(child: SokoVibeWatermark(compact: false)),
+          ),
         ],
       ),
     );
   }
-}
-
-class _AdViewTracker extends StatefulWidget {
-  final String sellerId;
-  final String productId;
-  const _AdViewTracker({required this.sellerId, required this.productId});
-
-  @override
-  State<_AdViewTracker> createState() => _AdViewTrackerState();
-}
-
-class _AdViewTrackerState extends State<_AdViewTracker> {
-  @override
-  void initState() {
-    super.initState();
-    _track();
-  }
-
-  Future<void> _track() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    await AdRevenueService().recordAdView(
-      sellerId: widget.sellerId,
-      productId: widget.productId,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
 }

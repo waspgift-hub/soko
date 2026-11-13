@@ -1,0 +1,194 @@
+const config = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT) || 3000,
+  
+  // Firebase
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+  },
+  
+  // Redis
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  },
+  
+  // Cloudflare R2
+  r2: {
+    accountId: process.env.R2_ACCOUNT_ID,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    bucketImages: process.env.R2_BUCKET_IMAGES || 'soko-vibe-images',
+    bucketVideos: process.env.R2_BUCKET_VIDEOS || 'soko-vibe-videos',
+    bucketThumbnails: process.env.R2_BUCKET_THUMBNAILS || 'soko-vibe-thumbnails',
+    bucketBackups: process.env.R2_BUCKET_BACKUPS || 'soko-vibe-backups',
+    // KYC identity documents live in their own bucket that has no public surface
+    // at all: no custom domain, r2.dev disabled, and no binding in the media
+    // Worker. Reads only ever go through a short-lived presigned GET.
+    bucketKyc: process.env.R2_BUCKET_KYC || 'soko-vibe-kyc',
+    publicUrl: process.env.R2_PUBLIC_URL || 'https://media.sokovibe.co.tz',
+  },
+  
+  // Payment (AzamPay)
+  azampay: {
+    apiUrl: process.env.AZAMPAY_API_BASE,
+    apiKey: process.env.AZAMPAY_CLIENT_ID,
+    apiSecret: process.env.AZAMPAY_CLIENT_SECRET,
+    webhookSecret: process.env.AZAMPAY_WEBHOOK_SECRET,
+    callbackPassword: process.env.AZAMPAY_CALLBACK_PASSWORD,
+    checksumKey: process.env.AZAMPAY_CHECKSUM_KEY,
+    defaultProvider: process.env.AZAMPAY_DEFAULT_PROVIDER || 'Airtel',
+    allowedIps: process.env.AZAMPAY_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
+    // The ONE AzamPay collection callback URL. Every payment-initiation path
+    // must use this value — providers must never receive a guessed/derived URL.
+    // Kept separate from APP_URL: the webhook host is not the canonical app URL.
+    collectionWebhookUrl: process.env.AZAMPAY_COLLECTION_WEBHOOK_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? ''
+        : 'http://localhost:3000/api/v1/payments/webhook/azampay'),
+  },
+  
+  // SMS
+  sms: {
+    mesejiApiKey: process.env.MESEJI_API_KEY,
+    mesejiSenderId: process.env.MESEJI_SENDER_ID || 'MESEJI',
+    notifyAfricaApiKey: process.env.NOTIFY_AFRICA_API_KEY,
+    // Base URLs are env-swappable so the whole stack can point at ANY SMS
+    // provider (free or paid) without touching code — migration = env change.
+    mesejiBaseUrl: process.env.MESEJI_BASE_URL || 'https://meseji.co.tz/api/v1/sms/send',
+    notifyAfricaBaseUrl: process.env.NOTIFY_AFRICA_SMS_BASE_URL || 'https://api.notify.africa',
+  },
+  
+  // Push Notifications
+  onesignal: {
+    appId: process.env.ONE_SIGNAL_APP_ID,
+    apiKey: process.env.ONE_SIGNAL_REST_API_KEY,
+    baseUrl: process.env.ONE_SIGNAL_BASE_URL || 'https://onesignal.com/api/v1',
+  },
+
+  // WhatsApp Business Cloud API (OTP template delivery). Missing token/phone
+  // number id is a valid no-op â€” the delivery chain then falls back to SMS.
+  // verifyToken/appSecret back the inbound webhook: verifyToken is the value
+  // pasted into the Meta dashboard, appSecret validates X-Hub-Signature-256.
+  whatsapp: {
+    token: process.env.WHATSAPP_BUSINESS_TOKEN,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+    baseUrl: process.env.WHATSAPP_GRAPH_BASE_URL || 'https://graph.facebook.com/v20.0',
+    templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'otp',
+    language: process.env.WHATSAPP_LANGUAGE || 'sw',
+    verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    appSecret: process.env.WHATSAPP_APP_SECRET,
+  },
+
+  // Cloudflare Turnstile (bot protection for public email forms)
+  turnstile: {
+    siteKey: process.env.TURNSTILE_SITE_KEY || '',
+    secret: process.env.TURNSTILE_SECRET || '',
+    hostnames: (process.env.TURNSTILE_HOSTNAMES || 'www.sokovibe.co.tz,sokovibe.co.tz,localhost,127.0.0.1')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
+  
+  // AI
+  groq: {
+    apiKey: process.env.GROQ_API_KEY,
+  },
+  
+  // Cloudinary (legacy image cleanup; app media now lives in R2)
+  cloudinary: {
+    destroyUrl: process.env.CLOUDINARY_DESTROY_URL || 'https://api.cloudinary.com/v1_1/dgbsohnl4/image/destroy',
+  },
+  
+  // Security
+  security: {
+    adminSecret: process.env.ADMIN_SECRET,
+    webhookSecret: process.env.WEBHOOK_SECRET,
+    encryptionKey: process.env.ENCRYPTION_KEY,
+    corsOrigins: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) || [],
+    // Bootstrap emails granted super-admin role/isAdmin on sign-in/provisioning.
+    // Keep minimal; explicit env overrides default.
+    superAdminEmails: (process.env.SUPER_ADMIN_EMAILS || 'admin@sokovibe.co.tz')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean),
+  },
+  
+  // Rate Limiting
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000,
+    max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
+  },
+  
+  // Business
+  business: {
+    // Platform commission as a fraction of the product price. The approved
+    // business default is 3.5% (0.035). An explicit PLATFORM_COMMISSION_PERCENT
+    // of 0 is honoured so the owner can still run a zero-fee promotion; the
+    // admin panel setting (`paymentsAndCurrency.platformCommissionPct`) takes
+    // precedence over this env default when a settings document exists.
+    // Shipping fees are not part of the commission base.
+    platformCommissionPercent: (() => {
+      const raw = process.env.PLATFORM_COMMISSION_PERCENT;
+      if (raw === undefined || raw === '') return 0.035;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) return 0.035;
+      return n > 1 ? n / 100 : n;
+    })(),
+    escrowAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    maxDailySaleAmount: parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000,
+  },
+
+  // Finance safety-net scheduler. All jobs are idempotent (state-machine
+  // guards + unique keys), so overlapping instances are safe.
+  finance: {
+    // Run the finance BullMQ worker inside the API process (current single
+    // instance). Set FINANCE_WORKER_IN_PROCESS=false when a dedicated worker
+    // process is deployed so both never double-process (BullMQ also guards).
+    workerInProcess: process.env.FINANCE_WORKER_IN_PROCESS !== 'false',
+    paymentExpireMs: (parseInt(process.env.FINANCE_PAYMENT_EXPIRE_MS) || 24 * 3600) * 1000,
+    autoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    withdrawalAutoProcessMs: (parseInt(process.env.FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN) || 15) * 60 * 1000,
+    withdrawalStuckMs: (parseInt(process.env.FINANCE_WITHDRAWAL_STUCK_HOURS) || 48) * 3600 * 1000,
+    reconciliationWindowMs: (parseInt(process.env.FINANCE_RECONCILIATION_WINDOW_HOURS) || 24) * 3600 * 1000,
+    disputeSlaMs: (parseInt(process.env.FINANCE_DISPUTE_SLA_HOURS) || 72) * 3600 * 1000,
+  },
+  
+  // URLs. APP_URL is the canonical public API/application URL; it must be set
+  // explicitly in production — there is deliberately NO fallback domain here so
+  // a missing value fails loudly instead of silently routing callbacks to a
+  // dead host. Payment webhooks use clickpesa.collectionWebhookUrl, never APP_URL.
+  urls: {
+    app: process.env.APP_URL || '',
+    frontend: process.env.FRONTEND_URL || 'https://www.sokovibe.co.tz',
+    admin: process.env.ADMIN_URL || 'https://admin.sokovibe.co.tz',
+  },
+
+  // Deep-link store destinations. Left empty on purpose: the app is not yet
+  // listed on any store, so the fallback page must not advertise one. Once a
+  // real listing exists, set ANDROID_STORE_URL / IOS_STORE_URL in the env.
+  deepLink: {
+    androidStoreUrl: process.env.ANDROID_STORE_URL || '',
+    iosStoreUrl: process.env.IOS_STORE_URL || '',
+    webProductUrl: process.env.WEB_PRODUCT_URL || 'https://www.sokovibe.co.tz/product/',
+  },
+};
+
+// Fail fast in production: a missing APP_URL / collection webhook URL silently
+// points payment callbacks at an empty or dead host — never recover from that
+// at runtime. Development keeps documented local defaults.
+if (config.nodeEnv === 'production') {
+  if (!config.urls.app) {
+    throw new Error('APP_URL must be configured in production (e.g. https://api.sokovibe.co.tz)');
+  }
+  if (!config.azampay.collectionWebhookUrl) {
+    throw new Error('AZAMPAY_COLLECTION_WEBHOOK_URL must be configured in production (e.g. https://api.sokovibe.co.tz/api/v1/payments/webhook/azampay)');
+  }
+  if (!config.azampay.callbackPassword) {
+    throw new Error('AZAMPAY_CALLBACK_PASSWORD must be configured in production (AzamPay callback password)');
+  }
+}
+
+module.exports = config;

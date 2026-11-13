@@ -1,87 +1,112 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
-import '../models/boost_tier.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
 
+/// Client for the legacy `/api/boost-product` purchase flow.
+///
+/// The server owns boost activation: it creates a `transactions` doc of type
+/// `boost`, fires an AzamPay MNO checkout (or returns a BillPay control number),
+/// and the collection webhook flips the product doc to `isBoosted` once the
+/// payment clears. The client only starts the payment and renders the result.
 class BoostService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Render free tier sleeps after ~15 min idle; the first request wakes it and
+  // can take up to ~60s, so the single attempt gets the full cold-start budget.
+  static const Duration _initTimeout = Duration(seconds: 60);
 
-  Future<Map<String, dynamic>?> initiateBoostPayment({
+  /// Starts a boost payment. Returns the server envelope — for USSD push it
+  /// contains `message`; for BillPay it contains `billPayNumber` and
+  /// `totalAmount`. Throws with a message the caller can localize.
+  ///
+  /// Deliberately single-attempt. Every POST creates a new chargeable
+  /// transaction and fires a new USSD push, so retrying after a lost response
+  /// would double-charge the seller. A timeout is reported as a failure and the
+  /// user retries by hand, which the duplicate guard in the server dedupes.
+  static Future<Map<String, dynamic>> initBoostProduct({
     required String productId,
-    required BoostTier tier,
+    required String productName,
+    String? productImage,
+    double productPrice = 0,
+    required String tier,
     required String phone,
-    required String userId,
+    String paymentMethod = 'ussd_push',
+    String provider = 'mpesa',
   }) async {
-    try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/boost-product'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'productId': productId,
-          'tier': tier.name,
-          'amount': tier.priceTzs,
-          'durationDays': tier.durationDays,
-          'phone': phone,
-          'userId': userId,
-        }),
-      );
+    final url = '${ApiConfig.baseUrl}/api/boost-product';
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    debugPrint('Boost: POST $url');
+    final resp = await http
+        .post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'productId': productId,
+            'productName': productName,
+            'productImage': productImage ?? '',
+            'productPrice': productPrice.round(),
+            'tier': tier,
+            'phone': phone,
+            'paymentMethod': paymentMethod,
+            'provider': provider,
+          }),
+        )
+        .timeout(_initTimeout);
 
-      if (resp.statusCode != 200) {
-        final body = jsonDecode(resp.body);
-        throw Exception(body['error'] ?? 'Boost payment failed');
+    debugPrint('Boost: status ${resp.statusCode} body ${resp.body}');
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    // This endpoint predates the {success} envelope and replies 200 with the
+    // payment envelope directly, so gate on status plus an error field.
+    if (resp.statusCode != 200 || body['error'] != null) {
+      return {'error': body['error'] ?? 'Boost request failed'};
+    }
+    return body;
+  }
+
+  /// Outcome of waiting on a boost payment to clear.
+  static const boostPaid = 'paid';
+  static const boostFailed = 'failed';
+  static const boostStillPending = 'pending';
+
+  /// Polls the transaction until the collection webhook settles it.
+  ///
+  /// Returns [boostPaid] once the server commits `status: completed` (the same
+  /// atomic batch that sets `isBoosted`), [boostFailed] on a terminal failure,
+  /// or [boostStillPending] if [timeout] elapses first. Never reports success
+  /// the server has not confirmed.
+  static Future<String> waitForSettlement(
+    String orderId, {
+    Duration timeout = const Duration(minutes: 3),
+    Duration interval = const Duration(seconds: 3),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final resp = await http
+            .get(
+              Uri.parse('${ApiConfig.baseUrl}/api/transaction-status/$orderId'),
+              headers: {if (token != null) 'Authorization': 'Bearer $token'},
+            )
+            .timeout(const Duration(seconds: 15));
+        if (resp.statusCode == 200) {
+          final body = jsonDecode(resp.body) as Map<String, dynamic>;
+          if (body['success'] == true) {
+            final status = (body['status'] ?? 'pending').toString();
+            if (status == 'completed') return boostPaid;
+            if (status == 'failed' || status == 'cancelled') return boostFailed;
+          }
+        }
+      } on Object catch (e) {
+        // A dropped poll is not a failed payment; keep waiting until the
+        // deadline so a flaky network never reports a false failure either.
+        debugPrint('Boost status poll: $e');
       }
-
-      return jsonDecode(resp.body) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('BoostService initiateBoostPayment: $e');
-      rethrow;
+      await Future<void>.delayed(interval);
     }
+    return boostStillPending;
   }
-
-  Future<void> handleBoostPaymentSuccess({
-    required String productId,
-    required BoostTier tier,
-  }) async {
-    try {
-      final now = DateTime.now();
-      final boostedUntil = now.add(Duration(days: tier.durationDays));
-
-      await _db.collection('products').doc(productId).update({
-        'isBoosted': true,
-        'boostedUntil': Timestamp.fromDate(boostedUntil),
-        'boostTier': tier.name,
-        'isFeatured': true,
-        'featuredUntil': Timestamp.fromDate(boostedUntil),
-      });
-    } catch (e) {
-      debugPrint('BoostService handleBoostPaymentSuccess: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> notifyBoost({
-    required String productId,
-    required String tierName,
-    String? sellerId,
-  }) async {
-    try {
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/boost/notify'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'productId': productId,
-          'tier': tierName,
-          'sellerId': sellerId ?? '',
-        }),
-      );
-    } catch (e) {
-      debugPrint('BoostService notifyBoost: $e');
-    }
-  }
-
-  static int getPriceForTier(BoostTier tier) => tier.priceTzs;
-
-  static int getDurationForTier(BoostTier tier) => tier.durationDays;
 }

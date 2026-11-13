@@ -1,0 +1,194 @@
+================================================================================
+ SOKO VIBE � ARCHITECTURE KAMILI (Frontend + Backend + Infra, E2E)
+================================================================================
+Toleo la ufafanuzi: v2.0 "Trust-Commerce" (Unified Firestore Architecture)
+Tarehe: Oktoba 2026
+Maandishi haya yanatokana na uchunguzi wa code halisi (sio mawazo).
+
+================================================================================
+ 1. MUHTASARI WA JUU (HIGH-LEVEL)
+================================================================================
+
+Soko Vibe ni marketplace ya Tanzania: Flutter app (mobile/web) + Node/Express
+server + Firebase + Redis + ClickPesa + OneSignal + Cloudflare.
+
+Trafiki hupitia mlango mmoja wa umma:
+
+  Mtumiaji (Flutter app / simu)
+        |
+        v
+  api.sokovibe.co.tz  (Cloudflare Worker = edge cache + reverse proxy)
+        |
+        v
+  soko-langu-server.onrender.com  (Render: API + Worker processes)
+        |                  |
+        |                  v
+        |            Firestore (via Store Facade)  <-- database kuu
+        |            Redis (cache + queues BullMQ)
+        v
+  Services za nje (external services):
+    - Firebase Auth / Firestore / App Check / Crashlytics / Performance
+    - ClickPesa (malipo mobile money)
+    - OneSignal (push notifications)
+    - Meseji / Notify Africa (SMS)
+    - Groq (AI assistant)
+    - Cloudinary (legacy images) + Cloudflare R2 (media mpya)
+    - Google AdMob (ad revenue)
+
+MUHIMU: System inatumia Unified Store Facade. Sawa na v1, Firestore ndio
+Source of Truth. Server src/ inatumia abstraction layer (Shim) inayoruhusu
+v2 endpoints (/api/v1/*) na v1 legacy-compat endpoints zote kufanya kazi
+juu ya Firestore bila kuhitaji SQL database.
+
+================================================================================
+ 2. TOPOLOGY KAMILI (NANI ANATUMIA NINI)
+================================================================================
+
+| Kipande            | Wapi | Kazi                                                      |
+|--------------------|------|-----------------------------------------------------------|
+| Flutter app        | client | UI, state, offline cache, local security, AI UI      |
+| GoRouter           | client | Routing + auth guards (26 auth routes, 5 admin routes)  |
+| Provider           | client | State management (auth, feed, theme, balance privacy)   |
+| Hive               | client | Offline cache (products, chat rooms, messages)           |
+| SharedPreferences  | client | Language, theme settings                               |
+| Express API       | server | Business logic, auth validation, payment orchestration  |
+| Store Facade      | server | Data abstraction (Firestore Shim)                      |
+| Firebase Admin    | server | Privileged DB access, system-owned field updates        |
+| Redis / BullMQ    | server | Caching, rate limiting, async background jobs         |
+| Cloudflare Worker | edge   | Request routing, caching, edge security               |
+
+================================================================================
+ 3. SERVER STRUCTURE (Node.js / Express)
+================================================================================
+
+3.1 Entry Point
+  - src/index.js: Inaanza Express server, inaconnect Redis, na inaanza
+    Store Facade.
+
+3.2 API Layers
+  - /api/v1/*: Modern endpoints zinatumia Services -> Store Facade.
+  - /api/* (legacy): Compat endpoints zinazohakikisha Flutter app ya zamani
+    inaendelea kufanya kazi.
+
+3.3 Store Facade (src/config/database.js)
+  - getStore() / getReadStore(): Zote zinarejesha Firestore implementation.
+  - Hii abstraction inaruhusu kubadilisha DB engine bila kubadilisha business logic.
+
+3.4 Worker (src/workers/index.js, BullMQ)
+  - Start: npm run worker.
+  - connectRedis.
+  - mediaWorker (queue 'media', concurrency 1): job 'image' (sharp) na
+    'video' (ffmpeg) � sasa ni stubs/skip kama sharp au ffmpeg hazipo.
+  - finance jobs kupitia services/finance-runner:
+      * scheduleFinanceJobs() � register repeating jobs.
+      * startFinanceWorker() � in-process worker (FINANCE_WORKER_IN_PROCESS
+        default true). Ikiwa dedicated worker imewekwa, set =false.
+  - Idempotent jobs (state-machine guards + unique keys) � overlapping
+    instances ziko safe.
+
+3.5 Finance safety-net (src/services/finance-runner.js)
+  - Auto-releases escrow baada ya ESCROW_AUTO_RELEASE_DAYS (default 14).
+  - Withdrawal auto-process (FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN 15).
+  - Withdrawal stuck detection (FINANCE_WITHDRAWAL_STUCK_HOURS 48).
+  - Reconciliation window (FINANCE_RECONCILIATION_WINDOW_HOURS 24).
+  - Dispute SLA (FINANCE_DISPUTE_SLA_HOURS 72).
+
+3.6 Authority stamps (client vs server)
+  Client haipaswi kuandika isAdmin/isSuspended/walletBalance/sellerBalance/
+  pendingEscrow/totalSales/grossSalesVolume/totalWithdrawn/isBoosted/
+  boostedUntil/boostTier/kyc � Firestore rules zinakataa (noSensitiveFieldChanges).
+  Server ndiyo mwenye mamlaka kwa financial/trust/kyc/boost fields
+  (Admin SDK). Hii ni defense against client-side tampering.
+
+================================================================================
+ 4. FIRESTORE — SOURCE OF TRUTH
+================================================================================
+
+Firebase project: sokonimoko-8c171-a8d14
+
+Collections ambapo APP INASOMA/KUANDIKA FIRESTORE MOJA KWA MOJA:
+
+  products                -> public read; create/update na seller (client!)
+                              (boost fields server-own; rating/delete server-own)
+  users                   -> profile ya mtumiaji (owner write)
+  orders                  -> lifecycle ya order (server)
+  transactions            -> malipo/transactions (server)
+  chat_rooms + messages   -> chat realtime (client + server /api/chat/send)
+  notifications           -> in-app notification list (client marks read)
+  ad_views                -> ad views (client write, server-ad owned)
+  product_analytics, boost_analytics -> analytics (client increments)
+  user_sessions           -> presence heartbeat (admin panel)
+  reviews                 -> product reviews (client)
+  reports                 -> reports (client)
+  price_drops             -> price drop requests
+  groups + messages       -> group chat
+  statuses                -> statuses (msalaa)
+
+firestore.rules (rules_version 2):
+  - helpers: isSignedIn, isOwner, isAdmin (users/{uid}.isAdmin==true),
+    notSuspended.
+  - noSensitiveFieldChanges / noSensitiveCreateFields: kukataa client kuandika
+    walletBalance, sellerBalance, pendingEscurow, totalSales, grossSalesVolume,
+    totalWithdrawn, isAdmin, isSuspended, kyc, isBoosted, boostedUntil,
+    boostTier, createdAt, lastSaleAt, lastLoginAt.
+  - products: create seller (no boost/feature/soldCount seeds; rating/
+    reviewCount lazima 0; admin anaveza); update seller au bump viewCount/
+    likedBy/rating/reviewCount/soldCount (admin).
+  - orders: participant bado hana uwezo wa kubadilisha status kupitia
+    Firestore inline — updates zinapiganwa na status state machine; update
+    hurejeshwa kwa soft-delete/shippingCost/totalAmount au admin.
+  - Catch-all deny: /{document=**} -> allow read, write false.
+
+firestore.indexes.json: 43 composite indexes (conversations, transactions,
+  flash_sales, notifications, products, orders, chat_rooms, reviews, statuses,
+  fraud_alerts, payouts, withdrawals, price_drops).
+
+Firebase Auth: phone OTP (+255), email+password, email OTP, Google Sign-In.
+  Server hu-toa custom token baada ya verify OTP (/api/v1/auth/*).
+  App Check: PlayIntegrity (prod Android), DeviceCheck (iOS).
+
+Crashlytics: error reporting (native tu). Performance: metrics (native tu).
+
+================================================================================
+ 5. REDIS — KWA KAZI GANI
+================================================================================
+  - Cache ya 2-tier: memory + Redis (src/cache.js legacy; config/redis.js v2).
+  - Rate limiting (server-side sliding window): OTP send 3/15min, search
+    20/min/IP, payouts 10/min/IP, payment initiation 10/min/IP, general
+    RATE_LIMIT_WINDOW_MS/RATE_LIMIT_MAX.
+  - Idempotency locks: ClickPesa webhook REDIS SETNX (double-spend prevention)
+    + BullMQ job-ID dedup (payment:{txn_id}) + DB unique transactionId +
+    worker status-priority guard.
+  - BullMQ queues: 'media' (image/video jobs) na finance jobs.
+  - Caching search results (search.js uses cache.setRedisClient).
+  - If Redis unreachable, everything degrades gracefully (skip).
+
+================================================================================
+ 6. CLOUDFLARE — KWA KAZI GANI (EDGE)
+================================================================================
+  - Worker as reverse proxy: Inashughulikia routing, authentication checks,
+    na caching ya static assets.
+  - Cloudflare R2: Inatumika kwa media mpya (replacement ya Cloudinary).
+
+================================================================================
+ 7. LOGS / HEALTH / OBSERVABILITY
+================================================================================
+  - /health: returns version 2.0.0, database ok, redis ok.
+  - Activity: recordApiHit (per min/hour/day/month/year, Redis).
+  - Load shedder: 503 + Retry-After kwenye overload.
+  - Crashlytics (client), logs server.log/server.err.
+  - x-soko-edge:1 kwenye edge hits.
+
+================================================================================
+ 8. MAMBO YA KUANGALIA (AINA ZA RISK ZILIZOPATIKANA)
+================================================================================
+  a) firebase_storage kwenye pubspec haitumiki — inaweza kuondolewa.
+  b) kAdsTestMode=true — test AdMob IDs ziko active kwa prod build sasa.
+  c) Cloudinary vs R2: app bado inatumia Cloudinary; R2 ni siku za usoni.
+  d) Vision AI (llama-3.2-90b) imekufa — code inarudisha ''.
+
+================================================================================
+ MWISHO — Hii ni architecture KWELI ya sasa (iliyothibitishwa kwa code).
+ Kwa maswali yoyote: angalia files zilizotajwa kwenye kila section.
+================================================================================
+

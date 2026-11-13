@@ -1,0 +1,496 @@
+# Soko Vibe — Data Domain Ownership Map (Phase A: FREEZE)
+
+> **HISTORICAL (2026 v2-era).** Everything below describes the pre-Firestore-only
+> world where "Postgres" was intended to hold v2 data. That is obsolete: the
+> `getStore()`/`getReadStore()` seam in `src/config/database.js` now resolves
+> to the Firestore store, so every module listed here (products, orders,
+> payments, wallet, referrals, notifications, reviews, kyc, search, etc.) reads
+> and writes Firestore. The retired `server/prisma/schema.prisma` was removed.
+> Treat all "Postgres" / "v2 (Postgres)" labels below as historical.
+
+Status: Phase A deliverable per MASTER_ARCHITECTURE.pdf §30.
+Last verified: September 2026 — every claim below was read from current code.
+
+## 1. Where the ring is (entry points)
+
+| Artifact | Entrypoint | Source of truth |
+|---|---|---|
+| `package.json` | `main: src/index.js` | v2 (Postgres) |
+| `npm start` / Render web | `node src/index.js` | v2 (Postgres) |
+| Render worker | `node src/workers/index.js` | v2 (Postgres/Redis) |
+| Dockerfile `CMD` | `node src/index.js` | v2 (Postgres) |
+
+`render.yaml` uses `runtime: node` + startCommand, so production boots via
+`npm start` regardless. The Dockerfile is now aligned to the same v2 entrypoint.
+
+## 2. Data domain ownership
+
+Legend: **A** = authoritative, **M** = mirror/compat (to be retired), **C** = client-owned but protected by Firestore rules.
+
+| Domain | Firestore (v1) | Postgres (v2) | Owner today | Target (blueprint) |
+|---|---|---|---|---|
+| Products catalog | **A** (client reads/writes `products`) | M (`/api/v1/products`, `Product` model) | Firestore (client) | Postgres/API (Phase B/C) |
+| Sellers/store | **A** (`users`, `sellerName`) | M (`SellerProfile`) | Firestore | Postgres/API |
+| Orders | **A** (`orders`, legacy-compat state machine) | M (`Order` model + presentation mirror) | Firestore (server) | Postgres/API |
+| Payments / transactions | **A** (`transactions` via orders-compat) | **A** (`Payment`, `PaymentAttempt`, `EscrowTransaction`, `WebhookEvent`) | Split: Firestore for app flows, Postgres for shop | Postgres/API |
+| Escrow | **A** (`orders/status` + finance jobs) | **A** (`EscrowHold`, `EscrowTransaction`) | Split | Postgres/API |
+| Wallet / ledger | — | **A** (`Wallet`, `WalletLedgerEntry`, `Withdrawal`) | Postgres | Postgres (already) |
+| Payouts | **A** (`payouts` legacy-compat) | M (`PayoutTransaction`) | Firestore (server) | Postgres/API |
+| Trust passport | **A** (`users`, trust fields) | **A** (`/api/v1/trust`) | Split | Postgres/API |
+| Chat | **A** (`chat_rooms`, `messages`) | — | Firestore (client + server moderation) | Isolated chat service (Phase E) |
+| Notifications | **A** (`notifications`, app-facing) | **A** (`Notification` model) | Split | Postgres/API |
+| Reviews | **A** (`reviews`) | — | Firestore (client) | Postgres/API (Phase D) |
+| Referrals | — | **A** (`Referral`) | Postgres | Postgres (already) |
+| Boosts | **A** (`products.isBoosted*` server-owned) | **A** (`Boost`, `Product.boosts`) | Firestore (server) | Postgres/API |
+| Moderation/reports | **A** (`reports`, moderation-compat) | **A** (`ModerationReport`) | Split | Postgres/API |
+| Feed | **A** (`products` derived) | **A** (`FeedPost`, `Like`, `Comment`, `Save`) | Split | Postgres/API |
+| Ads/Analytics | **A** (`ad_views`, `*_analytics`) | — | Firestore (client) | Postgres/API (Phase D) |
+| Media | **A** (Cloudinary URLs inside product docs) | **A** (`ProductMedia`, R2 keys) | Split: Cloudinary (client) vs R2 (server) | R2 only (Phase F) |
+| KYC / identity | **A** (`users.kyc`, server-owned) | — | Firestore (server) | Postgres/API |
+
+## 3. Server module map (`src/modules`) — verified mount status
+
+`app.js` mounts, in order:
+
+1. `/api/v1/*` — v2 modules, Postgres: auth, users/settings, sellers, orders,
+   payments, shipping, handover, wallet, disputes, refunds, media, feed,
+   search, share, trust, admin, products, referrals, moderation, reconciliation,
+   notifications.
+2. `/api` → `legacyShopRouter` — v2-backed checkout/status (Postgres) for the
+   web shop SPA, before legacy compat so Postgres wins.
+3. `/api` → `legacy-compat` mounts — **mark as compatibility, removal path exists**:
+   - payoutsRouter (`/api` + `/api/payouts`) — Firestore payouts
+   - deliveryRouter (`/api/orders`) — delivery OTP
+   - searchRouter (`/api/search`) — Firestore search
+   - notificationRouter (`/api/notification` + `/api/notifications`)
+   - featureCompatRouter (`/api`) — incl. cloudinary sign, auth, boost, kyc
+   - escrowRouter (`/api/escrow`)
+   - ordersCompatRouter (`/api`) — incl. create-marketplace-payment-link,
+     transactions/create (Firestore state machine)
+   - trustCompatRouter, moderationCompatRouter, adminCompat, adminCompatPublic
+
+## 4. Firestore rules that already enforce server authority
+
+`firestore.rules` deny client writes to: `isAdmin, isSuspended, walletBalance,
+sellerBalance, pendingEscrow, totalSales, grossSalesVolume, totalWithdrawn,
+isBoosted, boostedUntil, boostTier, kyc, createdAt, lastSaleAt, lastLoginAt`.
+Ratings/reviewCount updates are server-or-admin only for products.
+Orders catch-all: participant cannot mutate `status` inline (state machine).
+
+## 5. Phase A freeze decisions (this iteration)
+
+1. NO new client-side Firestore commerce writes may be added.
+2. New commerce flows MUST target `/api/v1/*` (Postgres).
+3. Legacy entry `server/index.js`, `orders.js`, `search.js`, `notification.js`,
+   `routes/*`, `helpers/*` remain **frozen** — bug fixes only, no new features.
+4. Dockerfile entrypoint divergence → recorded, not force-changed (rollback risk).
+5. Removal of any legacy path requires: tests + production verification +
+   rollback plan (blueprint §30-G).
+
+## 5a. API contract (§25) + Phase F media entry-point convergence (this session)
+
+1. Response envelope: every JSON response now carries `requestId`
+   (`middleware/requestId.js` echoes the caller's `x-request-id` or generates a
+   uuid and patches `res.json` — additive, never overwrites). The global 404,
+   504 timeout, error handler, `auth.js`, `validation.js` and `rateLimiter.js`
+   errors now return `{ success:false, data:null, error:<code>, code,
+   message, requestId[, details] }` via `utils/http.js jsonError`. `error`
+   intentionally stays a top-level String code so the existing Flutter/browser
+   clients that parse `body.error` keep working; `code`/`message` are the
+   structured fields for new consumers. Per-controller `serviceError`
+   helpers stay `{ error }` this pass (requestId is still added by the
+   middleware) — migrate them to `jsonError` in a follow-up before §25 is
+   fully closed.
+2. Dockerfile `CMD` now boots `node src/index.js` (v2) — the legacy Firestore
+   `index.js` is frozen compatibility and must not be booted by fresh
+   deployments (§1 divergence closed; render.yaml was already v2-correct).
+3. Media Phase F contract fix (`/api/v1/media/upload-url`): `ownerId` accepted
+   a strict uuid but is only an object-key namespace segment — sellers upload
+   media BEFORE the Product row exists (images picked first, listing submitted
+   later), so it now accepts Firebase UIDs or uuid via
+   `/^[A-Za-z0-9][A-Za-z0-9_-]*$/`. `ownerType` became an allow-list enum
+   (`product|user|seller|feed|dispute|chat`) so the R2 key namespace stays
+   clean. Client `r2_media_service.dart` fixed a compile-blocking cast typo
+   (`as Stringeli` → `as String`). `kUseMediaApi` remains OFF until the R2
+   media backfill runs in production (Phase F §30-F).
+4. Pre-existing test debt, now mostly cleared by item 17: at session start
+   `cancel-refund`, `order-state-machine`, `presentation-mirror` (DRAFT),
+   `refund-utils` (escrow-funded states) and `wallet-settle`
+   (creditLegacyBalance TypeError reading 'findFirst') failed 16 tests even
+   with the session diff reverted (verified by stashing). The state-machine
+   cluster (11 of the 16) is fixed under item 17. Remaining: `wallet-settle`
+   ×2 — `creditLegacyBalance` drives `tx.ledgerEntry` + `ledgerService.
+   updateWalletBalance` (the newer ledger abstraction), while the isolated test
+   fake only exposes legacy `walletLedgerEntry`/`wallet.update` rows. This is a
+   ledger-schema conformance item (§7), deferred to the wallet/payout converge
+   (§5 items 8, 15) — nothing in production regressed (same TypeError pre-
+   session and post).
+
+5. Lifecycle wiring caveat (B/C finding): buyer cancel/release are NOT safe to
+   flip to /api/v1/orders yet — v1 cancel rejects funds-held orders outright
+   (no ClickPesa refund yet) and v1 complete settles to the Postgres wallet
+   ledger instead of the legacy sellerBalance/ClickPesa payout. Lifecycle
+   wiring therefore depends on the wallet/payout converge (candidate 3).
+   Dispatch + dispute are flag-safe (state-compatible from IN_ESCROW).
+6. User-provisioning enabler: `auth.js` `authenticate` now auto-provisions a
+   Postgres `users` row from the Firebase record when missing (mirrors
+   legacy-shop `resolveShopBuyer`), so every /api/v1/* call works for an app
+   user who never hit the legacy buyer sync. Without this, v1 returned
+   401 USER_NOT_FOUND for those sellers and could never be wired client-side.
+7. Dispatch wiring done (client): `seller_dispatch_screen.dart` dispatch calls
+   `OrderApiClient().dispatchOrder` when `kUseOrdersApi` is on (default off);
+   legacy `/api/escrow/dispatch` remains the default. driverPhone/notes have no
+   v1 fields yet — revisited at flag flip.
+8. Wallet/payout sequencing (B/C finding): the Postgres withdrawal core already
+   exists (`wallet-service` `requestWithdrawal`/`processWithdrawal`/
+   `confirmPayout` + `/api/v1/wallet/withdrawals`). BUT app sellers' money still
+   lives in Firestore `sellerBalance` (release pays it via legacy escrow), and
+   the Postgres wallet ledger only accrues from v2 `complete`. Flipping
+   withdrawals to the v1 wallet before converging the RELEASE path would expose
+   an empty wallet — withdrawal converge must come AFTER release converge.
+9. Money-safety fix done: order settlement (`completeOrder` + handover
+   `verifyOtpAndComplete` → `releaseEscrowAndSettle`) now calls `ensureWallet(tx)`
+   from `wallet-service` instead of the old `if (wallet)` guard. Previously a
+   seller with no wallet row completed the order with the credit silently
+   skipped — money effectively lost. `requestWithdrawal` also ensures the wallet
+   (reports INSUFFICIENT_BALANCE instead of 404). Tested in
+   `wallet-settle.test.js` (idempotency + no-wallet regression).
+10. Security fix done: handover `issueOtp` returned the plaintext OTP to any
+    authenticated caller who knew the order UUID (data exposure). Now gated by
+    `assertCanIssueOtp` — only the order buyer or admin may issue; buyer-only
+    mirrors legacy Firestore OTP visibility. Tested in `handover-auth.test.js`.
+11. Wallet client bridge done: `lib/models/wallet_model.dart` +
+    `lib/services/wallet_api.dart` (fetchWallet / fetchWithdrawals /
+    requestWithdrawal) behind `ApiConfig.kUseWalletApi = false`. 10 client tests.
+    Flip order for sellers: release converge FIRST (§5 item 8), then wallet UIs,
+    then retire `/api/payouts/*` legacy reads.
+12. Dispute wiring deferred: v1 `disputeOrder` has no evidence field; the app
+    record is in Firestore and `DisputeEvidence` is R2-first (blueprint media
+    rule). Wiring app dispute to v1 today would drop evidence — leave on legacy
+    until the R2 evidence upload path lands (Phase F), then wire and retire.
+13. Release-path wire is now UNBLOCKED server-side AND client-side:
+    Server: `POST /api/v1/handover/:orderId/otp/issue` (buyer/admin-gated) +
+    `POST /api/v1/orders/:orderId/complete { otp }` (atomic settlement via
+    `verifyOtpAndComplete`); `ensureWallet` guarantees seller always receives the
+    ledger credit; `confirmCollection` already creates the `escrowHold` row for
+    app orders at payment time so the wallet settlement never silently skips.
+    Client (behind `kUseOrdersApi`): buyer's "Nimepokea" arrival action calls
+    `issueHandoverOtp` (returns 6-digit + expiry); seller's OTP form length
+    adapts to 6; seller verify posts to `completeOrder(txId, otp)`. When the
+    flag flips, legacy Firestore `delivery_otp` + `/api/orders/verify-delivery` +
+    Firestore `sellerBalance` payout stop being used for flag-on orders; money
+    flows into the Postgres wallet instead. The release flip must ship together
+    with (or immediately before) the wallet UI flip (§5 items 8, 11, §6.3) so
+    sellers can see and withdraw their earnings.
+14. Withdrawal destination phone is now captured and audited: `Withdrawal`
+    gained `phoneNumber` (`withdrawals.phone_number`,
+    per the retired schema.prisma); `requestWithdrawal` persists the phone
+    submitted in the
+    request; `processWithdrawal` pays to the stored phone via the exported
+    `withdrawalPayoutPhone(withdrawal)` helper (falls back to the seller profile
+    phone for rows created before the column existed; tested). Client: seller
+    earnings service + dashboard balance card + home-widget balance read the
+    Postgres wallet behind `kUseWalletApi`; withdrawal history maps the v1 status
+    set (pending/processing/completed) onto the legacy tile contract.
+    DEPLOY NOTE: `prisma db push`/migrate must apply the new column before
+    `kUseWalletApi` is flipped — `GET /api/v1/wallet/withdrawals` selects it.
+15. Legacy-balance cutover migration built (not yet run): a naive wallet flip
+    would hide every pre-flip Firestore `sellerBalance` — sellers would see an
+    empty wallet with no way to withdraw their old earnings. `scripts/
+    migrate-seller-balances.js` folds each seller's Firestore `sellerBalance`
+    (+ historical `totalWithdrawn` stat) into their Postgres wallet via
+    `wallet-service.creditLegacyBalance` — idempotent per-seller ledger key
+    (`LEGACY_BALANCE`, `legacy_balance_<sellerId>`). `pendingEscrow` is NOT
+    migrated on purpose: post-flip it settles through v1 `releaseEscrowAndSettle`
+    and would double-credit. Skips sellers with no SellerProfile yet (re-run
+    after they log in via v1). OPERATIONS: dry-run first, then `--commit` inside
+    the cutoff window, then flip `kUseOrdersApi` + `kUseWalletApi` together.
+    Payout pipeline verified: `finance.withdrawalProcess` (every 30 min) moves
+    PENDING → `processWithdrawal`; admin finalizes via `confirmPayout`
+    (`/api/v1/admin/...` route); stuck processing rows alert admins.
+16. Order lifecycle wired client-side (quote/dispatch + buyer release) behind
+    `kUseOrdersApi`. Quote call-sites (`seller_quote_screen`,
+    `seller_dispatch_screen._setShippingCost`,
+    `order_detail_screen._submitSellerShippingCost`) route to v1
+    `submitShippingQuote(orderId, amount)` (→ SHIPPING_FEE_SUBMITTED); seller
+    dispatch on `order_detail_screen` routes to `dispatchOrder` like the
+    existing quote-carousel wiring; buyer "Nimepokea"/confirm-receipt routes to
+    `issueHandoverOtp` because v1 escrow release is OTP-gated — the
+    seller/recipient completes with `completeOrder(otp)`, which is what settles
+    the Postgres wallet. Actually wiring the app cancel to v1 (`cancelOrder`) is
+    now viable after item 17: escrow-funded orders refund through
+    `refundOnCancel` + ClickPesa, pre-escrow orders go through the state machine
+    to CANCELLED. Cancel remains on legacy `/api/escrow/cancel` until the wallet/
+    payout converge flips together (the client cancel button only shows for
+    escrow-held orders anyway). Legacy
+    `/api/orders/transition`, `/api/orders/set-shipping-cost`, `/api/escrow/
+    dispatch`, `/api/escrow/release` remain the default while the flag is off.
+    Dispute stays deferred (§5 item 12).
+
+17. Order state machine converged to the authoritative money model (§8) and all
+    11 of its pre-existing test failures cleared. What was wrong and is now
+    fixed in `order-state-machine.js`:
+    - `ORDER_STATES` was missing states that production PERSISTS or reads:
+      `PENDING_SHIPPING_FEE`, `SHIPPING_FEE_SUBMITTED`, `SHIPPING_FEE_REVIEW`,
+      `AWAITING_ESCROW_PAYMENT`, `PAYMENT_PENDING`, `FAILED`, `IN_ESCROW`,
+      `READY_TO_DISPATCH`, `INSPECTION_PERIOD`, `OTP_PENDING`,
+      `OUT_FOR_DELIVERY`, `DELIVERY_ATTEMPTED`, `WALLET_CREDITED`. Every
+      `ORDER_STATES.X` reference in payment/shipping/refund/handover resolved to
+      `undefined` before — `machine.transition(undefined, ...)` threw at runtime
+      (e.g. shipping-quote approval, payment failure, escrow retry).
+    - The machine exposed only `transition`/`canTransition`/static
+      `getFinancialRule`/`canReleaseFunds`: added `getFinancialRule()`
+      (instance), `history` (every transition appended), static
+      `isProtectedState`, static `isValidState`, and `canonicalStatusOf` — the
+      single canonicalization point. `OrderStateMachine` now canonicalizes its
+      incoming state, so a `ready_to_dispatch` row behaves exactly like
+      `READY_TO_DISPATCH` (this was the primary runtime crash: raw legacy
+      spellings compared against uppercase constants).
+    - `isRefundableEscrowState` (refund-service) now canonicalizes its input,
+      and `order-service.cancelOrder` was implemented (the controller called it
+      but the module never exported it — every cancel 500'd). Escrow-held cancels
+      route through `refundOnCancel` (funds back to buyer via ClickPesa);
+      pre-escrow cancels move through the machine to CANCELLED. Covered by
+      rewrite of `order-state-machine.test.js` + existing `cancel-refund`/
+      `refund-utils` tests (assertions updated to the canonical uppercase
+      spellings that production writes).
+    - `LEGACY_STATUS` now has an explicit key for every canonical state (was
+      missing most money-model states — web-shop mirror fell back to 'pending'
+      for them). Suite result: 283 tests, 281 pass; the 2 remaining failures are
+      the `wallet-settle` ledger-schema item recorded in §5a item 4.
+    Remaining money-model conformance (recorded, not done): rows already in
+    Postgres written under legacy spellings still need a one-time data migration
+    to canonical values during the wallet/payout converge; `verifyPayment`
+    (order-service, legacy path) still writes ESCROW_HELD without a machine
+    transition and `payment-service.confirmCollection` uses explicit
+    PAYMENT_PROCESSING/FAILED — both already valid under the new edges.
+    Also `scripts/migrate-seller-balances.js` remains not-yet-run (§5 item 15).
+
+18. Chat Phase E isolation documented (boundary only — no re-wiring this pass).
+    Chat data stays Firestore-owned today: DM under `chat_rooms` +
+    `chat_rooms/<id>/messages`, group chat under `groups/<id>/messages`.
+    - WRITE owners (verified by grep): `lib/services/chat_service.dart` and
+      `lib/services/group_service.dart` are the ONLY app writers; the server
+      legacy shim `server/src/modules/legacy-compat/feature-compat.js` writes
+      `chat_rooms`/`messages` purely as a moderation/mirror fallback. No
+      commerce module writes chat collections.
+    - READ exception: `admin_dashboard_screen.dart:2181` reads `chat_rooms`
+      directly (admin room list). If Phase E adds richer admin chat surfaces,
+      route them through a read API instead of new direct reads.
+    - Boundary rule recorded in the two client services' class docs: any new
+      chat write goes through `ChatService`/`GroupService` so the domain stays
+      isolated behind its owner. Phase E (owned chat service + Postgres chat,
+      nearline) remains a standalone migration on top of this boundary; nothing
+      here flips live chat off Firestore.
+
+## 6. Next (Phase B) candidates, in dependency order
+
+0. Comments bridge (Phase E) — DONE, live in prod. Postgres is truth for
+   comments; Firestore mirrors for read continuity & offline fallback.
+   Server: `GET/POST /products/:id/comments`, `GET/POST /comments/:id/replies`,
+   `DELETE /comments/:id` + `/comments/:id/replies/:replyId` (author or
+   product-owner gate, soft delete, `replyCount` maintained). `Comment.targetId`
+   is now VarChar(128) (uuid columns reject opaque legacy Firestore ids) with
+   an index; `prisma db push` applied to prod. `resolveProduct` looks up by
+   Postgres uuid OR legacy Firestore doc id (legacyId arm). Replies list returns
+   a bare `data` array (client `_fetchRepliesApi` expects that); comments list
+   returns `{items,page,limit}` (client `_fetchCommentsApi` expects that).
+   `serializeComment` emits userId/userName/userImage/text/createdAt/replyCount.
+   Client (`ApiConfig.kUseCommentsApi = true`): `getComments`/`getReplies` poll
+   the API every `_pollInterval` via a type-correct `_pollStream<T>` (fetch
+   closure returns `Future<List<T>?>`, null-guard stops double-add), with
+   Firestore stream fallback when the flag is off. `addComment`/`addReply`
+   write API-first (Firestore mirror + `_notifySeller`); `deleteComment`/
+   `deleteReply` API-first with mirror cleanup + `replyCount`/`replyCount`-
+   decrement. `flutter analyze` clean. Unit tests 10/10 (comments).
+
+1. Products catalog bridge: Firestore → Postgres backfill + client switch.
+   DONE (full read-path bridge). `scripts/migrate-products.js` idempotently
+   mirrors Firestore `products` (7/7 in prod), backfills Cloudinary media into
+   `ProductMedia` (21 rows), enriches snapshots (category/subcategory, legacyId
+   = Firestore doc id, sellerId = legacy Firebase UID), and links orphaned
+   categories via legacy aliases. The v1 catalog `/api/v1/products` serves every
+   product surface behind `kUseProductsApi`/`kUseCategoriesApi`/`kUseSearchApi`:
+   home feed, discovery, featured carousel, category grid + pages, my-ads
+   (`/products/seller`, drafts included), public seller shop (`sellerId` =
+   profile id, Postgres user id, or Firebase UID), wishlist/recently-viewed
+   rehydrate (batch `ids` resolving uuid, slug, or legacyId), product detail,
+   global + AI-assistant search. `Product.fromApi` handles absolute media URLs,
+   Firestore-timestamp snapshots, and the full-snapshot list DTO. Brand pages
+   (`brand=` snapshot path probe, same exact-match semantics as the legacy
+   Firestore filter) and the category-page repository (name → categoryId, not
+   a text search) also read from Postgres. Seller writes are bridged too: the
+   add/edit/publish/unpublish/delete flows hit `/api/v1/products` first
+   (create persists the full Firestore-shape legacy metadata into snapshot —
+   images, video, wholesale tiers, variants, attributes, brand, condition,
+   location, barcode — then publish; edits merge into snapshot; delete is a
+soft delete) with a Firestore rescue fallback and an API-aware duplicate
+    gate. `Product.fromApi` round-trips the seller-hub fields from snapshot.
+    Done (B/C): every v1-created listing now gets a Firestore presentation
+    mirror at `products/{uuid}` (same pattern as the orders mirror) so the
+    client-owned consumers that key off a Firestore products doc by opaque id
+    — reviews/comments/boosts/counters, admin moderation, seller analytics,
+    deep-link reads — work for new products too. `product-mirror.js` writes
+    the legacy shape (isActive from status, sellerId = the seller's Firebase
+    UID, full snapshot metadata) on create/publish/unpublish/update/moderate
+    and removes the doc on soft delete; guarded so it no-ops without creds.
+    Remaining Firestore (off-path): flash-sale/combo discovery (FlashSale
+    objects are a client-owned collection; their products resolve via the API
+    detail path).
+2. Web Shop (`server/shop` SPA) public read path → `/api/v1` (Phase C1): DONE.
+   The shop browser surfaces now read Postgres first with Firestore degraded
+   fallback (no blank pages on API latency): home feed/pagination via
+   `GET /api/v1/products?page=&limit=24`, product detail + cache via
+   `GET /api/v1/products/:idOrSlug`, reviews via
+   `GET /api/v1/reviews/product/{snapshot.legacyId || id}` (opaque legacy
+   bucket for migrated products), public storefront (`#/store/:uid`) via
+   `GET /api/v1/products?sellerId=` with store age derived from the seller's
+   earliest product (no more `users/{uid}` read) and trust passport by the
+   seller profile id from the API `seller` block. `svProduct(raw)` in app.js
+   maps the API DTO to the flat shop shape (media r2Key → absolute URLs via
+   `https://media.sokovibe.co.tz`, boostedUntil `_seconds` timestamps, seller
+   block → sellerId/sellerPhone/sellerProfileId). Review POSTs route through
+   `POST /api/v1/reviews` (server recomputes the product rating; Firestore
+   write retained as rescue fallback only). Server side: `serializeProduct`
+   exposes `seller.sellerId` (Firebase UID) + `seller.sellerPhone` in the list
+   and detail DTOs (was missing — broke store links + review gating for
+   v1-created listings). Spec: `server/shop/spec/adapter-smoke.js` (extracts +
+   exercises the adapter block: seller flattening, R2 prefixing, legacy timestamps,
+reviews-by-legacyId). Seller hub writes bridged: add/edit save via
+    `POST /api/v1/products` (draft) → `POST /:id/publish`, `PUT /:id`, and
+    publish/unpublish (`POST /:id/publish|unpublish`) + delete (`DELETE /:id`,
+    soft delete) with a Firestore rescue on API failure; the seller product list
+    and overview stats read `GET /products/seller` (drafts included, svProduct
+    mapped); `becomeseller` also `POST /api/v1/seller/profile` so a shop-only
+    seller gets a Postgres SellerProfile (product writes require one). Live probe
+    8/8 (draft → seller list → publish → public detail/feed → soft delete → gone).
+    Checkout already routes to v2 orders (§6 money). Remaining shop Firestore
+    (Phase C2+): seller analytics/flash/boost product reads, chat, notifications
+    prefs, comments — post-milestone candidates.
+2. User profile bridge (Phase D1): DONE. App profile reads/writes go through
+   Postgres with Firestore degraded fallback behind `kUseUsersApi`:
+   `GET/PUT /api/v1/users/me` (mounted at /api/v1/users, NOT /users/settings)
+   returns the current profile in Firestore `users/{uid}` shape (displayName,
+   username, bio, phone, email, profileImage=avatar_url, location/mood/lat/lng/
+   paymentNumbers/shopBanner*/gender/dateOfBirth under `metadata.profile`,
+   `kyc.approved` from kyc_applications, langCode). Writes whitelist storefront
+   fields into columns + metadata.profile, dropping unknowns. Other users'
+   profiles read `GET /api/v1/users/public/:identifier` (Firebase UID or uuid;
+   uuid arm only when the id looks like a uuid — Postgres cast errors
+   otherwise; no email/phone/kyc leaked). Client `UserService` maps API DTOs
+   directly (`_fromApi`, ISO-8601 timestamps), falls back to Firestore, and
+   absorbs Firestore-seeded profiles (register/profile_setup write Firestore
+   directly) over blank API rows. Live probe 15/15 (me roundtrip, kyc flag,
+   public by uid, no private fields, 404 unknown). Still Firestore (Phase D2):
+   realtime presence (lastActive/activeChatRoom streams), username search,
+   batch getProfiles fallback, chat fcm tokens.
+2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
+   Done (B/C): Postgres truth → Firestore presentation mirror after every
+   money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
+   so app streams follow v2 status. Client lifecycle wiring done behind
+   `kUseOrdersApi` (§5 item 16): quote, dispatch, OTP handover + release;
+   cancel stays on legacy until v1 adds ClickPesa refund for escrow-held
+   orders; dispute stays on legacy (§5 item 12) pending R2 evidence path.
+3. Payouts → Postgres with idempotency + audit. Server core already existed
+   (`wallet-service` + `/api/v1/wallet`); this session: `ensureWallet` money-safety
+   fix on both settle paths, OTP-issue authorization, destination-phone
+   persistence + payout fallback, flag-gated client bridge (`kUseWalletApi`)
+   incl. seller earnings screen, dashboard balance card, and home-widget balance,
+   and the legacy-balance cutover migration + idempotent `creditLegacyBalance`.
+   Remaining: OPS runs the migration (§5 item 15), then the coordinated
+   release+wallet flip (§5 items 8, 13–15), then legacy `/api/payouts/*`
+   retirement.
+4. Notifications → Postgres app-facing rows: DONE. Server module
+   (`notification-service` + routes at `/api/v1/notifications`), Prisma indexes,
+   client `NotificationApiClient` + `kUseNotificationsApi` flag, screen + badge
+   wiring (badge, mark-read, mark-all, delete all route through the API in flag
+   mode; `markRelatedAsRead` no-ops with a badge refresh because v1 has no
+   "mark related" endpoint), dual-use service paths, and auth-rejection + unit
+   tests all landed. Push delivery (OneSignal) is unchanged; only the persistent
+   in-app inbox migrated. Flag stays false until production cutover.
+5. Trust passport → Postgres: DONE (client bridge). The v1 trust module
+   (`/api/v1/trust`) already existed; this session added Firebase-UID resolution
+   to `trust-passport.js` (accepts both SellerProfile.id and SellerProfile.userId,
+   so the app's order-detail sellerId — a Firebase UID — works unchanged),
+   built `TrustApiClient` + `kUseTrustApi` flag, and wired `TrustPassportCard`
+   to read /api/v1/trust/sellers/:id/passport behind the flag. 4 client unit
+   tests + 2 server auth tests. Keep the flag false until product/order backfill
+   + verification flows are live, otherwise passports show near-empty metrics.
+6. Search → Postgres: DONE (client bridge). The v1 search module
+   (`/api/v1/search/products`, `search-service.js` — ILIKE + trigram rank on
+   published products with price/category filters, category/sort/pagination)
+   already existed. `SearchService.globalSearch` now tries
+   `SearchApiClient` (`/api/v1/search/products`, new `kUseSearchApi` flag) first
+   and returns the "products" source bucket as a `SearchResponse`; on failure or
+   an empty Postgres catalog it falls back to the legacy `/api/search
+   /global-search` → Firestore path unchanged. Autocomplete, trending,
+   most-rated and record-click still use the legacy endpoints. 5 client unit
+   tests. Flag stays false until the product backfill has run, otherwise search
+   would return zero Postgres rows while Firestore still holds the catalog.
+7. Reviews → Postgres: DONE (module + client bridge). New `Review` Prisma model
+   (opaque productId/sellerId/userId refs — legacy Firestore doc ids or UIDs
+   that survive both eras — plus rating, comment, images, helpful, likedBy,
+   seller reply, verified-purchase flag; indexes on productId+createdAt,
+   sellerId, userId+productId). New `/api/v1/reviews` module (`review-service`
+   + routes): list by product (paginated), seller summary (avg + star
+   distribution), my-review lookup, upsert by (userId, productId), helpful
+   toggle, seller reply; delete-by-user intentionally absent (not in the app).
+   Client: `ReviewApiClient` + `kUseReviewsApi` flag; `ReviewService` and
+   `RatingService` reads/writes route through the API in flag mode (list reads
+   become one-shot streams because v1 is HTTP, not realtime), with Firestore as
+   the default. Self-review and invalid-rating are rejected server-side.
+   7 client unit tests + 4 server auth tests. Flag stays false until the
+product backfill has run (reviews reference product ids that only exist in
+    Firestore); the stream→poll read trade-off is acceptable inside the frozen
+    migration window.
+8. KYC → Postgres: DONE (module + client bridge). New `KycApplication` Prisma
+   model (one row per user, opaque Firebase UID as `userId` — no FK, so rows
+   exist pre-backfill and mirror the embedded `users/{uid}.kyc` doc; status
+   workflow `pending`→`approved`/`rejected`/`revoked` + delete; indexes on
+   status). New `/api/v1/kyc` module (`kyc-service` + routes): `GET
+   /status/:userId` (owner or admin), `POST /submit` (authenticated caller is
+   always the subject; upserts back to `pending`, rejects if already approved;
+   validation mirrors the legacy compat handler byte-for-byte including the
+   idType-label switch that the app's `kyc_id_*` values skip, so behavior is
+   preserved), plus an `x-admin-secret` admin router: `GET /admin/applications`
+   (status-filtered, paginated), `POST /admin/:userId/review`, `POST
+   /admin/:userId/revoke`, `DELETE /admin/:userId`. Decisions fan out best-
+   effort: Postgres `Notification` row + OneSignal + Firestore notification,
+   Firestore `users/{uid}.kyc` mirror, and `products.sellerKycApproved` re-sync
+   so the legacy admin panel and Firestore rules stay consistent while the
+   bridge is on. Client: `KycApiClient` + `kUseKycApi` flag; `KycService`
+   routes through the API in flag mode with legacy Firestore as the fallback
+   (kyc_screen unchanged — the client returns legacy-shaped maps). 5 client
+   unit tests + 6 server auth tests. Flag stays false until the users backfill/
+   `prisma db push` has created `kyc_applications` in production, otherwise
+   status reads would return 'none' while Firestore still holds the existing
+   application; the Flutter admin panel is NOT wired here yet (it stays on
+   legacy `/api/admin/kyc/*` until it adopts x-admin-secret auth). The legacy
+   panel's delete button previously 404'd (no `/api/admin/kyc/delete` existed);
+   a compat handler now resets `users/{uid}.kyc` to `status: 'none'`, re-syncs
+   `sellerKycApproved: false`, audits `kyc_deleted` and notifies the user —
+   mirroring the v1 `DELETE /admin/:userId` semantics.
+9. Phase F — Seller analytics + boost bridge (server): DONE (bridge schema
+   only; client flags stay OFF). New `seller-analytics` module behind
+   `/api/v1` (own `seller-analytics/routes.js` + `controller.js`, mounted at
+   line 290 of app.js as `app.use('/api/v1', sellerAnalyticsRouter)`): `GET
+   /sellers/:sellerId/analytics/overview` returns the Flutter
+   `SellerAnalytics.fromApi` DTO from Postgres-only aggregates (products,
+   `Product.snapshot` views, `Order` status/total split into successful/failed
+   + monthly sales/earnings buckets, `Review` rating → average/positive/
+   negative), while gender/location/age/boost-location breakdowns come back
+   empty `{}` because those were Firestore-only in the legacy fan-out �?" the
+   client keeps its Firestore fallback arm for those detail containers until
+   R2 evidence/media (Phase F R2-only) lands; `POST /boosts/:boostId/
+   impressions` and `/clicks` increment `Boost.impressions`/`Boost.clicks`
+   atomically via Prisma (2026 dynamic-counter bridge replacing the old
+   Firestore fan-out counter). Seller resolution accepts either the Postgres
+   uuid or the legacy Firestore opaque id via `Product.snapshot.legacyId`
+   fallback; boost resolution mirrors the same uuid + snapshot.legacyId arm.
+   3 server unit tests pass (routes linearize to the three Phase F paths +
+   controller exports the three handlers). Phase F client bridge
+   (`kUseSellerAnalyticsApi` / `kUseBoostsApi` in api_config.dart) is NOT
+   wired/scoped (dashboard detail containers stay Firestore-backed) so the
+   demographics regression window preferred by the roll gate stays closed;
+   schema/flag bridge lands only when the R2 evidence/media path provides the
+   remaining demographic maps.

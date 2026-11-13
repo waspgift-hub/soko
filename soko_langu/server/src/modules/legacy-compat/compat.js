@@ -1,0 +1,140 @@
+// Legacy-compat mounts: serves the proven old routers (payouts, delivery
+// OTP, search, notifications) under their ORIGINAL /api paths inside the
+// new v2 app. Zero Flutter changes needed for these flows. Firestore is the
+// same project, so data continues where it left off.
+const crypto = require('crypto');
+const admin = require('firebase-admin');
+const { getFirebaseApp, getFirebaseFirestore } = require('../../config/firebase');
+const { getRedis } = require('../../config/redis');
+const { requireUser, requireAdmin, isOwnerOrAdmin, checkSuspended } = require('./auth-helpers');
+const { sendOneSignalNotification, notifyAdmins } = require('./notify');
+
+const { azampayPayout, getPayoutFee, createPayloadChecksum } = require('../../../azampay');
+const payoutHelpers = require('../../../helpers/payouts');
+const cache = require('../../../cache');
+
+let ipRangeCheck = null;
+try {
+  ipRangeCheck = require('ip-range-check');
+} catch (_) {
+  ipRangeCheck = null;
+}
+
+// IP Whitelist is OPTIONAL defense-in-depth. AzamPay's PRIMARY webhook
+// verification mechanism is HMAC/checksum (see verifyWebhook) — not IP
+// whitelist. A missing AZAMPAY_ALLOWED_IPS skips this layer and relies
+// on HMAC instead. Set AZAMPAY_ALLOWED_IPS to a comma-separated list
+// (IPs or CIDR blocks) to add IP-level gating.
+
+function webhookIpWhitelist(req, res, next) {
+  const allowedRaw = process.env.AZAMPAY_ALLOWED_IPS;
+  if (!allowedRaw) {
+    // No whitelist configured — skip IP gating. HMAC verification
+    // (applied downstream by verifyWebhook) is the primary gate.
+    return next();
+  }
+  const clientIp = req.ip || (req.connection && req.connection.remoteAddress) || '';
+  const cleanIp = String(clientIp).replace(/^::ffff:/, '');
+  const allowed = allowedRaw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (ipRangeCheck) {
+    if (ipRangeCheck(cleanIp, allowed)) return next();
+  } else if (allowed.includes(cleanIp)) {
+    return next();
+  }
+  console.warn(`[SECURITY] Webhook from unauthorized IP: ${cleanIp}`);
+  return res.status(403).json({ error: 'IP not whitelisted' });
+}
+
+function verifyWebhook(req, res, next) {
+  const secret = process.env.AZAMPAY_CHECKSUM_KEY;
+  if (!secret) {
+    console.error('[WEBHOOK] AZAMPAY_CHECKSUM_KEY not set — rejecting webhook for security');
+    return res.status(503).json({ error: 'Webhook verification not configured' });
+  }
+  const body = req.body || {};
+  const provided = typeof body.checksum === 'string' ? body.checksum : '';
+  if (!provided) {
+    console.warn('[WEBHOOK] missing checksum — rejecting forged callback');
+    return res.status(401).json({ error: 'invalid checksum' });
+  }
+  const { checksum: _omit, checksumMethod: _omitMethod, ...rest } = body;
+  const expected = createPayloadChecksum(rest);
+  const match =
+    expected &&
+    crypto.timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
+  if (!expected || !match) {
+    console.warn('[WEBHOOK] invalid checksum — rejecting callback');
+    return res.status(401).json({ error: 'invalid checksum' });
+  }
+  next();
+}
+
+// Wire shared handles onto the Express app (delivery_otp reads req.app.locals).
+function setupCompat(app) {
+  getFirebaseApp();
+  const db = getFirebaseFirestore();
+  const redis = getRedis();
+
+  try {
+    cache.setRedisClient(redis);
+  } catch (e) {
+    console.error('[COMPAT] cache redis wiring failed:', e.message);
+  }
+
+  const { generatePayoutReference, PAYOUT_STATUSES, auditLog } = payoutHelpers({ admin, db });
+
+  Object.assign(app.locals, {
+    admin,
+    db,
+    commerceStore: require('../../services/commerce-store'),
+    redis,
+    cache,
+    requireUser,
+    sendOneSignalNotification,
+    clickpesaPayout: azampayPayout,
+    getPayoutFee,
+    generatePayoutReference,
+    PAYOUT_STATUSES,
+    auditLog,
+    checkSuspended,
+    notifyAdmins,
+  });
+
+  const payoutsFactory = require('../../../routes/payouts');
+  const { router: payoutsRouter } = payoutsFactory({
+    admin,
+    db,
+    commerceStore: require('../../services/commerce-store'),
+    requireUser,
+    requireAdmin,
+    isOwnerOrAdmin,
+    sendOneSignalNotification,
+    webhookIpWhitelist,
+    verifyWebhook,
+  });
+
+  // eslint-disable-next-line global-require
+  const deliveryRouter = require('../../../routes/delivery_otp');
+  // eslint-disable-next-line global-require
+  const { router: searchRouter } = require('../../../search');
+  // eslint-disable-next-line global-require
+  const { router: notificationRouter } = require('../../../notification');
+  // eslint-disable-next-line global-require
+  const escrowRouter = require('./escrow-compat');
+  // eslint-disable-next-line global-require
+  const codRouter = require('./cod-compat');
+  // eslint-disable-next-line global-require
+  const ordersCompatRouter = require('./orders-compat');
+  // eslint-disable-next-line global-require
+  const trustCompatRouter = require('./trust-compat');
+  // eslint-disable-next-line global-require
+  const moderationCompatRouter = require('./moderation-compat');
+  // eslint-disable-next-line global-require
+  const adminCompat = require('./admin-compat');
+  // eslint-disable-next-line global-require
+  const featureCompatRouter = require('./feature-compat')({ admin, db });
+
+  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter, codRouter, ordersCompatRouter, trustCompatRouter, moderationCompatRouter, adminCompatRouter: adminCompat, adminCompatPublic: adminCompat.publicRouter, featureCompatRouter };
+}
+
+module.exports = { setupCompat, webhookIpWhitelist, verifyWebhook };

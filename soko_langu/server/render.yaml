@@ -1,0 +1,77 @@
+# Render infrastructure for Soko Vibe server.
+#
+# Why the split:
+#   - `soko-langu-api` runs the HTTP surface (Express). Finance/media workers
+#     are OFF in-process (FINANCE_WORKER_IN_PROCESS=false) so web replicas stay
+#     request-only and scale horizontally behind the load balancer.
+#   - `soko-langu-worker` runs src/workers/index.js as its own service so heavy
+#     jobs (autorelease sweeps, image processing) never steal web capacity.
+#
+# Scale up horizontally with `replicas` (both services pull the same image).
+
+services:
+  - type: web
+    name: soko-langu-api
+    runtime: node
+    plan: starter
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: node --optimize-for-size --expose-gc src/index.js
+    healthCheckPath: /health
+    numInstances: 1
+    scaling:
+      minInstances: 1
+      maxInstances: 6
+      targetMemoryPercent: 75
+      targetCPUPercent: 70
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FINANCE_WORKER_IN_PROCESS
+        value: "false"
+      - key: PORT
+        value: "10000"
+      # Event-loop shedder switch: answers 503 + Retry-After when the loop lags
+      # past 1500ms AND heap exceeds 512MB, letting the orchestrator retarget.
+      - key: SHED_LOAD
+        value: "true"
+      # Bigger libuv threadpool: multiple instances × workers = more parallel
+      # crypto/network calls per instance (firebase-admin, ClickPesa, R2).
+      - key: UV_THREADPOOL_SIZE
+        value: "10"
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=1024"
+    disk:
+      name: tmp
+      mountPath: /tmp
+      sizeGB: 1
+    # Secrets come from the Render dashboard; do not inline them here.
+    # Dashboard checklist (both services unless noted):
+    #   - EDGE_SECRET: shared edge secret, SAME value as `wrangler secret put
+    #     EDGE_SECRET` on soko-api-edge. Lets origin rate limits key on the
+    #     real client IP (cf-connecting-ip) instead of shared Cloudflare IPs.
+    #   - ALLOWED_ORIGINS: comma-separated web origins for CORS
+    #     (e.g. https://www.sokovibe.co.tz,https://admin.sokovibe.co.tz).
+    #   - Firebase Admin credentials (service account JSON or projectId +
+    #     privateKey + clientEmail) for Firestore/Auth.
+    #   - R2_* vars + R2_PUBLIC_URL for presigned media uploads.
+    #   - CLICKPESA_* keys for payments/payouts; CRON_SECRET for cron routes;
+    #     X_ADMIN_SECRET for the legacy admin compat surface.
+    #   - YOUTUBE_API_KEY: Google Cloud browser key with YouTube Data API v3
+    #     enabled (server-side only — never ships in the app). Powers music
+    #     search; without it /api/v1/youtube/search answers 503 and the app
+    #     hides the YouTube tab gracefully.
+
+  - type: worker
+    name: soko-langu-worker
+    runtime: node
+    plan: starter
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm run worker
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FINANCE_WORKER_IN_PROCESS
+        value: "false"

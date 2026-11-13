@@ -1,0 +1,118 @@
+const { getStore } = require('../../config/database');
+const commerceStore = require('../../services/commerce-store');
+const { notifyAdmins } = require('../legacy-compat/notify');
+
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+// Ensure a seam user row exists for the Firebase identity (reporters may
+// never have touched v1 commerce endpoints before reporting).
+async function ensureUser({ firebaseUid, email, phone }) {
+  const store = getStore();
+  let user = await store.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    user = await store.user.create({
+      data: {
+        firebaseUid,
+        email: email || null,
+        phone: phone || null,
+        accountStatus: 'active',
+      },
+    });
+  }
+  return user;
+}
+
+async function submitReport({ reporterUid, reporterName, reportedUserId, reportedUserName, productId, productName, reason, description }) {
+  if (!reportedUserId || !reason || !description) {
+    throw httpError(400, 'Missing required fields');
+  }
+  const store = getStore();
+  const auth = require('firebase-admin').auth();
+
+  let email = null;
+  let phone = null;
+  try {
+    if (auth) {
+      const record = await auth.getUser(reporterUid);
+      email = record.email || null;
+      phone = record.phoneNumber || null;
+    }
+  } catch (_) {}
+
+  const reporter = await ensureUser({ firebaseUid: reporterUid, email, phone });
+
+  const report = await store.moderationReport.create({
+    data: {
+      reporterId: reporter.id,
+      targetId: reportedUserId,
+      targetType: productId ? 'product' : 'user',
+      reason: String(reason).slice(0, 50),
+      description: String(description).slice(0, 2000),
+      status: 'pending',
+    },
+  });
+
+  // Mirror to Firestore so existing admin screens keep working.
+  try {
+    await commerceStore.addDocument('reports', {
+      reporterId: reporterUid,
+      reporterName: reporterName || 'Anonymous',
+      reportedUserId,
+      reportedUserName: reportedUserName || 'Anonymous',
+      productId: productId || null,
+      productName: productName || null,
+      reason,
+      description,
+      status: 'pending',
+      adminNote: null,
+      pgReportId: report.id,
+      createdAt: commerceStore.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error('[MODERATION] firestore mirror failed:', e.message);
+  }
+
+  try {
+    await notifyAdmins(
+      'New report submitted',
+      `${reporterName || 'A user'} reported ${reportedUserName || 'a user'}. Reason: ${reason}`,
+      { type: 'report', reporterId: reporterUid, reportedUserId }
+    );
+  } catch (_) {}
+
+  return report;
+}
+
+async function listReports({ status, targetType, page = 1, limit = 20 }) {
+  const store = getStore();
+  const where = {};
+  if (status) where.status = status;
+  if (targetType) where.targetType = targetType;
+  const [items, total] = await Promise.all([
+    store.moderationReport.findMany({
+      where,
+      include: { reporter: { select: { id: true, email: true, phone: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit),
+      skip: (Number(page) - 1) * Number(limit),
+    }),
+    store.moderationReport.count({ where }),
+  ]);
+  return { items, pagination: { page: Number(page), limit: Number(limit), total } };
+}
+
+async function reviewReport({ id, status, reviewedBy }) {
+  const store = getStore();
+  const report = await store.moderationReport.findUnique({ where: { id } });
+  if (!report) throw httpError(404, 'REPORT_NOT_FOUND');
+  return store.moderationReport.update({
+    where: { id },
+    data: { status, reviewedBy, reviewedAt: new Date() },
+  });
+}
+
+module.exports = { submitReport, listReports, reviewReport };

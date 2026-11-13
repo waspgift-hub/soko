@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/follow_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
@@ -99,15 +102,15 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
             height: 56,
             color: Theme.of(context).colorScheme.outlineVariant,
             child: product.images.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: product.images.first, fit: BoxFit.cover)
+                ? ProductCachedImage(
+                    url: product.images.first, fit: BoxFit.cover)
                 : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
         title: Text(product.name,
             style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
-          'TSh ${product.price.toStringAsFixed(0)} | Stock: ${product.stock}',
+          'TSh ${product.price.toStringAsFixed(0)} | ${context.tr('stock', 'Stock')}: ${product.stock}',
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
         ),
         trailing: Radio<String>(
@@ -348,6 +351,12 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
           endTime: _endTime,
         );
         _flashSaleService.notifyFlashSale(sale);
+        unawaited(FollowService().notifyFollowers(
+          ownerId: user.uid,
+          title: context.tr('flash_sale_new', 'Flash sale'),
+          body: _selectedProduct!.name,
+          data: {'type': 'flash_sale', 'flashSaleId': flashSaleId, 'productId': _selectedProduct!.id},
+        ));
       }
 
       if (mounted) {

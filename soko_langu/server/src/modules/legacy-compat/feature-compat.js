@@ -1,0 +1,2294 @@
+// Feature-compat router: verbatim ports of the old-server endpoints the Flutter
+// app still calls (KYC, chat send, boost, flash sales, cloudinary signing, SMS,
+// statements, analytics, misc wallet/auth helpers) under their ORIGINAL /api
+// paths. Firestore is the same project, so data continues where it left off.
+//
+// Any money-affecting logic here is copied 1:1 from the proven legacy monolith
+// (server/index.js); nothing is invented. Deviations are limited to:
+//   - sendOneSignalBulk skips per-user preference gating (compat philosophy:
+//     delivery only, gating lives in the old server);
+//   - failStalePendingBoosts applies the LEGACY success path only for `boost`
+//     transactions (mark completed + activate product) instead of the full
+//     applyClickPesaPayment router, which is already served by the deployed v1
+//     webhook handlers. The pending transaction stays recoverable on the next
+//     run if ClickPesa later confirms success.
+// eslint-disable-next-line global-require
+const express = require('express');
+const crypto = require('crypto');
+const axios = require('axios');
+const admin = require('firebase-admin');
+
+const { requireUser, requireAdmin, isOwnerOrAdmin } = require('./auth-helpers');
+const { sendOneSignalNotification, notifyAdmins } = require('./notify');
+const { verifyAdminSecret } = require('../../../middlewares/security');
+const {
+  azampayCollect,
+  azampayPaymentStatus,
+  azampayCreateBillPayOrder,
+  calcGatewayFee,
+} = require('../../../azampay');
+const { localizeNotif, localizeDefaultReason, smsSafeForGateway } = require('../../../notif_lang');
+const { parseFlashSaleEndTime, isFlashSaleStillActive } = require('../../../money');
+const cache = require('../../../cache');
+const config = require('../../config');
+const commerceStore = require('../../services/commerce-store');
+
+// ─── Legacy constants (server/index.js) ─────────────────────────────────
+const BOOST_TIERS = {
+  bronze: { price: 1500, days: 3 },
+  silver: { price: 3000, days: 7 },
+  gold: { price: 10000, days: 30 },
+};
+
+// Statuses where money really came in (single source of truth for every
+// place a transaction is counted as a payment).
+const PAID_STATUSES = new Set([
+  'escrow_hold',
+  'paid_escrow_hold',
+  'paid_escrow_held',
+  'dispatched',
+  'delivered',
+  'delivery_confirmed',
+  'confirmed',
+  'completed',
+  'refunded',
+]);
+
+// Statuses where the escrow has actually been released to the seller. Escrow
+// hold statuses are NOT credits: money is still in pendingEscrow until release.
+const SELLER_CREDIT_STATUSES = new Set(['delivered', 'delivery_confirmed', 'completed']);
+
+/**
+ * Resolve the acting user for a token-authenticated route.
+ *
+ * The verified ID token is the only authority on identity, so `decoded.uid`
+ * wins. Older app builds additionally echoed `userId` in the request body; a
+ * *different* value is a forgery attempt and is still refused, but its absence
+ * is not an error. Requiring the echo broke every boost purchase at commit
+ * 81fb4f4 (the client dropped the field, the guard kept demanding it, and the
+ * route answered 403 "User ID mismatch" before any payment was attempted).
+ */
+function resolveRequestIdentity(decoded, claimedUserId) {
+  const uid = decoded && decoded.uid;
+  if (!uid) return { ok: false };
+  if (claimedUserId && claimedUserId !== uid) return { ok: false };
+  return { ok: true, userId: uid };
+}
+
+const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
+const notifLangCache = new Map();
+
+// ─── Notification helpers (ported from server/index.js) ────────────────
+async function getUserNotifLang(db, userId) {
+  const cached = notifLangCache.get(`notif_lang:${userId}`);
+  if (cached) return cached;
+  try {
+    const user = await commerceStore.getDocument('users', userId, { db });
+    const lang = user?.langCode || 'sw';
+    notifLangCache.set(`notif_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
+    return lang;
+  } catch (e) {
+    console.error(`[OS] lang lookup failed for ${userId}: ${e.message}`);
+    return 'sw';
+  }
+}
+
+// SMS language is a SEPARATE preference (smsLangCode) from the in-app language.
+async function getUserSmsLang(db, userId) {
+  const cached = notifLangCache.get(`sms_lang:${userId}`);
+  if (cached) return cached;
+  try {
+    const user = await commerceStore.getDocument('users', userId, { db });
+    const lang = user?.smsLangCode || user?.langCode || 'sw';
+    notifLangCache.set(`sms_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
+    return lang;
+  } catch (e) {
+    console.error(`[SMS] lang lookup failed for ${userId}: ${e.message}`);
+    return 'sw';
+  }
+}
+
+const NOTIFY_SMS_BASE = config.sms.notifyAfricaBaseUrl;
+
+function toInternational(phone) {
+  const d = String(phone).replace(/\D/g, '');
+  return d.startsWith('0') ? '255' + d.slice(1) : d;
+}
+
+// Sends via Notify Africa; returns false if not configured or the send failed.
+async function notifyAfricaSms(phone, message) {
+  const apiKey = process.env.NOTIFY_AFRICA_SMS_API_KEY;
+  const senderId = process.env.NOTIFY_AFRICA_SENDER_ID;
+  if (!apiKey || !senderId) {
+    console.error('notifyAfricaSms: missing NOTIFY_AFRICA_SMS_API_KEY / NOTIFY_AFRICA_SENDER_ID');
+    return false;
+  }
+  try {
+    const resp = await axios.post(`${NOTIFY_SMS_BASE}/api/v1/api/messages/send`, {
+      phone_number: toInternational(phone),
+      message,
+      sender_id: senderId,
+    }, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
+    const data = resp.data || {};
+    const ok = data.status === 200 || (data.data && data.data.messageId);
+    console.log(`notifyAfricaSms: ok to ${toInternational(phone)} msgId=${data.data?.messageId || ''} status=${data.data?.status || data.status || ''}`);
+    return ok;
+  } catch (e) {
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`notifyAfricaSms error: ${errBody}`);
+    return false;
+  }
+}
+
+async function sendSms(phone, message) {
+  try {
+    const apiKey = process.env.MESEJI_API_KEY;
+    if (apiKey) {
+      const digits = phone.replace(/\D/g, '');
+      // Meseji expects `contacts` as a single local-format STRING; the array
+      // form fails with `finalContacts.split is not a function` (verified live).
+      const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+      const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+      const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+      for (const sender of senders) {
+        try {
+          const resp = await axios.post(config.sms.mesejiBaseUrl, {
+            sender_id: sender,
+            message,
+            contacts: local,
+          }, {
+            headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+            timeout: 15000,
+          });
+          console.log(`sendSms: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+          return true;
+        } catch (e) {
+          const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+          console.error(`sendSms: sender ${sender} error: ${errBody}`);
+        }
+      }
+    }
+    if (await notifyAfricaSms(phone, message)) return true;
+    console.error('sendSms: no SMS provider delivered (Meseji or Notify Africa)');
+    return false;
+  } catch (e) {
+    console.error('sendSms error:', e.message);
+    return false;
+  }
+}
+
+// Resolves the recipient's language and localizes the Swahili SMS template.
+async function sendLocalizedSms(db, phone, swMessage, userId) {
+  const lang = userId ? await getUserSmsLang(db, userId) : 'sw';
+  return sendSms(phone, smsSafeForGateway(lang, swMessage));
+}
+
+async function notifyBoostPaymentFailed(db, tx, reason = '') {
+  try {
+    if (!tx || !tx.userId) return;
+    // The gateway may pass an English default; project it to the user's
+    // language so the boost-failure message stays a single language.
+    const reasonLang = await getUserNotifLang(db, tx.userId);
+    const reasonText = reason ? `. Sababu: ${localizeDefaultReason(reasonLang, reason)}` : '';
+    const title = 'Malipo ya Boost Yameshindikana';
+    const body = `Boost ya ${tx.productName || 'bidhaa yako'} haikukamilika${reasonText}. Jaribu tena kwenye app.`;
+    await commerceStore.addDocument("notifications", {
+      userId: tx.userId,
+      title,
+      body,
+      isRead: false,
+      type: 'boost',
+      data: { type: 'boost', status: 'failed', productId: tx.productId || '' },
+      createdAt: commerceStore.serverTimestamp(),
+    });
+    await sendOneSignalNotification(tx.userId, title, body, { type: 'boost', status: 'failed', productId: tx.productId || '' });
+    const user = await commerceStore.getDocument("users", tx.userId);
+    const phone = user?.phone || tx.buyerPhone || '';
+    if (phone) {
+      const amount = tx.totalAmount || tx.amount || 0;
+      const msg = `Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
+      await sendLocalizedSms(db, phone, msg, tx.userId);
+    } else {
+      console.error(`notifyBoostPaymentFailed: no phone for user ${tx.userId} (tx ${tx.buyerPhone || 'none'}) — SMS skipped`);
+    }
+  } catch (e) {
+    console.error('notifyBoostPaymentFailed error:', e.message);
+  }
+}
+
+function notifTypeToChannel(type) {
+  switch (type) {
+    case 'chat': return 'soko_chat';
+    case 'order': return 'soko_orders';
+    case 'payment': return 'soko_orders';
+    case 'boost': return 'soko_boost';
+    case 'flash_sale': return 'soko_general';
+    case 'escrow_auto_release': return 'soko_orders';
+    case 'kyc': return 'soko_general';
+    default: return 'soko_general';
+  }
+}
+
+async function sendOneSignalBulk(db, userIds, title, body, data = {}) {
+  if (!userIds || userIds.length === 0) return { successCount: 0 };
+  const appId = config.onesignal.appId;
+  const apiKey = config.onesignal.apiKey;
+  if (!appId || !apiKey) {
+    console.error('[OS] Missing config');
+    return { successCount: 0 };
+  }
+  const notifType = (data && data.type) || 'general';
+  let successCount = 0;
+  const batchSize = 2000;
+  for (let i = 0; i < userIds.length; i += batchSize) {
+    const chunk = userIds.slice(i, i + batchSize);
+    try {
+      const resp = await axios.post(`${config.onesignal.baseUrl}/notifications`, {
+        app_id: appId,
+        include_external_user_ids: chunk,
+        channel_for_external_user_ids: 'push',
+        headings: { en: title || '', sw: title || '' },
+        contents: { en: body || '', sw: body || '' },
+        data: { ...(data || {}), type: notifType },
+        priority: 10, android_priority: 'high', android_visibility: 1,
+        existing_android_channel_id: notifTypeToChannel(notifType),
+        android_sound: 'soko_notification',
+        android_icon: 'ic_notification',
+      }, {
+        headers: { Authorization: `Basic ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout: 20000,
+      });
+      const result = resp.data || {};
+      if (result.id) {
+        successCount += result.recipients || chunk.length;
+        console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients ?? chunk.length}`);
+      } else {
+        console.error('[OS] bulk send failed:', JSON.stringify(result));
+      }
+    } catch (err) {
+      console.error('[OS] bulk send error:', err.response?.data ? JSON.stringify(err.response.data) : err.message);
+    }
+  }
+  return { successCount };
+}
+
+// ─── Cron helpers (ported from server/index.js) ────────────────────────
+async function releaseExpiredEscrows(db) {
+  const summary = { released: 0, blocked: 0, skipped: 0, errored: 0, processed: 0 };
+  if (!db) return summary;
+  try {
+    const now = admin.firestore.Timestamp.now();
+    const expired = await db.collection('transactions')
+      .where('status', 'in', ['escrow_hold', 'dispatched'])
+      .where('escrowExpiresAt', '<=', now)
+      .limit(20)
+      .get();
+
+    // Ledger-backed release only. This cron predates the canonical escrow
+    // service and used to increment `sellerBalance` directly, which could pay
+    // out a disputed hold and left no immutable ledger row. Delegating keeps
+    // the endpoint working while routing every payout through `autoRelease()`:
+    // holding-only, dispute-aware, idempotent.
+    const { autoRelease } = require('../disputes/auto-release-service');
+
+    for (const doc of expired.docs) {
+      const tx = doc.data() || {};
+      const orderId = tx.orderId || doc.id;
+      summary.processed += 1;
+      try {
+        const result = await autoRelease({ orderId, triggeredBy: 'cron.release-escrows' });
+        if (result && result.status === 'AUTO_RELEASED') summary.released += 1;
+        else if (result && result.status === 'BLOCKED') summary.blocked += 1;
+        else summary.skipped += 1;
+      } catch (e) {
+        summary.errored += 1;
+        console.error('[CRON] autoRelease', orderId, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('Auto-release escrow error:', e);
+  }
+  return summary;
+}
+
+// Maps raw AzamPay status rows to 'success' | 'failed' | '' (still pending/unknown).
+function azamPayStatusFrom(resp, orderId) {
+  let rows = [];
+  if (resp && Array.isArray(resp.data)) rows = resp.data;
+  else if (Array.isArray(resp)) rows = resp;
+  else if (resp && resp.data && Array.isArray(resp.data.rows)) rows = resp.data.rows;
+  const match = rows.find((r) => (r.orderReference || r.order_id || r.externalId || '') === orderId) || rows[0] || {};
+  const raw = String(match.status || match.paymentStatus || resp?.status || '').toLowerCase();
+  if (/success|settled|completed|payment_received|paid/.test(raw)) return 'success';
+  if (/fail|cancel|expire|reject|declin|error/.test(raw)) return 'failed';
+  return '';
+}
+
+// Extracts the human-readable failure reason from GET /payments/{orderReference}.
+function azamPayFailureReasonFrom(resp, orderId) {
+  let rows = [];
+  if (resp && Array.isArray(resp.data)) rows = resp.data;
+  else if (Array.isArray(resp)) rows = resp;
+  else if (resp && resp.data && Array.isArray(resp.data.rows)) rows = resp.data.rows;
+  const match = rows.find((r) => (r.orderReference || r.order_id || r.externalId || '') === orderId) || rows[0] || {};
+  return String(match.message || match.failureMessage || match.error || resp?.message || '').trim();
+}
+
+// Legacy success path for a CONFIRMED boost payment: skip if already
+// finalized, otherwise atomically mark the transaction completed AND activate
+// the product boost (the exact applyClickPesaPayment boost branch). On a batch
+// failure the transaction stays pending so the next run can retry — the same
+// recovery the poller gives the full router.
+async function boostPaymentSuccess(db, orderId) {
+  const tx = await commerceStore.getDocument("transactions", orderId);
+  if (!tx) return;
+  if (tx.status === 'completed' || tx.status === 'escrow_hold') return;
+
+  const tier = tx.tier || 'bronze';
+  const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
+  const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+  const batch = db.batch();
+  batch.update(db.collection('transactions').doc(orderId), {
+    status: 'completed',
+    completedAt: commerceStore.serverTimestamp(),
+  });
+  if (tx.productId) {
+    batch.update(db.collection('products').doc(tx.productId), {
+      isBoosted: true,
+      boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+      boostTier: tier,
+      isFeatured: true,
+      featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+    });
+  }
+  try {
+    await batch.commit();
+    console.log(`[Boost] Atomic batch committed for ${orderId}`);
+  } catch (batchErr) {
+    console.error(`[Boost] Batch commit failed for ${orderId}:`, batchErr.message);
+  }
+}
+
+async function failStalePendingBoosts(db) {
+  if (!db) return;
+  try {
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+    const snap = await db.collection('transactions')
+      .where('type', '==', 'boost')
+      .where('status', '==', 'pending')
+      .where('paymentMethod', '==', 'ussd_push')
+      .limit(50)
+      .get();
+    for (const doc of snap.docs) {
+      const tx = doc.data();
+      const createdAt = tx.createdAt?.toDate?.() || new Date(0);
+      if (createdAt.getTime() > cutoff.getTime()) continue;
+      if (tx.status !== 'pending') continue;
+
+      // Ask AzamPay for the real outcome before deciding to time out.
+      let azStatus = '';
+      let azFailureReason = '';
+      try {
+        const resp = await azampayPaymentStatus(doc.id);
+        azStatus = azamPayStatusFrom(resp, doc.id);
+        azFailureReason = azamPayFailureReasonFrom(resp, doc.id);
+      } catch (_) {
+        // Status API unreachable — fall through and let the poller keep trying.
+      }
+
+      if (azStatus === 'success') {
+        // Payment actually completed — apply it instead of failing.
+        await boostPaymentSuccess(db, doc.id);
+        continue;
+      }
+      if (azStatus === 'failed') {
+        const reason = azFailureReason || 'Malipo ya ussd yameshindikana';
+        await doc.ref.update({
+          status: 'failed',
+          failureReason: reason,
+          completedAt: commerceStore.serverTimestamp(),
+        });
+        await notifyBoostPaymentFailed(db, tx, reason);
+        continue;
+      }
+
+      // Still unresolved (pending/unknown) and past the session window → timeout.
+      const reason = 'muda wa malipo umeisha';
+      await doc.ref.update({
+        status: 'failed',
+        failureReason: reason,
+        completedAt: commerceStore.serverTimestamp(),
+      });
+      await notifyBoostPaymentFailed(db, tx, reason);
+    }
+  } catch (e) {
+    console.error('failStalePendingBoosts error:', e.message);
+  }
+}
+
+// ─── Router ─────────────────────────────────────────────────────────────
+function createFeatureCompatRouter({ admin: fbAdmin, db }) {
+  const A = fbAdmin || admin;
+
+  function verifyToken(header) {
+    return require('firebase-admin').auth().verifyIdToken(String(header || '').replace('Bearer ', '').trim());
+  }
+
+  const router = express.Router();
+
+  // ─── AUTH — check-phone / check-email (Firestore semantics, not Prisma) ─
+  router.post('/auth/check-phone', async (req, res) => {
+    try {
+      const { phone } = req.body;
+      if (!phone) return res.status(400).json({ error: 'Phone is required' });
+
+      const cleanPhone = phone.replace(/\D/g, '');
+      const users = await commerceStore.listDocuments('users', {
+        where: [
+          { field: 'phone', op: 'in', value: [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`] }
+        ],
+        limit: 1,
+        db
+      });
+
+      res.json({ exists: users.length > 0 });
+    } catch (e) {
+      console.error('/api/auth/check-phone error:', e.message);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/auth/check-email', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email is required' });
+
+      const users = await commerceStore.listDocuments('users', {
+        where: [
+          { field: 'email', op: '==', value: email.trim().toLowerCase() }
+        ],
+        limit: 1,
+        db
+      });
+
+      let exists = users.length > 0;
+      if (!exists) {
+        try {
+          await require('firebase-admin').auth().getUserByEmail(email.trim().toLowerCase());
+          exists = true;
+        } catch (_) {}
+      }
+
+      res.json({ exists });
+    } catch (e) {
+      console.error('/api/auth/check-email error:', e.message);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── SMS — send via Meseji (falls back to Notify Africa) ──────────────
+  router.post('/sms/send', async (req, res) => {
+    try {
+      const auth = await requireUser(req, res);
+      if (!auth.ok) return;
+      const { phone, message } = req.body;
+      if (!phone || !message) {
+        return res.status(400).json({ error: 'Missing phone or message' });
+      }
+      const apiKey = process.env.MESEJI_API_KEY;
+      if (apiKey) {
+        const digits = phone.replace(/\D/g, '');
+        const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+        const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+        const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+        for (const sender of senders) {
+          try {
+            const resp = await axios.post(config.sms.mesejiBaseUrl, {
+              sender_id: sender,
+              message,
+              contacts: local,
+            }, {
+              headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+              timeout: 15000,
+            });
+            console.log(`/api/sms/send: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+            return res.json({ sent: true, provider: 'meseji', sender, batchId: resp.data?.batch_id || null });
+          } catch (e) {
+            const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+            console.error(`/api/sms/send: sender ${sender} error: ${errBody}`);
+          }
+        }
+      }
+      if (await notifyAfricaSms(phone, message)) {
+        return res.json({ sent: true, provider: 'notify_africa' });
+      }
+      console.error('/api/sms/send: no SMS provider delivered (Meseji or Notify Africa)');
+      return res.status(502).json({ error: 'SMS provider error' });
+    } catch (e) {
+      console.error('/api/sms/send error:', e.message);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── NOTIFICATIONS — send one-off (in-app + push) ─────────────────────
+  router.post('/send-notification', async (req, res) => {
+    try {
+      const auth = await requireUser(req, res);
+      if (!auth.ok) return;
+      const { userId, title, body, data } = req.body;
+      if (!userId || !title) {
+        return res.status(400).json({ error: 'Missing userId or title' });
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      await commerceStore.addDocument('notifications', {
+        userId,
+        title,
+        body: body || '',
+        data: data || {},
+        isRead: false,
+        createdAt: commerceStore.serverTimestamp(),
+      }, { db });
+
+
+      const notifType = data && data.type;
+      await sendOneSignalNotification(userId, title, body || '', { ...(data || {}), type: notifType || 'general' });
+
+      res.json({ sent: true });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── KYC — submit / status ────────────────────────────────────────────
+  router.post('/kyc/submit', async (req, res) => {
+    try {
+      // Auth FIRST — never reveal field requirements to anonymous callers.
+      const {
+        userId, fullName, firstName, middleName, lastName,
+        idType, idNumber, idImageUrl, selfieUrl,
+        dateOfBirth, address, phone, email, shopVideoUrl,
+      } = req.body || {};
+      if (!(await isOwnerOrAdmin(req, res, userId || ''))) return;
+      if (!userId || !fullName || !idType || !idNumber) {
+        return res.status(400).json({ error: 'Missing required KYC fields' });
+      }
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const existing = user.kyc;
+      if (existing && existing.status === 'approved') {
+        return res.status(400).json({ error: 'KYC already approved' });
+      }
+
+      // Auto-validate KYC fields. New requirements (three names, DOB, address,
+      // phone, email, shop video) surface in reviewNotes rather than hard-fail:
+      // this handler also serves the web-shop form, which still posts the
+      // legacy payload — the admin sees what is missing and reviews accordingly.
+      // The v1 /api/v1/kyc/submit path is the one that hard-gates on the fee.
+      const errors = [];
+      const nameParts = fullName.trim().split(/\s+/);
+      if (nameParts.length < 2) errors.push('Jina kamili linahitaji angalau majina mawili');
+      if (!idImageUrl) errors.push('Picha ya pasipoti haijapakiwa');
+      if (!selfieUrl) errors.push('Selfie haijapakiwa');
+      if (!shopVideoUrl) errors.push('Video ya duka haijapakiwa');
+      if (!dateOfBirth) errors.push('Tarehe ya kuzaliwa inahitajika');
+      if (!address) errors.push('Anwani inahitajika');
+      if (!phone) errors.push('Namba ya simu inahitajika');
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email))) errors.push('Barua pepe halali inahitajika');
+
+      // TODO: Integrate NIDA API for real-time National ID verification
+      // TODO: Integrate Face Matching microservice (e.g. AWS Rekognition)
+
+      // Validate ID number format based on type
+      const cleanId = idNumber.replace(/\s/g, '');
+      switch (idType) {
+        case 'National ID':
+          if (!/^\d{20}$/.test(cleanId)) errors.push('Namba ya National ID inatakiwa kuwa na tarakimu 20');
+          break;
+        case 'Passport':
+          if (cleanId.length < 6) errors.push('Namba ya Passport inatakiwa kuwa na angalau herufi 6');
+          break;
+        case 'Drivers License':
+          if (cleanId.length < 6) errors.push('Namba ya Drivers License inatakiwa kuwa na angalau herufi 6');
+          break;
+        case 'Voters ID':
+          if (cleanId.length < 6) errors.push('Namba ya Voters ID inatakiwa kuwa na angalau herufi 6');
+          break;
+      }
+
+      const status = 'pending';
+      const reason = errors.length > 0 ? errors.join('; ') : 'Inahitaji ukaguzi wa admin';
+
+      // Attach the one-time fee receipt when the seller already paid (via the
+      // v1 /api/v1/kyc/fee/initiate flow). Not hard-required here — see above.
+      let feeAmount = 0;
+      let feeReference = '';
+      let feePaidAt = null;
+      try {
+        const feeSnap = await db.collection('transactions')
+          .where('type', '==', 'kyc_fee')
+          .where('userId', '==', userId)
+          .where('status', '==', 'completed')
+          .limit(1)
+          .get();
+        if (!feeSnap.empty) {
+          const feeTx = feeSnap.docs[0];
+          feeAmount = feeTx.data().amount || 15000;
+          feeReference = feeTx.id;
+          feePaidAt = feeTx.data().completedAt || commerceStore.serverTimestamp();
+        }
+      } catch (_) {}
+
+      await commerceStore.updateDocument("users", userId, {
+        kyc: {
+          fullName,
+          firstName: (firstName || '').trim().slice(0, 100),
+          middleName: (middleName || '').trim().slice(0, 100),
+          lastName: (lastName || '').trim().slice(0, 100),
+          idType,
+          idNumber: cleanId,
+          idImageUrl: idImageUrl || '',
+          selfieUrl: selfieUrl || '',
+          dateOfBirth: /^\d{4}-\d{2}-\d{2}$/.test(String(dateOfBirth || '')) ? dateOfBirth : '',
+          address: (address || '').trim().slice(0, 500),
+          phone: (phone || '').trim().slice(0, 30),
+          email: (email || '').trim().slice(0, 200),
+          shopVideoUrl: shopVideoUrl || '',
+          feeAmount,
+          feeReference,
+          feePaidAt,
+          status,
+          approved: false,
+          reviewNotes: reason,
+          submittedAt: commerceStore.serverTimestamp(),
+          reviewedAt: null,
+        },
+      });
+
+      // Notify admin about new KYC submission
+      const adminSnap = await db.collection('users').where('isAdmin', '==', true).limit(5).get();
+      for (const adminDoc of adminSnap.docs) {
+        await commerceStore.addDocument('notifications', {
+          userId: adminDoc.id,
+          title: 'KYC Mpya Imewasilishwa',
+          body: `${fullName} ametuma KYC yake. Tafadhali kagua.`,
+          isRead: false,
+          createdAt: commerceStore.serverTimestamp(),
+          data: { type: 'kyc_review', userId },
+        }, { db });
+
+        await sendOneSignalNotification(adminDoc.id, 'KYC Mpya Imewasilishwa', `${fullName} ametuma KYC yake. Tafadhali kagua.`, { type: 'kyc', userId }).catch(() => {});
+      }
+
+      // Notify user
+      await commerceStore.addDocument("notifications", {
+        userId,
+        title: 'KYC Imewasilishwa',
+        body: 'KYC yako imewasilishwa. Subiri ukaguzi wa admin. Utapata taarifa ikikubaliwa.',
+        isRead: false,
+        createdAt: commerceStore.serverTimestamp(),
+      });
+
+      res.json({
+        success: true,
+        approved: false,
+        reason,
+        message: 'KYC imewasilishwa. Subiri ukaguzi wa admin.',
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.get('/kyc/status/:userId', async (req, res) => {
+    try {
+      const auth = await requireUser(req, res);
+      if (!auth.ok) return;
+      const { userId } = req.params;
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      // Only the owner (or an admin) may read KYC documents.
+      if (auth.uid !== userId) {
+        const adminAuth = await requireAdmin(req, res);
+        if (!adminAuth.ok) return;
+      }
+
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const kyc = user.kyc || { status: 'none' };
+      res.json({ kyc });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── CHAT — send message via REST ─────────────────────────────────────
+  router.post('/chat/send', async (req, res) => {
+    try {
+      const { senderId, receiverId, roomId, text, productId, productName, replyTo, replyToContent, replyToSender, clientMessageId } = req.body;
+      if (!senderId || !receiverId || !roomId || !text) {
+        return res.status(400).json({ error: 'Missing required fields (senderId, receiverId, roomId, text)' });
+      }
+      // Offline-first idempotency: a retried send carries the same
+      // clientMessageId, so return the original instead of duplicating.
+      if (clientMessageId) {
+        try {
+          const users = await commerceStore.listDocuments('chat_rooms/' + roomId + '/messages', {
+            where: [{ field: 'client_message_id', op: '==', value: clientMessageId }],
+            limit: 1,
+          });
+          if (users.length > 0) {
+            return res.json({ success: true, messageId: users[0].id, duplicate: true });
+          }
+        } catch (_) {}
+      }
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const authHeader = req.headers['authorization'];
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      let decoded;
+      try {
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+      } catch {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+      if (decoded.uid !== senderId) {
+        return res.status(403).json({ error: 'Sender ID mismatch' });
+      }
+
+      const senderDoc = await commerceStore.getDocument("users", senderId);
+      if (senderDoc && senderDoc.isSuspended === true) {
+        return res.status(403).json({ error: 'Account suspended' });
+      }
+
+      const roomDoc = await commerceStore.getDocument('chat_rooms', roomId);
+      if (!roomDoc) {
+        return res.status(404).json({ error: 'Chat room not found' });
+      }
+      const room = roomDoc;
+      if (!room.participants.includes(senderId)) {
+        return res.status(403).json({ error: 'You are not a participant in this room' });
+      }
+
+      // Write message to Firestore
+      const messageId = await commerceStore.addDocument('chat_rooms/' + roomId + '/messages', {
+        sender_id: senderId,
+        receiver_id: receiverId,
+        text,
+        timestamp: commerceStore.serverTimestamp(),
+        is_read: false,
+        is_delivered: true,
+        ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+        ...(productId ? { product_id: productId } : {}),
+        ...(productName ? { product_name: productName } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(replyToContent ? { reply_to_content: replyToContent } : {}),
+        ...(replyToSender ? { reply_to_sender: replyToSender } : {}),
+      });
+
+      // Update room metadata
+      await commerceStore.updateDocument('chat_rooms', roomId, {
+        last_message: text,
+        last_timestamp: commerceStore.serverTimestamp(),
+      });
+
+      // Presence-aware delivery: a recipient currently viewing this exact
+      // conversation (activeChatRoom === roomId) sees the message live, so we
+      // skip the unread bump, push, and in-app banner. If they are in the app
+      // elsewhere (fresh lastActive) we still bump unread + in-app badge but
+      // skip the disruptive heads-up push.
+      const RECEIVER_FRESH_MS = 2 * 60 * 1000;
+      const senderName = senderDoc
+        ? (senderDoc.displayName || senderDoc.name || 'Mtumiaji')
+        : 'Mtumiaji';
+      let receiverActiveHere = false;
+      let receiverFresh = false;
+      let receiverData = null;
+      let receiverRoomId = null;
+      try {
+        const receiverDoc = await commerceStore.getDocument("users", receiverId);
+        if (receiverDoc) {
+          receiverData = receiverDoc;
+          receiverRoomId = receiverData.activeChatRoom || null;
+          const lastActive = receiverData.lastActive;
+          if (lastActive && typeof lastActive.toMillis === 'function') {
+            receiverFresh = Date.now() - lastActive.toMillis() < RECEIVER_FRESH_MS;
+          }
+        }
+      } catch (_) {}
+      receiverActiveHere = receiverRoomId === roomId && receiverFresh;
+
+      if (!receiverActiveHere) {
+        try {
+          await commerceStore.updateDocument('chat_rooms', roomId, {
+            [`unread_counts.${receiverId}`]: commerceStore.increment(1),
+          });
+          const legacyField = receiverData?.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
+          await commerceStore.updateDocument('chat_rooms', roomId, {
+            [legacyField]: commerceStore.increment(1),
+          });
+        } catch (_) {}
+      }
+
+      if (!receiverActiveHere && !receiverFresh) {
+        try {
+          await sendOneSignalNotification(receiverId, senderName, text, { type: 'chat', senderId, senderName, roomId });
+        } catch (_) {}
+      }
+
+      if (!receiverActiveHere) {
+        try {
+          await commerceStore.addDocument('notifications', {
+            userId: receiverId,
+            title: senderName,
+            body: text,
+            type: 'chat',
+            data: { senderId, senderName, roomId },
+            isRead: false,
+            createdAt: commerceStore.serverTimestamp(),
+          });
+
+        } catch (_) {}
+      }
+
+      res.json({ success: true, messageId: messageId });
+    } catch (e) {
+      console.error('/api/chat/send error:', e);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── BOOST — hyped product placement (ClickPesa flow) ─────────────────
+  router.post('/boost-product', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+      let decoded;
+      try { decoded = await require('firebase-admin').auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
+      const { productId, tier, amount, durationDays, phone, productName, productImage, productPrice, paymentMethod } = req.body;
+      const identity = resolveRequestIdentity(decoded, req.body.userId);
+      if (!identity.ok) {
+        return res.status(403).json({ error: 'User ID mismatch' });
+      }
+      const { userId } = identity;
+
+      // Cancel stale pending boosts for same user+product so they don't get stuck
+      if (db && userId && productId) {
+        const staleSnap = await db.collection('transactions')
+          .where('type', '==', 'boost')
+          .where('productId', '==', productId)
+          .where('userId', '==', userId)
+          .where('status', '==', 'pending')
+          .get();
+        if (!staleSnap.empty) {
+          const now = Date.now();
+          const PENDING_TIMEOUT = 5 * 60 * 1000;
+          for (const doc of staleSnap.docs) {
+            const data = doc.data();
+            const createdAt = data.createdAt?.toDate?.()?.getTime?.() || 0;
+            const reason = createdAt > 0 && (now - createdAt) > PENDING_TIMEOUT
+              ? 'auto-cancelled (stale)'
+              : 'superseded by new boost';
+            await doc.ref.update({
+              status: 'failed',
+              cancelledAt: commerceStore.serverTimestamp(),
+              cancelReason: reason,
+            });
+          }
+        }
+      }
+      if (!productId || !tier || !phone) {
+        return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
+      }
+
+      if (db) {
+        const product = await db.collection('products').doc(String(productId)).get();
+        if (!product.exists) {
+          return res.status(404).json({ error: 'Product not found' });
+        }
+        const productData = product.data() || {};
+        const ownerId = String(
+          productData.userId || productData.sellerId || productData.ownerId || ''
+        );
+        if (ownerId && ownerId !== userId) {
+          return res.status(403).json({ error: 'Not product owner' });
+        }
+      }
+
+      // Normalize phone to 255 format
+      const phoneDigits = phone.replace(/\D/g, '');
+      const normalizedPhone = phoneDigits.startsWith('0')
+        ? '255' + phoneDigits.substring(1)
+        : phoneDigits.startsWith('255')
+          ? phoneDigits
+          : '255' + phoneDigits;
+
+      const tierConfig = BOOST_TIERS[tier];
+      if (!tierConfig) {
+        return res.status(400).json({ error: 'Invalid boost tier' });
+      }
+
+      // BillPay fee (1%) is deducted from the collected amount, so we add it on top.
+      // USSD Push fee is charged to the customer by ClickPesa on top, so we send the
+      // real tier price (never pre-added) to avoid charging the processing fee twice.
+      const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
+      const gatewayFee = calcGatewayFee(isBillPay ? 'billpay' : 'ussd_push', tierConfig.price, req.body.provider);
+      const totalToCollect = isBillPay ? tierConfig.price + gatewayFee : tierConfig.price;
+
+      const order_id = `boost${Date.now()}`;
+
+      if (isBillPay) {
+        const billResult = await azampayCreateBillPayOrder({
+          billAmount: totalToCollect,
+          billDescription: `Soko Vibe boost: ${tier} - ${productName || 'Product'}`,
+          billPaymentMode: 'EXACT',
+          billReference: order_id,
+        });
+
+        if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+          const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+          return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+        }
+
+        const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+        const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
+
+        if (db) {
+          await commerceStore.setDocument("transactions", order_id, {
+            type: 'boost',
+            productId,
+            productName: productName || '',
+            productImage: productImage || '',
+            productPrice: productPrice || 0,
+            tier: tier.toLowerCase(),
+            amount: tierConfig.price,
+            gatewayFee,
+            totalAmount: totalToCollect,
+            durationDays: tierConfig.days,
+            userId: userId || '',
+            buyerId: userId || '',
+            buyerName: userId || '',
+            buyerPhone: normalizedPhone,
+            sellerName: 'Soko Vibe',
+            billPayNumber,
+            clickpesaReference: clickpesaRef,
+            status: 'pending',
+            paymentMethod: 'BillPay',
+            createdAt: commerceStore.serverTimestamp(),
+          });
+        }
+
+        res.json({
+          order_id,
+          amount: tierConfig.price,
+          gatewayFee,
+          totalAmount: totalToCollect,
+          billPayNumber,
+          clickpesaReference: clickpesaRef,
+          message: `BillPay control number: ${billPayNumber}. Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalToCollect.toLocaleString()} > PIN.`,
+        });
+      } else {
+        // USSD Push flow (async — return immediately)
+        if (db) {
+          await commerceStore.setDocument("transactions", order_id, {
+            type: 'boost', productId, productName: productName || '',
+            productImage: productImage || '', productPrice: productPrice || 0,
+            tier: tier.toLowerCase(), amount: tierConfig.price, gatewayFee,
+            totalAmount: totalToCollect, durationDays: tierConfig.days,
+            userId: userId || '', buyerId: userId || '', buyerName: userId || '',
+            buyerPhone: normalizedPhone, sellerName: 'Soko Vibe',
+            status: 'pending', paymentMethod: paymentMethod || 'ussd_push',
+            createdAt: commerceStore.serverTimestamp(),
+          });
+        }
+
+        // Central webhook config: never derive the callback from the request host.
+        azampayCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.azampay.collectionWebhookUrl })
+          .then((result) => {
+            const ref = result?.id || result?.orderReference || '';
+            if (!ref) { console.error(`[USSD] Boost AzamPay no ref for ${order_id}`); return; }
+            return commerceStore.updateDocument("transactions", order_id, { clickpesaReference: ref, ussdSent: true });
+          })
+          .then(() => console.log(`[USSD] Boost push sent for ${order_id}`))
+          .catch((err) => {
+            console.error(`[USSD] Boost AzamPay error:`, err?.response?.data || err.message);
+            const reason = err?.response?.data?.message || err?.message || 'USSD push haikufika';
+            commerceStore.getDocument("transactions", order_id).then(tx => {
+              if (!tx) return;
+              return commerceStore.updateDocument("transactions", order_id, {
+                status: 'failed',
+                ussdFailed: true,
+                failureReason: reason,
+                completedAt: commerceStore.serverTimestamp(),
+              }).then(() => notifyBoostPaymentFailed(db, tx, reason));
+            }).catch(() => {});
+          });
+
+        res.json({
+          order_id, amount: tierConfig.price, gatewayFee, totalAmount: totalToCollect,
+          message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()}). Ada ya AzamPay inaongezwa kwenye malipo yako. Tuma PIN yako kwenye simu.`,
+        });
+      }
+    } catch (e) {
+      console.error('/api/boost-product error:', e?.message || e);
+      const msg = e?.message?.includes('AzamPay') ? e.message : 'Internal server error';
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // ─── SELLER — balance ─────────────────────────────────────────────────
+  router.get('/seller/balance', async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId) return res.status(400).json({ error: 'Missing userId' });
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!(await isOwnerOrAdmin(req, res, userId))) return;
+
+      const user = await commerceStore.getDocument('users', userId, { db });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      res.json({
+        sellerBalance: user.sellerBalance || 0,
+        totalSales: user.totalSales || 0,
+        grossSalesVolume: user.grossSalesVolume || 0,
+        phone: user.phone || '',
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── SELLER — analytics ───────────────────────────────────────────────
+  router.get('/seller-analytics/:sellerId', async (req, res) => {
+    try {
+      const { sellerId } = req.params;
+      if (!sellerId) return res.status(400).json({ error: 'sellerId required' });
+
+      const authHeader = req.headers['authorization'];
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      let decoded;
+      try {
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+      } catch {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (decoded.uid !== sellerId) {
+        const caller = await commerceStore.getDocument("users", decoded.uid);
+        if (!caller || !caller.isAdmin) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const analyticsCacheKey = `seller-analytics:${sellerId}`;
+      const cachedAnalytics = await cache.get(analyticsCacheKey);
+      if (cachedAnalytics) return res.json(cachedAnalytics);
+
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Products & Views
+      const productsSnap = await db.collection('products')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      const totalProducts = productsSnap.docs.length;
+      let totalProductViews = 0;
+      const genderBreakdown = {};
+      const locationBreakdown = {};
+      const ageBreakdown = {};
+      let boostImpressions = 0;
+      const boostLocationBreakdown = {};
+      const topProducts = [];
+
+      for (const productDoc of productsSnap.docs) {
+        const pid = productDoc.id;
+        const pData = productDoc.data();
+        totalProductViews += (pData.viewCount || 0);
+
+        const viewsSnap = await db.collection('product_analytics').doc(pid).collection('views').get();
+        const boostSnap = await db.collection('boost_analytics').doc(pid).collection('impressions').get();
+        const prodLocBreakdown = {};
+
+        for (const vDoc of viewsSnap.docs) {
+          const v = vDoc.data();
+          if (v.gender) genderBreakdown[v.gender] = (genderBreakdown[v.gender] || 0) + 1;
+          if (v.location) {
+            locationBreakdown[v.location] = (locationBreakdown[v.location] || 0) + 1;
+            prodLocBreakdown[v.location] = (prodLocBreakdown[v.location] || 0) + 1;
+          }
+          if (v.age != null) {
+            const age = v.age;
+            const group = age < 18 ? 'Under 18' : age < 25 ? '18-24' : age < 35 ? '25-34' : age < 50 ? '35-49' : '50+';
+            ageBreakdown[group] = (ageBreakdown[group] || 0) + 1;
+          }
+        }
+
+        boostImpressions += boostSnap.docs.length;
+        for (const bDoc of boostSnap.docs) {
+          const loc = bDoc.data().location || 'unknown';
+          boostLocationBreakdown[loc] = (boostLocationBreakdown[loc] || 0) + 1;
+        }
+
+        topProducts.push({
+          productId: pid,
+          productName: pData.name || 'Bidhaa',
+          productImage: Array.isArray(pData.images) ? pData.images[0] : (pData.image || null),
+          viewCount: viewsSnap.docs.length,
+          locationBreakdown: prodLocBreakdown,
+        });
+      }
+
+      topProducts.sort((a, b) => b.viewCount - a.viewCount);
+
+      // Transactions & Order Stats
+      const txSnap = await db.collection('transactions')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      let totalOrders = 0, successfulOrders = 0, failedOrders = 0;
+      let totalTransactions = 0, successfulTransactions = 0, failedTransactions = 0;
+      let monthlyEarnings = 0;
+      const completedStatuses = PAID_STATUSES;
+      const monthlySales = [];
+
+      for (let i = 0; i < 12; i++) {
+        const m = new Date(now.getFullYear(), (now.getMonth() - 11 + i + 12) % 12, 1);
+        monthlySales.push({ date: m.toISOString(), count: 0 });
+      }
+
+      for (const doc of txSnap.docs) {
+        const d = doc.data();
+        totalOrders++;
+        totalTransactions++;
+        const status = d.status || '';
+        const amount = d.totalAmount || 0;
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+
+        // Only count earnings/orders once the escrow is released to the seller.
+        const escrowReleasedToSeller = d.escrowReleased === true || SELLER_CREDIT_STATUSES.has(status);
+        if (completedStatuses.has(status) && escrowReleasedToSeller && status !== 'refunded') {
+          successfulOrders++;
+          successfulTransactions++;
+          if (createdAt && createdAt >= monthStart) {
+            monthlyEarnings += (typeof amount === 'number' ? amount : 0);
+          }
+          if (createdAt) {
+            for (let i = 0; i < monthlySales.length; i++) {
+              const saleMonth = new Date(monthlySales[i].date);
+              if (createdAt.getMonth() === saleMonth.getMonth() && createdAt.getFullYear() === saleMonth.getFullYear()) {
+                monthlySales[i].count++;
+                break;
+              }
+            }
+          }
+        } else if (status === 'failed' || status === 'refunded') {
+          failedOrders++;
+          failedTransactions++;
+        }
+      }
+
+      // Reviews
+      const reviewSnap = await db.collection('reviews')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      let totalReviews = 0, positiveReviews = 0, negativeReviews = 0;
+      let totalRating = 0;
+      for (const doc of reviewSnap.docs) {
+        totalReviews++;
+        const rating = doc.data().rating || 0;
+        totalRating += rating;
+        if (rating >= 4) positiveReviews++;
+        if (rating <= 2) negativeReviews++;
+      }
+      const averageRating = totalReviews > 0 ? totalRating / totalReviews : 0;
+
+      const analyticsResult = {
+        success: true,
+        sellerId,
+        totalProducts,
+        totalProductViews,
+        genderBreakdown,
+        locationBreakdown,
+        ageBreakdown,
+        boostImpressions,
+        boostLocationBreakdown,
+        monthlyEarnings,
+        totalOrders,
+        successfulOrders,
+        failedOrders,
+        totalTransactions,
+        successfulTransactions,
+        failedTransactions,
+        averageRating,
+        totalReviews,
+        positiveReviews,
+        negativeReviews,
+        lastUpdated: now.toISOString(),
+        topProducts: topProducts.slice(0, 10),
+        monthlySales,
+      };
+      await cache.set(analyticsCacheKey, analyticsResult, 60_000);
+      res.json(analyticsResult);
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── SELLER STATEMENT — bank-statement-style financial report ─────────
+  router.get('/seller-statement/:sellerId', async (req, res) => {
+    try {
+      const { sellerId } = req.params;
+      if (!sellerId) return res.status(400).json({ error: 'sellerId required' });
+
+      const authHeader = req.headers['authorization'];
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      let decoded;
+      try {
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+      } catch {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (decoded.uid !== sellerId) {
+        const caller = await commerceStore.getDocument("users", decoded.uid);
+        if (!caller || !caller.isAdmin) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const sellerData = await commerceStore.getDocument("users", sellerId);
+      if (!sellerData) return res.status(404).json({ error: 'Seller not found' });
+      const sellerName = sellerData.businessName || sellerData.name || sellerData.displayName || 'Muuzaji';
+      const sellerPhone = sellerData.phone || sellerData.phoneNumber || '';
+      const sellerEmail = sellerData.email || '';
+      const sellerLocation = sellerData.location || '';
+
+      // Single-field queries only — composite (sellerId, createdAt) index is not
+      // guaranteed on production, so filter + sort in memory instead.
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+      const txSnap = await db.collection('transactions')
+        .where('sellerId', '==', sellerId)
+        .get();
+      const txDocs = txSnap.docs.filter((doc) => {
+        const createdAt = doc.data().createdAt;
+        const t = createdAt ? (createdAt.toDate ? createdAt.toDate() : new Date(createdAt)) : null;
+        return t != null && t >= twelveMonthsAgo;
+      });
+
+      const paidStatuses = PAID_STATUSES;
+      const entries = [];
+      let runningBalance = 0;
+
+      for (const doc of txDocs) {
+        const d = doc.data();
+        const status = d.status || '';
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        const amount = d.sellerReceives || d.totalAmount || 0;
+        const commission = d.platformCommission || d.platformFee || 0;
+        const buyerName = d.buyerName || d.buyerPhone || 'Mnunuzi';
+        const productName = d.productName || 'Bidhaa';
+
+        // Only count a sale as credit once the escrow has been released to the
+        // seller. escrow_hold / dispatched are still held in pendingEscrow.
+        const escrowReleasedToSeller = d.escrowReleased === true || SELLER_CREDIT_STATUSES.has(status);
+        if (paidStatuses.has(status) && escrowReleasedToSeller && status !== 'refunded') {
+          runningBalance += amount;
+          entries.push({
+            type: 'credit',
+            date: createdAt ? createdAt.toISOString() : null,
+            description: `Uuzaji: ${productName} - ${buyerName}`,
+            grossAmount: amount,
+            commission: commission,
+            netAmount: amount - commission,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'completed',
+          });
+        }
+      }
+
+      // Payouts/withdrawals for this seller (last 12 months)
+      const withdrawSnap = await db.collection('withdrawals')
+        .where('userId', '==', sellerId)
+        .get();
+      const withdrawDocs = withdrawSnap.docs.filter((doc) => {
+        const createdAt = doc.data().createdAt;
+        const t = createdAt ? (createdAt.toDate ? createdAt.toDate() : new Date(createdAt)) : null;
+        return t != null && t >= twelveMonthsAgo;
+      });
+
+      for (const doc of withdrawDocs) {
+        const d = doc.data();
+        const status = d.status || '';
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        const amount = d.netAmount || d.amount || 0;
+
+        if (status === 'completed') {
+          runningBalance -= amount;
+          entries.push({
+            type: 'debit',
+            date: createdAt ? createdAt.toISOString() : null,
+            description: `Utoaji wa pesa: TSh ${amount.toLocaleString()}`,
+            grossAmount: amount,
+            commission: 0,
+            netAmount: amount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'completed',
+          });
+        }
+      }
+
+      // Refunds (money taken back from seller for failed orders)
+      for (const doc of txDocs) {
+        const d = doc.data();
+        const status = d.status || '';
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        const amount = d.totalAmount || 0;
+
+        if (status === 'refunded') {
+          runningBalance -= amount;
+          entries.push({
+            type: 'debit',
+            date: createdAt ? createdAt.toISOString() : null,
+            description: `Marejesho: ${d.productName || 'Bidhaa'} - agizo limeghairiwa`,
+            grossAmount: amount,
+            commission: 0,
+            netAmount: amount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'refunded',
+          });
+        }
+      }
+
+      // Sort all entries by date
+      entries.sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return -1;
+        if (!b.date) return 1;
+        return new Date(a.date) - new Date(b.date);
+      });
+
+      // Recalculate running balance chronologically
+      let balance = 0;
+      for (const entry of entries) {
+        if (entry.type === 'credit') balance += entry.netAmount;
+        else balance -= entry.netAmount;
+        entry.runningBalance = balance;
+      }
+
+      const totalCredits = entries.filter(e => e.type === 'credit').reduce((s, e) => s + e.netAmount, 0);
+      const totalDebits = entries.filter(e => e.type === 'debit').reduce((s, e) => s + e.netAmount, 0);
+
+      res.json({
+        success: true,
+        statementTitle: 'Soko Vibe Seller Statement',
+        generatedAt: new Date().toISOString(),
+        seller: {
+          sellerId,
+          name: sellerName,
+          phone: sellerPhone,
+          email: sellerEmail,
+          location: sellerLocation,
+        },
+        summary: {
+          totalCredits: Math.round(totalCredits * 100) / 100,
+          totalDebits: Math.round(totalDebits * 100) / 100,
+          currentBalance: Math.round(balance * 100) / 100,
+          totalTransactions: entries.length,
+        },
+        entries,
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── BUYER STATEMENT — buyer's payments + refunds, running balance ────
+  router.get('/buyer-statement/:buyerId', async (req, res) => {
+    try {
+      const { buyerId } = req.params;
+      if (!buyerId) return res.status(400).json({ error: 'buyerId required' });
+
+      const authHeader = req.headers['authorization'];
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      let decoded;
+      try {
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+      } catch {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (decoded.uid !== buyerId) {
+        const caller = await commerceStore.getDocument("users", decoded.uid);
+        if (!caller || !caller.isAdmin) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const buyerData = await commerceStore.getDocument("users", buyerId);
+      if (!buyerData) return res.status(404).json({ error: 'Buyer not found' });
+      const buyerName = buyerData.name || buyerData.displayName || 'Mnunuzi';
+      const buyerPhone = buyerData.phone || buyerData.phoneNumber || '';
+      const buyerEmail = buyerData.email || '';
+      const buyerLocation = buyerData.location || '';
+
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+      const txSnap = await db.collection('transactions')
+        .where('buyerId', '==', buyerId)
+        .get();
+      const txDocs = txSnap.docs.filter((doc) => {
+        const createdAt = doc.data().createdAt;
+        const t = createdAt ? (createdAt.toDate ? createdAt.toDate() : new Date(createdAt)) : null;
+        return t != null && t >= twelveMonthsAgo;
+      });
+
+      // Payments made by the buyer (money out). 'paid' is intentionally
+      // excluded: it is set client-side the moment a USSD push is sent, BEFORE
+      // payment is actually confirmed.
+      const paidStatuses = PAID_STATUSES;
+      const entries = [];
+      let runningBalance = 0;
+
+      for (const doc of txDocs) {
+        const d = doc.data();
+        const status = d.status || '';
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        const totalAmount = d.totalAmount || 0;
+        const sellerName = d.sellerName || 'Muuzaji';
+        const productName = d.productName || 'Bidhaa';
+
+        if (paidStatuses.has(status)) {
+          runningBalance -= totalAmount;
+          entries.push({
+            type: 'debit',
+            date: createdAt ? createdAt.toISOString() : null,
+            description: `Malipo: ${productName} - ${sellerName}`,
+            grossAmount: totalAmount,
+            commission: 0,
+            netAmount: totalAmount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status,
+          });
+        }
+
+        // Only a genuinely refunded order adds money back. A 'failed' order was
+        // never paid, so crediting it would fabricate income in the statement.
+        if (status === 'refunded') {
+          const refundAmount = d.refundAmount || d.totalAmount || 0;
+          if (refundAmount > 0) {
+            runningBalance += refundAmount;
+            entries.push({
+              type: 'credit',
+              date: createdAt ? createdAt.toISOString() : null,
+              description: `Marejesho: ${productName} - pesa zimerudishwa`,
+              grossAmount: refundAmount,
+              commission: 0,
+              netAmount: refundAmount,
+              runningBalance: runningBalance,
+              transactionId: doc.id,
+              status: 'refunded',
+            });
+          }
+        }
+      }
+
+      // Wallet deposits (money added to the buyer's wallet) — money IN, so they
+      // are credits. Only counted once ClickPesa confirms ('completed').
+      const depositSnap = await db.collection('deposits')
+        .where('userId', '==', buyerId)
+        .get();
+      for (const doc of depositSnap.docs) {
+        const d = doc.data();
+        if (d.status !== 'completed') continue;
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        if (createdAt && createdAt >= twelveMonthsAgo) {
+          const amount = d.amount || 0;
+          runningBalance += amount;
+          entries.push({
+            type: 'credit',
+            date: createdAt.toISOString(),
+            description: `Uwekaji wa fedha: ${d.paymentMethod === 'BillPay' ? 'BillPay' : 'Mobile Money'}`,
+            grossAmount: amount,
+            commission: 0,
+            netAmount: amount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'completed',
+          });
+        }
+      }
+
+      // Legacy wallet_transactions records (if ever written by older builds).
+      const walletSnap = await db.collection('wallet_transactions')
+        .where('userId', '==', buyerId)
+        .get();
+      for (const doc of walletSnap.docs) {
+        const d = doc.data();
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        if (createdAt && createdAt >= twelveMonthsAgo) {
+          const amount = d.amount || 0;
+          const type = d.type || '';
+          if (type === 'deposit' || type === 'refund') {
+            runningBalance += amount;
+            entries.push({
+              type: 'credit',
+              date: createdAt.toISOString(),
+              description: `Tapo la pochi: ${d.description || ''}`,
+              grossAmount: amount,
+              commission: 0,
+              netAmount: amount,
+              runningBalance: runningBalance,
+              transactionId: doc.id,
+              status: 'completed',
+            });
+          }
+        }
+      }
+
+      // Sort all entries by date
+      entries.sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return -1;
+        if (!b.date) return 1;
+        return new Date(a.date) - new Date(b.date);
+      });
+
+      // Recalculate running balance chronologically
+      let balance = 0;
+      for (const entry of entries) {
+        if (entry.type === 'credit') balance += entry.netAmount;
+        else balance -= entry.netAmount;
+        entry.runningBalance = balance;
+      }
+
+      const totalCredits = entries.filter(e => e.type === 'credit').reduce((s, e) => s + e.netAmount, 0);
+      const totalDebits = entries.filter(e => e.type === 'debit').reduce((s, e) => s + e.netAmount, 0);
+
+      res.json({
+        success: true,
+        statementTitle: 'Soko Vibe Buyer Statement',
+        generatedAt: new Date().toISOString(),
+        buyer: {
+          buyerId,
+          name: buyerName,
+          phone: buyerPhone,
+          email: buyerEmail,
+          location: buyerLocation,
+        },
+        summary: {
+          totalCredits: Math.round(totalCredits * 100) / 100,
+          totalDebits: Math.round(totalDebits * 100) / 100,
+          currentBalance: Math.round(balance * 100) / 100,
+          totalTransactions: entries.length,
+        },
+        entries,
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── CLOUDINARY — upload signing + delete (server-only auth) ──────────
+  router.post('/cloudinary/sign', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Missing or invalid token' });
+      }
+      const token = authHeader.split(' ')[1];
+      try {
+        await require('firebase-admin').auth().verifyIdToken(token);
+      } catch {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (!apiKey || !apiSecret) {
+        return res.status(500).json({ error: 'Cloudinary not configured on server' });
+      }
+
+      const cloudName = 'dgbsohnl4';
+      const folder = req.body.folder || 'soko_langu';
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      const params = { folder, timestamp };
+      const sortedKeys = Object.keys(params).sort();
+      const signatureStr = sortedKeys.map(k => `${k}=${params[k]}`).join('&') + apiSecret;
+      const signature = crypto.createHash('sha256').update(signatureStr).digest('hex');
+
+      res.json({ signature, timestamp, apiKey, cloudName });
+    } catch (e) {
+      console.error('Cloudinary sign error:', e);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/cloudinary/delete', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Missing or invalid token' });
+      }
+      let decoded;
+      try {
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.split(' ')[1]);
+      } catch {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (!apiKey || !apiSecret) {
+        return res.status(500).json({ error: 'Cloudinary not configured on server' });
+      }
+
+      const { imageUrl } = req.body;
+      if (!imageUrl || !/res\.cloudinary\.com/.test(imageUrl)) {
+        return res.json({ success: false, skipped: true });
+      }
+      const match = imageUrl.match(/\/v\d+\/(.+)\.\w+$/);
+      if (!match) return res.json({ success: false, skipped: true });
+      const publicId = match[1];
+
+      // BOLA guard: only the owner of the CURRENT profile image may delete it.
+      // The client retires the old avatar BEFORE updating the doc, so a match
+      // here proves ownership — every other URL (including guessed or scraped
+      // asset URLs in the shared Cloudinary account) is rejected.
+      try {
+        const current = await commerceStore.getDocument("users", decoded.uid);
+        if (!current || current.profileImage !== imageUrl) {
+          return res.json({ success: false, skipped: true });
+        }
+      } catch {
+        return res.json({ success: false, skipped: true });
+      }
+
+      const resp = await axios.post(
+        config.cloudinary.destroyUrl,
+        new URLSearchParams({
+          public_id: publicId,
+          timestamp: String(Math.floor(Date.now() / 1000)),
+        }),
+        {
+          auth: { username: apiKey, password: apiSecret },
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          timeout: 15000,
+        },
+      );
+      const result = resp.data || {};
+      if (result.result === 'ok' || result.result === 'not found') {
+        res.json({ success: true, publicId, result: result.result });
+      } else {
+        res.status(502).json({ error: `Cloudinary delete failed: ${result.result}` });
+      }
+    } catch (e) {
+      console.error('Cloudinary delete error:', e.message);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── ADMIN — one-off broadcast to all users (in-app + OneSignal) ──────
+  router.post('/admin/broadcast-notification', async (req, res) => {
+    try {
+      const auth = await requireAdmin(req, res);
+      if (!auth.ok) return;
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const { title, body } = req.body;
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+
+      // Get all active user IDs
+      const usersSnap = await db.collection('users').get();
+      const userIds = usersSnap.docs.map(doc => doc.id).filter(Boolean);
+
+      if (userIds.length === 0) {
+        return res.json({ success: true, message: 'No users to notify', sentCount: 0 });
+      }
+
+      // Admin broadcast always delivers (compat bulk sender has no prefs gate).
+      const pushResult = await sendOneSignalBulk(db, userIds, title, body || '', {
+        type: 'system',
+        broadcast: 'true',
+      });
+
+      // Save in-app notification for each user (batch of 500)
+      let notifCount = 0;
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+        const batch = db.batch();
+        const chunk = userIds.slice(i, i + BATCH_SIZE);
+        for (const uid of chunk) {
+          const notifRef = db.collection('notifications').doc();
+          batch.set(notifRef, {
+            userId: uid,
+            title: title,
+            body: body || '',
+            data: { type: 'system', broadcast: 'true' },
+            isRead: false,
+            createdAt: commerceStore.serverTimestamp(),
+          });
+          notifCount++;
+        }
+        await batch.commit();
+      }
+
+      console.log(`[Broadcast] Sent to ${userIds.length} users, notifications saved: ${notifCount}`);
+
+      res.json({
+        success: true,
+        message: `Notification sent to ${userIds.length} users`,
+        totalUsers: userIds.length,
+        pushNotifications: pushResult.successCount || 0,
+        inAppNotifications: notifCount,
+      });
+    } catch (e) {
+      console.error('[Broadcast] Error:', e);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── CRON — release expired escrows + fail stale boosts ───────────────
+  router.post('/cron/release-escrows', async (req, res) => {
+    try {
+      const secret = req.headers['x-cron-secret'];
+      if (!verifyAdminSecret(secret)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const summary = await releaseExpiredEscrows(db);
+      await failStalePendingBoosts(db);
+      res.json({ success: true, message: 'Escrow release triggered', data: summary });
+    } catch (e) {
+      console.error('Cron release-escrows error:', e);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── STATS — monitoring snapshot (admin) ──────────────────────────────
+  router.get('/stats', async (req, res) => {
+    try {
+      const auth = await requireAdmin(req, res);
+      if (!auth.ok) return;
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const [txSnap, pendingKycSnap, userSnap] = await Promise.all([
+        db.collection('transactions').where('status', '==', 'escrow_hold').count().get(),
+        db.collection('users').where('kyc.status', '==', 'pending').count().get(),
+        db.collection('users').count().get(),
+      ]);
+
+      res.json({
+        activeEscrows: txSnap.data().count,
+        pendingKyc: pendingKycSnap.data().count,
+        totalUsers: userSnap.data().count,
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ─── FLASH SALES — create / scan / notify / deactivate / delete ───────
+  router.post('/flash-sale/create', async (req, res) => {
+    try {
+      const authHeader = req.headers['authorization'];
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      let decoded;
+      try {
+        decoded = await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+      } catch {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+
+      const {
+        productId, productName, productImage, originalPrice, salePrice,
+        discountPercent, sellerId, sellerName, sellerPhone, location,
+        stock, startTime, endTime,
+      } = req.body;
+
+      if (!productId || !sellerId || !productName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      if (decoded.uid !== sellerId) {
+        return res.status(403).json({ error: 'Seller ID does not match authenticated user' });
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      // Check if user is suspended
+      const seller = await commerceStore.getDocument("users", sellerId);
+      if (seller && seller.isSuspended === true) {
+        return res.status(403).json({ error: 'Account suspended' });
+      }
+
+      // Prevent duplicate active flash sales for the same product.
+      const existing = await db.collection('flash_sales')
+        .where('productId', '==', productId)
+        .where('isActive', '==', true)
+        .get();
+      const now = new Date();
+      let hasActive = false;
+      const deactivateBatch = db.batch();
+      let batchCount = 0;
+      existing.docs.forEach(doc => {
+        const data = doc.data();
+        if (isFlashSaleStillActive(data, now)) {
+          hasActive = true;
+        } else {
+          deactivateBatch.update(doc.ref, { isActive: false });
+          batchCount++;
+        }
+      });
+      if (batchCount > 0) await deactivateBatch.commit();
+      if (hasActive) {
+        return res.status(400).json({ error: 'Product already has an active flash sale', code: 'FLASH_SALE_ALREADY_ACTIVE' });
+      }
+
+      const ref = await commerceStore.addDocument("flash_sales", {
+        productId,
+        productName: productName || '',
+        productImage: productImage || '',
+        originalPrice: originalPrice || 0,
+        salePrice: salePrice || 0,
+        discountPercent: discountPercent || 0,
+        sellerId,
+        sellerName: sellerName || '',
+        sellerPhone: sellerPhone || '',
+        location: location || '',
+        stock: stock || 0,
+        soldCount: 0,
+        isActive: true,
+        startTime: startTime ? new Date(startTime) : commerceStore.serverTimestamp(),
+        endTime: endTime ? new Date(endTime) : new Date(Date.now() + 24 * 3600000),
+        createdAt: commerceStore.serverTimestamp(),
+      });
+
+      res.json({ success: true, flashSaleId: ref.id });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/flash-sale/scan', async (req, res) => {
+    try {
+      const auth = await requireUser(req, res);
+      if (!auth.ok) return;
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+      const productsSnap = await db.collection('products')
+        .where('isActive', '==', true)
+        .where('createdAt', '<=', sevenDaysAgo)
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get();
+
+      let created = 0;
+      const now = new Date();
+
+      for (const doc of productsSnap.docs) {
+        const data = doc.data();
+        const viewCount = data.viewCount || 0;
+        const soldCount = data.soldCount || 0;
+        if (soldCount > 5 || viewCount > 200) continue;
+
+        const existing = await db.collection('flash_sales')
+          .where('productId', '==', doc.id)
+          .where('isActive', '==', true)
+          .get();
+        const scanNow = new Date();
+        const hasActive = existing.docs.some(d => isFlashSaleStillActive(d.data(), scanNow));
+        if (hasActive) continue;
+
+        const originalPrice = (data.price || 0).toDouble ? data.price : Number(data.price || 0);
+        const discountPercent = soldCount === 0 ? 30 : 20;
+        const salePrice = originalPrice * (1 - discountPercent / 100);
+        const images = data.images || [];
+
+        await commerceStore.addDocument("flash_sales", {
+          productId: doc.id,
+          productName: data.name || '',
+          productImage: images.length > 0 ? images[0] : '',
+          originalPrice: Math.round(originalPrice),
+          salePrice: Math.round(salePrice),
+          discountPercent,
+          sellerId: data.sellerId || '',
+          sellerName: data.sellerName || '',
+          sellerPhone: data.sellerPhone || '',
+          location: data.location || '',
+          stock: data.stock || 0,
+          soldCount,
+          isActive: true,
+          startTime: commerceStore.serverTimestamp(),
+          endTime: new Date(now.getTime() + 24 * 3600000),
+          createdAt: commerceStore.serverTimestamp(),
+        });
+        created++;
+      }
+
+      res.json({ success: true, flashSalesCreated: created });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/flash-sale/notify', async (req, res) => {
+    try {
+      const auth = await requireUser(req, res);
+      if (!auth.ok) return;
+      const { productName, salePrice, discountPercent, sellerId, productImage } = req.body;
+      if (!sellerId || auth.uid !== sellerId) {
+        return res.status(403).json({ error: 'Seller ID mismatch' });
+      }
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      let sentCount = 0;
+      const PAGE_SIZE = 500;
+
+      // Dedup: full-audience push at most once per 24h. In-app rows still go out.
+      const cooldownRef = db.collection('app_settings').doc('flash_sale_push_cooldown');
+      const cooldownSnap = await cooldownRef.get();
+      const lastSentAt = cooldownSnap.exists && cooldownSnap.data()?.lastSentAt
+        ? cooldownSnap.data().lastSentAt.toDate()
+        : null;
+      const cooldownMs = 24 * 60 * 60 * 1000;
+      const pushSkipped = lastSentAt != null && Date.now() - lastSentAt.getTime() < cooldownMs;
+
+      if (!pushSkipped) {
+        try {
+          // Group recipients by in-app language and send a localized bulk push
+          // per group (a Swahili template would otherwise reach en/zh users).
+          const langBuckets = new Map();
+          let lastPushId = null;
+          while (true) {
+            let query = db.collection('users');
+            if (lastPushId) query = query.startAfter(lastPushId);
+            query = query.limit(PAGE_SIZE);
+            const usersSnap = await query.get();
+            if (usersSnap.empty) break;
+            for (const doc of usersSnap.docs) {
+              if (doc.id && doc.id !== sellerId) {
+                const lang = (doc.data()?.langCode === 'en' || doc.data()?.langCode === 'zh') ? doc.data().langCode : 'sw';
+                if (!langBuckets.has(lang)) langBuckets.set(lang, []);
+                langBuckets.get(lang).push(doc.id);
+              }
+            }
+            lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
+          }
+          const swTitle = `⚡ Flash Sale! -${discountPercent}%`;
+          const swBody = `${productName} sasa TSh ${salePrice} pekee!`;
+          sentCount = 0;
+          for (const [lang, ids] of langBuckets) {
+            const loc = localizeNotif(lang, swTitle, swBody);
+            const osResult = await sendOneSignalBulk(db, ids, loc.title, loc.body, { type: 'flash_sale', productName: productName || '', image: productImage || '' });
+            sentCount += osResult.successCount;
+            console.log(`[flash-sale] bulk push sent lang=${lang} users=${ids.length} sent=${osResult.successCount}`);
+          }
+          await cooldownRef.set({ lastSentAt: A.firestore.Timestamp.now() }, { merge: true });
+          console.log(`[flash-sale] bulk push total sentCount=${sentCount}`);
+        } catch (pushErr) {
+          console.error('OneSignal push skipped for flash sale:', pushErr.message);
+        }
+      } else {
+        console.log(`[flash-sale] push skipped — cooldown active (last sent ${lastSentAt.toISOString()})`);
+      }
+
+      // Always confirm to the flash-sale creator that the sale is live.
+      try {
+        if (sellerId) {
+          await sendOneSignalNotification(sellerId,
+            'Flash Sale Yako Imeanzishwa!',
+            `${productName} inauzwa TSh ${salePrice} pekee (-${discountPercent}%).`,
+            { type: 'flash_sale', productName: productName || '' }
+          );
+        }
+      } catch (creatorErr) {
+        console.error('[flash-sale] creator notify error:', creatorErr.message);
+      }
+
+      // Write in-app notification for all users
+      let inAppNotified = 0;
+      let lastNotifId = null;
+
+      while (true) {
+        let query = db.collection('users');
+        if (lastNotifId) query = query.startAfter(lastNotifId);
+        query = query.limit(PAGE_SIZE);
+        const usersForNotif = await query.get();
+        if (usersForNotif.empty) break;
+
+        const batch = db.batch();
+        let batched = 0;
+        for (const doc of usersForNotif.docs) {
+          batch.set(db.collection('notifications').doc(), {
+            userId: doc.id,
+            title: `⚡ Flash Sale! -${discountPercent}%`,
+            body: `${productName} sasa TSh ${salePrice} pekee!`,
+            type: 'flash_sale',
+            data: { type: 'flash_sale', image: productImage || '' },
+            isRead: false,
+            createdAt: commerceStore.serverTimestamp(),
+          });
+          batched++;
+        }
+        if (batched > 0) await batch.commit();
+        inAppNotified += batched;
+        lastNotifId = usersForNotif.docs[usersForNotif.docs.length - 1].id;
+      }
+
+      res.json({ success: true, pushSent: sentCount, inAppNotified, pushSkipped });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/flash-sales/deactivate-expired', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      await require('firebase-admin').auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const { productId } = req.body;
+    if (!productId) return res.status(400).json({ error: 'productId required' });
+    const snap = await db.collection('flash_sales')
+      .where('productId', '==', productId)
+      .where('isActive', '==', true)
+      .get();
+    const now = new Date();
+    const batch = db.batch();
+    let count = 0;
+    snap.forEach(doc => {
+      const sale = doc.data();
+      if (now > sale.endTime.toDate()) {
+        batch.update(doc.ref, { isActive: false });
+        count++;
+      }
+    });
+    if (count > 0) await batch.commit();
+    res.json({ success: true, deactivated: count });
+  });
+
+  router.post('/flash-sales/delete', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    const { flashSaleId } = req.body;
+    if (!flashSaleId) return res.status(400).json({ error: 'flashSaleId required' });
+    await commerceStore.deleteDocument("flash_sales", flashSaleId);
+    res.json({ success: true });
+  });
+
+  // ─── PAYMENT METHODS / fees / wallet deposit methods ──────────────────
+  router.get('/payment-methods', (req, res) => {
+    res.json({ success: true, methods: ALL_PAYMENT_METHODS });
+  });
+
+  router.post('/payment-methods/calc-fee', (req, res) => {
+    const { methodId, amount, provider } = req.body;
+    if (!methodId || amount == null) {
+      return res.status(400).json({ error: 'methodId and amount are required' });
+    }
+    const fee = calcGatewayFee(methodId, Number(amount), provider);
+    const method = ALL_PAYMENT_METHODS.find(m => m.id === methodId);
+    res.json({
+      success: true,
+      methodId,
+      amount: Number(amount),
+      fee,
+      total: Number(amount) + fee,
+      feeType: method?.feeType || 'tiered',
+    });
+  });
+
+  // Wallet deposit initiation (verbatim port of server/index.js:7984).
+  // Creates a Firestore deposits/{ref} doc, then either fires the ClickPesa
+  // USSD push (fire-and-forget, response returns immediately) or generates a
+  // BillPay control number. Completions are finalized by the v1 webhook
+  // (confirmLegacyDeposit, `dep` branch), so the push/control-number here must
+  // never replace that single source of truth for credits.
+  router.post('/wallet/deposit', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+      let decoded;
+      try { decoded = await require('firebase-admin').auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
+      const { userId, phone, amount, method } = req.body;
+      if (!userId || decoded.uid !== userId) {
+        return res.status(403).json({ error: 'userId mismatch' });
+      }
+      if (!amount) {
+        return res.status(400).json({ error: 'amount is required' });
+      }
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+      if (!phone) {
+        return res.status(400).json({ error: 'phone is required' });
+      }
+
+      const depositRef = `dep${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
+      const depMethod = method || 'ussd';
+
+      if (depMethod === 'billpay') {
+        // BillPay flow: create order control number (1% fee billed to the buyer)
+        const gatewayFee = calcGatewayFee('billpay', Math.round(amount), req.body.provider);
+        const totalCharge = Math.round(amount) + gatewayFee;
+
+        await db.collection('deposits').doc(depositRef).set({
+          userId,
+          phone,
+          amount: Math.round(amount),
+          gatewayFee,
+          totalCharge,
+          status: 'pending',
+          paymentMethod: 'BillPay',
+          createdAt: commerceStore.serverTimestamp(),
+        });
+
+        const billResult = await azampayCreateBillPayOrder({
+          billAmount: totalCharge,
+          billDescription: `Soko Vibe wallet deposit: TZS ${Math.round(amount)}`,
+          billPaymentMode: 'EXACT',
+          billReference: depositRef,
+        });
+
+        if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+          const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+          return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+        }
+
+        const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+        const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
+
+        await db.collection('deposits').doc(depositRef).update({
+          billPayNumber,
+          clickpesaReference: clickpesaRef,
+        });
+
+        res.json({
+          success: true,
+          depositRef,
+          method: 'billpay',
+          billPayNumber,
+          totalCharge,
+          gatewayFee,
+          clickpesaId: clickpesaRef,
+          message: `BillPay control number: ${billPayNumber}. Total charge: TZS ${totalCharge.toLocaleString()}. Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalCharge.toLocaleString()} > PIN.`,
+        });
+      } else {
+        // USSD Push flow: ClickPesa charges its USSD fee to the customer on top,
+        // so we send the real deposit amount (never pre-add the fee).
+        const processingFee = 0;
+        const totalCharge = Math.round(amount);
+
+        const phoneDigits = phone.replace(/\D/g, '');
+        const normalizedPhone = phoneDigits.startsWith('0')
+          ? '255' + phoneDigits.substring(1)
+          : phoneDigits.startsWith('255')
+            ? phoneDigits
+            : '255' + phoneDigits;
+
+        await db.collection('deposits').doc(depositRef).set({
+          userId,
+          phone: normalizedPhone,
+          amount: Math.round(amount),
+          processingFee,
+          totalCharge,
+          status: 'pending',
+          paymentMethod: 'AzamPay',
+          createdAt: commerceStore.serverTimestamp(),
+        });
+
+        // Fire AzamPay async — return immediately
+        azampayCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.azampay.collectionWebhookUrl })
+          .then((result) => {
+            const ref = result?.id || '';
+            if (!ref) { console.error(`[USSD] Deposit AzamPay no ref for ${depositRef}`); return; }
+            return db.collection('deposits').doc(depositRef).update({ clickpesaReference: ref, ussdSent: true });
+          })
+          .then(() => console.log(`[USSD] Deposit push sent for ${depositRef}`))
+          .catch((err) => {
+            console.error(`[USSD] Deposit AzamPay error:`, err?.response?.data || err.message);
+            db.collection('deposits').doc(depositRef).update({ ussdFailed: true }).catch(() => {});
+          });
+
+        res.json({
+          success: true, depositRef, method: 'ussd',
+          message: `Malipo ya TZS ${totalCharge.toLocaleString()} yanatuma USSD push kwa ${normalizedPhone}. Ada ya ClickPesa inaongezwa kwenye malipo yako.`,
+        });
+      }
+    } catch (e) {
+      console.error('/api/wallet/deposit error:', e);
+      res.status(500).json({ error: e.message || 'Deposit failed' });
+    }
+  });
+
+  router.get('/wallet/deposit/methods', (req, res) => {
+    res.json({
+      success: true,
+      methods: [
+        {
+          id: 'ussd',
+          name: 'Mobile Money USSD Push',
+          nameSw: 'USSD Push (M-Pesa, Tigo, Airtel)',
+          description: 'Receive a USSD prompt on your phone. Works with M-Pesa, Airtel Money, Tigo, HaloPesa.',
+          descriptionSw: 'Pokea kidokezo cha USSD kwenye simu yako. Inafanya kazi na M-Pesa, Airtel, Tigo, HaloPesa.',
+          feeDescription: 'Tiered fee (TZS 54 – 7,960)',
+        },
+        {
+          id: 'billpay',
+          name: 'BillPay (M-Pesa, Airtel, Tigo)',
+          nameSw: 'BillPay (M-Pesa, Airtel, Tigo)',
+          description: 'Pay directly via mobile money BillPay. 1% fee.',
+          descriptionSw: 'Lipa moja kwa moja kwa BillPay. Ada 1%.',
+          feeDescription: '1% fee',
+        },
+      ],
+    });
+  });
+
+  return router;
+}
+
+module.exports = createFeatureCompatRouter;
+module.exports.resolveRequestIdentity = resolveRequestIdentity;

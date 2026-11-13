@@ -1,0 +1,278 @@
+/**
+ * Live E2E API suite for the deployed Soko Vibe server.
+ *
+ * Safety: this suite only touches public/read-only endpoints and verifies that
+ * protected endpoints REJECT unauthenticated requests. It never creates real
+ * payments, sends SMS, or mutates money — so it is safe to run against
+ * production.
+ *
+ * Opt-in only: `npm test` must stay hermetic and offline, so this suite skips
+ * unless it is explicitly requested. It talks to a *deployed* server, which
+ * means its results describe that deployment, not the working tree.
+ *
+ * Run:  cd server && npm run test:e2e          (uses the default URL)
+ *       E2E_BASE_URL=https://host npm run test:e2e
+ */
+const nodeTest = require('node:test');
+const assert = require('node:assert/strict');
+
+// E2E_LIVE=1 opts in without changing the target; E2E_BASE_URL implies opt-in
+// because naming a host is itself an explicit request to test it.
+const LIVE = process.env.E2E_LIVE === '1' || Boolean(process.env.E2E_BASE_URL);
+
+const test = LIVE
+  ? nodeTest
+  : (name) => nodeTest.skip(`${name} (live E2E disabled: set E2E_LIVE=1)`, () => {});
+
+const BASE = process.env.E2E_BASE_URL || 'https://soko-langu-server.onrender.com';
+
+// The production server rate-limits at 30 requests/min per IP, so the security
+// sweep must pace itself below that or it trips 429/503 before reaching the
+// endpoints. ~2.2s spacing keeps a 65-test sweep near 27 req/min.
+let _lastRequestAt = 0;
+async function req(method, path, body) {
+  const wait = 2200 - (Date.now() - _lastRequestAt);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  _lastRequestAt = Date.now();
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let json = null;
+  try { json = await res.json(); } catch { /* non-JSON body */ }
+  return { status: res.status, json };
+}
+
+// A 429 from the rate limiter still proves the call was rejected — it is just
+// as safe as a 401/403 from the auth gate.
+function isRejected(status) {
+  return [401, 403, 429].includes(status);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// A. UPTIME + PUBLIC READ-ONLY ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────
+
+test('GET /health → 200 ok', async () => {
+  const r = await req('GET', '/health');
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.status, 'ok');
+});
+
+test('POST /api/search/trending → public 200 with trending array', async () => {
+  const r = await req('POST', '/api/search/trending', {});
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.json?.trending));
+});
+
+test('POST /api/search/most-rated → public 200 with products+sellers', async () => {
+  const r = await req('POST', '/api/search/most-rated', { limit: 5 });
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.json?.products));
+  assert.ok(Array.isArray(r.json?.sellers));
+});
+
+test('GET /api/payment-methods → 200 lists wallet+ussd_push+billpay', async () => {
+  const r = await req('GET', '/api/payment-methods');
+  assert.equal(r.status, 200);
+  const ids = (r.json?.methods || []).map((m) => m.id);
+  assert.ok(ids.includes('wallet'));
+  assert.ok(ids.includes('ussd_push'));
+  assert.ok(ids.includes('billpay'));
+});
+
+test('GET /api/wallet/deposit/methods → 200 lists ussd + billpay', async () => {
+  const r = await req('GET', '/api/wallet/deposit/methods');
+  assert.equal(r.status, 200);
+  const ids = (r.json?.methods || []).map((m) => m.id);
+  assert.ok(ids.includes('ussd'));
+  assert.ok(ids.includes('billpay'));
+});
+
+test('POST /api/auth/check-phone → 200 boolean exists', async () => {
+  const r = await req('POST', '/api/auth/check-phone', { phone: '0712345678' });
+  assert.equal(r.status, 200);
+  assert.ok(typeof r.json?.exists === 'boolean');
+});
+
+test('POST /api/auth/check-email → 200 boolean exists', async () => {
+  const r = await req('POST', '/api/auth/check-email', { email: 'unused-e2e@example.com' });
+  assert.equal(r.status, 200);
+  assert.ok(typeof r.json?.exists === 'boolean');
+});
+
+// Phase C: the trust passport is public reading material for buyers deciding
+// whether to pay — verify the Firestore-backed passport renders a seller.
+test('GET /api/trust/passport/:sellerId → 200 public passport', async () => {
+  const r = await req('GET', '/api/trust/passport/e2e-seller');
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.success, true);
+  assert.ok(r.json?.data?.seller, 'expected a seller object');
+  assert.equal(r.json?.data?.metrics?.activeDisputes, 0);
+  assert.ok(Array.isArray(r.json?.data?.indicators));
+});
+
+test('auth check endpoints reject missing payload → 400', async () => {
+  assert.equal((await req('POST', '/api/auth/check-phone', {})).status, 400);
+  assert.equal((await req('POST', '/api/auth/check-email', {})).status, 400);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// B. MONEY-CALC CORRECTNESS (read-only proxy of server/money + clickpesa)
+// ─────────────────────────────────────────────────────────────────────────
+
+test('calc-fee: wallet is free', async () => {
+  const r = await req('POST', '/api/payment-methods/calc-fee', { methodId: 'wallet', amount: 50000 });
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.fee, 0);
+  assert.equal(r.json?.total, 50000);
+});
+
+test('calc-fee: USSD Push tiered fee (3000→230, 100000→3240)', async () => {
+  const r1 = await req('POST', '/api/payment-methods/calc-fee', { methodId: 'ussd_push', amount: 3000 });
+  assert.equal(r1.json?.fee, 230);
+  const r2 = await req('POST', '/api/payment-methods/calc-fee', { methodId: 'ussd_push', amount: 100000 });
+  assert.equal(r2.json?.fee, 3240);
+});
+
+test('calc-fee: billpay default 1%', async () => {
+  const r = await req('POST', '/api/payment-methods/calc-fee', { methodId: 'billpay', amount: 100000 });
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.fee, 1000);
+  assert.equal(r.json?.total, 101000);
+});
+
+test('calc-fee: halopesa billpay 2%', async () => {
+  const r = await req('POST', '/api/payment-methods/calc-fee', { methodId: 'billpay', amount: 100000, provider: 'halopesa' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.fee, 2000);
+});
+
+test('calc-fee: crdb direct debit flat 2000', async () => {
+  const r = await req('POST', '/api/payment-methods/calc-fee', { methodId: 'crdb_direct_debit', amount: 100000 });
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.fee, 2000);
+});
+
+test('calc-fee: missing fields → 400', async () => {
+  const r = await req('POST', '/api/payment-methods/calc-fee', {});
+  // 429 is also fine — the production rate limiter may kick in mid-suite.
+  assert.ok(isRejected(r.status) || r.status === 400, `expected rejection, got ${r.status}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// C. SECURITY — protected endpoints MUST reject unauthenticated calls
+// ─────────────────────────────────────────────────────────────────────────
+
+const PROTECTED_ENDPOINTS = [
+  ['POST', '/api/search/global-search', { query: 'phone' }],
+  ['POST', '/api/search/autocomplete', { query: 'ph' }],
+  ['POST', '/api/search/record-click', { resultId: 'x', resultType: 'product' }],
+  ['POST', '/api/sms/send', { phone: '255719537300', message: 'e2e' }],
+  ['POST', '/api/send-notification', { userId: 'x', title: 't', body: 'b' }],
+  ['GET', '/api/seller/balance?userId=x', null],
+  ['GET', '/api/payouts', null],
+  ['GET', '/api/admin/stats', null],
+  ['GET', '/api/stats', null],
+  ['GET', '/api/admin/finance-summary', null],
+  ['GET', '/api/admin/analytics', null],
+  ['GET', '/api/admin/users', null],
+  ['GET', '/api/clickpesa/balance', null],
+  ['POST', '/api/boost-product', { userId: 'x' }],
+  ['POST', '/api/flash-sale/create', {}],
+  ['POST', '/api/flash-sale/scan', { productId: 'x' }],
+  ['POST', '/api/flash-sale/notify', { sellerId: 'x' }],
+  ['GET', '/api/kyc/status/some-user', null],
+  ['POST', '/api/kyc/submit', {}],
+  ['POST', '/api/orders/create', {}],
+  ['GET', '/api/transaction-status/some-order', null],
+  ['GET', '/api/reports', null],
+  ['GET', '/api/fraud/alerts', null],
+  ['GET', '/api/seller-statement/some-seller', null],
+  ['GET', '/api/buyer-statement/some-buyer', null],
+  ['POST', '/api/admin/broadcast-notification', {}],
+  ['POST', '/api/cron/release-escrows', {}],
+  ['POST', '/api/escrow/release', {}],
+  // Phase A–E v2 Trust-Commerce gates: every owner-scoped action must reject
+  // unauthenticated callers BEFORE touching any order data.
+  ['POST', '/api/orders/transition', { orderId: 'x', to: 'quoted' }],
+  ['POST', '/api/orders/set-shipping-cost', { orderId: 'x', shippingCost: 2000 }],
+  ['POST', '/api/orders/delivery-arrival', { orderId: 'x' }],
+  ['POST', '/api/orders/generate-delivery-otp', { orderId: 'x' }],
+  ['POST', '/api/orders/verify-delivery', { orderId: 'x', otp: '0000' }],
+  ['POST', '/api/orders/open-dispute', { orderId: 'x' }],
+  ['POST', '/api/escrow/dispatch', { orderId: 'x', userId: 'x' }],
+  ['POST', '/api/escrow/buyer-transport', { orderId: 'x', userId: 'x' }],
+  ['POST', '/api/escrow/dispute', { orderId: 'x', userId: 'x', reason: 'e2e' }],
+  ['POST', '/api/escrow/admin-release', {}],
+  ['POST', '/api/escrow/admin-resolve-dispute', {}],
+  ['POST', '/api/orders/cron/auto-release', {}],
+  // Legacy seller-withdraw is RETIRED (OWNERSHIP_MAP §6 item 3): both the app
+  // and the shop SPA withdraw via POST /api/v1/wallet/withdrawals. A retired
+  // mutation must answer 410 regardless of auth — the auth gate is gone.
+  ['POST', '/api/payouts/seller/withdraw', { userId: 'x', amount: 100, phone: '0712345678' }, 410],
+  ['POST', '/api/moderation/check-text', { text: 'test' }],
+];
+
+for (const [method, path, body, expectedStatus] of PROTECTED_ENDPOINTS) {
+  test(`SECURITY ${method} ${path} → rejects unauthenticated`, async () => {
+    const r = await req(method, path, body);
+    assert.notEqual(r.status, 200,
+      `${method} ${path} should NOT be reachable without auth (got 200)`);
+    if (expectedStatus) {
+      assert.equal(r.status, expectedStatus,
+        `${method} ${path} expected 410 (retired) but got ${r.status}`);
+      return;
+    }
+    assert.ok(isRejected(r.status),
+      `${method} ${path} expected 401/403/429 but got ${r.status}`);
+  });
+}
+
+// Specific auth contract checks
+test('SECURITY global-search unauthorized → 401', async () => {
+  const r = await req('POST', '/api/search/global-search', { query: 'phone' });
+  assert.ok(isRejected(r.status), `got ${r.status}`);
+});
+
+test('SECURITY sms/send unauthorized → 401', async () => {
+  const r = await req('POST', '/api/sms/send', { phone: '255719537300', message: 'e2e' });
+  assert.ok(isRejected(r.status), `got ${r.status}`);
+});
+
+test('SECURITY seller/balance unauthorized → 401', async () => {
+  const r = await req('GET', '/api/seller/balance?userId=someone');
+  assert.ok(isRejected(r.status), `got ${r.status}`);
+});
+
+test('SECURITY admin endpoints reject without x-admin-secret → 401', async () => {
+  for (const p of ['/api/admin/users', '/api/admin/stats', '/api/admin/finance-summary', '/api/clickpesa/balance']) {
+    const r = await req('GET', p);
+    assert.ok(isRejected(r.status), `${p} should be rejected without admin secret (got ${r.status})`);
+  }
+});
+
+test('SECURITY orders/create unauthorized → 401', async () => {
+  const r = await req('POST', '/api/orders/create', {});
+  assert.ok(isRejected(r.status), `got ${r.status}`);
+});
+
+test('SECURITY cron release-escrows → rejects without cron secret', async () => {
+  const r = await req('POST', '/api/cron/release-escrows', {});
+  assert.ok(isRejected(r.status), `got ${r.status}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// D. VALIDATION — missing payloads return 400, never 500
+// ─────────────────────────────────────────────────────────────────────────
+
+test('orders/create missing body → 400/401 (never 500)', async () => {
+  const r = await req('POST', '/api/orders/create', {});
+  assert.ok([400, 401, 429].includes(r.status), `got ${r.status}`);
+});
+
+test('boost-product missing body → 400/401 (never 500)', async () => {
+  const r = await req('POST', '/api/boost-product', {});
+  assert.ok([400, 401, 429].includes(r.status), `got ${r.status}`);
+});

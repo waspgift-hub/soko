@@ -56,7 +56,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
           context.go(AppRoutes.home);
         }
       } catch (e) {
-        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: $e');
+        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: ${context.trError(e)}');
       }
     } else {
       if (!mounted) return;
@@ -300,7 +300,8 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
               ),
             ),
           IconButton(
-            icon: Icon(Icons.close, size: 18, color: cs.onSurfaceVariant),
+            tooltip: context.tr('remove_account'),
+            icon: Icon(Icons.close, size: 18, color: cs.primary),
             onPressed: () => _removeAccount(account),
           ),
         ],

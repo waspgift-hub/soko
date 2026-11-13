@@ -1,0 +1,9 @@
+﻿{
+  "name": "soko-vibe-company",
+  "compatibility_date": "2025-10-11",
+  "assets": {
+    "directory": "./",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

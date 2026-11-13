@@ -9,51 +9,103 @@ class AppRoutes {
   static const String chat = '/chat';
   static const String profile = '/profile';
   static const String productDetail = '/product';
+  static const String productReviews = '/product-reviews';
   static const String admin = '/admin';
+  static const String adminConsole = '/admin';
+  static const String staffDashboardWeb = '/staff';
+  static const String companyOs = '/company';
   static const String sellerDashboard = '/seller';
   static const String notifications = '/notifications';
+  static const String notificationPreferences = '/notification-preferences';
   static const String settings = '/settings';
+
+  /// Optional post-install download of category artwork. Reachable from
+  /// settings and shown as a prompt after first launch; never required.
+  static const String artworkPack = '/artwork-pack';
+
   static const String publicProfile = '/public-profile';
   static const String search = '/search';
   static const String category = '/category';
   static const String categoryProducts = '/category-products';
-  static const String verifyEmail = '/verify-email';
   static const String accountSelection = '/account-selection';
+  static const String onboarding = '/onboarding';
+  static const String contactDiscovery = '/contact-discovery';
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
-  static const String shopCustomization = '/shop-customize';
-  static const String audioPlayer = '/audio';
+  static const String homeV2 = '/v2';
+  static const String companyConsole = '/company';
+  static const String checkoutV2 = '/checkout-v2';
+  static const String chatV2 = '/chat-v2';
+  static const String searchV2 = '/search-v2';
+  static const String productDetailV2 = '/product-v2';
+  static const String ordersV2 = '/orders-v2';
+  static const String profileV2 = '/profile-v2';
+  static const String sellerDashboardV2 = '/seller-v2';
+
   static const String editProfile = '/edit-profile';
   static const String addProduct = '/add-product';
   static const String help = '/help';
+  static const String tutorials = '/tutorials';
   static const String about = '/about';
-  static const String adminAdRevenue = '/admin-ad-revenue';
   static const String createGroup = '/create-group';
   static const String groupChat = '/group-chat';
-  static const String onboarding = '/onboarding';
 
   static const String sellerEarnings = '/seller-earnings';
   static const String checkout = '/checkout';
   static const String discovery = '/discovery';
-  static const String productBoost = '/product-boost';
   static const String myPurchases = '/my-purchases';
   static const String kyc = '/kyc';
+  static const String subscription = '/subscription';
+
+  /// Hub for email, phone, MFA, and KYC verification statuses.
+  static const String verificationCenter = '/verification-center';
   static const String report = '/report';
-  static const String adminWallet = '/admin/wallet';
+  static const String adminKyc = '/admin/kyc';
+  static const String adminBroadcast = '/admin/broadcast';
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';
   static const String createFlashSale = '/create-flash-sale';
   static const String sellerDispatch = '/seller-dispatch';
-  static const String magicLink = '/magic-link';
+  static const String sellerQuote = '/seller-quote';
 
-  static const String status = '/status';
-  static const String statusViewer = '/status-viewer';
-  static const String addStatus = '/add-status';
   static const String aiAssistant = '/ai-assistant';
+  static const String aiSettings = '/ai-settings';
+  static const String agent = '/agent';
+  static const String receipt = '/receipt';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
-  static const String audioList = '/audio-list';
-  static const String audioQueue = '/audio-queue';
-  static const String youtubeSearch = '/youtube-search';
-  static const String youtubePlayer = '/youtube-player';
+  static const String sellerAnalytics = '/seller-analytics';
+  static const String orderDetail = '/order-detail';
+  static const String orderFlow = '/order-flow';
+  static const String sellerOrders = '/seller-orders';
+  static const String adminUserDetail = '/admin/user';
+  static const String boostProduct = '/boost-product';
+  static const String buyerRequests = '/buyer-requests';
+  static const String postBuyerRequest = '/post-buyer-request';
+  static const String verifyEmail = '/verify-email';
+  static const String otpVerification = '/otp-verification';
+  static const String mfaEnrollment = '/mfa-enrollment';
+  static const String mfaChallenge = '/mfa-challenge';
+
+  // Social / verification routes
+  static const String followers = '/followers';
+  static const String following = '/following';
+  static const String followRequests = '/follow-requests';
+  static const String suggestedAccounts = '/suggested-accounts';
+  static const String blockedAccounts = '/blocked-accounts';
+  static const String adminPrivacy = '/admin/privacy';
+
+  // Deep-link / share routes (aliases that map to canonical screens)
+  static const String userProfileAlias = '/profile';
+  static const String order = '/order';
+  static const String otp = '/otp';
+  static const String userSearch = '/user-search';
+  static const String oneUiHome = '/oneui/home';
+  static const String oneUiShell = '/oneui/shell';
+  static const String oneUiRegister = '/oneui/register';
+  static const String oneUiLogin = '/oneui/login';
+  // Web-only dashboards (no Flutter routes) - use server links
+  static const String adminConsoleWeb = '/admin';
+  static const String staffWeb = '/staff';
+  static const String companyOsWeb = '/company';
 }

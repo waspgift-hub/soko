@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
+  <title>Staff Dashboard | Soko Vibe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    :root { --bg:#0f1026; --card:#15182b; --border:#24263d; --text:#f8fafc; --text-muted:#cbd5f5; --primary:#22d3ee; }
+    * { margin:0; padding:0; box-sizing:border-box; font-family:Inter,system-ui,sans-serif; }
+    body { background:radial-gradient(circle at top,#1d4ed8 0%,var(--bg) 55%); color:var(--text); }
+    header { display:flex; align-items:center; justify-content:space-between; padding:16px 32px; border-bottom:1px solid var(--border); backdrop-filter:blur(10px); position:sticky; top:0; background:rgba(15,16,38,0.8); }
+    .brand { display:flex; align-items:center; gap:12px; font-weight:700; }
+    nav { display:flex; gap:12px; flex-wrap:wrap; }
+    nav a { color:var(--text-muted); text-decoration:none; padding:8px 12px; border-radius:10px; display:flex; align-items:center; gap:8px; font-size:14px; }
+    nav a.active, nav a:hover { color:var(--text); background:rgba(34,211,238,0.16); }
+    main { max-width:1200px; margin:0 auto; padding:32px; display:flex; flex-direction:column; gap:24px; }
+    .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:20px; }
+    .span-4 { grid-column:span 4; }
+    .span-8 { grid-column:span 8; }
+    .span-12 { grid-column:span 12; }
+    .panel { border-radius:16px; border:1px solid var(--border); background:var(--card); overflow:hidden; }
+    .panel-header { padding:20px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .panel-body { padding:0 24px 24px; display:grid; gap:12px; }
+    .metric { padding:24px; display:flex; flex-direction:column; gap:10px; }
+    .metric-value { font-size:38px; font-weight:700; }
+    .metric-label { color:var(--text-muted); }
+    .list { display:grid; gap:12px; }
+    .list-item { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-radius:12px; border:1px solid rgba(148,163,184,0.24); }
+    .badge { padding:4px 10px; border-radius:999px; font-size:12px; background:rgba(34,211,238,0.2); }
+    @media (max-width:980px){ .span-4, .span-8 { grid-column:span 12; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div style="width:10px; height:10px; border-radius:50%; background:var(--primary); box-shadow:0 0 30px rgba(34,211,238,0.5);"></div>
+      <div>
+        <div>Soko Vibe · Staff Dashboard</div>
+        <small style="color:var(--text-muted);">Web-only access</small>
+      </div>
+    </div>
+    <nav>
+      <a class="active" href="#home"><i data-lucide="home" size="18"></i>Home</a>
+      <a href="#tasks"><i data-lucide="check-square" size="18"></i>My Tasks</a>
+      <a href="#tickets"><i data-lucide="life-buoy" size="18"></i>Tickets</a>
+      <a href="#reports"><i data-lucide="bar-chart-3" size="18"></i>Reports</a>
+      <a href="/company"><i data-lucide="building-2" size="18"></i>Company OS</a>
+      <a href="/admin"><i data-lucide="shield-check" size="18"></i>Admin Console</a>
+    </nav>
+  </header>
+  <main>
+    <div>
+      <h1 style="font-size:32px; font-weight:700;">Staff Dashboard</h1>
+      <p style="color:var(--text-muted);">All staff operations accessible via web</p>
+    </div>
+    <div class="grid">
+      <div class="panel span-4 metric">
+        <span class="metric-label">My Open Tasks</span>
+        <span class="metric-value">--</span>
+        <span style="color:var(--text-muted);">Assigned to you</span>
+      </div>
+      <div class="panel span-4 metric">
+        <span class="metric-label">Pending Approvals</span>
+        <span class="metric-value">--</span>
+        <span style="color:var(--text-muted);">Requires action</span>
+      </div>
+      <div class="panel span-4 metric">
+        <span class="metric-label">Announcements</span>
+        <span class="metric-value">--</span>
+        <span style="color:var(--text-muted);">Unread</span>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="panel span-8">
+        <div class="panel-header">
+          <div>
+            <div style="font-weight:600;">My Tasks</div>
+            <small style="color:var(--text-muted);">Track work assigned to you</small>
+          </div>
+          <span class="badge">Live</span>
+        </div>
+        <div class="panel-body">
+          <div class="list">
+            <div class="list-item"><div><div style="font-weight:500;">No tasks loaded</div><small style="color:var(--text-muted);">Sign in via Admin Console or Staff auth</small></div><span style="color:var(--text-muted);">--</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel span-4">
+        <div class="panel-header">
+          <div>
+            <div style="font-weight:600;">Quick Links</div>
+            <small style="color:var(--text-muted);">Web dashboards</small>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="list">
+            <a class="list-item" href="/company" style="color:var(--text); text-decoration:none;"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="building-2" size="18"></i><span>Company OS</span></div><i data-lucide="arrow-up-right" size="18" style="color:var(--text-muted);"></i></a>
+            <a class="list-item" href="/admin" style="color:var(--text); text-decoration:none;"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="shield-check" size="18"></i><span>Admin Console</span></div><i data-lucide="arrow-up-right" size="18" style="color:var(--text-muted);"></i></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

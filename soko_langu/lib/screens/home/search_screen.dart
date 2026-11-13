@@ -1,17 +1,36 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../widgets/product_cached_image.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
-import '../../services/product_service.dart';
-import '../../services/user_service.dart';
+import '../../app/app_transitions.dart';
+import '../../services/search_service.dart';
+import '../../services/ai/ai_service.dart';
+import '../../services/search_history_service.dart';
 import '../../services/flash_sale_service.dart';
-import '../../models/product_model.dart';
+import '../../services/product_api.dart';
 import '../../models/flash_sale_model.dart';
-import '../../widgets/product_card.dart';
-import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
+import '../../main.dart';
+import '../../theme/app_colors.dart';
+import '../../models/product_model.dart';
+import '../../models/category_model.dart';
+import '../../data/marketplace_taxonomy.dart';
+import '../../models/discovery_filters.dart';
+import '../../services/search_intent.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
+import '../../widgets/blue_tick_badge.dart';
+import '../../widgets/soko_vibe_loading.dart';
+import '../../widgets/barcode_scanner_widget.dart';
+import '../../widgets/soko_vibe_watermark.dart';
+import '../../widgets/soko_widgets.dart';
+import '../../widgets/ds/ds.dart';
+import '../../theme/app_dimens.dart';
 import '../../utils/responsive.dart';
+import '../../services/share_service.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,216 +39,660 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  final ProductService _productService = ProductService();
-  final UserService _userService = UserService();
-  final FlashSaleService _flashSaleService = FlashSaleService();
+class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final SearchService _searchService = SearchService();
+  final SearchHistoryService _historyService = SearchHistoryService();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+
+  late TabController _tabCtrl;
+  final List<String> _tabs = ['all', 'products', 'sellers', 'categories'];
+
+  List<SearchSuggestion> _suggestions = [];
+  List<String> _searchHistory = [];
+  List<Map<String, dynamic>> _trending = [];
+  SearchResponse? _response;
   bool _loading = false;
   bool _hasSearched = false;
-  bool _error = false;
-  List<Product>? _lastResults;
-  List<UserProfile>? _userResults;
+  bool _searchFailed = false;
+  String _selectedTab = 'all';
+  Timer? _debounce;
+
+  // Monotonic request id. Every search bumps it; a response is applied only if
+  // it still matches, so a slow earlier query can never overwrite a newer one.
+  int _searchSeq = 0;
+
+  // AI search summary (G10): DB-grounded, async, never blocks results.
+  String? _aiSummary;
+  bool _aiSummaryLoading = false;
+  bool _aiSummaryFailed = false;
+  String? _aiSummaryQuery;
+
+  // Sort (G11): 'best' (server ranking) | 'price_asc' | 'price_desc'.
+  String _sortKey = 'best';
+
+  // Initial/discovery state (no search yet): boosted-first listing + most-rated sections.
+  List<SearchResult> _discoveryProducts = [];
+  List<SearchResult> _mostRatedProducts = [];
+  List<SearchResult> _mostRatedSellers = [];
+  bool _loadingInitial = true;
+
+  // Flash sale stream
+  final FlashSaleService _flashSaleService = FlashSaleService();
+  StreamSubscription<Map<String, FlashSale>>? _flashSub;
   Map<String, FlashSale> _flashSales = {};
-  StreamSubscription? _flashSub;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_onSearchChanged);
-    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
-      if (mounted) setState(() => _flashSales = map);
+    _tabCtrl = TabController(length: _tabs.length, vsync: this);
+    _tabCtrl.addListener(() {
+      if (!_tabCtrl.indexIsChanging) {
+        final tab = _tabs[_tabCtrl.index];
+        if (tab == _selectedTab) return;
+        setState(() => _selectedTab = tab);
+        if (_hasSearched && _response != null && _searchCtrl.text.isNotEmpty) {
+          _performSearch();
+        }
+      }
+    });
+    _searchCtrl.addListener(_onSearchChanged);
+    _focusNode.addListener(_onFocusChanged);
+    // Defer network/storage work until after the push transition so the first
+    // frame paints instantly and a slow response never stalls the navigation.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadHistory();
+      _loadTrending();
+      _loadDiscovery();
+      _loadMostRated();
+      _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
+        if (mounted) setState(() => _flashSales = map);
+      });
     });
   }
 
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
+    _searchCtrl.removeListener(_onSearchChanged);
+    _searchCtrl.dispose();
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    _tabCtrl.dispose();
+    _debounce?.cancel();
     _flashSub?.cancel();
+    _speech.stop();
     super.dispose();
   }
 
+  Future<void> _loadHistory() async {
+    final h = await _historyService.getHistory();
+    if (mounted) setState(() => _searchHistory = h);
+  }
+
+  Future<void> _loadTrending() async {
+    try {
+      final t = await _searchService.getTrendingSearches();
+      if (mounted) setState(() => _trending = t);
+    } catch (_) {}
+  }
+
+  /// Loads a default listing when nothing has been searched: boosted
+  /// products first, non-boosted products after.
+  Future<void> _loadDiscovery() async {
+    try {
+      // Use the v2 Postgres product API which returns the isBoosted flag
+      // alongside each product (PUBLIC_SELECT includes it via snapshot).
+      final products = await ProductApiClient().fetchProducts(limit: 30);
+
+      final boosted = products.items.where((p) => p.isBoosted).toList();
+      final normal = products.items.where((p) => !p.isBoosted).toList();
+
+      if (mounted) {
+        setState(() {
+          final combined = [
+            ...boosted.map((p) => SearchResult.fromProduct(p)),
+            ...normal.map((p) => SearchResult.fromProduct(p)),
+          ]..shuffle();
+          _discoveryProducts = combined;
+          _loadingInitial = false;
+        });
+      }
+    } catch (e) {
+      // Fallback to Firestore for the discovery view if the API is unreachable.
+      try {
+        final fs = FirebaseFirestore.instance;
+        final recentSnap = await fs
+            .collection('products')
+            .where('isActive', isEqualTo: true)
+            .orderBy('createdAt', descending: true)
+            .limit(30)
+            .get()
+            .timeout(const Duration(seconds: 12));
+
+        final normal = <SearchResult>[];
+        for (final p in recentSnap.docs.map((d) => Product.fromFirestore(d))) {
+          normal.add(SearchResult.fromProduct(p));
+          if (normal.length >= 20) break;
+        }
+
+        if (mounted) {
+          setState(() {
+            normal.shuffle();
+            _discoveryProducts = normal;
+            _loadingInitial = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _loadingInitial = false);
+      }
+    }
+  }
+
+  /// Loads most-rated products (11.2) and most-rated sellers (11.3).
+  Future<void> _loadMostRated() async {
+    try {
+      final data = await _searchService.getMostRated(limit: 8);
+      if (mounted && data != null) {
+        setState(() {
+          _mostRatedProducts = data.products;
+          _mostRatedSellers = data.sellers;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus && _searchCtrl.text.isEmpty) _loadHistory();
+  }
+
   void _onSearchChanged() {
-    if (_searchController.text.isEmpty) {
+    _debounce?.cancel();
+    final text = _searchCtrl.text.trim();
+    if (text.length >= 2) {
+      _debounce = Timer(const Duration(milliseconds: 350), () => _fetchSuggestions(text));
+    } else {
+      setState(() => _suggestions = []);
+    }
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    try {
+      final s = await _searchService.autocomplete(query);
+      if (mounted && _searchCtrl.text.trim() == query) {
+        setState(() => _suggestions = s);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _performSearch({String? query}) async {
+    final q = (query ?? _searchCtrl.text).trim();
+    if (q.isEmpty) return;
+
+    _focusNode.unfocus();
+    final seq = ++_searchSeq;
+    setState(() {
+      _loading = true;
+      _hasSearched = true;
+      _searchFailed = false;
+      _suggestions = [];
+      _sortKey = 'best'; // new query ? fresh server ranking
+    });
+
+    _historyService.addQuery(q);
+    if (mounted) _loadHistory();
+
+    try {
+      final resp = await _searchService.globalSearch(query: q, type: 'all', pageSize: 30);
+      if (!mounted || seq != _searchSeq) return;
       setState(() {
-        _hasSearched = false;
+        _response = resp;
         _loading = false;
-        _error = false;
+        _searchFailed = false;
+      });
+      _maybeLoadAiSummary(resp);
+    } catch (_) {
+      if (mounted && seq == _searchSeq) {
+        setState(() {
+          _loading = false;
+          _searchFailed = true;
+        });
+      }
+    }
+  }
+
+  /// Fires a non-blocking, DB-grounded AI summary for the settled results.
+  /// Results render immediately; the summary arrives async (?60 progressive
+  /// update) and silently disappears on failure or on an empty result set.
+  Future<void> _maybeLoadAiSummary(SearchResponse resp) async {
+    final products = resp.results.where((r) => r.type == 'product').toList();
+    final locale = AppConfig.of(context).langCode;
+
+    // AI keeps search priority even when the catalog has no DB match: a
+    // grounded not-found context (buildNotFoundCatalogContext) turns an empty
+    // result into sourced suggestions instead of a silent dead-end (?62 AI
+    // priority, G-catalog notFoundInApp). Nothing below may invent facts.
+    final hasMatches = resp.total > 0 && products.isNotEmpty;
+    if (!hasMatches) {
+      // No DB-grounded rows: answer with an explicitly-labelled, off-app
+      // guidance fallback so the buyer still gets useful direction (?62.
+      setState(() {
+        _aiSummary = null;
+        _aiSummaryLoading = false;
+        _aiSummaryFailed = false;
+      });
+      if (_aiSummaryQuery == resp.query.trim()) return;
+      if (!mounted) return;
+      final fallback = await AiService.instance
+          .generateSearchSummary(
+            query: resp.query,
+            groundedContext: AiService.buildNotFoundCatalogContext(resp.query),
+            total: 0,
+            locale: locale,
+          )
+          .timeout(const Duration(seconds: 12), onTimeout: () => throw TimeoutException('summary'));
+      if (!mounted) return;
+      setState(() {
+        _aiSummary = fallback;
+        _aiSummaryLoading = false;
+        _aiSummaryQuery = resp.query.trim();
+      });
+      _aiSummaryFailed = false;
+      return;
+    }
+    final sameQuery = _aiSummaryQuery == resp.query.trim();
+    if (sameQuery && !_aiSummaryLoading) return; // already answered
+
+    setState(() {
+      _aiSummary = null;
+      _aiSummaryLoading = true;
+      _aiSummaryFailed = false;
+      _aiSummaryQuery = resp.query.trim();
+    });
+
+    final sym = context.currencySymbol();
+    final buffer = StringBuffer();
+    for (final r in products.take(8)) {
+      buffer.writeln(
+        '- ${r.displayName} | '
+        'bei: ${r.price != null ? '${r.price!.toStringAsFixed(0)} $sym' : 'n/a'} | '
+        'muuzaji: ${r.sellerName ?? 'n/a'} | '
+        'eneo: ${r.location ?? 'n/a'} | '
+        'rating: ${r.rating?.toStringAsFixed(1) ?? 'n/a'} (${r.reviewCount ?? 0}) | '
+        'SILA: ${r.kycApproved ? 'ndiyo' : 'hapana'}',
+      );
+    }
+    final detected = resp.detected;
+    final scope = <String>[
+      if (detected['maxPrice'] is num) 'bei<=${detected['maxPrice']}',
+      if (detected['minPrice'] is num) 'bei>=${detected['minPrice']}',
+      if (detected['location'] is String && (detected['location'] as String).isNotEmpty)
+        'eneo: ${detected['location']}',
+    ].join(', ');
+
+    final grounded = AiService.buildInAppCatalogContext(
+      scope.isNotEmpty ? 'SCOPE: $scope\n${buffer.toString()}' : buffer.toString(),
+    );
+
+    try {
+      final reply = await AiService.instance
+          .generateSearchSummary(
+            query: resp.query,
+            groundedContext: grounded,
+            total: resp.total,
+            locale: locale,
+          )
+          .timeout(const Duration(seconds: 12), onTimeout: () => throw TimeoutException('summary'));
+      if (!mounted) return;
+      setState(() {
+        _aiSummary = reply;
+        _aiSummaryLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _aiSummary = null;
+        _aiSummaryLoading = false;
+        _aiSummaryFailed = true;
       });
     }
   }
 
-  Future<void> _performSearch() async {
-    final query = _searchController.text.trim();
-    if (query.isEmpty) return;
+  Future<void> _navigateToProduct(String productId) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('products').doc(productId).get();
+      if (doc.exists && mounted) {
+        final product = Product.fromFirestore(doc);
+        context.push('${AppRoutes.productDetail}/$productId', extra: product);
+      }
+    } catch (_) {
+      if (mounted) {
+        context.push('${AppRoutes.productDetail}/$productId');
+      }
+    }
+  }
 
+  void _openCategory(String id, String name, {String? image}) {
+    final cat = Category(
+      id: id.isNotEmpty ? id : name,
+      name: name,
+      nameSw: name,
+      icon: '??',
+      image: image,
+      subcategories: const [],
+    );
+    context.push('${AppRoutes.categoryProducts}/${Uri.encodeComponent(name)}', extra: cat);
+  }
+
+  void _onSuggestionTap(SearchSuggestion s) {
+    _focusNode.unfocus();
+    if (s.type == 'product' && s.id != null && s.id!.isNotEmpty) {
+      _navigateToProduct(s.id!);
+    } else if ((s.type == 'user' || s.type == 'seller') && s.id != null && s.id!.isNotEmpty) {
+      context.push('${AppRoutes.publicProfile}/${s.id}', extra: s.text);
+    } else if (s.type == 'category') {
+      _openCategory(s.id ?? s.text, s.text, image: s.image);
+    } else {
+      _searchCtrl.text = s.text;
+      _performSearch();
+    }
+  }
+
+  Future<void> _barcodeSearch(String code) async {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) return;
+    _focusNode.unfocus();
     setState(() {
       _loading = true;
-      _error = false;
       _hasSearched = true;
+      _suggestions = [];
     });
-
     try {
-      final results = await Future.wait([
-        _productService.searchProducts(query).first,
-        _userService.searchUsers(query),
-      ]);
-      if (mounted) {
-        setState(() {
-          _lastResults = results[0] as List<Product>;
-          _userResults = results[1] as List<UserProfile>;
-          _loading = false;
-        });
+      final snap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('barcode', isEqualTo: trimmed)
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 12));
+      if (snap.docs.isNotEmpty && mounted) {
+        final product = Product.fromFirestore(snap.docs.first);
+        context.push('${AppRoutes.productDetail}/${snap.docs.first.id}', extra: product);
+        setState(() => _loading = false);
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = true;
-          _loading = false;
-        });
-      }
+    } catch (_) {}
+    if (mounted) {
+      _performSearch(query: trimmed);
+    }
+  }
+
+  void _clearField() {
+    _searchCtrl.clear();
+    // Invalidate in-flight responses so clearing mid-search cannot repopulate
+    // the field the user just emptied.
+    _searchSeq++;
+    setState(() {
+      _suggestions = [];
+      _response = null;
+      _hasSearched = false;
+      _loading = false;
+    });
+  }
+
+  Future<void> _removeHistoryItem(String q) async {
+    await _historyService.removeQuery(q);
+    _loadHistory();
+  }
+
+  Future<void> _clearAllHistory() async {
+    await _historyService.clearAll();
+    _loadHistory();
+  }
+
+  Future<void> _startVoiceSearch() async {
+    final available = await _speech.initialize();
+    if (!available || !mounted) return;
+    setState(() => _isListening = true);
+    await _speech.listen(
+      onResult: (result) {
+        if (result.finalResult && result.recognizedWords.isNotEmpty) {
+          _searchCtrl.text = result.recognizedWords;
+          _performSearch();
+        }
+      },
+      listenFor: const Duration(seconds: 10),
+      pauseFor: const Duration(seconds: 3),
+    );
+    if (mounted) setState(() => _isListening = false);
+  }
+
+  void _stopVoiceSearch() {
+    _speech.stop();
+    setState(() => _isListening = false);
+  }
+
+  Future<void> _openBarcodeScanner() async {
+    final result = await Navigator.push<String>(
+      context,
+      buildAppRoute(builder: (_) => const BarcodeScannerWidget()),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      _searchCtrl.text = result;
+      _barcodeSearch(result);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return Scaffold(
+      backgroundColor: cs.surface,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: TextField(
-            controller: _searchController,
-            autofocus: true,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-            decoration: InputDecoration(
-              hintText: context.tr('search_products'),
-              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54)),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {
-                          _hasSearched = false;
-                          _loading = false;
-                          _error = false;
-                          _lastResults = null;
-                          _userResults = null;
-                        });
-                      },
-                    )
-                  : null,
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _performSearch(),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
-            onPressed: _performSearch,
-          ),
-        ],
-      ),
-      body: SafeArea(child: _buildBody()),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_loading) return _buildLoadingState();
-    if (_error) return _buildErrorState();
-    if (!_hasSearched) return _buildInitialState();
-
-    final products = _lastResults ?? [];
-    final users = _userResults ?? [];
-    if (products.isEmpty && users.isEmpty) return _buildEmptyState();
-
-    return _buildResults(users, products);
-  }
-
-  Widget _buildLoadingState() {
-    return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search, size: 48, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
-            const GoogleLoading(size: 32, strokeWidth: 3),
-            const SizedBox(height: 16),
-            Text(
-              context.tr('searching_soko'),
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr('loading_results'),
-              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInitialState() {
-    return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search, size: 72, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 16),
-            Text(
-              context.tr('search_products'),
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr('find_products_people'),
-              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.search_off, size: 72, color: Theme.of(context).colorScheme.outline),
-              const SizedBox(height: 16),
-              Text(
-                context.tr('no_results_soko'),
-                style: const TextStyle(
-                  fontSize: 18,
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+        titleSpacing: 0,
+        toolbarHeight: 68,
+        title: LayoutBuilder(builder: (context, constraints) => _buildSearchField(cs, constraints)),
+        bottom: _hasSearched
+            ? TabBar(
+                controller: _tabCtrl,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                dividerColor: cs.outlineVariant.withValues(alpha: 0.35),
+                labelColor: cs.primary,
+                unselectedLabelColor: cs.onSurfaceVariant,
+                indicatorColor: cs.primary,
+                indicatorSize: TabBarIndicatorSize.label,
+                labelStyle: TextStyle(
+                  fontSize: Responsive.scaleFont(context, 13.5),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontSize: Responsive.scaleFont(context, 13.5),
                   fontWeight: FontWeight.w500,
                 ),
+                tabs: _tabs.map((t) => Tab(text: context.tr(t))).toList(),
+              )
+            : _isListening
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(36),
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.errorContainer.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.mic_rounded, size: 16, color: cs.error),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          context.tr('listening'),
+                          style: TextStyle(
+                            color: cs.onErrorContainer,
+                            fontSize: Responsive.scaleFont(context, 13),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : null,
+      ),
+      body: GestureDetector(
+        onTap: () => _focusNode.unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
+          bottom: true,
+          top: false,
+          child: AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+            child: KeyedSubtree(
+              key: ValueKey('$_loading|$_hasSearched|$_searchFailed|$_selectedTab'),
+              child: _buildBody(cs),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField(ColorScheme cs, BoxConstraints constraints) {
+    final width = constraints.maxWidth;
+    final isSmall = width < 360;
+    final isTablet = Responsive.isTablet;
+    final fieldHeight = isTablet ? 52.0 : 46.0;
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final iconSize = (isSmall ? 19.0 : 21.0) * scale.clamp(0.85, 1.3);
+    return SizedBox(
+      height: fieldHeight,
+      child: Padding(
+        padding: EdgeInsetsDirectional.only(end: isSmall ? 4 : 8),
+        child: SokoSearchBar(
+          controller: _searchCtrl,
+          focusNode: _focusNode,
+          hint: context.tr('search_products_users'),
+          onSubmitted: (q) => _performSearch(query: q),
+          onClear: _clearField,
+          trailing: [
+            IconButton(
+              icon: Icon(
+                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                size: iconSize,
+                color: _isListening ? cs.error : cs.onSurfaceVariant,
               ),
-              const SizedBox(height: 8),
+              tooltip: _isListening ? context.tr('stop') : context.tr('voice'),
+              onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(
+                minWidth: isSmall ? 36 : 40,
+                minHeight: isSmall ? 36 : 40,
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.qr_code_scanner_rounded, size: iconSize, color: cs.onSurfaceVariant),
+              tooltip: context.tr('scan_barcode_qr'),
+              onPressed: _openBarcodeScanner,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(
+                minWidth: isSmall ? 36 : 40,
+                minHeight: isSmall ? 36 : 40,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(ColorScheme cs) {
+    // Universal scroll behavior: supports all gestures (tap, drag, fling,
+    // scroll, pinch, longPress) and all screen sizes via adaptive physics.
+    // No fixed height prevents clipping on small phones or huge textScale.
+    // Only the very first search shows a full-screen gate. Re-searches keep
+    // the prior results visible (inline progress) so a slow request never
+    // blanks the whole screen or looks like a freeze.
+    if (_loading && _response == null) {
+      return const Center(child: GoogleLoadingPage());
+    }
+
+    if (_searchFailed && _response == null) {
+      return _buildSearchError(cs);
+    }
+
+    if (_suggestions.isNotEmpty && !_hasSearched) {
+      return _buildSuggestions(cs);
+    }
+
+    if (_response != null) {
+      return RefreshIndicator(onRefresh: () async => _performSearch(), child: _buildResults(cs));
+    }
+
+    if (_focusNode.hasFocus && _searchCtrl.text.isEmpty) {
+      return _buildHistoryPanel(cs);
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadDiscovery();
+        await _loadMostRated();
+      },
+      child: _buildInitialState(cs),
+    );
+  }
+
+  Widget _buildSearchError(ColorScheme cs) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppInsets.xl),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.cloud_off_rounded, size: 34, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
               Text(
-                context.tr('try_different'),
-                style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                context.tr('search_failed_title'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: cs.onSurface),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                context.tr('search_failed_body'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.4, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 20),
+              DsButton(
+                label: context.tr('retry'),
+                icon: Icons.refresh_rounded,
+                height: 48,
+                onPressed: _performSearch,
               ),
             ],
           ),
@@ -238,152 +701,1104 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildErrorState() {
-    return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cloud_off, size: 72, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              context.tr('trouble_connecting'),
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr('try_again'),
-              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _performSearch,
-              icon: const Icon(Icons.refresh),
-              label: Text(context.tr('try_again')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResults(List<UserProfile> users, List<Product> products) {
-    return ListView(
-      padding: const EdgeInsets.all(12),
+  Widget _buildSuggestions(ColorScheme cs) {
+    final intent = parseSearchIntent(_searchCtrl.text);
+    // Universal: handle keyboard, textScale and any screen width
+    return Column(
       children: [
-        if (users.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              '${context.tr('users')} (${users.length})',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-          ...users.map(_buildUserTile),
-          const Divider(height: 32),
-        ],
-        if (products.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              '${context.tr('products')} (${products.length})',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: Responsive.gridColumns(context),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: Responsive.cardAspectRatio(context),
-            ),
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              final product = products[index];
-              return ProductCard(
-                product: product,
-                flashSale: _flashSales[product.id],
-                onTap: () => context.push(
-                  '${AppRoutes.productDetail}/${product.id}',
-                  extra: product,
+        if (!intent.isEmpty) _IntentStrip(intent: intent, onOpen: _openIntent),
+        Expanded(
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.symmetric(horizontal: Responsive.isSmallPhone ? 4 : 8, vertical: 4),
+            itemCount: _suggestions.length,
+            separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
+            itemBuilder: (_, i) {
+              final s = _suggestions[i];
+              final IconData typeIcon;
+              final Color typeColor;
+              if (s.type == 'product') {
+                typeIcon = Icons.shopping_bag_outlined;
+                typeColor = cs.primary;
+              } else if (s.type == 'seller' || s.type == 'user') {
+                typeIcon = Icons.storefront_outlined;
+                typeColor = cs.secondary;
+              } else if (s.type == 'category') {
+                typeIcon = Icons.category_outlined;
+                typeColor = cs.tertiary;
+              } else {
+                typeIcon = Icons.search;
+                typeColor = cs.onSurfaceVariant;
+              }
+              return ListTile(
+                leading: s.image != null && s.image!.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: ProductCachedImage(
+                          url: s.image!,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(typeIcon, size: 18, color: typeColor),
+                      ),
+                title: Text(
+                  s.text,
+                  style: TextStyle(fontSize: Responsive.scaleFont(context, 14)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                subtitle: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Icon(typeIcon, size: Responsive.scaleFont(context, 11), color: typeColor),
+                    const SizedBox(width: 3),
+                    Text(
+                      context.tr(s.type),
+                      style: TextStyle(
+                        fontSize: Responsive.scaleFont(context, 11),
+                        color: typeColor,
+                      ),
+                    ),
+                    if (s.price != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        '? ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: Responsive.scaleFont(context, 11),
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                trailing: Icon(Icons.north_west, size: 16, color: cs.onSurfaceVariant),
+                dense: true,
+                onTap: () => _onSuggestionTap(s),
               );
             },
           ),
-        ],
-        const SizedBox(height: 16),
-        const AdBanner(),
+        ),
       ],
     );
   }
 
-  Widget _buildUserTile(UserProfile user) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          backgroundImage: user.profileImage.isNotEmpty
-              ? NetworkImage(user.profileImage)
-              : null,
-          child: user.profileImage.isEmpty
-              ? Text(
-                  user.displayName.isNotEmpty
-                      ? user.displayName[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(fontSize: 20, color: Theme.of(context).colorScheme.surface, fontWeight: FontWeight.bold),
-                )
-              : null,
+  /// Opens the category page carrying the understood intent as presets.
+  void _openIntent(SearchIntent intent) {
+    var cat = intent.category;
+    if (cat == null && intent.brand != null) {
+      final want = intent.brand!.toLowerCase();
+      for (final c in kMarketplaceTaxonomy) {
+        if (c.brands.any((b) => b.name.toLowerCase() == want)) {
+          cat = c;
+          break;
+        }
+      }
+    }
+    if (cat == null) return;
+    final model = categoryFromTaxonomy(cat);
+    final params = <String>[];
+    if (intent.subcategory != null) {
+      params.add('sub=${Uri.encodeComponent(intent.subcategory!.name)}');
+    }
+    if (intent.brand != null) {
+      params.add('brands=${Uri.encodeComponent(intent.brand!)}');
+    }
+    if (intent.attributes.isNotEmpty) {
+      params.add(
+        'attrs=${Uri.encodeComponent(intent.attributes.entries.map((e) => "${e.key}:${e.value}").join(','))}',
+      );
+    }
+    if (intent.flags.isNotEmpty) {
+      params.add('flags=${intent.flags.join(',')}');
+    }
+    final qs = params.isEmpty ? '' : '?${params.join('&')}';
+    context.push(
+      '${AppRoutes.categoryProducts}'
+      '/${Uri.encodeComponent(model.name)}$qs',
+      extra: model,
+    );
+  }
+
+  Widget _buildResults(ColorScheme cs) {
+    final resp = _response!;
+    final results = _sortedResults(resp);
+
+    if (results.isEmpty) {
+      return _buildEmptyState(cs, resp);
+    }
+
+    final head = <Widget>[_buildResultMeta(resp, cs)];
+    if (_loading) {
+      head.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: LinearProgressIndicator(minHeight: 2, color: cs.primary),
         ),
-        title: Row(
+      );
+    }
+    final summary = _buildAiSummaryCard(cs, resp);
+    if (summary != null) head.add(summary);
+
+    // Universal: adaptive padding, dismiss keyboard on drag, all gestures
+    final horizontalPadding = Responsive.isTablet ? 20.0 : (Responsive.isSmallPhone ? 8.0 : 12.0);
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.all(horizontalPadding),
+      itemCount: head.length + results.length,
+      itemBuilder: (_, i) {
+        if (i < head.length) {
+          return head[i];
+        }
+        final r = results[i - head.length];
+        return GestureDetector(
+          onLongPress: () => _shareSearchResult(r),
+          child: _buildResultCard(cs, r),
+        );
+      },
+    );
+  }
+
+  // Compact DB-grounded AI summary (?8/?9/?62). Hidden until content arrives or
+  // when generation failed ? search results must never depend on it.
+  Widget? _buildAiSummaryCard(ColorScheme cs, SearchResponse resp) {
+    if (_aiSummaryFailed || _aiSummaryQuery != resp.query.trim()) return null;
+    if (!_aiSummaryLoading && _aiSummary == null) return null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cs.surfaceSubtle,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Flexible(
-              child: Text(
-                user.displayName.isNotEmpty
-                    ? user.displayName
-                    : context.tr('unknown'),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
-              ),
+            Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 14, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  context.tr('ai_label'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: cs.primary,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 10),
+            if (_aiSummaryLoading)
+              Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.tr('ai_summarizing'),
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Text(_aiSummary!, style: TextStyle(fontSize: 13, height: 1.5, color: cs.onSurface)),
           ],
         ),
-        subtitle: Text(
-          user.location.isNotEmpty
-              ? user.location
-              : user.bio.isNotEmpty
-              ? user.bio
-              : '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
+      ),
+    );
+  }
+
+  // G11 local client-side sort of the server ranking. 'best' keeps the
+  // (relevance-ranked) server order; price sorts put items with no price last.
+  List<SearchResult> _sortedResults(SearchResponse resp) {
+    // Client-side per-tab filtering: the server's `type` filter is unreliable
+    // (fallbacks return products only), so always request 'all' and filter here.
+    final filtered = resp.results.where((r) {
+      switch (_selectedTab) {
+        case 'products':
+          return r.type == 'product';
+        case 'sellers':
+          return r.type == 'seller' || r.type == 'user';
+        case 'categories':
+          return r.type == 'category';
+        default:
+          return true;
+      }
+    }).toList();
+    if (_sortKey == 'best') return filtered;
+    final copy = [...filtered];
+    copy.sort((a, b) {
+      final pa = a.price;
+      final pb = b.price;
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      final cmp = pa.compareTo(pb);
+      return _sortKey == 'price_desc' ? -cmp : cmp;
+    });
+    return copy;
+  }
+
+  // Headers above results: auto-applied typo correction notice + chips for the
+  // structured filters the server pulled out of free text ("= 800K ? DSM").
+  Widget _buildResultMeta(SearchResponse resp, ColorScheme cs) {
+    final detected = resp.detected;
+    final maxPrice = detected['maxPrice'];
+    final minPrice = detected['minPrice'];
+    final location = detected['location'];
+    final chips = <String>[
+      if (maxPrice is num) '= ${context.formatPrice(maxPrice.toDouble())}',
+      if (minPrice is num) '= ${context.formatPrice(minPrice.toDouble())}',
+      if (location is String && location.isNotEmpty) location,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (resp.autoCorrected && resp.query.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.spellcheck_rounded, size: 16, color: cs.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${context.tr('showing_results_for')} "${resp.query}"',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (chips.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final c in chips)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Text(
+                        c,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          _buildSortRow(cs),
+          Text(
+            '${resp.total} ${context.tr('results').toLowerCase()}',
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // G11 sort switcher (Best Match / Lowest / Highest). Nearest (?42) is
+  // deferred until location consent exists ? excluded from the chip set.
+  Widget _buildSortRow(ColorScheme cs) {
+    final sorts = <(String, String, IconData)>[
+      ('best', context.tr('sort_best_match'), Icons.recommend_rounded),
+      ('price_asc', context.tr('sort_price_low'), Icons.arrow_upward_rounded),
+      ('price_desc', context.tr('sort_price_high'), Icons.arrow_downward_rounded),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final s in sorts)
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                if (_sortKey == s.$1) return;
+                setState(() => _sortKey = s.$1);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _sortKey == s.$1 ? cs.primary : cs.surfaceRaised,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _sortKey == s.$1 ? cs.primary : cs.hairline),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      s.$3,
+                      size: 14,
+                      color: _sortKey == s.$1 ? cs.onPrimary : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      s.$2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _sortKey == s.$1 ? cs.onPrimary : cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _shareSearchResult(SearchResult r) {
+    if (r.type == 'product' && r.id.isNotEmpty) {
+      ShareService.instance.shareProduct(
+        productId: r.id,
+        productName: r.displayName,
+        price: r.price ?? 0,
+      );
+      return;
+    }
+    if ((r.type == 'seller' || r.type == 'user') && r.id.isNotEmpty) {
+      ShareService.instance.shareSeller(sellerId: r.id, sellerName: r.displayName);
+    }
+  }
+
+  Widget _buildResultCard(ColorScheme cs, SearchResult r) {
+    final isProduct = r.type == 'product';
+    final isSeller = r.type == 'user' || r.type == 'seller';
+    final isCategory = r.type == 'category';
+    final flash = isProduct ? _flashSales[r.id] : null;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          _searchService.recordClick(resultId: r.id, resultType: r.type, query: _response?.query);
+          if (isProduct) {
+            _navigateToProduct(r.id);
+          } else if (isSeller) {
+            context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName);
+          } else if (isCategory) {
+            _openCategory(r.id, r.displayName, image: r.image);
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              if (r.image != null && r.image!.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ProductCachedImage(url: r.image!, fit: BoxFit.cover),
+                        if (flash != null)
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: cs.error,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '-${flash.discountPercent.toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                  color: cs.surface,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          bottom: 2,
+                          left: 2,
+                          child: IgnorePointer(child: SokoVibeWatermark()),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            r.displayName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: cs.onSurface,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Blue Tick beside the product title. Resolved from trusted state rather than
+                        // from r.kycApproved, which is a denormalised product
+                        // field a seller could previously write directly.
+                        BlueTickBadge(sellerId: r.sellerId, size: 14),
+                        if (isProduct || isSeller)
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: context.tr('share'),
+                            icon: const Icon(Icons.share_outlined, size: 18),
+                            onPressed: () => _shareSearchResult(r),
+                          ),
+                        if (r.isBoosted)
+                          Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              context.tr('boost_product'),
+                              style: TextStyle(fontSize: 10, color: cs.primary),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    if (r.description != null && r.description!.isNotEmpty)
+                      Text(
+                        r.description!,
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (isProduct && flash != null) ...[
+                      Text(
+                        '${context.currencySymbol()} ${flash.salePrice.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: cs.error,
+                        ),
+                      ),
+                      Text(
+                        '${context.currencySymbol()} ${flash.originalPrice.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          decoration: TextDecoration.lineThrough,
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ] else if (isProduct && r.price != null)
+                      Text(
+                        '${context.currencySymbol()} ${r.price!.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: cs.primary,
+                        ),
+                      ),
+                    if (r.sellerName != null || r.location != null)
+                      Text(
+                        [
+                          r.sellerName,
+                          r.location,
+                        ].where((x) => x != null && x.isNotEmpty).join(' ? '),
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (r.rating != null && r.rating! > 0)
+                      Row(
+                        children: [
+                          Icon(Icons.star, size: 14, color: cs.primary),
+                          const SizedBox(width: 2),
+                          Text(
+                            r.rating!.toStringAsFixed(1),
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                          ),
+                          if (r.reviewCount != null) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '(${r.reviewCount})',
+                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                            ),
+                          ],
+                        ],
+                      ),
+                    if (isCategory)
+                      Row(
+                        children: [
+                          Icon(Icons.category_outlined, size: 13, color: cs.tertiary),
+                          const SizedBox(width: 4),
+                          Text(
+                            context.tr('categories'),
+                            style: TextStyle(fontSize: 11, color: cs.tertiary),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 14,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ColorScheme cs, SearchResponse resp) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SokoAnimatedIllustration(SokoIllustration.emptySearch, size: 96),
+            const SizedBox(height: 16),
+            Text(
+              context.tr('no_results'),
+              style: TextStyle(fontSize: 18, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.tr('try_different'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+            ),
+            if (resp.correction != null) ...[
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: () {
+                  _searchCtrl.text = resp.correction!;
+                  _performSearch();
+                },
+                icon: const Icon(Icons.search, size: 18),
+                label: Text('${context.tr('search_for')} "${resp.correction}"'),
+              ),
+            ],
+          ],
         ),
-        onTap: () => context.push(
-          '${AppRoutes.publicProfile}/${user.uid}',
-          extra: user.displayName,
+      ),
+    );
+  }
+
+  // G12 quick-start queries: localized premium examples + real trending terms
+  // (deduped) so a first-time user can search without typing (spec ?56-style
+  // "phone under 500k" phrasing). Tapping performs the search immediately.
+  List<String> _suggestedQueries() {
+    final statics = [
+      context.tr('suggested_q1'),
+      context.tr('suggested_q2'),
+      context.tr('suggested_q3'),
+    ];
+    final dynamicQueries = _trending
+        .map((t) => t['text'] as String? ?? '')
+        .where((s) => s.isNotEmpty && !statics.contains(s))
+        .take(3)
+        .toList();
+    return [...statics, ...dynamicQueries];
+  }
+
+  Widget _buildHistoryPanel(ColorScheme cs) {
+    // Universal: scroll + drag dismiss + responsive padding for any device
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.all(Responsive.isTablet ? 20 : (Responsive.isSmallPhone ? 8 : 12)),
+      children: [
+        if (_suggestedQueries().isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  context.tr('suggested_for_you'),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
+              ],
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _suggestedQueries().map((q) {
+              return ActionChip(
+                label: Text(q, style: TextStyle(fontSize: Responsive.scaleFont(context, 13))),
+                onPressed: () {
+                  _searchCtrl.text = q;
+                  _performSearch();
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (_trending.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.trending_up, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    context.tr('trending'),
+                    style: TextStyle(
+                      fontSize: Responsive.scaleFont(context, 15),
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _trending.take(10).map((t) {
+              final text = t['text'] as String? ?? '';
+              return ActionChip(
+                label: Text(text, style: TextStyle(fontSize: Responsive.scaleFont(context, 13))),
+                onPressed: () {
+                  _searchCtrl.text = text;
+                  _performSearch();
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (_searchHistory.isNotEmpty) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.history, size: 18, color: cs.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.tr('recent_searches'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: _clearAllHistory,
+                child: Text(
+                  context.tr('clear_all'),
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+          ..._searchHistory.map(
+            (q) => Dismissible(
+              key: ValueKey('history_$q'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 16),
+                color: cs.error.withValues(alpha: 0.1),
+                child: Icon(Icons.delete_outline, color: cs.error),
+              ),
+              onDismissed: (_) => _removeHistoryItem(q),
+              child: ListTile(
+                leading: Icon(Icons.history, size: 18, color: cs.onSurfaceVariant),
+                title: Text(
+                  q,
+                  style: TextStyle(fontSize: Responsive.scaleFont(context, 14)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  tooltip: context.tr('remove_search_history'),
+                  icon: Icon(Icons.close, size: 16, color: cs.primary),
+                  onPressed: () => _removeHistoryItem(q),
+                ),
+                dense: true,
+                onTap: () {
+                  _searchCtrl.text = q;
+                  _performSearch();
+                },
+                onLongPress: () => _removeHistoryItem(q),
+              ),
+            ),
+          ),
+        ],
+        if (_searchHistory.isEmpty && _trending.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(Icons.search, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr('search_products_users'),
+                    style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildInitialState(ColorScheme cs) {
+    final boosted = _discoveryProducts.where((r) => r.isBoosted).toList();
+    final normal = _discoveryProducts.where((r) => !r.isBoosted).toList();
+    final hasContent =
+        _mostRatedProducts.isNotEmpty ||
+        _mostRatedSellers.isNotEmpty ||
+        _discoveryProducts.isNotEmpty;
+
+    final pad = Responsive.isTablet ? 20.0 : 16.0;
+    final productCarouselHeight = Responsive.isTablet ? 232.0 : 208.0;
+    final sellerCarouselHeight = Responsive.isTablet ? 164.0 : 148.0;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(pad, 8, pad, 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Text(
+            context.tr('discover'),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.6,
+              color: cs.onSurface,
+              height: 1.1,
+            ),
+          ),
         ),
+        if (_mostRatedProducts.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.star_rounded, context.tr('most_rated_products')),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: productCarouselHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _mostRatedProducts.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => _buildMostRatedProductCard(cs, _mostRatedProducts[i]),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+        if (_mostRatedSellers.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.storefront_rounded, context.tr('most_rated_sellers')),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: sellerCarouselHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _mostRatedSellers.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => _buildMostRatedSellerCard(cs, _mostRatedSellers[i]),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+        if (boosted.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.rocket_launch_rounded, context.tr('featured_products')),
+          const SizedBox(height: 8),
+          ...boosted.map((r) => _buildResultCard(cs, r)),
+          const SizedBox(height: 12),
+        ],
+        if (normal.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.inventory_2_outlined, context.tr('other_products')),
+          const SizedBox(height: 8),
+          ...normal.map((r) => _buildResultCard(cs, r)),
+        ],
+        if (_loadingInitial && !hasContent)
+          const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: SokoVibeLoading()),
+          ),
+        if (!hasContent && !_loadingInitial)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.2)),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr('search_products_users'),
+                    style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(ColorScheme cs, IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: cs.primary),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMostRatedProductCard(ColorScheme cs, SearchResult r) {
+    final flash = _flashSales[r.id];
+    return SizedBox(
+      width: 140,
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: InkWell(
+          onTap: () => _navigateToProduct(r.id),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    r.image != null && r.image!.isNotEmpty
+                        ? ProductCachedImage(url: r.image!, fit: BoxFit.cover)
+                        : Container(
+                            color: cs.surfaceContainerHighest,
+                            child: const Center(
+                              child: Icon(Icons.image_outlined, color: Colors.grey),
+                            ),
+                          ),
+                    if (r.isBoosted)
+                      Positioned(
+                        top: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cs.secondary.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            context.tr('boost_product'),
+                            style: TextStyle(
+                              color: cs.onSecondary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (flash != null)
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cs.error,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '-${flash.discountPercent.toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              color: cs.surface,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      r.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    if (flash != null) ...[
+                      Text(
+                        '${context.currencySymbol()} ${flash.salePrice.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: cs.error,
+                        ),
+                      ),
+                      Text(
+                        '${context.currencySymbol()} ${flash.originalPrice.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          decoration: TextDecoration.lineThrough,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ] else if (r.price != null)
+                      Text(
+                        '${context.currencySymbol()} ${r.price!.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: cs.primary,
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 13, color: cs.primary),
+                        const SizedBox(width: 2),
+                        Text(
+                          r.rating?.toStringAsFixed(1) ?? '0.0',
+                          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '(${r.reviewCount ?? 0})',
+                          style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMostRatedSellerCard(ColorScheme cs, SearchResult r) {
+    return SellerCard(
+      name: r.displayName,
+      imageUrl: r.image ?? '',
+      rating: r.rating ?? 0,
+      reviewCount: r.reviewCount ?? 0,
+      // The Blue Tick resolves from trusted backend state; r.kycApproved is a
+      // denormalised hint only and no longer drives the badge.
+      sellerId: r.id,
+      kycVerified: r.kycApproved,
+      onTap: () => context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName),
+    );
+  }
+}
+
+/// Visual shortcut chips for the understood search intent. Tapping any
+/// chip opens the matching category page with the intent as presets.
+class _IntentStrip extends StatelessWidget {
+  final SearchIntent intent;
+  final ValueChanged<SearchIntent> onOpen;
+  const _IntentStrip({required this.intent, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final langEn = AppConfig.of(context).langCode == 'en';
+    final chips = <Widget>[];
+    void add(IconData icon, String label) {
+      chips.add(
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ActionChip(
+            avatar: Icon(icon, size: 16, color: cs.primary),
+            label: Text(label, style: const TextStyle(fontSize: 12)),
+            onPressed: () => onOpen(intent),
+          ),
+        ),
+      );
+    }
+
+    final cat = intent.category;
+    if (cat != null) add(Icons.category_outlined, langEn ? cat.name : cat.nameSw);
+    final sub = intent.subcategory;
+    if (sub != null) add(Icons.layers_rounded, langEn ? sub.name : sub.nameSw);
+    if (intent.brand != null) add(Icons.sell_rounded, intent.brand!);
+    intent.attributes.forEach((k, v) => add(Icons.tune_rounded, '$k: $v'));
+    for (final f in intent.flags) {
+      final def = popularFlagByKey(f);
+      add(Icons.bolt_rounded, def?.label ?? (def?.labelKey != null ? def!.labelKey! : f));
+    }
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        children: chips,
       ),
     );
   }

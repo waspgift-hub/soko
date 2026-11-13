@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+
+# Private / non-indexable surfaces
+Disallow: /api/
+Disallow: /apiv1/
+Disallow: /admin/
+Disallow: /company
+Disallow: /company/
+Disallow: /staff
+Disallow: /staff/
+Disallow: /health
+Disallow: /marketing/
+Disallow: /product-fallback.html
+Disallow: /dashboard
+Disallow: /account
+Disallow: /checkout
+Disallow: /auth/
+Disallow: /signin
+Disallow: /signup
+Disallow: /login
+
+Sitemap: https://www.sokovibe.co.tz/sitemap.xml

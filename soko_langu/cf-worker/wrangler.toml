@@ -1,0 +1,35 @@
+name = "soko-api-edge"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Route: new subdomain `api.sokovibe.co.tz` fronting the Render origin.
+# To route on the MAIN zone instead (web + api same origin), change to:
+#   pattern = "sokovibe.co.tz/api/*"
+[[routes]]
+pattern = "api.sokovibe.co.tz/*"
+zone_name = "sokovibe.co.tz"
+
+# Origin override (leave as the Render service in normal operation).
+[vars]
+ORIGIN_URL = "https://soko-langu-server.onrender.com"
+
+# Optional multi-region origins. Set per-continent when regional Render
+# replicas exist; requests from that continent's edge cities route to them for
+# public catalog + search reads. Leave empty (or unset) to keep single-origin.
+#   REGION_ORIGIN_AF = "https://soko-langu-africa.onrender.com"
+#   REGION_ORIGIN_EU = "https://soko-langu-eu.onrender.com"
+#   REGION_ORIGIN_AS = "https://soko-langu-asia.onrender.com"
+#   REGION_ORIGIN_NA = "https://soko-langu-na.onrender.com"
+
+# Optional edge rate-limit brake (KV-backed sliding window, 120 req/min per IP
+# on uncached traffic). Create once, then uncomment:
+#   wrangler kv namespace create RATE_LIMIT_KV
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "<paste-namespace-id>"
+
+# Shared edge secret so the origin can trust cf-connecting-ip for its own rate
+# limits. NEVER commit the value — set it as a secret, then mirror the SAME
+# value as EDGE_SECRET in the Render dashboard (soko-langu-api):
+#   wrangler secret put EDGE_SECRET

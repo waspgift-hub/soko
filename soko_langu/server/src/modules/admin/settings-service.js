@@ -1,0 +1,232 @@
+// Platform settings store (admin panel "Mipangilio").
+//
+// Persisted as a single Firestore document `app_settings/admin_settings`, the
+// same document family already used for the flash-sale push cooldown. That
+// keeps settings cluster-wide across instances, needs no Prisma model and no
+// Postgres migration. When Firestore is unavailable (local/dev) the service
+// falls back to an in-memory copy so the panel stays fully usable.
+const commerceStore = require('../../services/commerce-store');
+
+const SETTINGS_COLLECTION = 'app_settings';
+const SETTINGS_DOC = 'admin_settings';
+
+// Fields that are returned to the browser only as a masked marker
+// ('******' when set, '' when empty) so secrets never reach the SPA bundle.
+const SECRET_FIELDS = new Set([
+  'smtpPass','smtpUser','firebaseServiceAccountJson','s3SecretKey',
+  's3AccessKey','stripeSecretKey','paypalSecretKey','clickpesaSecretKey',
+  'azamPaySecretKey','selcomSecretKey','twilioAuthToken','smsApiKey',
+  'twilioAccountSid','twilioFrom','oauthGoogleClientSecret','oauthFbAppSecret',
+]);
+
+// Defaults for every group the Settings section manages. Secrets default to
+// empty strings so a pristine Firestore doc never claims a secret is set.
+const DEFAULTS = {
+  general: {
+    platformName: 'Soko Vibe',
+    tagline: 'Nunua na Uza kwa Usalama',
+    logoUrl: '',
+    timezone: 'Africa/Dar_es_Salaam',
+    language: 'sw',
+    dateFormat: 'short',
+    timeFormat: '24h',
+    adminEmail: '',
+    supportEmail: '',
+    supportPhone: '',
+  },
+  registrationAndAuth: {
+    allowRegistration: true,
+    allowSellerSignup: true,
+    defaultUserRole: 'buyer',
+    requireEmailVerification: true,
+    requirePhoneVerification: false,
+    enable2FA: false,
+    sessionTimeoutMinutes: 60,
+  },
+  paymentsAndCurrency: {
+    currency: 'TZS',
+    taxRatePct: 0,
+    // Fraction of the product price (0.035 = 3.5%). The admin field is
+    // labelled "(%)" and `commissionPercent()` accepts either unit, so the
+    // stored default may be written as 3.5 or 0.035.
+    platformCommissionPct: 3.5,
+    enableEscrow: true,
+    escrowReleaseDays: 14,
+    primaryGateway: 'azampay',
+    gateways: {
+      clickpesa: { enabled: false, merchantId: '', apiKey: '', secretKey: '' },
+      azamPay: { enabled: true, merchantId: '', apiKey: '', secretKey: '' },
+      selcom: { enabled: false, merchantId: '', apiKey: '', secretKey: '' },
+      stripe: { enabled: false, secretKey: '' },
+      paypal: { enabled: false, clientId: '', secretKey: '' },
+    },
+  },
+  emailNotifications: {
+    provider: 'smtp',
+    smtpHost: '',
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: '',
+    smtpPass: '',
+    fromEmail: '',
+    fromName: 'Soko Vibe',
+    signatures: { buyer: '', seller: '' },
+  },
+  integrations: {
+    analyticsId: '',
+    pixelId: '',
+    s3Bucket: '',
+    oauth: {
+      google: { clientId: '', clientSecret: '', redirectUri: '' },
+      facebook: { appId: '', appSecret: '', redirectUri: '' },
+    },
+  },
+  securityMaintenance: {
+    maintenanceMode: false,
+    maintenanceReason: '',
+    allowSuspendedLogin: false,
+    ipWhitelist: '',
+    ipBlacklist: '',
+    backupSchedule: 'daily',
+  },
+  performance: {
+    enableCache: true,
+    cacheTtlSeconds: 300,
+    imageMaxMB: 5,
+    maxUploadMB: 5,
+    enableCompression: true,
+    apiRateLimitPerMin: 300,
+  },
+  dailyEngagement: {
+    enabled: true,
+    timezone: 'Africa/Dar_es_Salaam',
+    sendHourLocal: 9,
+    channels: { email: true, push: true },
+  },
+  appRelease: {
+    latestVersion: '1.0.1',
+    latestBuild: 2,
+    minSupportedVersion: '1.0.0',
+    minSupportedBuild: 1,
+    urgency: 'none',
+    releaseNotes: '',
+    androidDownloadUrl: '',
+    iosDownloadUrl: '',
+    published: false,
+  },
+};
+
+let MEMORY = null;
+
+function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULTS)); }
+
+// Deep merge a validated patch over the current/default settings. Only keys
+// that exist in DEFAULTS groups are accepted so injected/unknown fields are
+// never persistedeur. Secrets are skipped on read/write masking.
+function safeMerge(base, patch) {
+  const out = cloneDefaults();
+  if (!patch || typeof patch !== 'object') return out;
+  Object.keys(patch).forEach((group) => {
+    if (!DEFAULTS[group] || !patch[group] || typeof patch[group] !== 'object') return;
+    const baseGroup = base && base[group] ? base[group] : out[group];
+    const patchGroup = patch[group];
+    Object.keys(DEFAULTS[group]).forEach((key) => {
+      if (!Object.prototype.hasOwnProperty.call(patchGroup, key)) return;
+      const val = patchGroup[key];
+      if (SECRET_FIELDS.has(key) && (!val || val === '******')) return;
+      if (val && typeof val === 'object' && !Array.isArray(val) && typeof out[group][key] === 'object') {
+        out[group][key] = { ...(baseGroup[key] || {}), ...val };
+        return;
+      }
+      out[group][key] = val;
+    });
+  });
+  return out;
+}
+
+function maskNested(obj) {
+  const out = {};
+  Object.entries(obj || {}).forEach(([k, v]) => {
+    if (SECRET_FIELDS.has(k)) { out[k] = v ? '******' : ''; return; }
+    if (v && typeof v === 'object' && !Array.isArray(v)) { out[k] = maskNested(v); return; }
+    out[k] = v;
+  });
+  return out;
+}
+
+function maskAll(settings) {
+  const out = {};
+  Object.entries(settings || {}).forEach(([g, v]) => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) out[g] = maskNested(v);
+    else out[g] = v;
+  });
+  return out;
+}
+
+async function getFromFirestore() {
+  try {
+    const snap = await commerceStore.getDocument(SETTINGS_COLLECTION, SETTINGS_DOC);
+    if (!snap) return null;
+    return safeMerge(null, snap || {});
+  } catch (e) {
+    console.error('[settings-service] Firestore read failed:', e?.message || e);
+    return null;
+  }
+}
+
+async function getSettings(forceReload = false) {
+  if (MEMORY && !forceReload) return MEMORY;
+  const fromFs = await getFromFirestore();
+  return fromFs || (MEMORY = cloneDefaults());
+}
+
+// Masked read for the panel renderer (secrets never leave the server).
+function getSettingsForRender(settings) { return maskAll(settings || cloneDefaults()); }
+async function getSettingsMasked() { return getSettingsForRender(await getSettings()); }
+
+async function writeToFirestore(settings) {
+  try {
+    await commerceStore.upsertDocument(
+      SETTINGS_COLLECTION,
+      SETTINGS_DOC,
+      { ...settings, updatedAt: new Date().toISOString() }
+    );
+    return true;
+  } catch (e) {
+    console.error('[settings-service] Firestore write failed:', e?.message || e);
+    return false;
+  }
+}
+
+async function saveSettings(patch) {
+  const current = (await getSettings()) || cloneDefaults();
+  const merged = safeMerge(current, patch);
+  MEMORY = merged;
+  await writeToFirestore(merged);
+  return merged;
+}
+
+/**
+ * Platform commission as a fraction of the product price (0.035 = 3.5%).
+ *
+ * The admin field is labelled "(%)", so an owner who types "3.5" means 3.5%
+ * while the stored value the payment math wants is 0.035. Rather than force one
+ * unit on the operator, accept both: a value above 1 is read as a percentage
+ * and divided down. Anything outside 0–100 is nonsense and yields 0 (no fee),
+ * which is the safe direction — the platform never overcharges.
+ */
+function commissionPercent(settings) {
+  const v = Number(settings?.paymentsAndCurrency?.platformCommissionPct);
+  if (!Number.isFinite(v) || v < 0) return 0;
+  if (v > 1) return v <= 100 ? v / 100 : 0;
+  return v;
+}
+
+module.exports = {
+  getSettings,
+  saveSettings,
+  getSettingsMasked,
+  commissionPercent,
+  DEFAULTS,
+  safeMerge,
+};

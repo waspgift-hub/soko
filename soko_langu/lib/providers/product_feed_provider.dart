@@ -13,6 +13,8 @@ class ProductFeedProvider extends ChangeNotifier {
   ProductFeedProvider({ProductRepository? repo})
       : _repo = repo ?? ProductRepository();
 
+  static const Duration _kFetchTimeout = Duration(seconds: 20);
+
   List<Product> _products = [];
   bool _isLoading = false;
   bool _hasMore = true;
@@ -37,11 +39,14 @@ class ProductFeedProvider extends ChangeNotifier {
     _errorKind = null;
     notifyListeners();
 
-    final result = await _repo.loadProducts(startOver: true);
+    final result = await _loadWithTimeout(() => _repo.loadProducts(startOver: true));
     if (result.isError) {
       _error = result.error;
-      _errorKind = FirestoreErrorKind.other;
-      _products = [];
+      // A cache-empty network failure means the feed genuinely couldn't be
+      // reached — surface it as a network problem so the retry UI shows.
+      _errorKind = FirestoreErrorKind.network;
+      // Don't wipe existing products on error — keeps realtime data visible
+      if (_products.isEmpty) _products = [];
     } else {
       _products = result.data ?? [];
       _fromCache = result.isCache;
@@ -53,6 +58,22 @@ class ProductFeedProvider extends ChangeNotifier {
 
     // Subscribe to real-time updates (only when online)
     _startRealtimeSubscription();
+  }
+
+  /// Runs a repo fetch against a hard budget. The repository itself caps each
+  /// remote attempt, but this guarantees `isLoading` clears even if something
+  /// unexpected throws, falling back to the Hive cache every time.
+  Future<ProductResult<List<Product>>> _loadWithTimeout(
+    Future<ProductResult<List<Product>>> Function() fetch,
+  ) async {
+    try {
+      return await fetch().timeout(
+        _kFetchTimeout,
+        onTimeout: () => _repo.loadFromCache(),
+      );
+    } catch (_) {
+      return _repo.loadFromCache();
+    }
   }
 
   void _startRealtimeSubscription() {
@@ -89,49 +110,27 @@ class ProductFeedProvider extends ChangeNotifier {
     );
   }
 
-  /// Load next page (Firestore pagination).
-  Future<void> loadNextPage() async {
-    if (_isLoading || !_hasMore) return;
-    _isLoading = true;
-    _error = null;
-    _errorKind = null;
-    notifyListeners();
-
-    final result = await _repo.loadProducts();
-    if (result.isError) {
-      _error = result.error;
-      _errorKind = FirestoreErrorKind.other;
-    } else {
-      final fresh = result.data ?? [];
-      for (final p in fresh) {
-        if (!_loadedIds.contains(p.id)) {
-          _loadedIds.add(p.id);
-          _products.add(p);
-        }
-      }
-      _hasMore = fresh.length >= 30;
-      _fromCache = result.isCache;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
   Future<void> loadByBrand(String brand) async {
     if (_isLoading) return;
     _isLoading = true;
     _error = null;
     _errorKind = null;
+    _hasMore = true;
+    _loadedIds.clear();
+    _currentFilter = 'brand';
+    _currentBrandFilter = brand;
     notifyListeners();
 
-    final result = await _repo.loadByBrand(brand);
+    final result = await _loadWithTimeout(() => _repo.loadByBrand(brand, startOver: true));
     if (result.isError) {
       _error = result.error;
-      _errorKind = FirestoreErrorKind.other;
+      _errorKind = FirestoreErrorKind.network;
       _products = [];
     } else {
       _products = result.data ?? [];
       _fromCache = result.isCache;
+      _loadedIds = _products.map((p) => p.id).toSet();
+      _hasMore = result.hasMore;
     }
 
     _isLoading = false;
@@ -143,18 +142,76 @@ class ProductFeedProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _errorKind = null;
+    _hasMore = true;
+    _loadedIds.clear();
+    _currentFilter = 'category';
+    _currentCategoryFilter = category;
+    _currentSubcategoryFilter = subcategory;
     notifyListeners();
 
-    final result = await _repo.loadProductsByCategory(
-      category,
-      subcategory: subcategory,
+    final result = await _loadWithTimeout(
+      () => _repo.loadProductsByCategory(
+        category,
+        subcategory: subcategory,
+        startOver: true,
+      ),
     );
     if (result.isError) {
       _error = result.error;
-      _errorKind = FirestoreErrorKind.other;
+      _errorKind = FirestoreErrorKind.network;
       _products = [];
     } else {
       _products = result.data ?? [];
+      _fromCache = result.isCache;
+      _loadedIds = _products.map((p) => p.id).toSet();
+      _hasMore = result.hasMore;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // Filter state for paginated loadMore
+  String? _currentFilter;
+  String? _currentBrandFilter;
+  String? _currentCategoryFilter;
+  String? _currentSubcategoryFilter;
+
+  /// Load next page — works for main feed, brand, and category views.
+  Future<void> loadNextPage() async {
+    if (_isLoading || !_hasMore) return;
+    _isLoading = true;
+    _error = null;
+    _errorKind = null;
+    notifyListeners();
+
+    ProductResult<List<Product>> result;
+
+    final Future<ProductResult<List<Product>>> Function() fetch;
+    if (_currentFilter == 'brand' && _currentBrandFilter != null) {
+      fetch = () => _repo.loadByBrand(_currentBrandFilter!);
+    } else if (_currentFilter == 'category' && _currentCategoryFilter != null) {
+      fetch = () => _repo.loadProductsByCategory(
+        _currentCategoryFilter!,
+        subcategory: _currentSubcategoryFilter,
+      );
+    } else {
+      fetch = () => _repo.loadProducts();
+    }
+    result = await _loadWithTimeout(fetch);
+
+    if (result.isError) {
+      _error = result.error;
+      _errorKind = FirestoreErrorKind.network;
+    } else {
+      final fresh = result.data ?? [];
+      for (final p in fresh) {
+        if (!_loadedIds.contains(p.id)) {
+          _loadedIds.add(p.id);
+          _products.add(p);
+        }
+      }
+      _hasMore = result.hasMore;
       _fromCache = result.isCache;
     }
 
@@ -180,6 +237,10 @@ class ProductFeedProvider extends ChangeNotifier {
     _products.clear();
     _loadedIds.clear();
     _hasMore = true;
+    _currentFilter = null;
+    _currentBrandFilter = null;
+    _currentCategoryFilter = null;
+    _currentSubcategoryFilter = null;
     await loadInitial();
   }
 

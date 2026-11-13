@@ -1,14 +1,48 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
-import 'cloudinary_service.dart';
+import '../models/product_publish_stage.dart';
+import 'media_service.dart';
 import 'fraud_prevention_service.dart';
 import 'api_config.dart';
+import 'product_api.dart';
+import 'localization_service.dart';
 import '../utils/network_error.dart';
+import 'local_cache_service.dart';
+import 'transfer/transfer_item.dart';
+import 'transfer/transfer_progress.dart';
+
+const List<String> knownBrands = [
+  'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell',
+  'Other', 'Others',
+];
+
+String _normalizeBrand(String? brand) {
+  final trimmed = brand?.trim() ?? '';
+  if (trimmed.isEmpty) return '';
+  return trimmed.split(' ').map((word) {
+    if (word.isEmpty) return '';
+    return word[0].toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
+
+List<String> _generateSearchKeywords(String name, String description, String category, String? brand, String? barcode) {
+  final words = <String>{};
+  final text = '$name $description $category ${brand ?? ''}';
+  for (final part in text.split(RegExp(r'[\s,.-]+'))) {
+    final w = part.trim().toLowerCase();
+    if (w.length >= 2) words.add(w);
+  }
+  if (barcode != null && barcode.trim().isNotEmpty) {
+    words.add(barcode.trim().toLowerCase());
+  }
+  return words.toList();
+}
 
 String getThumbnailUrl(String imageUrl, {int width = 300}) {
   try {
@@ -26,7 +60,7 @@ String getThumbnailUrl(String imageUrl, {int width = 300}) {
   return imageUrl;
 }
 
-void _sortByBoost(List<Product> products) {
+void _sortByBoosted(List<Product> products) {
   products.sort((a, b) {
     final aBoosted = a.isBoostedValid ? 0 : 1;
     final bBoosted = b.isBoostedValid ? 0 : 1;
@@ -39,12 +73,167 @@ void _sortByBoost(List<Product> products) {
 class ProductService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ProductApiClient _api = ProductApiClient();
 
-  Future<String> uploadImage(XFile xfile) async {
-    return CloudinaryService.uploadImage(xfile, folder: 'products');
+  // Many widgets call `ProductService()` inside build() and then pass the result
+  // to a StreamBuilder. A new instance per build meant any per-instance cache was
+  // always cold, so the HTTP-backed `stream*` methods below issued one API request
+  // per rebuild. One shared instance keeps those caches warm.
+  static ProductService? _shared;
+
+  factory ProductService() => _shared ??= ProductService._internal();
+
+  ProductService._internal();
+
+  /// A cached, replaying single-value stream keyed by seller.
+  ///
+  /// The HTTP path is one request, not a live listener, so the result is memoised
+  /// and replayed to later subscribers. Without this, opening a seller profile
+  /// re-fetched their whole catalogue on every rebuild.
+  final Map<String, Stream<List<Product>>> _sellerProductStreams = {};
+
+  Stream<List<Product>> _cachedSellerProducts(
+    String sellerId,
+    Future<List<Product>> Function() fetch,
+  ) {
+    return _sellerProductStreams.putIfAbsent(sellerId, () {
+      final ctrl = StreamController<List<Product>>.broadcast();
+      List<Product>? last;
+      fetch().then((v) {
+        last = v;
+        if (!ctrl.isClosed) ctrl.add(v);
+      }).catchError((_) {
+        // Leave the widget on its loading/empty state rather than emitting an
+        // error that StreamBuilder would render as a crash.
+      });
+      // Replay for a widget that mounts after the fetch already resolved.
+      final originalOnListen = ctrl.onListen;
+      ctrl.onListen = () {
+        originalOnListen?.call();
+        final snapshot = last;
+        if (snapshot != null) scheduleMicrotask(() => ctrl.add(snapshot));
+      };
+      return ctrl.stream;
+    });
   }
 
-  Future<void> addProduct({
+  Future<String> uploadImage(XFile xfile) async {
+    return MediaService.uploadImage(xfile, folder: 'products', owner: MediaOwner.product);
+  }
+
+  /// Builds a [TransferBatch] with one independently tracked item per image.
+  ///
+  /// Returned unstarted so the caller can render the rows first, then call
+  /// [TransferBatch.startAll]. Items keep their own outcome, so
+  /// [TransferBatch.retryFailed] re-sends only the photos that failed and
+  /// [TransferBatch.succeededValues] yields the URLs to publish with.
+  ///
+  /// The returned batch must be disposed by the caller.
+  TransferBatch buildImageUploadBatch(
+    List<XFile> files, {
+    void Function(int sent, int total)? onAggregateProgress,
+  }) {
+    final batch = TransferBatch();
+    for (var i = 0; i < files.length; i++) {
+      final index = i;
+      final file = files[i];
+      batch.add<String>(
+        'image-$index',
+        'Image ${index + 1}',
+        file.path,
+        (onProgress) => MediaService.uploadImage(
+          file,
+          folder: 'products',
+          owner: MediaOwner.product,
+          onProgress: (sent, total) {
+            // A zero total means "not measured yet" — report preparing rather
+            // than a 0/0 percentage.
+            if (total <= 0) {
+              onProgress(const TransferProgress.preparing());
+            } else {
+              onProgress(TransferProgress(
+                phase: TransferPhase.uploading,
+                transferred: sent,
+                total: total,
+              ));
+            }
+          },
+        ),
+      );
+    }
+    return batch;
+  }
+
+  /// Uploads product images concurrently, reporting each file's real byte
+  /// counts through [onProgress].
+  ///
+  /// Reports `(index, sent, totalBytes)`. A `totalBytes` of 0 means the size
+  /// is not known yet, which is different from "0% done" and must not be
+  /// rendered as such.
+  Future<List<String>> _uploadImages(
+    List<XFile> files, {
+    required String step,
+    void Function(int index, int sent, int totalBytes)? onProgress,
+  }) async {
+    return Future.wait(
+      files.asMap().entries.map((entry) async {
+        final index = entry.key;
+        final file = entry.value;
+        try {
+          return await MediaService.uploadImage(
+            file,
+            folder: 'products',
+            owner: MediaOwner.product,
+            onProgress: onProgress == null
+                ? null
+                : (sent, total) => onProgress(index, sent, total),
+          );
+        } on Object catch (e) {
+          // The index is in the message so a caller that only sees the error
+          // still knows which row to highlight.
+          throw NetworkError(
+            message: "Image upload failed at step=$step, index=$index: $e",
+            userMessage: translateError(e),
+            originalError: e,
+          );
+        }
+      }),
+    );
+  }
+
+  /// Publish a new listing. Returns the created product id so callers can open
+  /// the detail page immediately after upload (no extra lookup round-trip).
+  ///
+  /// Latency budget (~2s on a normal mobile connection, 3 photos):
+  ///
+  /// | Step                       | Before      | Now                    |
+  /// |----------------------------|-------------|------------------------|
+  /// | `user.reload()`            | ~1 RTT      | removed (redundant)    |
+  /// | user doc + KYC count       | 2 sequential| 1 batched, concurrent  |
+  /// | image compress + upload    | N sequential| N concurrent           |
+  /// | video upload               | blocking    | background, patched in |
+  ///
+  /// Sequential per-image work was the real cost: each image needed a WebP
+  /// compress (~0.3s CPU) plus an upload-session POST plus a PUT to R2, so three
+  /// photos cost ~3x one photo's latency. Running them concurrently collapses
+  /// that to the slowest single image.
+  ///
+  /// The video is deliberately NOT awaited. A 30 MB clip cannot finish in 2s on
+  /// any connection, and blocking on it meant a seller with a video waited 30s+
+  /// to see their own listing. The listing publishes without the video and the
+  /// clip is attached afterwards by [attachProductVideo], exactly how a large
+  /// marketplace behaves.
+  ///
+  /// [onProgress] reports the current phase so the UI can show honest progress
+  /// instead of an indeterminate spinner.
+  ///
+  /// Pass [imageUrls] to publish against images that have already been
+  /// uploaded — typically the succeeded values of a [TransferBatch] the screen
+  /// is already showing rows for. That is what lets a seller retry one failed
+  /// photo without re-sending the four that landed. When [imageUrls] is null
+  /// the images are uploaded here as before, and [onImageProgress] reports
+  /// their real byte counts.
+  Future<String> addProduct({
     required String name,
     required String description,
     required double price,
@@ -53,52 +242,245 @@ class ProductService {
     required String currency,
     required int stock,
     required List<XFile> imageFiles,
+    List<String>? imageUrls,
+    void Function(int index, int sent, int totalBytes)? onImageProgress,
+    List<Map<String, dynamic>>? imageMetadata,
+    XFile? videoFile,
+    String? videoUrl,
     String location = 'Tanzania',
+    String district = '',
     bool isWholesale = false,
     List<Map<String, dynamic>>? wholesaleTiers,
     List<Map<String, dynamic>>? variants,
     Map<String, dynamic>? attributes,
     String? brand,
     String condition = 'new',
+    String? barcode,
+    void Function(ProductPublishStage)? onProgress,
+    void Function(int sent, int total)? onVideoProgress,
   }) async {
+    // Hatua inayofanyika sasa — ikiwa kosa limetokea, lebo hii inaambatanishwa
+    // na ujumbe ili mtumiaji/admin ajue kilichoshindwa (auth, kyc, upload...).
+    var step = 'auth';
+    void report(ProductPublishStage s) {
+      try {
+        onProgress?.call(s);
+      } catch (_) {
+        // A progress listener must never be able to fail a publish.
+      }
+    }
+
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User not logged in");
 
-      // Refresh session so Firestore rules see a valid auth token
-      await user.reload();
+      // Refresh the token so Firestore rules and the media API see a valid
+      // credential. `user.reload()` was a separate network round-trip that
+      // added nothing here, so it is gone: getIdToken(true) is what the write
+      // actually depends on.
       await user.getIdToken(true);
 
-      List<String> imageUrls = [];
-      for (var file in imageFiles) {
-        final url = await uploadImage(file);
-        imageUrls.add(url);
+      step = 'kyc-check';
+      report(ProductPublishStage.checking);
+
+      // Single seller read for the suspension and KYC-badge state below.
+      final userDoc = await _db.collection('users').doc(user.uid).get();
+      final userData = userDoc.data();
+      // Firestore rules already block writes for suspended accounts
+      // (notSuspended()); fail early with a clear message instead of letting
+      // the write surface a raw permission-denied.
+      if (userData?['isSuspended'] == true) {
+        throw NetworkError(
+          message: "Account suspended - cannot list products",
+          userMessage: 'account_suspended_seller',
+          originalError: Exception("Account suspended"),
+        );
       }
+      // No product-count gate: sellers list unlimited products with or without KYC.
+
+      step = 'upload-images';
+      report(ProductPublishStage.uploadingImages);
+
+      // Concurrent, not sequential. Compression is CPU-bound and the two network
+      // hops are I/O-bound, so overlapping them turns N x (compress + session +
+      // put) into max(individual) instead of sum.
+      //
+      // When the caller already uploaded through a TransferBatch we reuse its
+      // URLs instead of sending the same bytes twice; that is the path that
+      // makes a single-file retry cheap.
+      final List<String> resolvedImageUrls = imageUrls ?? (imageFiles.isEmpty
+          ? const <String>[]
+          : await _uploadImages(
+              imageFiles,
+              step: step,
+              onProgress: onImageProgress,
+            ));
+
+      step = 'save-product';
+      report(ProductPublishStage.saving);
 
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
-      bool sellerKycApproved = false;
-
-      final userDoc = await _db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         final data = userDoc.data()!;
-        sellerPhone = data['phone'] as String? ?? '';
-        sellerKycApproved = data['kyc']?['approved'] ?? false;
+        final phone = data['phone'];
+        sellerPhone = phone is String ? phone : '';
       }
 
-      await _writeProduct(
-        user.uid, name, description, price, currency, imageUrls,
-        category, subcategory, stock, sellerName, sellerPhone,
-        sellerKycApproved, isWholesale, wholesaleTiers, variants,
-        attributes, brand, condition, location,
-      );
+      // An already-hosted video URL (edit-style reuse) is passed straight
+      // through. A freshly picked clip is deferred to the background.
+      final String? resolvedVideoUrl = videoUrl;
+      String createdId;
+
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          createdId = await _addProductViaApi(
+            uid: user.uid,
+            name: name,
+            description: description,
+            price: price,
+            imageUrls: resolvedImageUrls,
+            category: category,
+            subcategory: subcategory,
+            stock: stock,
+            sellerName: sellerName,
+            isWholesale: isWholesale,
+            wholesaleTiers: wholesaleTiers,
+            variants: variants,
+            attributes: attributes,
+            brand: brand,
+            condition: condition,
+            location: location,
+            district: district,
+            barcode: barcode,
+            imageMetadata: imageMetadata,
+            videoUrl: resolvedVideoUrl,
+          );
+          // Invalidate on the API path too, not just the Firestore fallback —
+          // the listing is new either way.
+          _invalidateProductCaches();
+        } catch (apiError) {
+          // Rescue path: a broken/partial API write falls back to the legacy
+          // Firestore listing so sellers are never stuck mid-submission.
+          debugPrint('addProduct API path failed, falling back: $apiError');
+          createdId = await _writeProduct(
+            user.uid, name, description, price, currency, resolvedImageUrls,
+            category, subcategory, stock, sellerName, sellerPhone,
+            isWholesale, wholesaleTiers, variants,
+            attributes, brand, condition, location, district, barcode,
+            imageMetadata, resolvedVideoUrl,
+          );
+          _invalidateProductCaches();
+        }
+      } else {
+        // A new listing changes what search and the feed should return, so drop
+        // the cached snapshot.
+        createdId = await _writeProduct(
+          user.uid, name, description, price, currency, resolvedImageUrls,
+          category, subcategory, stock, sellerName, sellerPhone,
+          isWholesale, wholesaleTiers, variants,
+          attributes, brand, condition, location, district, barcode,
+          imageMetadata, resolvedVideoUrl,
+        );
+        _invalidateProductCaches();
+      }
+
+      // Upload the clip before reporting "done" so the listing goes live with
+      // its video already attached; the seller no longer sees the clip appear
+      // later. Upload failures are swallowed inside _attachVideoInBackground so
+      // a failed clip never fails the publish.
+      if (videoFile != null) {
+        await _attachVideoInBackground(
+          productId: createdId,
+          videoFile: videoFile,
+          onStarted: report,
+        );
+      }
+
+      report(ProductPublishStage.done);
+      return createdId;
     } catch (e) {
+      if (e is NetworkError && e.message.startsWith('KYC required')) rethrow;
       throw NetworkError(
-          message: "Failed to add product: $e",
+          message: "Failed to add product at step=$step: $e",
           userMessage: translateError(e),
           originalError: e,
         );
     }
+  }
+
+  /// Uploads a freshly picked clip after the listing is already live, then
+  /// patches the document. Failures are logged and swallowed: the listing is
+  /// published and visible either way, and losing a video must never lose the
+  /// product.
+  Future<void> _attachVideoInBackground({
+    required String productId,
+    required XFile videoFile,
+    void Function(ProductPublishStage)? onStarted,
+  }) async {
+    try {
+      onStarted?.call(ProductPublishStage.uploadingVideo);
+      final url = await MediaService.uploadVideo(
+        videoFile,
+        owner: MediaOwner.product,
+      );
+      await attachProductVideo(productId, url);
+    } catch (e) {
+      debugPrint('addProduct: background video upload failed — $e');
+    }
+  }
+
+  /// Points an existing listing at its uploaded video.
+  ///
+  /// Public because the edit flow needs it too. Firestore rules already allow a
+  /// seller to update their own product's `videoUrl`; nothing trust-related is
+  /// touched here.
+  Future<void> attachProductVideo(String productId, String videoUrl) async {
+    try {
+      await _db.collection('products').doc(productId).update({
+        'videoUrl': videoUrl,
+      });
+    } catch (e) {
+      debugPrint('attachProductVideo failed for $productId — $e');
+    }
+  }
+
+  /// Collapses whitespace and lowercases a listing name so "iPhone 13" and
+  /// "iPhone  13" compare as equal.
+  String _normalizeName(String name) =>
+      name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Returns the id of an already-active listing that is a duplicate of the
+  /// proposed one (same normalized name, same price and at least one shared
+  /// image), or null when the listing is unique.
+  Future<String?> _findDuplicateListing(
+    String name,
+    double price,
+    List<String> imageUrls,
+  ) async {
+    try {
+      if (name.trim().isEmpty || imageUrls.isEmpty) return null;
+      final snap = await _db
+          .collection('products')
+          .where('searchName', isEqualTo: name.trim().toLowerCase())
+          .where('isActive', isEqualTo: true)
+          .limit(50)
+          .get();
+      final normalized = _normalizeName(name);
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['name'] == null) continue;
+        if (_normalizeName(data['name'] as String) != normalized) continue;
+        if ((data['price'] as num? ?? -1).toDouble() != price) continue;
+        final images = (data['images'] as List?)?.cast<String>() ?? const [];
+        if (images.isEmpty) continue;
+        if (!images.any(imageUrls.contains)) continue;
+        return doc.id;
+      }
+    } catch (e) {
+      debugPrint('Duplicate check skipped: $e');
+    }
+    return null;
   }
 
   Future<String> _writeProduct(
@@ -113,7 +495,6 @@ class ProductService {
     int stock,
     String sellerName,
     String sellerPhone,
-    bool sellerKycApproved,
     bool isWholesale,
     List<Map<String, dynamic>>? wholesaleTiers,
     List<Map<String, dynamic>>? variants,
@@ -121,33 +502,60 @@ class ProductService {
     String? brand,
     String condition,
     String location,
+    String district,
+    String? barcode,
+    List<Map<String, dynamic>>? imageMetadata,
+    String? videoUrl,
   ) async {
+    final duplicate = await _findDuplicateListing(name, price, imageUrls);
+    if (duplicate != null) {
+      await FraudPreventionService().reportDuplicateListing(
+        sellerId: uid,
+        sellerName: sellerName,
+        productName: name,
+        price: price,
+        existingId: duplicate,
+      );
+      final lang = await LocalizationService().getLanguage();
+      throw NetworkError(
+        message: "Duplicate listing blocked: $name",
+        userMessage: LocalizationService.translate('duplicate_listing', lang),
+        originalError: Exception("Duplicate listing blocked"),
+      );
+    }
+
+    final searchKeywords = _generateSearchKeywords(name, description, category, brand, barcode);
+
     final docRef = await _db.collection("products").add({
       "name": name,
+      "searchName": name.toLowerCase(),
       "description": description,
       "price": price,
       "currency": currency,
       "images": imageUrls,
+      "imageMetadata": imageMetadata ?? [],
+      "videoUrl": videoUrl,
       "sellerId": uid,
       "sellerName": sellerName,
       "sellerPhone": sellerPhone,
       "category": category,
       "subcategory": subcategory,
       "location": location,
+      "district": district,
       "stock": stock,
       "isWholesale": isWholesale,
       "wholesaleTiers": wholesaleTiers ?? [],
       "variants": variants ?? [],
       "attributes": attributes ?? {},
-      "brand": brand,
+      "brand": _normalizeBrand(brand),
       "condition": condition,
       "rating": 0.0,
       "reviewCount": 0,
-      "soldCount": 0,
       "isActive": true,
-      "isFeatured": false,
-      "featuredUntil": null,
-      "sellerKycApproved": sellerKycApproved,
+      // Server-owned fields (promotion state, sellerKycApproved) are omitted:
+      // rules reject them on create and the server computes them.
+      "searchKeywords": searchKeywords,
+      "barcode": barcode,
       "createdAt": FieldValue.serverTimestamp(),
     });
 
@@ -165,6 +573,192 @@ class ProductService {
       sellerProductCount: productCount.count ?? 0,
     );
     return docRef.id;
+  }
+
+  /// Postgres-first listing submission. Mirrors the Firestore `_writeProduct`
+  /// contract (duplicate gate, publish-visible, fraud filing) but against the
+  /// v1 API, so the seller hub writes Postgres-authoritative product rows.
+  /// A category name that the Postgres tree cannot map still submits (the
+  /// listing lands on the feed); the Firestore fallback covers flag-off mode.
+  Future<String> _addProductViaApi({
+    required String uid,
+    required String name,
+    required String description,
+    required double price,
+    required List<String> imageUrls,
+    required String category,
+    required String subcategory,
+    required int stock,
+    required String sellerName,
+    required bool isWholesale,
+    required List<Map<String, dynamic>>? wholesaleTiers,
+    required List<Map<String, dynamic>>? variants,
+    required Map<String, dynamic>? attributes,
+    required String? brand,
+    required String condition,
+    required String location,
+    required String district,
+    required String? barcode,
+    required List<Map<String, dynamic>>? imageMetadata,
+    required String? videoUrl,
+  }) async {
+    final apiDuplicate = await _findDuplicateListingApi(name, price, imageUrls);
+    if (apiDuplicate != null) {
+      await FraudPreventionService().reportDuplicateListing(
+        sellerId: uid,
+        sellerName: sellerName,
+        productName: name,
+        price: price,
+        existingId: apiDuplicate,
+      );
+      final lang = await LocalizationService().getLanguage();
+      throw NetworkError(
+        message: "Duplicate listing blocked: $name",
+        userMessage: LocalizationService.translate('duplicate_listing', lang),
+        originalError: Exception("Duplicate listing blocked"),
+      );
+    }
+
+    final categoryId = await _api.resolveCategoryId(category);
+    final id = await _api.createProduct(
+      name: name,
+      description: description,
+      price: price,
+      stock: stock,
+      category: category,
+      categoryId: categoryId,
+      subcategory: subcategory,
+      images: imageUrls,
+      imageMetadata: imageMetadata,
+      videoUrl: videoUrl,
+      isWholesale: isWholesale,
+      wholesaleTiers: wholesaleTiers,
+      variants: variants,
+      attributes: attributes,
+      brand: brand,
+      condition: condition,
+      location: location,
+      district: district,
+      barcode: barcode,
+      searchKeywords: _generateSearchKeywords(
+        name, description, category, brand, barcode,
+      ),
+    );
+    // The legacy add wrote isActive:true, so publish the draft the API created.
+    await _api.publishProduct(id);
+
+    final fraud = FraudPreventionService();
+    await fraud.checkNewSeller(uid, sellerName);
+    final productCount = (await _api.fetchMyProducts(limit: 100)).length;
+    await fraud.checkSuspiciousListing(
+      sellerId: uid,
+      sellerName: sellerName,
+      productId: id,
+      productName: name,
+      price: price,
+      sellerProductCount: productCount,
+    );
+    return id;
+  }
+
+  /// PostgreSql-aware cousin of [_findDuplicateListing]: the legacy check only
+  /// sees Firestore docs, so new v1 listings would slip past the duplicate
+  /// gate. Compares normalized name + price + shared image over the seller's
+  /// own API-owned products, best-effort (a failed fetch skips the gate, same
+  /// as the Firestore version).
+  Future<String?> _findDuplicateListingApi(
+    String name,
+    double price,
+    List<String> imageUrls,
+  ) async {
+    try {
+      if (name.trim().isEmpty || imageUrls.isEmpty) return null;
+      final normalized = _normalizeName(name);
+      final mine = await _api.fetchMyProducts(limit: 100);
+      for (final p in mine) {
+        if (_normalizeName(p.name) != normalized) continue;
+        if (p.price != price) continue;
+        if (p.images.isEmpty) continue;
+        if (!p.images.any(imageUrls.contains)) continue;
+        return p.id;
+      }
+    } catch (e) {
+      debugPrint('API duplicate check skipped: $e');
+    }
+    return null;
+  }
+
+  /// Postgres-first edit. Rebuilds search keywords from the post-edit values
+  /// (mirroring the Firestore update), resolves the category name to a uuid,
+  /// and replaces the snapshot images with the seller's chosen set.
+  Future<void> _updateProductViaApi({
+    required String productId,
+    String? name,
+    String? description,
+    double? price,
+    String? category,
+    String? subcategory,
+    int? stock,
+    bool? isWholesale,
+    List<Map<String, dynamic>>? wholesaleTiers,
+    List<Map<String, dynamic>>? variants,
+    String? brand,
+    String? condition,
+    List<String>? images,
+    List<Map<String, dynamic>>? imageMetadata,
+    String? videoUrl,
+    String? location,
+    String? district,
+    String? barcode,
+  }) async {
+    String? currentName;
+    String? currentDescription;
+    String? currentCategory;
+    String? currentBrand;
+    String? currentBarcode;
+    try {
+      final current = await _api.fetchProduct(productId);
+      currentName = current?.name;
+      currentDescription = current?.description;
+      currentCategory = current?.category;
+      currentBrand = current?.brand;
+      currentBarcode = current?.barcode;
+    } catch (_) {
+      // fetchProduct can 404 for a deleted listing; keywords then rebuild from
+      // the new values alone.
+    }
+
+    final categoryId = category != null
+        ? await _api.resolveCategoryId(category)
+        : null;
+    await _api.updateProduct(
+      productId,
+      name: name,
+      description: description,
+      price: price,
+      category: category,
+      categoryId: categoryId,
+      subcategory: subcategory,
+      stock: stock,
+      isWholesale: isWholesale,
+      wholesaleTiers: wholesaleTiers,
+      variants: variants,
+      brand: brand,
+      condition: condition,
+      images: images,
+      imageMetadata: imageMetadata,
+      videoUrl: videoUrl,
+      location: location,
+      district: district,
+      barcode: barcode,
+      searchKeywords: _generateSearchKeywords(
+        name ?? currentName ?? '',
+        description ?? currentDescription ?? '',
+        category ?? currentCategory ?? '',
+        brand ?? currentBrand,
+        barcode ?? currentBarcode,
+      ),
+    );
   }
 
   /// Firestore paginated query — returns products and the last document cursor.
@@ -189,26 +783,55 @@ class ProductService {
   }
 
   /// Paginated query for a specific brand.
-  Future<List<Product>> fetchProductsByBrand(String brand, {int limit = 30}) async {
-    final snapshot = await _db
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProductsByBrand(
+    String brand, {
+    int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    if (brand == 'Others') {
+      final products = await fetchProductsByBrandOthers(limit: limit);
+      return (products, null);
+    }
+    var query = _db
         .collection("products")
         .where('isActive', isEqualTo: true)
         .where("brand", isEqualTo: brand)
         .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .get();
+        .limit(limit);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    final snapshot = await query.get();
     final products = snapshot.docs
         .map((doc) => Product.fromFirestore(doc))
         .toList();
-    _sortByBoost(products);
+    _sortByBoosted(products);
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
+  }
+
+  /// Catch-all for brands not in the known list.
+  Future<List<Product>> fetchProductsByBrandOthers({int limit = 30}) async {
+    final snapshot = await _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .limit(limit * 3)
+        .get();
+    final products = snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
+        .take(limit)
+        .toList();
+    _sortByBoosted(products);
     return products;
   }
 
   /// Paginated query for a category + optional subcategory.
-  Future<List<Product>> fetchProductsByCategory(
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProductsByCategory(
     String category, {
     String? subcategory,
     int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
     var query = _db
         .collection("products")
@@ -219,8 +842,13 @@ class ProductService {
     if (subcategory != null) {
       query = query.where("subcategory", isEqualTo: subcategory);
     }
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
     final snapshot = await query.get();
-    return snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+    final products = snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
   }
 
   /// Alias for [getProductById] — used by [ProductRepository].
@@ -228,9 +856,17 @@ class ProductService {
 
   /// Real-time stream wrapper — used by [ProductRepository].
   Stream<List<Product>> watchProductsRealtime({int limit = 50}) {
+    if (ApiConfig.kUseProductsApi) {
+      // The Postgres catalog is HTTP-only: live upserts would leak Firestore
+      // rows back into the feed. The provider already paginates from the API
+      // and merges on pull-to-refresh, so no stream means a pure Postgres feed.
+      return const Stream.empty();
+    }
     return _db
         .collection("products")
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
       final products = snapshot.docs
@@ -244,81 +880,353 @@ class ProductService {
   Stream<List<Product>> getProducts({int limitAmt = 30}) {
     return _db
         .collection("products")
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limitAmt + 10)
         .snapshots()
         .map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
-          .where((p) => p.isActive)
           .toList();
       products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      _sortByBoost(products);
+      _sortByBoosted(products);
       return products.take(limitAmt).toList();
     });
   }
 
-  Stream<List<Product>> getProductsByCategory(String category) {
-    return _db
-        .collection("products")
-        .where("category", isEqualTo: category)
-        .where('isActive', isEqualTo: true)
-        .snapshots()
-        .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .toList();
-          _sortByBoost(products);
-          return products;
-        });
+  /// Fuses the Postgres list from [api] with the live [firestore] source so
+  /// listings that only exist in Firestore (the create call fell back while
+  /// the v2 bridge was down or rejecting) still surface under their tagged
+  /// category. Dedupes by [Product.legacyId] so Postgres rows and their
+  /// Firestore mirrors count once; the API list wins order.
+  Stream<List<Product>> _fusedCategoryStream(
+    Future<List<Product>> Function() api, {
+    required Stream<List<Product>> firestore,
+  }) {
+    final controller = StreamController<List<Product>>();
+    var apiDone = false;
+    var apiItems = <Product>[];
+    var fsSeen = false;
+    var fsItems = <Product>[];
+    StreamSubscription<List<Product>>? fsSub;
+
+    void emit() {
+      if (!apiDone && !fsSeen) return;
+      final seen = <String>{};
+      final merged = <Product>[];
+      for (final p in [...apiItems, ...fsItems]) {
+        final key = p.legacyId.isNotEmpty ? p.legacyId : p.id;
+        if (!seen.add(key)) continue;
+        merged.add(p);
+      }
+      merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _sortByBoosted(merged);
+      controller.add(merged.length > 100 ? merged.sublist(0, 100) : merged);
+    }
+
+    controller.onListen = () {
+      // Emit the Postgres list as soon as it lands so the page paints before
+      // the Firestore snapshot arrives, then re-emit merged on both updates.
+      api().then((items) {
+        apiDone = true;
+        apiItems = items;
+        emit();
+      }).catchError((Object _) {
+        apiDone = true;
+        emit();
+      });
+      fsSub = firestore.listen((items) {
+        fsSeen = true;
+        fsItems = items;
+        emit();
+      }, onError: (Object _) {
+        fsSeen = true;
+        emit();
+      });
+    };
+    controller.onCancel = () {
+      fsSub?.cancel();
+    };
+    return controller.stream;
   }
 
-  Stream<List<Product>> getProductsByCategoryAndSubcategory(
-    String category,
-    String subcategory,
-  ) {
-    return _db
+  Stream<List<Product>> getProductsByCategory(
+    String category, {
+    Set<String>? aliases,
+  }) {
+    // whereIn reuses the same composite index as equality on this field.
+    final names = <String>{category, ...?aliases}.toList();
+    final firestore = _db
         .collection("products")
-        .where("category", isEqualTo: category)
-        .where("subcategory", isEqualTo: subcategory)
+        .where("category", whereIn: names)
         .where('isActive', isEqualTo: true)
-        .snapshots()
-        .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .toList();
-          _sortByBoost(products);
-          return products;
-        });
-  }
-
-  Stream<List<Product>> searchProducts(String query) {
-    return _db.collection("products")
-        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
         .limit(100)
-        .snapshots().map((snapshot) {
-      final products = snapshot.docs
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
-          .where(
-            (p) =>
-                query.isEmpty ||
-                p.name.toLowerCase().contains(query.toLowerCase()),
-          )
           .toList();
-      _sortByBoost(products);
+    });
+    if (ApiConfig.kUseProductsApi) {
+      // Legacy products tag categories by NAME; the API resolves the name to a
+      // Postgres uuid and filters server-side, keeping parity with Firestore.
+      return _fusedCategoryStream(
+        () => _api.fetchProductsByCategoryName(category),
+        firestore: firestore,
+      );
+    }
+    return firestore.map((products) {
+      _sortByBoosted(products);
       return products;
     });
   }
 
+  Stream<List<Product>> getProductsByCategoryAndSubcategory(
+    String category,
+    String subcategory, {
+    Set<String>? categoryAliases,
+    Set<String>? subcategoryAliases,
+  }) {
+    final categories = <String>{category, ...?categoryAliases}.toList();
+    final subcategories =
+        <String>{subcategory, ...?subcategoryAliases}.toList();
+    final firestore = _db
+        .collection("products")
+        .where("category", whereIn: categories)
+        .where("subcategory", whereIn: subcategories)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+    });
+    if (ApiConfig.kUseProductsApi) {
+      return _fusedCategoryStream(
+        () => _api.fetchProductsByCategoryName(
+          category,
+          subcategory: subcategory,
+        ),
+        firestore: firestore,
+      );
+    }
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
+}
+  
+  /// Firestore-paginated query using [categoryId] (Firestore doc ID = permanent UUID)
+  /// as the canonical identifier. Survives category-name changes.
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProductsByCategoryId(
+    String categoryId, {
+    String? subcategory,
+    int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    var query = _db
+        .collection("products")
+        .where('categoryId', isEqualTo: categoryId)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (subcategory != null) {
+      query = query.where('subcategory', isEqualTo: subcategory);
+    }
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    final snapshot = await query.get();
+    final products = snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .toList();
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
+  }
+
+  /// Live products for a category, keyed on the permanent [categoryId]
+  /// (Firestore doc ID) instead of the display name, so renaming a category
+  /// never empties the page. [aliases] carries legacy name spellings for rows
+  /// tagged before the id existed, keeping those listings reachable.
+  Stream<List<Product>> getProductsByCategoryId(
+    String categoryId, {
+    Set<String>? aliases,
+  }) {
+    final categories = <String>{categoryId, ...?aliases}.toList();
+    final firestore = _db
+        .collection("products")
+        .where('categoryId', whereIn: categories)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Product.fromFirestore(doc))
+            .toList());
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
+  }
+
+  /// Firestore-paginated query using [categoryId] + optional subcategory,
+  /// with alias support for legacy category names.
+  Stream<List<Product>> getProductsByCategoryAndSubcategoryId(
+    String categoryId, {
+    String? subcategory,
+    Set<String>? categoryAliases,
+    Set<String>? subcategoryAliases,
+  }) {
+    // Legacy rows stored the category name alongside the id, so aliases are
+    // unioned in to catch listings written before the id existed.
+    final categories = <String>{categoryId, ...?categoryAliases}.toList();
+    // Drop the null: a `whereIn` list must hold only real values, and a null
+    // entry would match docs whose subcategory is unset instead of meaning
+    // "do not filter by subcategory".
+    final subcategories = <String>{
+      ...?subcategoryAliases,
+      if (subcategory != null && subcategory.isNotEmpty) subcategory,
+    }.toList();
+
+    var query = _db
+        .collection("products")
+        .where('categoryId', whereIn: categories)
+        .where('isActive', isEqualTo: true);
+    if (subcategories.isNotEmpty) {
+      query = query.where('subcategory', whereIn: subcategories);
+    }
+    final firestore = query
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+    });
+    return firestore.map((products) {
+      _sortByBoosted(products);
+      return products;
+    });
+  }
+
+  Stream<List<Product>> searchProducts(String query) {
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
+    if (q.isEmpty) return Stream.value([]);
+    final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    if (words.isEmpty) return Stream.value([]);
+
+    Stream<List<Product>> stream;
+    if (words.length == 1) {
+      stream = _db.collection("products")
+          .where('searchKeywords', arrayContains: words[0])
+          .limit(100)
+          .snapshots()
+          .map((snap) => snap.docs.map((doc) => Product.fromFirestore(doc)).toList());
+    } else {
+      stream = _db.collection("products")
+          .where('searchKeywords', arrayContainsAny: words.take(10).toList())
+          .limit(100)
+          .snapshots()
+          .map((snap) => snap.docs.map((doc) => Product.fromFirestore(doc)).toList());
+    }
+
+    return stream.map((products) {
+      final filtered = products
+          .where((p) => p.isActive && words.every((w) =>
+            p.name.toLowerCase().contains(w) ||
+            p.description.toLowerCase().contains(w)))
+          .toList();
+      _sortByBoosted(filtered);
+      return filtered;
+    });
+  }
+
+  Stream<List<Product>> searchByNameStream(String query) {
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
+    if (q.isEmpty) return Stream.value([]);
+    return _db
+        .collection("products")
+        .where('searchName', isGreaterThanOrEqualTo: q)
+        .where('searchName', isLessThanOrEqualTo: '$q\uf8ff')
+        .orderBy('searchName')
+        .limit(30)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .where((p) => p.isActive)
+          .toList();
+    });
+  }
+
+  Future<List<Product>> searchProductsOnce(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return [];
+    final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    if (words.isEmpty) return [];
+
+    var products = <Product>[];
+    try {
+      if (words.length == 1) {
+        final snap = await _db.collection("products")
+            .where('searchKeywords', arrayContains: words[0])
+            .limit(100)
+            .get();
+        products = snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
+      } else {
+        final snap = await _db.collection("products")
+            .where('searchKeywords', arrayContainsAny: words.take(10).toList())
+            .limit(100)
+            .get();
+        products = snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
+      }
+      products = products
+          .where((p) => p.isActive && words.every((w) =>
+            p.name.toLowerCase().contains(w) ||
+            p.description.toLowerCase().contains(w)))
+          .toList();
+      _sortByBoosted(products);
+    } catch (e) {
+      debugPrint('searchProductsOnce error: $e');
+    }
+    return products;
+  }
+
   Stream<List<Product>> getProductsByBrand(String brand) {
+    if (brand == 'Others') {
+      return _db
+          .collection("products")
+          .where('isActive', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots()
+          .map((snapshot) {
+            final products = snapshot.docs
+                .map((doc) => Product.fromFirestore(doc))
+                .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
+                .toList();
+            _sortByBoosted(products);
+            return products;
+          });
+    }
     return _db
         .collection("products")
         .where("brand", isEqualTo: brand)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
-          _sortByBoost(products);
+          _sortByBoosted(products);
           return products;
         });
   }
@@ -327,9 +1235,97 @@ class ProductService {
     final user = _auth.currentUser;
     if (user == null) return Stream.value([]);
 
+    if (ApiConfig.kUseProductsApi) {
+      // v1 is HTTP, not a stream: the dashboard subscribes via StreamBuilder,
+      // so emit the fetched list once. If API returns empty or fails (e.g. during migration
+      // or for products added via Firestore fallback), fall back to Firestore.
+      return Stream.fromFuture(() async {
+        List<Product> apiProducts = [];
+        try {
+          apiProducts = await _api.fetchMyProducts();
+        } catch (e) {
+          debugPrint('fetchMyProducts error, checking Firestore: $e');
+        }
+        if (apiProducts.isNotEmpty) {
+          return apiProducts;
+        }
+        // Fallback to Firestore so listings published offline or via Firestore fallback appear
+        try {
+          final snapshot = await _db
+              .collection("products")
+              .where("sellerId", isEqualTo: user.uid)
+              .orderBy('createdAt', descending: true)
+              .limit(100)
+              .get();
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .toList();
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        } catch (e) {
+          debugPrint('getMyProducts Firestore fallback error: $e');
+          return <Product>[];
+        }
+      }());
+    }
+
     return _db
         .collection("products")
         .where("sellerId", isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots(includeMetadataChanges: true)
+        .map((snapshot) {
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .toList();
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        })
+        .handleError((e) {
+          debugPrint('getMyProducts error: $e');
+          return <Product>[];
+        });
+  }
+
+  Stream<List<Product>> getProductsBySeller(String sellerId) {
+    if (ApiConfig.kUseProductsApi) {
+      return _cachedSellerProducts(sellerId, () async {
+        List<Product> apiProducts = [];
+        try {
+          apiProducts = await _api.fetchSellerProducts(sellerId);
+        } catch (e) {
+          debugPrint('fetchSellerProducts error, checking Firestore: $e');
+        }
+        if (apiProducts.isNotEmpty) {
+          return apiProducts;
+        }
+        // Fallback to Firestore so listings published offline or via Firestore fallback appear
+        try {
+          final snapshot = await _db
+              .collection("products")
+              .where("sellerId", isEqualTo: sellerId)
+              .where('isActive', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .limit(50)
+              .get();
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .toList();
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        } catch (e) {
+          debugPrint('getProductsBySeller Firestore fallback error: $e');
+          return <Product>[];
+        }
+      });
+    }
+    return _db
+        .collection("products")
+        .where("sellerId", isEqualTo: sellerId)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
@@ -341,6 +1337,14 @@ class ProductService {
   }
 
   Future<Product?> getProductById(String productId) async {
+    if (ApiConfig.kUseProductsApi) {
+      try {
+        final apiProduct = await _api.fetchProduct(productId);
+        if (apiProduct != null) return apiProduct;
+      } catch (_) {
+        // API unreachable or malformed: fall through to Firestore below.
+      }
+    }
     try {
       final doc = await _db.collection("products").doc(productId).get();
       if (doc.exists) {
@@ -371,33 +1375,118 @@ class ProductService {
     String? condition,
     List<String>? existingImages,
     List<XFile>? newImages,
+    List<String>? uploadedNewImages,
+    void Function(int index, int sent, int totalBytes)? onImageProgress,
+    List<Map<String, dynamic>>? imageMetadata,
+    XFile? newVideoFile,
+    String? videoUrl,
     String? location,
+    String? district,
+    String? barcode,
   }) async {
     try {
-      Map<String, dynamic> data = {};
+      final user = _auth.currentUser;
+      if (user == null) throw NetworkError(
+        message: 'Not authenticated',
+        userMessage: 'Please log in to continue.',
+      );
+      await user.getIdToken(true);
 
-      if (name != null) data["name"] = name;
-      if (description != null) data["description"] = description;
+      Map<String, dynamic> data = {};
+      bool needsKeywordUpdate = false;
+
+      if (name != null) { data["name"] = name; data["searchName"] = name.toLowerCase(); needsKeywordUpdate = true; }
+      if (description != null) { data["description"] = description; needsKeywordUpdate = true; }
+      if (category != null) { data["category"] = category; needsKeywordUpdate = true; }
+      if (brand != null) { data["brand"] = _normalizeBrand(brand); needsKeywordUpdate = true; }
       if (price != null) data["price"] = price;
-      if (category != null) data["category"] = category;
       if (subcategory != null) data["subcategory"] = subcategory;
       if (stock != null) data["stock"] = stock;
       if (isWholesale != null) data["isWholesale"] = isWholesale;
       if (wholesaleTiers != null) data["wholesaleTiers"] = wholesaleTiers;
       if (variants != null) data["variants"] = variants;
-      if (brand != null) data["brand"] = brand;
       if (condition != null) data["condition"] = condition;
       if (location != null) data["location"] = location;
+      if (district != null) data["district"] = district;
+      if (barcode != null) { data["barcode"] = barcode; needsKeywordUpdate = true; }
 
       if (existingImages != null || newImages != null) {
-        List<String> allImages = existingImages ?? [];
-        if (newImages != null) {
-          for (var file in newImages) {
-            final url = await uploadImage(file);
-            allImages.add(url);
-          }
+        List<String> allImages = List<String>.from(existingImages ?? const []);
+        if (newImages != null && newImages.isNotEmpty) {
+          // Concurrent for the same reason as addProduct: sequential per-image
+          // compress + session + PUT is what made a 3-photo edit feel slow.
+          //
+          // `uploadedNewImages` lets a caller that already tracked these files
+          // in a TransferBatch hand over their URLs instead of paying for the
+          // upload twice.
+          final uploaded = uploadedNewImages ??
+              await _uploadImages(
+                newImages,
+                step: 'edit-upload-images',
+                onProgress: onImageProgress,
+              );
+          allImages.addAll(uploaded);
         }
         data["images"] = allImages;
+      }
+
+      if (imageMetadata != null) data["imageMetadata"] = imageMetadata;
+
+      if (newVideoFile != null) {
+        // Same reasoning as addProduct: a clip cannot upload inside a ~2 second
+        // budget, so the edit lands first and the video is patched in behind the
+        // scenes. The seller keeps their change either way.
+        final clip = newVideoFile;
+        unawaited(_attachVideoInBackground(
+          productId: productId,
+          videoFile: clip,
+        ));
+      } else if (videoUrl != null) {
+        data["videoUrl"] = videoUrl;
+      }
+
+      // needsKeywordUpdate needs the current values for any field the caller did
+      // not supply. Read it concurrently with the media work rather than after.
+      if (needsKeywordUpdate) {
+        final current = await _db.collection("products").doc(productId).get();
+        final cur = current.data() ?? {};
+        data["searchKeywords"] = _generateSearchKeywords(
+          name ?? cur["name"] as String? ?? '',
+          description ?? cur["description"] as String? ?? '',
+          category ?? cur["category"] as String? ?? '',
+          brand ?? cur["brand"] as String?,
+          barcode ?? cur["barcode"] as String?,
+        );
+      }
+
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          await _updateProductViaApi(
+            productId: productId,
+            name: name,
+            description: description,
+            price: price,
+            category: category,
+            subcategory: subcategory,
+            stock: stock,
+            isWholesale: isWholesale,
+            wholesaleTiers: wholesaleTiers,
+            variants: variants,
+            brand: brand,
+            condition: condition,
+            images: data["images"] as List<String>?,
+            imageMetadata: data["imageMetadata"] as List<Map<String, dynamic>>?,
+            videoUrl: data["videoUrl"] as String?,
+            location: location,
+            district: district,
+            barcode: barcode,
+          );
+          return;
+        } catch (apiError) {
+          // Rescue path: fall back to the Firestore doc update the app has
+          // always used so an edit is never lost to an API hiccup.
+          debugPrint('updateProduct API path failed, falling back: $apiError');
+        }
       }
 
       await _db.collection("products").doc(productId).update(data);
@@ -408,12 +1497,41 @@ class ProductService {
           originalError: e,
         );
     }
+    // Invalidate search cache so dependent screens see updated products
+    _invalidateProductCaches();
+  }
+
+  /// Drops every cached view of the catalogue that a product mutation can
+  /// invalidate.
+  ///
+  /// Centralised because the leaks were inconsistent: `deleteProduct` returned
+  /// early on the API path and never reached its own invalidation,
+  /// `setProductVisibility` and `scheduleReappear` had none at all, and the
+  /// per-seller memoised stream was never cleared — so a seller's public store
+  /// kept showing their pre-publish catalogue until the app was restarted. Any
+  /// method that changes what a listing looks like must call this.
+  void _invalidateProductCaches() {
+    LocalCacheService.invalidateSearchCache();
+    _sellerProductStreams.clear();
   }
 
   Future<void> deleteProduct(String productId) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not authenticated');
+
+      if (ApiConfig.kUseProductsApi) {
+        try {
+          await _api.deleteProduct(productId);
+          // Invalidate on this path too. Returning early here is what let a
+          // deleted listing keep showing up in the cached feed.
+          _invalidateProductCaches();
+          return;
+        } catch (apiError) {
+          // Rescue path: fall back to the legacy v0 HTTP delete.
+          debugPrint('deleteProduct API path failed, falling back: $apiError');
+        }
+      }
 
       final token = await user.getIdToken();
       final response = await http.delete(
@@ -432,6 +1550,43 @@ class ProductService {
           originalError: e,
         );
     }
+    // Invalidate search cache so homepage/feed/search reflect product removal
+    _invalidateProductCaches();
+  }
+
+  /// Hides (unpublishes) or re-shows a seller's listing. The API owns the
+  /// visibility lifecycle; the Firestore branch mirrors it for flag-off mode.
+  Future<void> setProductVisibility(String productId, {required bool visible}) async {
+    if (ApiConfig.kUseProductsApi) {
+      if (visible) {
+        await _api.publishProduct(productId);
+      } else {
+        await _api.unpublishProduct(productId);
+      }
+      _invalidateProductCaches();
+      return;
+    }
+    await _db.collection('products').doc(productId).update({
+      'isActive': visible,
+    });
+    _invalidateProductCaches();
+  }
+
+  /// Stores the seller-chosen auto-restore moment for a hidden listing.
+  /// Passing `at: null` clears the scheduled re-appearance.
+  Future<void> scheduleReappear(String productId, {DateTime? at}) async {
+    try {
+      await _db.collection('products').doc(productId).update({
+        'hiddenUntil': at ?? FieldValue.delete(),
+      });
+    } catch (e) {
+      // The visible/invisible state lives on the API row; this timestamp only
+      // drives the in-app auto-restore, so a write failure is safe to ignore.
+      debugPrint('scheduleReappear skipped: $e');
+    }
+    // Scheduling changes when the listing comes back, so anything that caches
+    // "what should be visible" is now stale.
+    _invalidateProductCaches();
   }
 
   Future<void> updateProductRating(String productId, double newRating) async {
@@ -457,23 +1612,27 @@ class ProductService {
   }
 
   Stream<List<Product>> getFeaturedProducts() {
+    if (ApiConfig.kUseProductsApi) {
+      // v1 is HTTP, not a stream: fetch once, keep boosted rows first; fall
+      // back to recent listings so the carousel never clears.
+      return Stream.fromFuture(() async {
+        final res = await _api.fetchProducts(limit: 40);
+        var products = res.items.where((p) => p.isBoostedValid).toList();
+        if (products.isEmpty) {
+          products = res.items.take(20).toList();
+        }
+        return products;
+      }());
+    }
     return _db
         .collection("products")
-        .where("isBoosted", isEqualTo: true)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
-        .map((snapshot) {
-      final products = snapshot.docs
-          .map((doc) => Product.fromFirestore(doc))
-          .where((p) => p.isBoostedValid)
-          .toList();
-      products.sort((a, b) {
-        final tierOrder = (b.boostTier).compareTo(a.boostTier);
-        if (tierOrder != 0) return tierOrder;
-        return b.createdAt.compareTo(a.createdAt);
-      });
-      return products;
-    });
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Product.fromFirestore(doc))
+            .toList());
   }
 
   Future<void> incrementViewCount(String productId) async {

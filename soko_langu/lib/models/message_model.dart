@@ -18,6 +18,59 @@ class Message {
   final bool isDeletedForEveryone;
   final Map<String, List<String>> reactions;
 
+  factory Message.fromMap(String id, Map<String, dynamic> data) {
+    final reactions = <String, List<String>>{};
+    final rawReactions = data['reactions'];
+    if (rawReactions is Map) {
+      rawReactions.forEach((key, value) {
+        if (value is Iterable) {
+          reactions[key.toString()] = value.whereType<String>().toList();
+        }
+      });
+    }
+    return Message(
+      id: id,
+      senderId: _string(data['sender_id'] ?? data['senderId']),
+      receiverId: _string(data['receiver_id'] ?? data['receiverId']),
+      content: _string(data['text'] ?? data['content']),
+      timestamp: _timestamp(data['timestamp']) ?? DateTime.now(),
+      isRead: _bool(data['is_read'] ?? data['isRead']),
+      isDelivered: _bool(data['is_delivered'] ?? data['isDelivered']),
+      isEdited: _bool(data['is_edited'] ?? data['isEdited']),
+      productId: _nullableString(data['product_id'] ?? data['productId']),
+      productName: _nullableString(data['product_name'] ?? data['productName']),
+      replyTo: _nullableString(data['reply_to'] ?? data['replyTo']),
+      replyToContent:
+          _nullableString(data['reply_to_content'] ?? data['replyToContent']),
+      replyToSender:
+          _nullableString(data['reply_to_sender'] ?? data['replyToSender']),
+      messageType:
+          _nullableString(data['message_type'] ?? data['messageType']) ?? 'text',
+      isDeletedForEveryone: _bool(
+        data['is_deleted_for_everyone'] ?? data['isDeletedForEveryone'],
+      ),
+      reactions: reactions,
+    );
+  }
+
+  // Legacy messages were written by several clients with inconsistent types.
+  // Coercing instead of casting keeps one bad document from throwing while
+  // the chat is being read.
+
+  static String _string(Object? raw) =>
+      raw is String ? raw : (raw?.toString() ?? '');
+
+  static String? _nullableString(Object? raw) => raw is String ? raw : null;
+
+  static bool _bool(Object? raw) => raw is bool ? raw : false;
+
+  static DateTime? _timestamp(Object? raw) {
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    return null;
+  }
+
   Message({
     required this.id,
     required this.senderId,

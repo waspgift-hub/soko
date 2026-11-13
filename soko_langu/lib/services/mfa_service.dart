@@ -1,0 +1,290 @@
+import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:base32/base32.dart';
+import 'package:crypto/crypto.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting, debugPrint;
+
+/// TOTP-based Multi-Factor Authentication service using Firebase Auth's
+/// native second-factor support.
+class MfaService {
+  MfaService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
+
+  final FirebaseAuth _auth;
+  TotpSecret? _pendingSecret;
+
+  User? get _currentUser => _auth.currentUser;
+
+  /// Checks if the current user already has TOTP MFA enrolled.
+  Future<bool> hasMfaEnrolled() async {
+    final user = _currentUser;
+    if (user == null) return false;
+    try {
+      await user.reload();
+      final factors = await user.multiFactor.getEnrolledFactors();
+      final enrolled = factors.any((f) => f.factorId == 'totp');
+      return enrolled;
+    } catch (e) {
+      debugPrint('MFA hasMfaEnrolled error: $e');
+      return false;
+    }
+  }
+
+  Future<MfaEnrollmentData> startEnrollment() async {
+    final user = _currentUser;
+    if (user == null) throw MfaError.notAuthenticated();
+    if (user.email == null) throw MfaError.emailNotVerified();
+    await user.reload();
+    if (!user.emailVerified) throw MfaError.emailNotVerified();
+    if (await hasMfaEnrolled()) throw MfaError.alreadyEnrolled();
+
+    final session = await user.multiFactor.getSession();
+    final totpSecret = await TotpMultiFactorGenerator.generateSecret(session);
+    _pendingSecret = totpSecret;
+    final authUri = await totpSecret.generateQrCodeUrl(
+      accountName: user.email!,
+      issuer: 'Soko Vibe',
+    );
+    return MfaEnrollmentData(
+      secret: totpSecret.secretKey,
+      authUri: authUri,
+      recoveryCodes: _generateRecoveryCodes(10),
+      factorUid: '',
+    );
+  }
+
+  Future<void> completeEnrollmentWithSecret({
+    required String secret,
+    required String totpCode,
+  }) async {
+    final user = _currentUser;
+    if (user == null) throw MfaError.notAuthenticated();
+    final totpSecret = _pendingSecret;
+    if (totpSecret == null || totpSecret.secretKey != secret) {
+      throw MfaError.enrollmentFailed('Enrollment session expired. Start again.');
+    }
+    try {
+      final assertion = await TotpMultiFactorGenerator.getAssertionForEnrollment(
+        totpSecret,
+        totpCode,
+      );
+      await user.multiFactor.enroll(assertion, displayName: 'Authenticator App');
+      _pendingSecret = null;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('MFA enrollment failed: ${e.code} - ${e.message}');
+      if (e.code == 'invalid-verification-code' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'argument-error') {
+        throw MfaError.invalidCode();
+      }
+      if (e.code == 'admin-restricted-operation') {
+        throw MfaError.mfaNotEnabled();
+      }
+      if (e.code == 'second-factor-already-enrolled') {
+        _pendingSecret = null;
+        throw MfaError.alreadyEnrolled();
+      }
+      throw MfaError.enrollmentFailed(e.message ?? e.code);
+    } catch (e) {
+      debugPrint('MFA enrollment error: $e');
+      throw MfaError.enrollmentFailed(e.toString());
+    }
+  }
+
+  Future<UserCredential> resolveSignInChallenge(
+    MultiFactorResolver resolver,
+    String totpCode, {
+    String? selectedUid,
+  }) async {
+    final hints = resolver.hints.whereType<TotpMultiFactorInfo>().toList();
+    if (hints.isEmpty) {
+      throw MfaError.enrollmentFailed('No TOTP factor available for this account.');
+    }
+    TotpMultiFactorInfo hint = hints.first;
+    if (selectedUid != null) {
+      for (final h in hints) {
+        if (h.uid == selectedUid) {
+          hint = h;
+          break;
+        }
+      }
+    }
+    try {
+      final assertion = await TotpMultiFactorGenerator.getAssertionForSignIn(hint.uid, totpCode);
+      return await resolver.resolveSignIn(assertion);
+    } on FirebaseAuthException catch (e) {
+      debugPrint('MFA sign-in failed: ${e.code} - ${e.message}');
+      if (e.code == 'invalid-verification-code' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'argument-error') {
+        throw MfaError.invalidCode();
+      }
+      throw MfaError.enrollmentFailed(e.message ?? e.code);
+    }
+  }
+
+  /// Unenrolls the TOTP second factor.
+  Future<void> unenroll() async {
+    final user = _currentUser;
+    if (user == null) throw MfaError.notAuthenticated();
+
+    try {
+      final factors = await user.multiFactor.getEnrolledFactors();
+      final totpFactor = factors.where((f) => f.factorId == 'totp').firstOrNull;
+
+      if (totpFactor == null) throw MfaError.notEnrolled();
+
+      await user.multiFactor.unenroll(factorUid: totpFactor.uid);
+    } on FirebaseAuthException catch (e) {
+      debugPrint('MFA unenroll failed: ${e.code} - ${e.message}');
+      throw MfaError.unenrollmentFailed(e.message ?? e.code);
+    } catch (e) {
+      debugPrint('MFA unenroll error: $e');
+      throw MfaError.unenrollmentFailed(e.toString());
+    }
+  }
+
+  /// Gets the TOTP secret for an enrolled factor (for re-displaying QR).
+  Future<String?> getTotpSecret() async {
+    final user = _currentUser;
+    if (user == null) return null;
+    try {
+      await user.reload();
+      // Note: MultiFactorInfo doesn't expose secretKey.
+      // We return null here since the secret is only available during enrollment.
+      return null;
+    } catch (e) {
+      debugPrint('MFA getTotpSecret error: $e');
+      return null;
+    }
+  }
+
+  /// Gets the enrollment ID (factor UID) for an enrolled TOTP factor.
+  Future<String?> getTotpEnrollmentId() async {
+    final user = _currentUser;
+    if (user == null) return null;
+    try {
+      await user.reload();
+      final factors = await user.multiFactor.getEnrolledFactors();
+      final factor = factors.where((f) => f.factorId == 'totp').firstOrNull;
+      return factor?.uid;
+    } catch (e) {
+      debugPrint('MFA getTotpEnrollmentId error: $e');
+      return null;
+    }
+  }
+
+  /// Verifies a TOTP code for step-up authentication.
+  ///
+  /// Step-up verification requires server-side validation against the enrolled
+  /// secret; the client does not have access to that secret. This method
+  /// therefore fails closed and must not be treated as a successful check.
+  /// Callers must use the backend verification endpoint instead.
+  Future<bool> verifyTotpForStepUp(String totpCode) async {
+    final user = _currentUser;
+    if (user == null) return false;
+    // Never auto-succeed: without server-side verification the code cannot be
+    // validated against the enrolled secret.
+    debugPrint('MFA step-up verification requires server-side validation; failing closed.');
+    return false;
+  }
+
+  /// Generates recovery codes for TOTP MFA.
+  ///
+  /// Returns 10 codes of 8 characters each (e.g., "A1B2-C3D4").
+  List<String> _generateRecoveryCodes(int count) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    final random = Random.secure();
+    final codes = <String>[];
+    for (var i = 0; i < count; i++) {
+      final buffer = StringBuffer();
+      for (var j = 0; j < 8; j++) {
+        final idx = random.nextInt(chars.length);
+        buffer.write(chars[idx]);
+        if (j == 3) buffer.write('-');
+      }
+      codes.add(buffer.toString());
+    }
+    return codes;
+  }
+
+  /// Computes a TOTP code locally for testing/display purposes.
+  ///
+  /// Not used for actual verification (Firebase handles that), but useful
+  /// for showing the current code in the UI during enrollment flow.
+  @visibleForTesting
+  static String generateTotp(String base32Secret, {int timeStep = 30, int digits = 6}) {
+    final secret = base32.decode(base32Secret);
+    final counter = (DateTime.now().millisecondsSinceEpoch ~/ 1000) ~/ timeStep;
+    final counterBytes = ByteData(8)..setInt64(0, counter, Endian.big);
+    final hmac = Hmac(sha1, secret);
+    final hash = hmac.convert(counterBytes.buffer.asUint8List()).bytes;
+    final offset = hash.last & 0x0f;
+    final code =
+        ((hash[offset] & 0x7f) << 24) |
+        ((hash[offset + 1] & 0xff) << 16) |
+        ((hash[offset + 2] & 0xff) << 8) |
+        (hash[offset + 3] & 0xff);
+    final otp = code % (10 ^ digits);
+    return otp.toString().padLeft(digits, '0');
+  }
+}
+
+/// Data returned when starting TOTP enrollment.
+class MfaEnrollmentData {
+  final String secret; // Raw secret for manual entry
+  final String authUri; // otpauth:// URI for QR code
+  final List<String> recoveryCodes; // One-time recovery codes
+  final String factorUid; // Firebase factor UID (empty until enrolled)
+
+  const MfaEnrollmentData({
+    required this.secret,
+    required this.authUri,
+    required this.recoveryCodes,
+    required this.factorUid,
+  });
+}
+
+/// MFA-specific errors with user-facing messages.
+class MfaError implements Exception {
+  final String code;
+  final String userMessage;
+
+  const MfaError._(this.code, this.userMessage);
+
+  static MfaError notAuthenticated() =>
+      const MfaError._('not_authenticated', 'Please sign in to manage two-factor authentication.');
+
+  static MfaError emailNotVerified() => const MfaError._(
+    'email_not_verified',
+    'Please verify your email address before enabling two-factor authentication.',
+  );
+
+  static MfaError alreadyEnrolled() =>
+      const MfaError._('already_enrolled', 'Two-factor authentication is already enabled.');
+
+  static MfaError notEnrolled() =>
+      const MfaError._('not_enrolled', 'Two-factor authentication is not enabled.');
+
+  static MfaError invalidCode() =>
+      const MfaError._('invalid_code', 'The code is incorrect. Please try again.');
+
+  static MfaError mfaNotEnabled() => const MfaError._(
+    'mfa_not_enabled',
+    'Two-factor authentication is not available. Please contact support.',
+  );
+
+  static MfaError enrollmentFailed(String? message) => MfaError._(
+    'enrollment_failed',
+    message ?? 'Failed to enable two-factor authentication. Please try again.',
+  );
+
+  static MfaError unenrollmentFailed(String? message) => MfaError._(
+    'unenrollment_failed',
+    message ?? 'Failed to disable two-factor authentication. Please try again.',
+  );
+
+  @override
+  String toString() => 'MfaError($code: $userMessage)';
+}

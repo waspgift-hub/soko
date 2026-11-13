@@ -1,6 +1,81 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart' as url;
 import '../../extensions/context_tr.dart';
+import '../../services/app_update_service.dart';
+
+/// Official Soko Vibe public links, in one place.
+///
+/// These were previously inline string literals scattered through this screen,
+/// which is how the About screen ended up pointing at a YouTube handle that is
+/// not the Soko Vibe channel, and at a personal gmail address that appears in
+/// no other Soko Vibe document. Anything shown to a user as a way to reach us
+/// lives here so the app and the website cannot drift apart again.
+
+/// Support address, as published on the website and in the privacy notice.
+const String supportEmail = 'support@soko-vibe.com';
+
+/// Data Protection Officer, as published in the privacy notice.
+const String dpoEmail = 'dpo@soko-vibe.com';
+
+/// Public website.
+const String websiteUrl = 'https://www.sokovibe.co.tz';
+
+/// Terms of Service.
+const String termsUrl = '$websiteUrl/terms.html';
+
+/// Privacy Policy.
+const String privacyPolicyUrl = '$websiteUrl/privacy.html';
+
+/// YouTube channel, referenced by channel id rather than @handle: handles get
+/// changed and reused, a channel id never points somewhere else.
+const String youTubeChannelId = 'UC8ALYEifcm4hEsl9MGoCD4Q';
+const String youTubeChannelUrl =
+    'https://www.youtube.com/channel/$youTubeChannelId';
+
+/// What to show under the YouTube row.
+///
+/// Not a URL: the channel's canonical form is the /channel/UC... URL and it
+/// exposes no @handle, so any handle-shaped string here would be a guess that
+/// could point somewhere else one day. The channel name is the honest label.
+const String youTubeChannelLabel = 'Soko Vibe — YouTube';
+
+Future<void> _checkForUpdates(BuildContext context) async {
+  final remote = await AppUpdateService.instance.fetch();
+  if (!context.mounted) return;
+  final published = remote?.published == true;
+  final notes = (remote?.releaseNotes ?? '').trim();
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(
+        published ? context.tr('update_available') : context.tr('update_not_published'),
+      ),
+      content: Text(
+        published
+            ? (notes.isEmpty ? context.tr('update_available') : notes)
+            : context.tr('no_store_listing'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.tr('ok')),
+        ),
+        if (published)
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              url.launchUrl(
+                Uri.parse('https://www.sokovibe.co.tz/support'),
+                mode: url.LaunchMode.externalApplication,
+              );
+            },
+            child: Text(context.tr('update_now')),
+          ),
+      ],
+    ),
+  );
+}
 
 class AboutAppScreen extends StatelessWidget {
   const AboutAppScreen({super.key});
@@ -31,7 +106,7 @@ class AboutAppScreen extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(25),
                 child: Image.asset(
-                  'assets/soko_vibe_logo.png',
+                  'assets/app_icon.png',
                   width: 100,
                   height: 100,
                   fit: BoxFit.cover,
@@ -65,17 +140,32 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // Version
-              _buildInfoCard(
-                context,
-                icon: Icons.info_outline,
-                title: context.tr('version_label'),
-                value: context.tr('version'),
+              FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snap) {
+                  final label = snap.hasData
+                      ? '${snap.data!.version} (${snap.data!.buildNumber})'
+                      : '…';
+                  return Column(
+                    children: [
+                      _buildInfoCard(
+                        context,
+                        icon: Icons.info_outline,
+                        title: context.tr('version_label'),
+                        value: label,
+                      ),
+                      TextButton(
+                        onPressed: () => _checkForUpdates(context),
+                        child: Text(context.tr('check_for_updates')),
+                      ),
+                    ],
+                  );
+                },
               ),
 
               const SizedBox(height: 12),
 
-              // Soko Vibe Team
+              // Credits — Founder / Developers / Investors
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -83,38 +173,33 @@ class AboutAppScreen extends StatelessWidget {
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    Icon(Icons.group, color: Theme.of(context).colorScheme.primary, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('developer'),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Gift Wapalila & Praygod Hassani",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ),
+                    _creditRow(
+                      context,
+                      icon: Icons.emoji_events,
+                      label: context.tr('founder_label'),
+                      value: context.tr('founder_name'),
+                    ),
+                    const Divider(height: 20),
+                    _creditRow(
+                      context,
+                      icon: Icons.code,
+                      label: context.tr('developer'),
+                      value: context.tr('developer_names'),
+                    ),
+                    const Divider(height: 20),
+                    _creditRow(
+                      context,
+                      icon: Icons.handshake_outlined,
+                      label: context.tr('investors_label'),
+                      value: context.tr('investors_names'),
                     ),
                   ],
                 ),
@@ -122,10 +207,14 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Contact Email
+              // Contact Email.
+              // support@soko-vibe.com is the address the website, the privacy
+              // notice and the data-protection notice all publish. It used to be
+              // a personal gmail here, which meant a user who read the policy on
+              // the site and emailed the app was talking to two different places.
               GestureDetector(
                 onTap: () async {
-                  final uri = Uri.parse('mailto:langusoko@gmail.com');
+                  final uri = Uri.parse('mailto:$supportEmail');
                   if (await url.canLaunchUrl(uri)) {
                     await url.launchUrl(uri);
                   }
@@ -134,19 +223,24 @@ class AboutAppScreen extends StatelessWidget {
                   context,
                   icon: Icons.email,
                   title: context.tr('contact_label'),
-                  value: "langusoko@gmail.com",
+                  value: supportEmail,
                   isLink: true,
                 ),
               ),
 
               const SizedBox(height: 12),
 
-              // YouTube Tutorials
+              // YouTube channel.
+              // The channel id is the stable identifier: the @handle has been
+              // changed before and would silently send users to a dead page.
               GestureDetector(
                 onTap: () async {
-                  final uri = Uri.parse('https://www.youtube.com/@badtz-xb');
+                  final uri = Uri.parse(youTubeChannelUrl);
                   if (await url.canLaunchUrl(uri)) {
-                    await url.launchUrl(uri, mode: url.LaunchMode.externalApplication);
+                    await url.launchUrl(
+                      uri,
+                      mode: url.LaunchMode.externalApplication,
+                    );
                   }
                 },
                 child: Container(
@@ -168,7 +262,11 @@ class AboutAppScreen extends StatelessWidget {
                           color: Colors.red.shade50,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(Icons.play_circle_fill, color: Colors.red.shade600, size: 28),
+                        child: Icon(
+                          Icons.play_circle_fill,
+                          color: Colors.red.shade600,
+                          size: 28,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -176,16 +274,18 @@ class AboutAppScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Mafunzo / Tutorials',
+                              context.tr('tutorials_title'),
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'youtube.com/@badtz-xb',
+                              youTubeChannelLabel,
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.red.shade600,
@@ -195,7 +295,11 @@ class AboutAppScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Icon(Icons.open_in_new, color: Colors.red.shade400, size: 18),
+                      Icon(
+                        Icons.open_in_new,
+                        color: Colors.red.shade400,
+                        size: 18,
+                      ),
                     ],
                   ),
                 ),
@@ -217,10 +321,14 @@ class AboutAppScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                 ),
@@ -236,7 +344,7 @@ class AboutAppScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Tunashukuru kwa kutumia Soko Vibe!\nMaoni yako yanatusaidia kuboresha.",
+                      context.tr('thank_you_message'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
@@ -268,6 +376,45 @@ class AboutAppScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _creditRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 24),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

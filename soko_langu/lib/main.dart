@@ -1,50 +1,70 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 
-import 'package:audio_service/audio_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:firebase_performance/firebase_performance.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
+import 'package:safe_text/safe_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // --- App modules ---
 import 'app/app_state.dart' as app_state;
 import 'app/router.dart' as router_lib;
-import 'firebase_messaging_background.dart';
 import 'firebase_options.dart';
 import 'notifiers/auth_notifier.dart';
-import 'providers/music_state_notifier.dart';
 import 'providers/product_feed_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'services/ai/ai_service.dart';
 import 'services/app_lock_service.dart';
-import 'services/audio_cache_service.dart';
-import 'services/audio_handler.dart';
-import 'widgets/mini_player.dart';
 import 'services/auth_service.dart';
 import 'services/exchange_rate_service.dart';
 import 'services/onboarding_service.dart';
-import 'services/magic_link_service.dart';
+import 'services/user_service.dart';
 import 'services/groq_service.dart';
-import 'services/interstitial_ad_service.dart';
 import 'services/localization_service.dart';
+import 'services/error_reporting_service.dart';
 import 'services/local_cache_service.dart';
+import 'services/platform_config_service.dart';
+import 'services/network_state_service.dart';
+import 'repositories/product_repository.dart';
 import 'services/notification_service.dart';
+import 'services/local_notification_service.dart';
+import 'services/balance_privacy_service.dart';
+import 'services/seller_verification_service.dart';
+import 'services/analytics_service.dart';
+import 'services/deep_link_service.dart';
+import 'services/media_audio_handler.dart';
+import 'services/receive_share_service.dart';
 import 'services/security_service.dart';
+import 'services/server_keep_alive.dart';
+import 'services/category_artwork/category_artwork_service.dart';
+import 'services/banner_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
+import 'widgets/transaction_status_watcher.dart';
+import 'widgets/age_gate_dialog.dart';
+import 'widgets/premium_background.dart';
+
+// SharedPreferences keys for the optional Category Artwork Pack. The pack is
+// never required; these only throttle the remote version check.
+const String _kArtworkAutoChecked = 'artwork_pack_checked';
+const String _kArtworkLastCheckMs = 'artwork_pack_last_check_ms';
 
 // ---------------------------------------------------------------------------
 // Global singletons — scoped to app lifetime, lazily resolved where possible.
@@ -53,7 +73,6 @@ import 'widgets/connectivity_wrapper.dart';
 final NotificationService notificationService = NotificationService();
 final LocalizationService localizationService = LocalizationService();
 final SecurityService securityService = SecurityService();
-final InterstitialAdService interstitialAdService = InterstitialAdService();
 final ThemeManager themeManager = ThemeManager();
 final GoRouter appRouter = router_lib.buildRouter();
 
@@ -67,14 +86,25 @@ typedef CurrencyCallback = void Function(String);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Cap image cache at 200 MB to prevent OOM on low-RAM devices
+  // while keeping enough headroom for the product feed + chat images.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024;
+
+  await themeManager.load();
+
+  await SafeTextFilter.init(language: Language.swahili);
+
   // --- Firebase initialization (blocking — required before any Firestore call) ---
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    );
+    ).timeout(const Duration(seconds: 15));
     if (!kIsWeb) {
+      // ONLINE-ONLY: no Firestore SDK cache on-device. Cached documents would
+      // read like authoritative data while disconnected and hide the outage
+      // behind stale snapshots; fail-fast surfaces the real connection state.
       FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: true,
+        persistenceEnabled: false,
       );
     }
   } catch (e) {
@@ -82,31 +112,49 @@ void main() async {
   }
 
   // --- Local cache (Hive) — must be ready before any repository reads ---
+  // Hive runs on web too (IndexedDB), so the offline product cache
+  // keeps working for browser users.
+  try {
+    await LocalCacheService.init().timeout(const Duration(seconds: 20));
+  } catch (e) {
+    debugPrint('LocalCacheService: init failed — $e');
+  }
+
+  // Owner-controlled money settings (commission rate). Fire-and-forget: a slow
+  // or failed fetch must not delay first paint, and the service keeps the
+  // previous value rather than resetting the rate.
+  unawaited(PlatformConfigService.instance.loadCommissionRate());
+
+  // --- Global error handlers (must be set before runApp to catch startup crashes) ---
+  if (!kIsWeb) {
+    // Crashlytics has no web implementation; only wire fatal errors on native.
+    _setupGlobalErrorHandlers();
+  }
+
+  // --- Google Sign-In: initialize before any sign in calls ---
   if (!kIsWeb) {
     try {
-      await LocalCacheService.init();
+      await GoogleSignIn.instance.initialize().timeout(const Duration(seconds: 10));
     } catch (e) {
-      debugPrint('LocalCacheService: init failed — $e');
-    }
-    try {
-      await AudioCacheService().init();
-    } catch (e) {
-      debugPrint('AudioCacheService: init failed — $e');
+      debugPrint('GoogleSignIn: init failed — $e');
     }
   }
 
-  // --- Global error handlers (must be set before runApp to catch startup crashes) ---
-  _setupGlobalErrorHandlers();
-
-  // --- FCM background handler registration ---
-  // SAFE: only stores a callback reference; the handler itself calls Firebase.initializeApp.
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-  // --- AudioService: init before runApp on non-web, so the handler
-  // Completer resolves before the first widget tree is built. This
-  // eliminates the retry loop that MusicStateNotifier previously needed.
+  // --- Local notifications for heads-up display ---
   if (!kIsWeb) {
-    await _initAudioService();
+    try {
+      await LocalNotificationService().initialize().timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('LocalNotification: init failed — $e');
+    }
+  }
+
+  // --- Media session (background audio + notification controls) ---
+  // Must be registered before the first queue is built: the audio engine is
+  // chosen at play time and never used if the service failed to start.
+  // Web has no audio_service platform implementation, so skip it there.
+  if (!kIsWeb) {
+    await initSokoMediaAudio();
   }
 
   runApp(const SokoVibeApp());
@@ -117,44 +165,25 @@ void main() async {
 void _setupGlobalErrorHandlers() {
   FlutterError.onError = (FlutterErrorDetails details) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    // Also report to our error monitoring
+    ErrorReportingService().reportError(
+      error: details.exception,
+      userMessage: details.exceptionAsString(),
+      severity: ErrorSeverity.critical,
+      stackTrace: details.stack.toString(),
+    );
   };
 
   ui.PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    ErrorReportingService().reportError(
+      error: error,
+      userMessage: error.toString(),
+      severity: ErrorSeverity.critical,
+      stackTrace: stack.toString(),
+    );
     return true; // Prevent the isolate from crashing after reporting
   };
-}
-
-/// Initialize AudioService before the first frame.
-///
-/// Must run before [runApp] so [musicHandlerFuture] resolves before any
-/// widget (e.g. [MiniPlayer], [PlayerScreen]) tries to read playback state.
-Future<void> _initAudioService() async {
-  try {
-    await AudioService.init(
-      builder: () {
-        final handler = MusicHandler();
-        bindMusicHandler(handler);
-        return handler;
-      },
-      config: AudioServiceConfig(
-        androidNotificationChannelId: 'com.soko_vibe.music',
-        androidNotificationChannelName: 'Soko Vibe Music',
-        androidNotificationChannelDescription:
-            'Audio playback controls for Soko Vibe',
-        androidNotificationIcon: 'ic_notification',
-        notificationColor: Color(0xFF40916C),
-        androidStopForegroundOnPause: false,
-        androidNotificationOngoing: true,
-        androidNotificationClickStartsActivity: true,
-        androidResumeOnClick: true,
-        androidShowNotificationBadge: true,
-        preloadArtwork: true,
-      ),
-    );
-  } catch (e) {
-    debugPrint('AudioService init failed: $e');
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,15 +193,19 @@ Future<void> _initAudioService() async {
 class AppConfig extends InheritedWidget {
   final String langCode;
   final String currencyCode;
+  final String smsLangCode;
   final LangCallback onSetLanguage;
   final CurrencyCallback onSetCurrency;
+  final LangCallback onSetSmsLanguage;
 
   const AppConfig({
     super.key,
     required this.langCode,
     required this.currencyCode,
+    required this.smsLangCode,
     required this.onSetLanguage,
     required this.onSetCurrency,
+    required this.onSetSmsLanguage,
     required super.child,
   });
 
@@ -189,7 +222,9 @@ class AppConfig extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppConfig old) =>
-      langCode != old.langCode || currencyCode != old.currencyCode;
+      langCode != old.langCode ||
+      currencyCode != old.currencyCode ||
+      smsLangCode != old.smsLangCode;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,16 +238,16 @@ class SokoVibeApp extends StatefulWidget {
   State<SokoVibeApp> createState() => _SokoVibeAppState();
 }
 
-class _SokoVibeAppState extends State<SokoVibeApp>
-    with WidgetsBindingObserver {
+class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   String _langCode = 'en';
   String _currencyCode = 'TZS';
+  String _smsLangCode = 'sw';
   late final ProductFeedProvider _productFeedProvider;
-  late final MusicStateNotifier _musicState;
   late final AuthRepository _authRepository;
   late final OnboardingService _onboardingService;
   late final AuthNotifier _authNotifier;
-  MagicLinkService? _magicLinkService;
+  late final NetworkStateService _networkState;
+  MethodChannel? _navigateChannel;
 
   // -----------------------------------------------------------------------
   // Lifecycle
@@ -221,8 +256,13 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   @override
   void initState() {
     super.initState();
-    _productFeedProvider = ProductFeedProvider();
-    _musicState = MusicStateNotifier();
+    // Central connectivity truth; started before any repository reads and
+    // shared with the feed repository so probes aren't duplicated per call.
+    _networkState = NetworkStateService();
+    _networkState.start();
+    _productFeedProvider = ProductFeedProvider(
+      repo: ProductRepository(networkState: _networkState),
+    );
     _authRepository = AuthRepository();
     _onboardingService = OnboardingService();
     _authNotifier = AuthNotifier(
@@ -231,28 +271,154 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     );
     WidgetsBinding.instance.addObserver(this);
     themeManager.addListener(_onThemeChange);
+    app_state.appStateNotifier.addListener(_onAppStateAuthChange);
     _initApp();
+    _setupNavigateChannel();
+    _setupDeepLinks();
+    _setupShareReceive();
   }
 
   @override
   void dispose() {
-    _magicLinkService?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
+    app_state.appStateNotifier.removeListener(_onAppStateAuthChange);
     _productFeedProvider.dispose();
+    _networkState.dispose();
+    _navigateChannel?.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  void _onAppStateAuthChange() {
+    if (app_state.appStateNotifier.isAuthenticated) {
+      // resume any private deep link that was held for auth
+      DeepLinkService.instance.consumePendingAfterAuth();
+      // also auto-open share composer if media is pending
+      if (ReceiveShareService.instance.hasPending) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openSellComposer();
+        });
+      }
+    }
+  }
+
+  void _setupNavigateChannel() {
+    if (kIsWeb) return;
+    _navigateChannel = const MethodChannel('soko_lang/navigate');
+    _navigateChannel!.setMethodCallHandler((call) async {
+      if (call.method == 'navigate') {
+        final route = call.arguments as String?;
+        if (route != null && route.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _pushIfNotCurrent(route);
+          });
+        }
+      }
+    });
+  }
+
+  /// Hands incoming App Links / Universal Links to the router.
+  ///
+  /// Called early so a cold-start link is captured before Firebase finishes,
+  /// while actual navigation waits for [DeepLinkService.flushPending] — the
+  /// same link therefore never races app initialization or auth restore.
+  void _setupDeepLinks() {
+    if (kIsWeb) return; // web shares are handled by the marketing site
+    DeepLinkService.instance.onLocation = _onDeepLink;
+    unawaited(DeepLinkService.instance.init());
+  }
+
+  void _onDeepLink(String location) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      appRouter.go(location);
+    });
+  }
+
+  void _setupShareReceive() {
+    if (kIsWeb) return;
+    ReceiveShareService.instance.onMediaReceived = _onShareMedia;
+    unawaited(ReceiveShareService.instance.init());
+  }
+
+  void _onShareMedia(List<String> paths) {
+    if (paths.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final isAuth = FirebaseAuth.instance.currentUser != null;
+      if (!isAuth) {
+        // preserve media via service (already persisted) and go to login;
+        // after login, _consumePendingShareMedia will run via auth listener
+        appRouter.go('/login');
+        // also listen for auth change to auto-open composer
+        // the login screen's success will trigger appStateNotifier -> flush via _initApp's pending?
+        // we wire via a one-time listener on auth state
+        FirebaseAuth.instance.authStateChanges().first.then((user) {
+          if (user != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _openSellComposer();
+            });
+          }
+        });
+        return;
+      }
+      _openSellComposer();
+    });
+  }
+
+  void _openSellComposer() {
+    final paths = ReceiveShareService.instance.consumePending();
+    // fallback to pendingPaths if consume returned empty but paths were passed
+    final toUse = paths.isEmpty ? ReceiveShareService.instance.pendingPaths : paths;
+    if (toUse.isEmpty) return;
+    // Navigate to add-product with shared media
+    final extra = <String, dynamic>{'sharedMedia': toUse};
+    // Use GoRouter push with extra — AddProductScreen reads via state.extra or service
+    // Since AddProductScreen currently reads initialMediaPaths via widget param,
+    // we pass via extra map and let router builder handle it.
+    appRouter.push('/add-product', extra: extra);
   }
 
   // -----------------------------------------------------------------------
   // App lifecycle observer
   // -----------------------------------------------------------------------
 
+  Timer? _sessionTimer;
+  final _analyticsService = AnalyticsService();
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       AppLockService.instance.onBackground();
+      _sessionTimer?.cancel();
     } else if (state == AppLifecycleState.resumed) {
-      AppLockService.instance.onResume();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onResume());
+    }
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    themeManager.onSystemBrightnessChanged(brightness);
+  }
+
+  Future<void> _onResume() async {
+    await AppLockService.instance.onResume();
+    _trackSession();
+    if (mounted) setState(() {});
+  }
+
+  void _trackSession() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      _analyticsService.trackUserSession(uid);
+      _sessionTimer?.cancel();
+      // 1-minute heartbeat keeps presence accurate for the admin online panel.
+      _sessionTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+        _analyticsService.trackUserSession(uid);
+      });
     }
   }
 
@@ -268,24 +434,50 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   // App initialization
   // -----------------------------------------------------------------------
 
-  /// Loads theme and preferences, then fires background services.
+  /// Loads preferences and fires background services.
   Future<void> _initApp() async {
-    // Load theme asynchronously (UI already has valid defaults)
-    themeManager.load();
-
     try {
       final prefs = await SharedPreferences.getInstance();
 
       setState(() {
-        _langCode = prefs.getString('language_code') ?? 'en';
+        final savedLang = prefs.getString('language_code');
+        _langCode =
+            (savedLang != null &&
+                LocalizationService.supportedLanguages.containsKey(savedLang))
+            ? savedLang
+            : 'sw';
         _currencyCode = prefs.getString('currency') ?? 'TZS';
+        final savedSmsLang = prefs.getString('sms_language');
+        _smsLangCode =
+            (savedSmsLang != null &&
+                LocalizationService.supportedLanguages.containsKey(
+                  savedSmsLang,
+                ))
+            ? savedSmsLang
+            : '';
       });
 
       await _authNotifier.initialize();
+      // Existing users may have chosen a language before this sync existed —
+      // push their saved choice to Firestore once on launch so the server can
+      // localize notifications for them too.
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        UserService().setLanguage(user.uid, _langCode).catchError((_) {});
+        // Only sync the SMS language when the user actually chose one; a user
+        // who never set it should keep getting SMS in their app language (the
+        // server falls back to langCode when smsLangCode is unset).
+        if (_smsLangCode.isNotEmpty) {
+          UserService()
+              .setSmsLanguage(user.uid, _smsLangCode)
+              .catchError((_) {});
+        }
+      }
       app_state.appStateNotifier.setAppInitialized();
-
-      _magicLinkService = MagicLinkService(_authNotifier);
-      unawaited(_magicLinkService!.initialize());
+      _trackSession();
+      // A cold-start deep link (getInitialLink) is flushed only now that the
+      // router redirects can behave correctly.
+      DeepLinkService.instance.flushPending();
 
       // Sync phone from onboarding to Firestore if user is logged in
       final phone = prefs.getString('phone_number');
@@ -302,14 +494,79 @@ class _SokoVibeAppState extends State<SokoVibeApp>
 
       _setupNotificationCallbacks();
 
+      // Category artwork pack (optional post-install download). Runs after the
+      // app is usable and deliberately never blocks: local state is read
+      // first, the remote check is fire-and-forget, and every failure path
+      // leaves the marketplace on icon fallbacks.
+      _initArtworkPack(prefs);
+
+      // Banner service bootstrap. Fire-and-forget; banners load asynchronously.
+      unawaited(context.read<BannerService>().start());
+
       // Background services (fire-and-forget)
       _initBackgroundServices(prefs);
-
-      // Start MusicStateNotifier streams (handler already ready since
-      // AudioService.init completed before runApp).
-      _musicState.init();
     } catch (e) {
       debugPrint('_initApp: error — $e');
+    }
+  }
+
+  /// Warms local artwork state, then installs the pack silently.
+  ///
+  /// The first install has no visible prompt: the marketplace stays on icon
+  /// fallbacks while the download runs in the background, and a failure leaves
+  /// that state in place so the next cold start simply attempts again. The
+  /// remote version check stays throttled to 12h so installed devices do not
+  /// ping the manifest on every launch.
+  Future<void> _initArtworkPack(SharedPreferences prefs) async {
+    final service = CategoryArtworkService.instance;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      service.setAppVersion(info.version);
+    } catch (_) {
+      // Without a version the minAppVersion gate cannot reject the pack, which
+      // is the safe direction to fail.
+    }
+    await service.initialize();
+    // A pack that is already on disk is the cache. Re-downloading it on every
+    // launch is what made the photo prompt feel like it never stuck.
+    if (service.status != ArtworkStatus.installed) {
+      unawaited(downloadCategoryArtworkPack());
+    }
+
+    // A remote manifest re-check must not happen on every cold start; only a
+    // small incremental update rides on it anyway.
+    if ((prefs.getBool(_kArtworkAutoChecked) ?? false)) {
+      final last = prefs.getInt(_kArtworkLastCheckMs) ?? 0;
+      final elapsed = DateTime.now().millisecondsSinceEpoch - last;
+      if (elapsed < const Duration(hours: 12).inMilliseconds) return;
+    }
+
+    await service.checkForUpdates();
+    if (service.status == ArtworkStatus.updateAvailable) {
+      unawaited(downloadCategoryArtworkPack());
+    }
+
+    // Only stamp the throttle once a manifest was actually parsed; a failed check
+    // must be retried on the next launch instead of being suppressed for 12h.
+    if (service.remoteManifest != null) {
+      await prefs.setBool(_kArtworkAutoChecked, true);
+      await prefs.setInt(
+        _kArtworkLastCheckMs,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    }
+  }
+
+  /// Installs the artwork pack with no UI at all. Both the first install and
+  /// the incremental update come through here; a failure only logs, because
+  /// the service keeps the notInstalled/installed state that the next cold
+  /// start makes its retry decision from.
+  Future<void> downloadCategoryArtworkPack() async {
+    final service = CategoryArtworkService.instance;
+    try {
+      await service.downloadPack();
+    } catch (e) {
+      debugPrint('artwork pack silent download failed: $e');
     }
   }
 
@@ -321,30 +578,93 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     NotificationService.onNotificationTap = (Map<String, dynamic> data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final type = data['type'] as String?;
-        switch (type) {
-          case 'order':
-          case 'boost':
-            appRouter.push('/notifications');
-          case 'flash_sale':
-            appRouter.push('/flash-sale');
-          case 'product':
-            final productId = data['productId'] as String?;
-            if (productId != null) {
-              appRouter.push('/product/$productId');
-            }
-        }
+        _onNotificationTap(type, data, context);
       });
     };
 
-    NotificationService.onPaymentNotificationTap =
-        (Map<String, dynamic> data) {
+    NotificationService.onPaymentNotificationTap = (Map<String, dynamic> data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final orderId = (data['orderId'] ?? data['transactionId']) as String?;
         if (orderId != null) {
-          appRouter.push('/receipt/$orderId');
+          _pushIfNotCurrent('/receipt/$orderId', context);
         }
+        unawaited(
+          notificationService.markRelatedAsRead(
+            (data['type'] as String?) ?? 'payment',
+            data,
+          ),
+        );
       });
     };
+  }
+
+  void _onNotificationTap(
+    String? type,
+    Map<String, dynamic>? data,
+    BuildContext ctx,
+  ) {
+    switch (type) {
+      case 'order':
+        final orderId =
+            data?['orderId'] as String? ?? data?['transactionId'] as String?;
+        if (orderId != null) {
+          // Order notifications carry the OTHER party's id: to-buyer ones
+          // include sellerId, to-seller ones include buyerId. A seller who
+          // just got "set the shipping cost for this new order" goes to the
+          // quote screen; other seller order notices (quote sent, paid, …)
+          // keep the order detail so they can act where the order lives.
+          // New-order requests are the only to-seller order notifications
+          // that carry productId, so that discriminates them uniquely.
+          final myUid = FirebaseAuth.instance.currentUser?.uid;
+          final isNewOrderForSeller =
+              myUid != null &&
+              data?['sellerId'] == null &&
+              data?['buyerId'] != null &&
+              data?['productId'] != null;
+          if (isNewOrderForSeller) {
+            _pushIfNotCurrent('/seller-quote', ctx);
+          } else {
+            _pushIfNotCurrent('/order-detail/$orderId', ctx, data ?? {});
+          }
+        } else {
+          _pushIfNotCurrent('/notifications', ctx);
+        }
+      case 'payment':
+        final orderId = (data?['orderId'] ?? data?['transactionId']) as String?;
+        if (orderId != null) {
+          _pushIfNotCurrent('/receipt/$orderId', ctx);
+        }
+      case 'chat':
+        final receiverId =
+            data?['senderId'] as String? ?? data?['receiverId'] as String?;
+        if (receiverId != null) {
+          _pushIfNotCurrent('/chat/$receiverId', ctx);
+        } else {
+          _pushIfNotCurrent('/chats', ctx);
+        }
+      case 'flash_sale':
+        _pushIfNotCurrent('/flash-sale', ctx);
+      case 'product':
+        final productId = data?['productId'] as String?;
+        if (productId != null) {
+          _pushIfNotCurrent('/product/$productId', ctx);
+        } else {
+          _pushIfNotCurrent('/notifications', ctx);
+        }
+    }
+    unawaited(notificationService.markRelatedAsRead(type, data));
+  }
+
+  void _pushIfNotCurrent(
+    String location, [
+    BuildContext? context,
+    Object? extra,
+  ]) {
+    if (context != null && mounted) {
+      final current = GoRouterState.of(context).matchedLocation;
+      if (current == location) return;
+    }
+    appRouter.push(location, extra: extra);
   }
 
   // -----------------------------------------------------------------------
@@ -352,43 +672,44 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   // -----------------------------------------------------------------------
 
   Future<void> _initBackgroundServices(SharedPreferences prefs) async {
-    // Crashlytics
-    try {
-      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
-    } catch (e) {
-      debugPrint('Crashlytics: failed — $e');
-    }
-
-    // Performance
-    try {
-      await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
-    } catch (e) {
-      debugPrint('Performance: failed — $e');
-    }
-
     if (!kIsWeb) {
+      // Crashlytics
+      try {
+        await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+          true,
+        );
+      } catch (e) {
+        debugPrint('Crashlytics: failed — $e');
+      }
+
+      // Performance
+      try {
+        await FirebasePerformance.instance.setPerformanceCollectionEnabled(
+          true,
+        );
+      } catch (e) {
+        debugPrint('Performance: failed — $e');
+      }
+
       // App Check
       try {
-        await FirebaseAppCheck.instance.activate(
-          providerAndroid: kDebugMode
-              ? const AndroidDebugProvider()
-              : const AndroidPlayIntegrityProvider(),
-          providerApple: const AppleDeviceCheckProvider(),
-        );
+        await FirebaseAppCheck.instance
+            .activate(
+              providerAndroid: kDebugMode
+                  ? const AndroidDebugProvider()
+                  : const AndroidPlayIntegrityProvider(),
+              providerApple: const AppleDeviceCheckProvider(),
+            )
+            .timeout(const Duration(seconds: 10));
         if (kDebugMode) {
-          final tokenStr = await FirebaseAppCheck.instance.getToken(true);
+          final tokenStr = await FirebaseAppCheck.instance
+              .getToken(true)
+              .timeout(const Duration(seconds: 8));
           debugPrint('🔥 AppCheck Debug Token (register in Firebase Console):');
           debugPrint(tokenStr ?? 'null');
         }
       } catch (e) {
         debugPrint('AppCheck: failed — $e');
-      }
-
-      // AdMob
-      try {
-        await MobileAds.instance.initialize();
-      } catch (e) {
-        debugPrint('AdMob: failed — $e');
       }
 
       // Security (root/jailbreak detection)
@@ -397,18 +718,11 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       } catch (e) {
         debugPrint('SecurityService: failed — $e');
       }
-
-      // Awesome Notifications (local channels)
-      try {
-        await NotificationService.initLocalNotifications();
-      } catch (e) {
-        debugPrint('AwesomeNotifications init: $e');
-      }
     }
 
     // FCM push + in-app notification service
     try {
-      await notificationService.initialize();
+      await notificationService.initialize().timeout(const Duration(seconds: 12));
     } catch (e) {
       debugPrint('notificationService: $e');
     }
@@ -423,6 +737,9 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     // AI assistant
     AiService.initialize(GroqService());
 
+    // Payments backend lives on a Render free-tier box that sleeps after idle;
+    // keep it warm while the app is open so the first payment isn't a cold start.
+    ServerKeepAlive.instance.start();
   }
 
   // -----------------------------------------------------------------------
@@ -431,10 +748,26 @@ class _SokoVibeAppState extends State<SokoVibeApp>
 
   void _setLanguage(String code) {
     setState(() => _langCode = code);
+    // Push the chosen language to the profile doc so the server localizes push
+    // notifications to match the in-app choice, not the device locale.
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      UserService().setLanguage(user.uid, code).catchError((_) {});
+    }
   }
 
   void _setCurrency(String code) {
     setState(() => _currencyCode = code);
+  }
+
+  void _setSmsLanguage(String code) {
+    setState(() => _smsLangCode = code);
+    // SMS language is stored separately from the push/in-app language so the
+    // server can localize transactional SMS without touching push language.
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      UserService().setSmsLanguage(user.uid, code).catchError((_) {});
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -446,20 +779,44 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _productFeedProvider),
-        ChangeNotifierProvider.value(value: _musicState),
+        ChangeNotifierProvider.value(value: _networkState),
         ChangeNotifierProvider.value(value: themeManager),
+        ChangeNotifierProvider(create: (_) => BalancePrivacyService()),
         Provider.value(value: _authRepository),
         Provider.value(value: _onboardingService),
         ChangeNotifierProvider.value(value: _authNotifier),
+        // Trusted KYC / Blue Tick state for every badge on every surface.
+        ChangeNotifierProvider<SellerVerificationService>.value(
+          value: sellerVerificationService,
+        ),
+        // Centralized banner management service for first-party banners.
+        Provider<BannerService>.value(
+          value: BannerService(),
+        ),
       ],
-      child: MaterialApp.router(
-        routerConfig: appRouter,
-        debugShowCheckedModeBanner: false,
-        title: 'Soko Vibe',
-        theme: themeManager.lightTheme,
-        darkTheme: themeManager.darkTheme,
-        themeMode: themeManager.isDark ? ThemeMode.dark : ThemeMode.light,
-        builder: _appBuilder,
+      // M3 Expressive dynamic color: OS schemes (Android 12+ wallpaper,
+      // desktop accents) flow into ThemeManager, which falls back to the
+      // static brand themes wherever the OS reports none.
+      child: DynamicColorBuilder(
+        builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+          themeManager.setDynamicSchemes(lightDynamic, darkDynamic);
+          return MaterialApp.router(
+            routerConfig: appRouter,
+            debugShowCheckedModeBanner: false,
+            title: 'Soko Vibe',
+            locale: Locale(_langCode),
+            supportedLocales: const [Locale('en'), Locale('sw')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: themeManager.lightTheme,
+            darkTheme: themeManager.darkTheme,
+            themeMode: themeManager.themeMode,
+            builder: _appBuilder,
+          );
+        },
       ),
     );
   }
@@ -468,8 +825,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   /// reused without unnecessary allocations.
   Widget _appBuilder(BuildContext context, Widget? child) {
     Responsive.init(context);
-    Widget content = child!;
-    final cs = Theme.of(context).colorScheme;
+    Widget content = child ?? const SizedBox();
 
     // Web desktop constraint
     if (kIsWeb && Responsive.isDesktop) {
@@ -481,49 +837,58 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       );
     }
 
-    // Cosmic Slate gradient background
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    content = Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: isDark
-              ? [
-                  cs.surface.withValues(alpha: 0.97),
-                  cs.surfaceContainerLow,
-                  cs.surface.withValues(alpha: 0.97),
-                ]
-              : [
-                  cs.surface.withValues(alpha: 0.95),
-                  cs.surfaceContainerLow,
-                  cs.surface.withValues(alpha: 0.95),
-                ],
-        ),
-      ),
-      child: content,
-    );
+    content = PremiumBackground(child: content);
 
     // Cross-cutting overlays
     content = ConnectivityWrapper(child: content);
     content = MaintenanceGate(child: content);
     content = AppLockOverlay(child: content);
+    content = TransactionStatusWatcher(child: content);
+    content = _AgeGateOverlay(child: content);
 
     return AppConfig(
       langCode: _langCode,
       currencyCode: _currencyCode,
+      smsLangCode: _smsLangCode,
       onSetLanguage: _setLanguage,
       onSetCurrency: _setCurrency,
+      onSetSmsLanguage: _setSmsLanguage,
       child: Stack(
         children: [
-          Column(
-            children: [
-              Expanded(child: content),
-              const MiniPlayer(),
-            ],
-          ),
+          Column(children: [Expanded(child: content)]),
         ],
       ),
     );
   }
+}
+
+/// Shows age gate dialog once on first launch. Does NOT block the app.
+class _AgeGateOverlay extends StatefulWidget {
+  final Widget child;
+  const _AgeGateOverlay({required this.child});
+
+  @override
+  State<_AgeGateOverlay> createState() => _AgeGateOverlayState();
+}
+
+class _AgeGateOverlayState extends State<_AgeGateOverlay> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  Future<void> _check() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('age_gate_confirmed') == true) return;
+      await AgeGateDialog.show(context);
+      await prefs.setBool('age_gate_confirmed', true);
+    } catch (_) {
+      // fail-safe — never block the app
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

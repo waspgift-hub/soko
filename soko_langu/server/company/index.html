@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
+  <title>Company OS | Soko Vibe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    :root { --bg:#0a0a0b; --card:#141416; --border:#27272a; --text:#fafafa; --text-muted:#a1a1aa; --primary:#22d3ee; --primary-2:#3b82f6; }
+    * { margin:0; padding:0; box-sizing:border-box; font-family:Inter,system-ui,sans-serif; }
+    body { background:radial-gradient(circle at top,#1e293b 0%,var(--bg) 55%); color:var(--text); line-height:1.6; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:16px 32px; border-bottom:1px solid var(--border); backdrop-filter:blur(12px); position:sticky; top:0; background:rgba(10,10,11,0.8); }
+    .brand { display:flex; align-items:center; gap:12px; font-weight:700; }
+    .brand-dot { width:10px; height:10px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--primary-2)); box-shadow:0 0 40px rgba(34,211,238,0.4); }
+    nav { display:flex; gap:16px; flex-wrap:wrap; }
+    nav a { color:var(--text-muted); text-decoration:none; font-size:14px; padding:8px 12px; border-radius:10px; display:flex; align-items:center; gap:8px; }
+    nav a.active, nav a:hover { color:var(--text); background:rgba(59,130,246,0.16); }
+    main { display:grid; grid-template-columns:280px 1fr; gap:24px; max-width:1440px; margin:0 auto; padding:32px; }
+    .sidebar { display:flex; flex-direction:column; gap:16px; }
+    .card { background:linear-gradient(180deg,rgba(59,130,246,0.12) 0%,var(--card) 100%); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+    .card-header { padding:20px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .card-body { padding:0 24px 24px; display:grid; gap:12px; }
+    .list-item { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; border:1px solid transparent; text-decoration:none; color:var(--text); }
+    .list-item:hover { border-color:rgba(59,130,246,0.4); background:rgba(59,130,246,0.12); }
+    .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:20px; }
+    .span-6 { grid-column:span 6; }
+    .span-12 { grid-column:span 12; }
+    .metric { display:flex; flex-direction:column; gap:8px; padding:24px; }
+    .metric-value { font-size:40px; font-weight:700; }
+    .metric-label { color:var(--text-muted); }
+    .panel { border-radius:16px; border:1px solid var(--border); background:var(--card); overflow:hidden; }
+    .panel-header { padding:20px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .panel-body { padding:0 24px 24px; display:grid; gap:12px; }
+    .table { width:100%; border-collapse:collapse; }
+    .table th { text-align:left; color:var(--text-muted); font-weight:500; padding:12px 0; border-bottom:1px solid var(--border); }
+    .table td { padding:14px 0; border-bottom:1px solid rgba(39,39,42,0.8); }
+    .badge { padding:4px 10px; border-radius:999px; font-size:12px; background:rgba(34,211,238,0.18); color:var(--text); }
+    @media (max-width:1100px){ main{grid-template-columns:1fr;} .sidebar{display:none;} .span-6{grid-column:span 12;} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div>Soko Vibe � Company OS</div>
+        <small style="color:var(--text-muted);">HRM � Projects � Calendar � Finance</small>
+      </div>
+    </div>
+    <nav>
+      <a class="active" href="#overview"><i data-lucide="layout-dashboard" size="18"></i>Overview</a>
+      <a href="#hr"><i data-lucide="users" size="18"></i>HRM</a>
+      <a href="#projects"><i data-lucide="kanban-square" size="18"></i>Projects & Tasks</a>
+      <a href="#calendar"><i data-lucide="calendar" size="18"></i>Calendar</a>
+      <a href="#finance"><i data-lucide="wallet" size="18"></i>Finance</a>
+      <a href="/admin"><i data-lucide="shield-check" size="18"></i>Admin Console</a>
+      <a href="/staff"><i data-lucide="briefcase" size="18"></i>Staff Dashboard</a>
+    </nav>
+    <div style="display:flex; gap:12px; align-items:center;">
+      <div style="text-align:right;">
+        <div style="font-size:14px;">Web Access</div>
+        <small style="color:var(--text-muted);">company.sokovibe.co.tz ready</small>
+      </div>
+    </div>
+  </header>
+  <main>
+    <aside class="sidebar">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div style="font-weight:600;">Quick access</div>
+            <small style="color:var(--text-muted);">Navigate Company OS</small>
+          </div>
+          <i data-lucide="sparkles" size="18" style="color:var(--primary);"></i>
+        </div>
+        <div class="card-body">
+          <a class="list-item" href="#hr"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="user-plus" size="18"></i><span>Onboard employee</span></div><i data-lucide="chevron-right" size="18" style="color:var(--text-muted);"></i></a>
+          <a class="list-item" href="#projects"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="plus-circle" size="18"></i><span>Create project</span></div><i data-lucide="chevron-right" size="18" style="color:var(--text-muted);"></i></a>
+          <a class="list-item" href="#finance"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="file-text" size="18"></i><span>New journal entry</span></div><i data-lucide="chevron-right" size="18" style="color:var(--text-muted);"></i></a>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div style="font-weight:600;">Access</div>
+            <small style="color:var(--text-muted);">All roles on web</small>
+          </div>
+          <span class="badge">Web Only</span>
+        </div>
+        <div class="panel-body">
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Admin Console</span><a href="/admin" style="color:var(--primary); text-decoration:none;">Open</a></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Staff Dashboard</span><a href="/staff" style="color:var(--primary); text-decoration:none;">Open</a></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Company OS</span><a href="/company" style="color:var(--primary); text-decoration:none;">Open</a></div>
+        </div>
+      </div>
+    </aside>
+    <section style="display:flex; flex-direction:column; gap:24px;">
+      <div>
+        <h1 style="font-size:32px; font-weight:700;">Company OS</h1>
+        <p style="color:var(--text-muted);">Admin, Staff & Operations - accessible via web only</p>
+      </div>
+      <div class="grid">
+        <div class="panel span-6 metric">
+          <span class="metric-label">Employees</span>
+          <span class="metric-value">--</span>
+          <span style="color:var(--text-muted);">HRM</span>
+        </div>
+        <div class="panel span-6 metric">
+          <span class="metric-label">Active Projects</span>
+          <span class="metric-value">--</span>
+          <span style="color:var(--text-muted);">Tasks & Milestones</span>
+        </div>
+        <div class="panel span-6 metric">
+          <span class="metric-label">Events</span>
+          <span class="metric-value">--</span>
+          <span style="color:var(--text-muted);">Calendar</span>
+        </div>
+        <div class="panel span-6 metric">
+          <span class="metric-label">Finance</span>
+          <span class="metric-value">TZS --</span>
+          <span style="color:var(--text-muted);">Ledger snapshot</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div style="font-weight:600;">System Links</div>
+            <small style="color:var(--text-muted);">All dashboards on web</small>
+          </div>
+        </div>
+        <div class="panel-body" style="grid-template-columns:repeat(3,1fr);">
+          <a class="list-item" href="/admin"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="shield-check" size="18"></i><span>Admin Console</span></div><i data-lucide="arrow-up-right" size="18" style="color:var(--text-muted);"></i></a>
+          <a class="list-item" href="/staff"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="briefcase" size="18"></i><span>Staff Dashboard</span></div><i data-lucide="arrow-up-right" size="18" style="color:var(--text-muted);"></i></a>
+          <a class="list-item" href="/company"><div style="display:flex; align-items:center; gap:12px;"><i data-lucide="building-2" size="18"></i><span>Company OS</span></div><i data-lucide="arrow-up-right" size="18" style="color:var(--text-muted);"></i></a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

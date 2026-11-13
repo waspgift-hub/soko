@@ -1,0 +1,433 @@
+const { getStore } = require('../../config/database');
+const { requireLock, releaseLock } = require('../../config/redis');
+const { getProvider } = require('./provider-factory');
+const { PaymentError } = require('./payment-errors');
+const config = require('../../config');
+const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
+const { sameAmount } = require('../../utils/money');
+const outbox = require('./webhook-outbox');
+const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
+const { sendOneSignalNotification } = require('../legacy-compat/notify');
+const { confirmLegacyDeposit } = require('./legacy-deposit-confirm');
+const { confirmLegacyTransaction } = require('./legacy-transaction-confirm');
+
+/**
+ * Payment service.
+ *
+ * Four-layer double-spending prevention:
+ *  1. Redis SETNX lock (30s TTL)
+ *  2. BullMQ job ID deduplication (enqueued per webhook id)
+ *  3. Database UNIQUE constraint on idempotency keys
+ *  4. Status priority check before any state change
+ */
+
+// Methods the provider factory actually implements. ClickPesa was removed;
+// card and bank collection are not implemented by AzamPayProvider, so accepting
+// them at the route only produced a 500 after the buyer had chosen a method.
+const SUPPORTED_PAYMENT_PROVIDERS = new Set(['azampay', 'mno_checkout']);
+
+// Create a payment record and initiate the provider collection.
+async function initiatePayment({
+  orderId,
+  buyerId,
+  provider: providerName = 'azampay',
+  amount,
+  phoneNumber,
+}) {
+  if (!SUPPORTED_PAYMENT_PROVIDERS.has(providerName)) {
+    // Typed 400 rather than letting getProvider() throw an unhandled 500: the
+    // request is invalid, not the server.
+    throw httpError(400, 'UNSUPPORTED_PAYMENT_PROVIDER');
+  }
+  const store = getStore();
+  const lock = await requireLock(`payment:${orderId}`, 60);
+
+  try {
+    return await store.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+      if (order.buyerId !== buyerId) throw httpError(403, 'FORBIDDEN');
+      if (order.status !== ORDER_STATES.AWAITING_ESCROW_PAYMENT) {
+        throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
+      }
+      if (!sameAmount(order.totalAmount, amount)) throw httpError(400, 'AMOUNT_MISMATCH');
+
+      // Any prior pending/initiated payment for this order is voided out.
+      await tx.payment.updateMany({
+        where: { orderId, status: 'initiated' },
+        data: { status: 'voided' },
+      });
+
+      const provider = getProvider(providerName);
+      const providerResponse = await provider.initiateCollection({
+        amount,
+        orderReference: order.orderNumber,
+        phoneNumber,
+        callbackUrl: config.azampay.collectionWebhookUrl,
+      });
+
+      const payment = await tx.payment.create({
+        data: {
+          orderId,
+          provider: providerName,
+          amount,
+          status: 'initiated',
+          providerReference: providerResponse.providerReference,
+          idempotencyKey: `init_${order.orderNumber}_${Date.now()}`,
+        },
+      });
+
+      // Move order to PAYMENT_PENDING
+      const machine = new OrderStateMachine(order.status);
+      machine.transition(ORDER_STATES.PAYMENT_PENDING, {
+        actor: 'buyer',
+        actorId: buyerId,
+        reason: 'Payment initiated via ' + providerName,
+      });
+
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: ORDER_STATES.PAYMENT_PENDING,
+          statusChangedBy: buyerId,
+        },
+      });
+
+      return { payment, providerInstruction: providerResponse.raw };
+    });
+  } finally {
+    if (lock.acquired) await releaseLock(`payment:${orderId}`, lock.token);
+  }
+}
+
+// Server-side verification of a collection status (called on webhook or poll).
+// On success, creates the escrow hold and moves order to ESCROW_HELD.
+async function confirmCollection({
+  orderReference,
+  providerPaymentId,
+  amount,
+  force = false,
+}) {
+  const store = getStore();
+  const lock = await requireLock(`collection:${orderReference}`, 60);
+
+  let result;
+  try {
+    await store.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { orderNumber: orderReference },
+      });
+      if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+
+      const payment = await tx.payment.findFirst({
+        where: { orderId: order.id, status: { in: ['initiated', 'pending'] } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!payment) throw httpError(404, 'PAYMENT_NOT_FOUND');
+
+      // Server-authoritative money: the provider may echo a different amount
+      // than we asked the buyer to pay — never credit more than the order.
+      if (amount != null && !sameAmount(amount, order.totalAmount)) {
+        throw httpError(400, `AMOUNT_MISMATCH:${amount.toString()}`);
+      }
+
+      // Layer 4: status priority check
+      if (order.status === ORDER_STATES.ESCROW_HELD) {
+        result = { status: 'ALREADY_IN_ESCROW', order };
+        return;
+      }
+      if (![ORDER_STATES.PAYMENT_PENDING, ORDER_STATES.PAYMENT_PROCESSING, ORDER_STATES.FAILED].includes(order.status) && !force) {
+        throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
+      }
+
+      // Optional server-side re-verification with the provider
+      if (providerPaymentId === 'auto' || !providerPaymentId) {
+        if (!force) {
+          const provider = getProvider(payment.provider);
+          const statusResp = await provider.queryCollectionStatus(orderReference);
+          if (statusResp.status !== 'completed') {
+            // A customer-side decline is not an order fault and must not leave
+            // the order stuck in PAYMENT_PENDING forever. Measured live: a buyer
+            // with an empty wallet produces status FAILED and the reason lives
+            // only in the gateway's `message` field.
+            if (statusResp.status === 'failed') {
+              throw new PaymentError({
+                code: 'CUSTOMER_PAYMENT_FAILED',
+                message: statusResp.failureReason
+                  || 'Malipo yamekataliwa. Hakuna salio lililofanyika.',
+                provider: payment.provider,
+                status: 402,
+                providerReference: statusResp.providerPaymentId,
+                retryable: true,
+              });
+            }
+            throw httpError(409, `PAYMENT_NOT_VERIFIED:${statusResp.status}`);
+          }
+          providerPaymentId = statusResp.providerPaymentId;
+        }
+      }
+
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'completed',
+          providerPaymentId: providerPaymentId || payment.providerReference,
+          verifiedAt: new Date(),
+        },
+      });
+
+      // Create escrow hold
+      const escrowHold = await tx.escrowHold.create({
+        data: {
+          orderId: order.id,
+          paymentId: payment.id,
+          amount: payment.amount,
+          status: 'holding',
+        },
+      });
+
+      const machine = new OrderStateMachine(order.status);
+      machine.transition(ORDER_STATES.ESCROW_HELD, {
+        actor: 'system',
+        reason: 'Collection verified server-side',
+      });
+
+      const updatedOrder = await tx.order.update({
+        where: { id: order.id },
+        data: { status: ORDER_STATES.ESCROW_HELD, paidAt: new Date() },
+      });
+
+      // Ledger: the escrow_holds row above IS the v2 money trail (payment ->
+      // hold). Phase 5 moved seller wallets to Firestore, released on handover
+      // via ledger-service, so no Postgres pool ledger sits here anymore.
+      result = { status: 'VERIFIED', order: updatedOrder, escrowHold };
+    });
+  } finally {
+    if (lock.acquired) await releaseLock(`collection:${orderReference}`, lock.token);
+  }
+
+  // Presentation mirror AFTER commit
+  if (result && result.status === 'VERIFIED') {
+    await syncLegacyOrderStatus(result.order);
+    await notifySellerEscrowFunded(result.order);
+  }
+  return result;
+}
+
+// Handle an incoming provider webhook.
+// Layer 2 (WebhookEvent outbox): a unique dedup key makes re-deliveries and
+// multi-instance concurrency at-most-once. Status-priority checks remain the
+// financial source of truth even if two distinct events race on one order.
+async function handleWebhook({ providerName, payload, signature, headers }) {
+  const provider = getProvider(providerName);
+  if (!provider.verifyWebhook(payload, signature)) {
+    throw httpError(401, 'INVALID_WEBHOOK_SIGNATURE');
+  }
+
+  const normalized = provider.normalizeWebhook(payload);
+  const webhookId = headers['x-webhook-id'] || payload.webhookId || payload.id;
+  const dedupKey = outbox.buildDedupKey(providerName, webhookId, payload);
+
+  if (!normalized.orderReference) {
+    throw httpError(400, 'MISSING_ORDER_REFERENCE');
+  }
+
+  const lock = await requireLock(`webhook:${dedupKey}`, 60);
+  try {
+    const event = await outbox.recordWebhookEvent({
+      provider: providerName,
+      dedupKey,
+      type: normalized.status || 'unknown',
+      rawPayload: payload,
+      signature: signature || null,
+      orderReference: normalized.orderReference,
+    });
+
+    // Duplicate delivery: `recordWebhookEvent` claims the dedup key inside a
+    // Firestore transaction using `create()`, so exactly ONE concurrent caller
+    // gets `claimed: true` and may apply a business effect. Everyone else acks.
+    //
+    // The `processed` status check is kept as a second guard for a delivery that
+    // arrives long after the first finished. A `received` row means an earlier
+    // delivery claimed the key but may have died before applying its effect —
+    // acknowledging (rather than re-running) is what prevents double-crediting
+    // `users/{uid}.walletBalance`; reconciliation resolves the orphan.
+    if (event && (event.duplicate === true || event.claimed === false)) {
+      return {
+        received: true,
+        webhookId,
+        duplicate: true,
+        ...(event.status === outbox.WEBHOOK_STATUS_PROCESSED
+          ? {}
+          : { pending: true }),
+      };
+    }
+
+    await outbox.markWebhookProcessing(event);
+
+    try {
+      // Legacy `dep`, `boost`, and `kyc` references settle against Firestore
+      // money rows (deposits + transactions collections), not the ecommerce
+      // `orders` table — orderNumbers are SV-prefixed and can never collide.
+      // The escrow confirm path below 404s on them, so route them here first.
+      const legacyRef = String(normalized.orderReference);
+      if (legacyRef.startsWith('dep')) {
+        await confirmLegacyDeposit({
+          orderReference: legacyRef,
+          status: normalized.status,
+          providerPaymentId: normalized.providerPaymentId,
+          failureReason: normalized.raw?.message || normalized.raw?.reason || 'Payment failed',
+          channel: normalized.raw?.channel || '',
+        });
+        await outbox.markWebhookProcessed(event);
+        return { received: true, webhookId };
+      }
+      if (legacyRef.startsWith('boost') || legacyRef.startsWith('kyc')) {
+        await confirmLegacyTransaction({
+          orderReference: legacyRef,
+          status: normalized.status,
+          providerPaymentId: normalized.providerPaymentId,
+          failureReason: normalized.raw?.message || normalized.raw?.reason || 'Payment failed',
+        });
+        await outbox.markWebhookProcessed(event);
+        return { received: true, webhookId };
+      }
+
+      if (normalized.status === 'completed') {
+        await confirmCollection({
+          orderReference: normalized.orderReference,
+          providerPaymentId: normalized.providerPaymentId,
+          amount: normalized.amount,
+        });
+      } else if (normalized.status === 'failed') {
+        await markPaymentFailed(normalized.orderReference, {
+          reason: normalized.failureReason,
+          providerPaymentId: normalized.providerPaymentId,
+        });
+      }
+      await outbox.markWebhookProcessed(event);
+    } catch (err) {
+      // Remember partial processing so the retry re-runs the safe path;
+      // confirmCollection is idempotent (status-priority + unique hold).
+      await outbox.markWebhookFailed(event, err);
+      throw err;
+    }
+
+    return { received: true, webhookId };
+  } finally {
+    if (lock.acquired) await releaseLock(`webhook:${dedupKey}`, lock.token);
+  }
+}
+
+async function markPaymentFailed(orderReference, { reason = null, providerPaymentId = null } = {}) {
+  const store = getStore();
+  const lock = await requireLock(`fail:${orderReference}`, 60);
+  let result;
+  try {
+    await store.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { orderNumber: orderReference },
+      });
+      if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+
+      const payment = await tx.payment.findFirst({
+        where: { orderId: order.id, status: { in: ['initiated', 'pending'] } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (payment) {
+        // No failureReason column on `payments`, and adding one would mean a
+        // migration on the money table. The reason is not lost: the gateway's
+        // full message is already persisted verbatim in the webhook event's
+        // rawPayload by outbox.recordWebhookEvent before this runs, and it is
+        // logged here where an operator reads it.
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'failed',
+            providerPaymentId: providerPaymentId || payment.providerReference,
+          },
+        });
+        if (reason) {
+          console.warn(`[payment] ${orderReference} declined: ${reason}`);
+        }
+      }
+
+      if (order.status !== ORDER_STATES.PAYMENT_PENDING) {
+        result = { status: 'SKIPPED', order };
+        return;
+      }
+
+      // Back to AWAITING_ESCROW_PAYMENT, not FAILED. The money never moved and
+      // the cause is on the buyer's side (no balance, wrong PIN, prompt
+      // dismissed), so the order must stay payable. Parking it in FAILED meant
+      // the buyer had no way to try again and the seller had a dead order.
+      const machine = new OrderStateMachine(order.status);
+      machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {
+        actor: 'system',
+        reason: reason ? `Collection failed: ${reason}` : 'Collection failed, retryable',
+      });
+      const updated = await tx.order.update({
+        where: { id: order.id },
+        data: { status: ORDER_STATES.AWAITING_ESCROW_PAYMENT },
+      });
+      result = { status: 'FAILED', order: updated, reason };
+    });
+  } finally {
+    if (lock.acquired) await releaseLock(`fail:${orderReference}`, lock.token);
+  }
+
+  if (result && result.status === 'FAILED') {
+    await syncLegacyOrderStatus(result.order);
+  }
+  return result;
+}
+
+// Commission calculation (platform fee on product price).
+function calcCommission(productPrice) {
+  const percent = config.business.platformCommissionPercent;
+  return Math.round(Number(productPrice) * percent);
+}
+
+// Escrow-funded notice to the seller (in-app row + push). Best-effort: a
+// notification failure must never fail the finance commit it follows.
+async function notifySellerEscrowFunded(order) {
+  const store = getStore();
+  try {
+    const sellerUserId = (await store.sellerProfile.findUnique({
+      where: { id: order.sellerId },
+      select: { userId: true },
+    }))?.userId;
+    if (!sellerUserId) return;
+    const seller = await store.user.findUnique({ where: { id: sellerUserId } });
+    if (!seller) return;
+    const title = 'Malipo Yamefika Escrow';
+    const body = `Oda ${order.orderNumber}: mnunuzi amelipa. Tayarisha kusafirisha.`;
+    const data = { type: 'escrow_funded', orderId: order.id };
+    try {
+      await store.notification.create({ data: { userId: seller.id, type: 'escrow_funded', title, body, data } });
+    } catch (e) {
+      console.error('[PAYMENT][NOTIFY-SELLER-DB]', e.message);
+    }
+    try {
+      await sendOneSignalNotification(seller.firebaseUid, title, body, data);
+    } catch (e) {
+      console.error('[PAYMENT][NOTIFY-SELLER-OS]', e.message);
+    }
+  } catch (e) {
+    console.error('[PAYMENT][NOTIFY-SELLER]', order.id, e.message);
+  }
+}
+
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+module.exports = {
+  initiatePayment,
+  confirmCollection,
+  handleWebhook,
+  markPaymentFailed,
+  calcCommission,
+};

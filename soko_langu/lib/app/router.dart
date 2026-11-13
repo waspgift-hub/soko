@@ -1,12 +1,24 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'app_transitions.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
+import '../ui/screens/home_v2_screen.dart';
+import '../ui/screens/search_v2_screen.dart';
+import '../ui/screens/product_detail_v2_screen.dart';
+import '../ui/screens/orders_v2_screen.dart';
+import '../ui/screens/profile_v2_screen.dart';
+import '../ui/screens/seller_dashboard_v2_screen.dart';
+import '../screens/company/company_console_screen.dart';
+import '../ui/screens/chat_v2_screen.dart';
+import '../ui/screens/checkout_v2_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
-import '../screens/auth/verify_email_screen.dart';
+
 import '../screens/home/product_detail.dart';
+import '../screens/home/product_reviews_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/home/checkout_screen.dart';
 import '../screens/home/category_screen.dart';
@@ -20,78 +32,200 @@ import '../screens/chat/group_chat_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/profile/public_profile_screen.dart';
 import '../screens/profile/settings_screen.dart';
+import '../screens/profile/subscription_screen.dart';
+import '../screens/profile/follower_following_screen.dart';
+import '../screens/profile/follow_requests_screen.dart';
+import '../screens/profile/suggested_accounts_screen.dart';
+import '../screens/profile/blocked_accounts_screen.dart';
+import '../screens/profile/admin_privacy_screen.dart';
+import '../screens/onboarding/artwork_pack_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
-import '../screens/profile/shop_customization_screen.dart';
+
 import '../screens/profile/wishlist_screen.dart';
+// import '../screens/music/music_screen.dart';
+// import '../screens/music/now_playing_screen.dart';
 import '../screens/profile/my_ads_screen.dart';
 import '../screens/profile/seller_dashboard_screen.dart';
-import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
+import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
-import '../screens/audio/player_screen.dart';
-import '../screens/audio/music_library_screen.dart';
-import '../screens/audio/music_queue_screen.dart';
+import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
-import '../screens/auth/magic_link_screen.dart';
+import '../screens/onboarding/tutorials_screen.dart';
+import '../screens/profile/contact_discovery_screen.dart';
+import '../screens/verification/verification_center_screen.dart';
+import '../screens/auth/verify_email_screen.dart';
+import '../screens/auth/otp_verification_screen.dart';
+import '../screens/auth/mfa_challenge_screen.dart';
+import '../screens/auth/mfa_enrollment_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
-import '../screens/admin/admin_ad_revenue_screen.dart';
-import '../screens/admin/admin_wallet_screen.dart';
+import '../screens/admin/admin_user_detail_screen.dart';
+import '../screens/admin/admin_kyc_screen.dart';
+import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
 import '../screens/orders/seller_dispatch_screen.dart';
+import '../screens/orders/seller_quote_screen.dart';
+import '../screens/orders/seller_orders_screen.dart';
+import '../screens/orders/receipt_screen.dart';
+import '../screens/orders/order_detail_screen.dart';
 import '../screens/kyc/kyc_screen.dart';
 import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
 import '../screens/report/report_screen.dart';
+import '../screens/requests/buyer_requests_screen.dart';
+import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
+import '../screens/ai/ai_settings_screen.dart';
+import '../screens/ai/agent_screen.dart';
+import '../screens/seller/seller_analytics_screen.dart';
+import '../screens/boost/boost_product_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
-import '../models/status_model.dart';
-import '../screens/status/status_list_screen.dart';
-import '../screens/status/status_viewer_screen.dart';
-import '../screens/status/add_status_screen.dart';
+import '../models/otp_verification_models.dart';
+import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
+import '../repositories/product_repository.dart'; // Added for V3 API loading
+import '../screens/search/user_search_screen.dart';
+import '../data/marketplace_taxonomy.dart';
+import '../models/category_model.dart';
+import '../services/category_service.dart';
+import '../services/username_service.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
+Page<T> _premiumPage<T>(Widget child) {
+  return buildAppPage<T>(child);
+}
 
 final List<String> _authRequiredRoutes = [
   AppRoutes.checkout,
   AppRoutes.kyc,
+  AppRoutes.verificationCenter,
   AppRoutes.addProduct,
   AppRoutes.profile,
   AppRoutes.settings,
   AppRoutes.editProfile,
-  AppRoutes.shopCustomization,
   AppRoutes.wishlist,
   AppRoutes.myAds,
   AppRoutes.sellerDashboard,
   AppRoutes.sellerEarnings,
   AppRoutes.sellerDispatch,
+  AppRoutes.sellerQuote,
+  AppRoutes.sellerOrders,
   AppRoutes.myPurchases,
-  AppRoutes.productBoost,
   AppRoutes.notifications,
   AppRoutes.chats,
   AppRoutes.chat,
   AppRoutes.createGroup,
   AppRoutes.groupChat,
-  AppRoutes.status,
-  AppRoutes.addStatus,
   AppRoutes.createFlashSale,
+  AppRoutes.receipt,
+  AppRoutes.orderDetail,
+  AppRoutes.order, // web alias /order/:id
+  AppRoutes.otp, // web alias /otp/:id
   AppRoutes.report,
+  AppRoutes.buyerRequests,
+  AppRoutes.postBuyerRequest,
+  AppRoutes.boostProduct,
+  AppRoutes.agent,
+  AppRoutes.contactDiscovery,
 ];
 
 final List<String> _adminOnlyRoutes = [
   AppRoutes.admin,
-  AppRoutes.adminAdRevenue,
-  AppRoutes.adminWallet,
+  AppRoutes.adminUserDetail,
   AppRoutes.adminReports,
+  AppRoutes.adminKyc,
+  AppRoutes.adminBroadcast,
 ];
+
+/// Reads key:value pairs (attributes preset) from a query param.
+Map<String, Set<String>>? _queryAttrMap(GoRouterState state) {
+  final raw = state.uri.queryParameters['attrs'];
+  if (raw == null || raw.isEmpty) return null;
+  final out = <String, Set<String>>{};
+  for (final part in raw.split(',')) {
+    final i = part.indexOf(':');
+    if (i <= 0) continue;
+    final key = part.substring(0, i).trim();
+    final value = part.substring(i + 1).trim();
+    if (key.isEmpty || value.isEmpty) continue;
+    out.putIfAbsent(key, () => <String>{}).add(value);
+  }
+  return out.isEmpty ? null : out;
+}
+
+/// Reads a comma-separated multi-value query param for pre-selection.
+Set<String>? _queryBrandSet(GoRouterState state, String key) {
+  final raw = state.uri.queryParameters[key];
+  if (raw == null || raw.isEmpty) return null;
+  final out = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+  return out.isEmpty ? null : out;
+}
+
+/// Builds an [OtpVerificationRequest] from a map extra (used when navigating
+/// with a plain map instead of the typed request object).
+OtpVerificationRequest? _requestFromMap(Map<String, dynamic> extra) {
+  try {
+    final purposeStr = extra['purpose'] as String?;
+    final OtpPurpose purpose = purposeStr != null
+        ? OtpPurpose.values.firstWhere(
+            (e) => e.toString() == 'OtpPurpose.$purposeStr',
+            orElse: () => OtpPurpose.accountVerification,
+          )
+        : OtpPurpose.accountVerification;
+    final channelStr = extra['channel'] as String?;
+    final OtpChannel channel = channelStr != null
+        ? OtpChannel.values.firstWhere(
+            (e) => e.toString() == 'OtpChannel.$channelStr',
+            orElse: () => OtpChannel.phone,
+          )
+        : OtpChannel.phone;
+    return OtpVerificationRequest(
+      purpose: purpose,
+      destination: extra['destination'] as String? ?? '',
+      maskedDestination: extra['maskedDestination'] as String? ?? '',
+      channel: channel,
+      otpLength: (extra['otpLength'] as int?) ?? 6,
+      langCode: extra['langCode'] as String? ?? 'sw',
+      onVerify: extra['onVerify'] as Future<OtpVerificationResult> Function(String)?,
+      onResend: extra['onResend'] as Future<OtpVerificationResult> Function()?,
+      allowDestinationEdit: extra['allowDestinationEdit'] as bool? ?? false,
+      allowResend: extra['allowResend'] as bool? ?? true,
+      headingOverride: extra['headingOverride'] as String?,
+      subtitleOverride: extra['subtitleOverride'] as String?,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Resolves a category from a `:name` path segment using only data compiled
+/// into the app, so a deep link renders on the first frame without a network
+/// round trip.
+///
+/// Tries the stable id first, then the taxonomy's name/nameSw/aliases and every
+/// subcategory name/alias. That covers old shared URLs (which used display
+/// names) as well as id-based ones.
+Category? _resolveCategorySync(String raw) {
+  final decoded = Uri.decodeComponent(raw).trim();
+  if (decoded.isEmpty) return null;
+  final slug = decoded.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+
+  return CategoryService.byId(decoded) ??
+      CategoryService.byId(slug) ??
+      _categoryFromTaxonomy(resolveTaxonomyByName(decoded));
+}
+
+Category? _categoryFromTaxonomy(TaxonomyCategory? tax) =>
+    tax == null ? null : categoryFromTaxonomy(tax);
 
 GoRouter buildRouter() {
   return GoRouter(
@@ -101,17 +235,39 @@ GoRouter buildRouter() {
     redirect: (context, state) {
       if (!app_state.appStateNotifier.appInitialized) return null;
 
-      final location = state.uri.toString();
+      final location = state.uri.path;
       final isAuth = app_state.appStateNotifier.isAuthenticated;
       final isAdmin = app_state.appStateNotifier.isAdmin;
 
-      // Admin-only routes
+      if (app_state.appStateNotifier.onboardingChecked &&
+          !app_state.appStateNotifier.hasCompletedOnboarding) {
+        const onboardingExempt = {
+          AppRoutes.onboarding,
+          AppRoutes.login,
+          AppRoutes.register,
+          AppRoutes.forgotPassword,
+          AppRoutes.privacyPolicy,
+          AppRoutes.termsOfService,
+          AppRoutes.otpVerification,
+          AppRoutes.verifyEmail,
+        };
+        final exempt = onboardingExempt.any((r) => location == r || location.startsWith('$r/'));
+        if (!exempt) return AppRoutes.onboarding;
+      }
+      if (app_state.appStateNotifier.hasCompletedOnboarding && location == AppRoutes.onboarding) {
+        return AppRoutes.home;
+      }
+
+      final authScreens = [AppRoutes.login, AppRoutes.register];
+      if (isAuth && authScreens.any((r) => location == r || location.startsWith('$r/'))) {
+        return AppRoutes.home;
+      }
+
       if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;
         if (!isAdmin) return AppRoutes.home;
       }
 
-      // Auth-required routes
       if (_authRequiredRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;
       }
@@ -121,245 +277,830 @@ GoRouter buildRouter() {
     routes: [
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const AuthGate(),
+        pageBuilder: (context, state) => _premiumPage(const AuthGate()),
       ),
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => _premiumPage(const LoginScreen()),
       ),
       GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) => const RegisterScreen(),
+        pageBuilder: (context, state) {
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
+          return _premiumPage(
+            RegisterScreen(
+              initialPhone: extra['phone'] as String?,
+              displayPhone: extra['displayPhone'] as String?,
+              otpVerified: extra['otpVerified'] == true,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
-        builder: (context, state) => const ForgotPasswordScreen(),
+        pageBuilder: (context, state) => _premiumPage(const ForgotPasswordScreen()),
       ),
       GoRoute(
         path: AppRoutes.verifyEmail,
-        builder: (context, state) => const VerifyEmailScreen(),
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final email = extra is Map<String, dynamic>
+              ? extra['email'] as String?
+              : extra is String
+              ? extra
+              : null;
+          return _premiumPage(VerifyEmailScreen(email: email));
+        },
       ),
       GoRoute(
-        path: AppRoutes.magicLink,
-        builder: (context, state) => const MagicLinkScreen(),
+        path: AppRoutes.otpVerification,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final request = extra is OtpVerificationRequest
+              ? extra
+              : extra is Map<String, dynamic>
+              ? _requestFromMap(extra)
+              : null;
+          if (request == null) {
+            return _premiumPage(const _MissingRouteData());
+          }
+          return _premiumPage(OtpVerificationScreen(request: request));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.mfaEnrollment,
+        pageBuilder: (context, state) => _premiumPage(const MfaEnrollmentScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.mfaChallenge,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Map<String, dynamic> && extra['resolver'] is MultiFactorResolver) {
+            return _premiumPage(
+              MfaChallengeScreen(
+                resolver: extra['resolver'] as MultiFactorResolver,
+                email: extra['email'] as String?,
+              ),
+            );
+          }
+          return _premiumPage(const _MissingRouteData());
+        },
       ),
       GoRoute(
         path: AppRoutes.accountSelection,
-        builder: (context, state) => const AccountSelectionScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AccountSelectionScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.onboarding,
+        pageBuilder: (context, state) => _premiumPage(const OnboardingScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.contactDiscovery,
+        pageBuilder: (context, state) => _premiumPage(const ContactDiscoveryScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.tutorials,
+        pageBuilder: (context, state) => _premiumPage(const TutorialsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.homeV2,
+        pageBuilder: (context, state) => _premiumPage(const HomeV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.searchV2,
+        pageBuilder: (context, state) => _premiumPage(const SearchV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.productDetailV2,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Product) {
+            return _premiumPage(ProductDetailV2Screen(product: extra));
+          }
+          return _premiumPage(const HomeV2Screen());
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.ordersV2,
+        pageBuilder: (context, state) => _premiumPage(const OrdersV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.profileV2,
+        pageBuilder: (context, state) => _premiumPage(const ProfileV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerDashboardV2,
+        pageBuilder: (context, state) => _premiumPage(const SellerDashboardV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.companyConsole,
+        pageBuilder: (context, state) => _premiumPage(const CompanyConsoleScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.chatV2,
+        pageBuilder: (context, state) => _premiumPage(const ChatV2Screen()),
+      ),
+      GoRoute(
+        path: AppRoutes.checkoutV2,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Product) {
+            return _premiumPage(CheckoutV2Screen(product: extra));
+          }
+          return _premiumPage(const HomeV2Screen());
+        },
       ),
       GoRoute(
         path: AppRoutes.chats,
-        builder: (context, state) => const ChatsListScreen(),
+        pageBuilder: (context, state) => _premiumPage(const ChatsListScreen()),
       ),
       GoRoute(
         path: AppRoutes.profile,
-        builder: (context, state) => const ProfilePage(),
+        pageBuilder: (context, state) => _premiumPage(const ProfilePage()),
       ),
       GoRoute(
         path: '${AppRoutes.productDetail}/:id',
-        builder: (context, state) {
-          return ProductDetailPage(product: state.extra as Product);
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          return _premiumPage(
+            extra is Product
+                ? ProductDetailPage(product: extra)
+                : _ProductDetailLoader(productId: state.pathParameters['id'] ?? ''),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.productReviews,
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          final productId = extra['productId'] as String? ?? '';
+          if (productId.isEmpty) return _premiumPage(const _MissingRouteData());
+          return _premiumPage(
+            ProductReviewsScreen(
+              productId: productId,
+              productName: extra['productName'] as String? ?? '',
+            ),
+          );
         },
       ),
       GoRoute(
         path: '${AppRoutes.chat}/:receiverId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final receiverId = state.pathParameters['receiverId']!;
-          final extra = state.extra as Map<String, String>?;
-          return ChatPage(
-            receiverId: receiverId,
-            receiverName: extra?['name'] ?? '',
-            productName: extra?['product'] ?? '',
-            productId: extra?['productId'],
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
+          return _premiumPage(
+            ChatPage(
+              receiverId: receiverId,
+              receiverName: extra['name'] as String? ?? '',
+              productName: extra['productTitle'] as String? ?? extra['product'] as String? ?? '',
+              productId: extra['productId'] as String?,
+            ),
           );
         },
       ),
       GoRoute(
         path: AppRoutes.notifications,
-        builder: (context, state) => const NotificationScreen(),
+        pageBuilder: (context, state) => _premiumPage(const NotificationScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.notificationPreferences,
+        pageBuilder: (context, state) => _premiumPage(const NotificationPreferencesScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.publicProfile}/:userId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final userId = state.pathParameters['userId']!;
           final name = state.extra as String? ?? '';
-          return PublicProfileScreen(userId: userId, userName: name);
+          return _premiumPage(PublicProfileScreen(userId: userId, userName: name));
         },
       ),
       GoRoute(
-        path: AppRoutes.settings,
-        builder: (context, state) => const SettingsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.sellerDashboard,
-        builder: (context, state) => const SellerDashboardScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.search,
-        builder: (context, state) => const SearchScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.category,
-        builder: (context, state) => const CategoryScreen(),
-      ),
-      GoRoute(
-        path: '${AppRoutes.categoryProducts}/:name',
-        builder: (context, state) {
-          return CategoryProductsScreen(category: state.extra as dynamic);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.editProfile,
-        builder: (context, state) => const EditProfileScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.shopCustomization,
-        builder: (context, state) => const ShopCustomizationScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.wishlist,
-        builder: (context, state) => const WishlistScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.myAds,
-        builder: (context, state) => const MyAdsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.help,
-        builder: (context, state) => const HelpCenterScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.about,
-        builder: (context, state) => const AboutAppScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.addProduct,
-        builder: (context, state) {
-          return AddProductScreen(product: state.extra as dynamic);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.audioList,
-        builder: (context, state) => const MusicLibraryScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.audioQueue,
-        builder: (context, state) => const MusicQueueScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.audioPlayer,
-        builder: (context, state) => const PlayerScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.admin,
-        builder: (context, state) => const AdminDashboardScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.adminAdRevenue,
-        builder: (context, state) => const AdminAdRevenueScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.adminWallet,
-        builder: (context, state) => const AdminWalletScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.createGroup,
-        builder: (context, state) => const CreateGroupScreen(),
-      ),
-      GoRoute(
-        path: '${AppRoutes.groupChat}/:groupId',
-        builder: (context, state) {
-          final groupId = state.pathParameters['groupId']!;
-          return GroupChatScreen(groupId: groupId);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.onboarding,
-        builder: (context, state) => const OnboardingScreen(),
-      ),
-
-      GoRoute(
-        path: AppRoutes.status,
-        builder: (context, state) => const StatusListScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.statusViewer,
-        builder: (context, state) {
-          final data = state.extra as Map<String, dynamic>;
-          return StatusViewerScreen(
-            updates: (data['updates'] as List).cast<StatusUpdate>(),
-            initialIndex: data['initialIndex'] as int? ?? 0,
+        path: '${AppRoutes.followers}/:userId',
+        pageBuilder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          final name = state.extra as String? ?? '';
+          return _premiumPage(
+            FollowerFollowingScreen(userId: userId, userName: name, isFollowers: true),
           );
         },
       ),
       GoRoute(
-        path: AppRoutes.addStatus,
-        builder: (context, state) => const AddStatusScreen(),
+        path: '${AppRoutes.following}/:userId',
+        pageBuilder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          final name = state.extra as String? ?? '';
+          return _premiumPage(
+            FollowerFollowingScreen(userId: userId, userName: name, isFollowers: false),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.followRequests,
+        pageBuilder: (context, state) => _premiumPage(const FollowRequestsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.suggestedAccounts,
+        pageBuilder: (context, state) => _premiumPage(const SuggestedAccountsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.blockedAccounts,
+        pageBuilder: (context, state) => _premiumPage(const BlockedAccountsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.adminPrivacy,
+        pageBuilder: (context, state) => _premiumPage(const AdminPrivacyScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        pageBuilder: (context, state) => _premiumPage(const SettingsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.artworkPack,
+        pageBuilder: (context, state) => _premiumPage(const ArtworkPackScreen(allowDismiss: true)),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerDashboard,
+        pageBuilder: (context, state) => _premiumPage(const SellerDashboardScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.search,
+        pageBuilder: (context, state) => _premiumPage(const SearchScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.category,
+        pageBuilder: (context, state) => _premiumPage(const CategoryScreen()),
+      ),
+      GoRoute(
+        path: '${AppRoutes.categoryProducts}/:name',
+        pageBuilder: (context, state) {
+          // In-app navigation carries the Category in `extra`. A cold deep
+          // link, an App Link, and the SEO/web fallback all arrive with no
+          // `extra` at all, so it is reconstructed from the stable taxonomy
+          // before the screen is built — the previous code cast a null
+          // `extra` into a non-nullable `Category` and threw at page build.
+          final extra = state.extra;
+          final resolved = extra is Category
+              ? extra
+              : _resolveCategorySync(state.pathParameters['name'] ?? '');
+
+          if (resolved != null) {
+            return _premiumPage(
+              CategoryProductsScreen(
+                category: resolved,
+                initialSubcategory: state.uri.queryParameters['sub'],
+                initialBrands: _queryBrandSet(state, 'brands'),
+                initialAttributes: _queryAttrMap(state),
+                initialFlags: _queryBrandSet(state, 'flags'),
+              ),
+            );
+          }
+
+          // Unknown name and no live tree to fall back on yet: resolve
+          // asynchronously through the API/Firestore layer rather than
+          // rendering a permanently broken page.
+          return _premiumPage(
+            _CategoryProductsLoader(
+              name: state.pathParameters['name'] ?? '',
+              initialSubcategory: state.uri.queryParameters['sub'],
+              initialBrands: _queryBrandSet(state, 'brands'),
+              initialAttributes: _queryAttrMap(state),
+              initialFlags: _queryBrandSet(state, 'flags'),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.editProfile,
+        pageBuilder: (context, state) => _premiumPage(const EditProfileScreen()),
+      ),
+
+      GoRoute(
+        path: AppRoutes.wishlist,
+        pageBuilder: (context, state) => _premiumPage(const WishlistScreen()),
+      ),
+      // GoRoute(
+      //   path: AppRoutes.music,
+      //   pageBuilder: (context, state) => _premiumPage(const MusicScreen()),
+      //   routes: [
+      //     GoRoute(
+      //       path: 'now-playing',
+      //       pageBuilder: (context, state) =>
+      //           _premiumPage(const NowPlayingScreen()),
+      //     ),
+      //   ],
+      // ),
+      GoRoute(
+        path: AppRoutes.myAds,
+        pageBuilder: (context, state) => _premiumPage(const MyAdsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.help,
+        pageBuilder: (context, state) => _premiumPage(const HelpCenterScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.about,
+        pageBuilder: (context, state) => _premiumPage(const AboutAppScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.orderFlow,
+        pageBuilder: (context, state) => _premiumPage(const OrderFlowScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.addProduct,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is Map<String, dynamic> && extra.containsKey('sharedMedia')) {
+            final media = extra['sharedMedia'];
+            final paths = media is List ? media.map((e) => e.toString()).toList() : <String>[];
+            final product = extra['product'];
+            return _premiumPage(
+              AddProductScreen(
+                product: product is Product ? product : null,
+                initialMediaPaths: paths,
+              ),
+            );
+          }
+          // legacy: extra is Product directly or map with product key
+          if (extra is Map && extra['product'] is Product) {
+            return _premiumPage(AddProductScreen(product: extra['product'] as Product));
+          }
+          return _premiumPage(AddProductScreen(product: extra is Product ? extra : null));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.admin,
+        pageBuilder: (context, state) => _premiumPage(const AdminDashboardScreen()),
+      ),
+      GoRoute(
+        path: '${AppRoutes.adminUserDetail}/:uid',
+        pageBuilder: (context, state) {
+          final uid = state.pathParameters['uid']!;
+          return _premiumPage(AdminUserDetailScreen(uid: uid));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.adminKyc,
+        pageBuilder: (context, state) => _premiumPage(const AdminKycScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.adminBroadcast,
+        pageBuilder: (context, state) => _premiumPage(const AdminBroadcastScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.createGroup,
+        pageBuilder: (context, state) => _premiumPage(const CreateGroupScreen()),
+      ),
+      GoRoute(
+        path: '${AppRoutes.groupChat}/:groupId',
+        pageBuilder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return _premiumPage(GroupChatScreen(groupId: groupId));
+        },
       ),
       GoRoute(
         path: AppRoutes.aiAssistant,
-        builder: (context, state) => const AiAssistantScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AiAssistantScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.aiSettings,
+        pageBuilder: (context, state) => _premiumPage(const AiSettingsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.agent,
+        pageBuilder: (context, state) => _premiumPage(const AgentScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerEarnings,
-        builder: (context, state) => const SellerEarningsScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerEarningsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerAnalytics,
+        pageBuilder: (context, state) {
+          final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+          return _premiumPage(SellerAnalyticsScreen(sellerId: sellerId));
+        },
       ),
       GoRoute(
         path: AppRoutes.checkout,
-        builder: (context, state) => CheckoutScreen(product: state.extra as dynamic),
-      ),
-      GoRoute(
-        path: AppRoutes.productBoost,
-        builder: (context, state) => ProductBoostScreen(product: state.extra as dynamic),
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          Product? product;
+          var quantity = 1;
+          String? variantId;
+          double? unitPrice;
+          if (extra is Product) {
+            product = extra;
+          } else if (extra is Map) {
+            final p = extra['product'];
+            if (p is Product) {
+              product = p;
+              final q = extra['quantity'];
+              if (q is int && q > 0) quantity = q;
+              final v = extra['variantId'];
+              if (v is String) variantId = v;
+              final u = extra['unitPrice'];
+              if (u is num) unitPrice = u.toDouble();
+            }
+          }
+          if (product == null) {
+            return _premiumPage(const _MissingRouteData());
+          }
+          return _premiumPage(
+            CheckoutScreen(
+              product: product,
+              quantity: quantity,
+              variantId: variantId,
+              unitPrice: unitPrice,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.discovery,
-        builder: (context, state) => const DiscoveryScreen(),
+        pageBuilder: (context, state) => _premiumPage(const DiscoveryScreen()),
       ),
       GoRoute(
         path: AppRoutes.myPurchases,
-        builder: (context, state) => const MyPurchasesScreen(),
+        pageBuilder: (context, state) => _premiumPage(const MyPurchasesScreen()),
+      ),
+      GoRoute(
+        path: '${AppRoutes.receipt}/:orderId',
+        pageBuilder: (context, state) {
+          final orderId = state.pathParameters['orderId']!;
+          return _premiumPage(ReceiptScreen(orderId: orderId));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.orderDetail}/:docId',
+        pageBuilder: (context, state) {
+          final docId = state.pathParameters['docId']!;
+          final data = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
+          return _premiumPage(OrderDetailScreen(docId: docId, data: data));
+        },
       ),
       GoRoute(
         path: AppRoutes.sellerDispatch,
-        builder: (context, state) => const SellerDispatchScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerDispatchScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerQuote,
+        pageBuilder: (context, state) => _premiumPage(const SellerQuoteScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerOrders,
+        pageBuilder: (context, state) => _premiumPage(const SellerOrdersScreen()),
       ),
       GoRoute(
         path: AppRoutes.kyc,
-        builder: (context, state) => const KycScreen(),
+        pageBuilder: (context, state) => _premiumPage(const KycScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.subscription,
+        pageBuilder: (context, state) => _premiumPage(const SubscriptionScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.verificationCenter,
+        pageBuilder: (context, state) => _premiumPage(const VerificationCenterScreen()),
       ),
       GoRoute(
         path: AppRoutes.report,
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>;
-          return ReportScreen(
-            reportedUserId: extra['reportedUserId'] as String,
-            reportedUserName: extra['reportedUserName'] as String,
-            productId: extra['productId'] as String?,
-            productName: extra['productName'] as String?,
+        pageBuilder: (context, state) {
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
+          return _premiumPage(
+            ReportScreen(
+              reportedUserId: extra['reportedUserId'] as String? ?? '',
+              reportedUserName: extra['reportedUserName'] as String? ?? '',
+              productId: extra['productId'] as String?,
+              productName: extra['productName'] as String?,
+            ),
           );
         },
       ),
       GoRoute(
         path: AppRoutes.adminReports,
-        builder: (context, state) => const AdminReportsScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AdminReportsScreen()),
       ),
       GoRoute(
         path: AppRoutes.flashSale,
-        builder: (context, state) => const FlashSaleScreen(),
+        pageBuilder: (context, state) => _premiumPage(const FlashSaleScreen()),
       ),
       GoRoute(
         path: AppRoutes.createFlashSale,
-        builder: (context, state) => const CreateFlashSaleScreen(),
+        pageBuilder: (context, state) => _premiumPage(const CreateFlashSaleScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.buyerRequests,
+        pageBuilder: (context, state) => _premiumPage(const BuyerRequestsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.postBuyerRequest,
+        pageBuilder: (context, state) => _premiumPage(const PostBuyerRequestScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.boostProduct,
+        pageBuilder: (context, state) {
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : const {};
+          return _premiumPage(
+            BoostProductScreen(
+              productId: extra['productId'] as String? ?? '',
+              product: extra['product'] as dynamic,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.privacyPolicy,
-        builder: (context, state) => const PrivacyPolicyScreen(),
+        pageBuilder: (context, state) => _premiumPage(const PrivacyPolicyScreen()),
       ),
       GoRoute(
         path: AppRoutes.termsOfService,
-        builder: (context, state) => const TermsOfServiceScreen(),
+        pageBuilder: (context, state) => _premiumPage(const TermsOfServiceScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.userSearch,
+        pageBuilder: (context, state) => _premiumPage(const UserSearchScreen()),
+      ),
+      // Web deep-link aliases
+      GoRoute(
+        path: '${AppRoutes.order}/:orderId',
+        redirect: (context, state) {
+          final id = state.pathParameters['orderId'] ?? '';
+          return '${AppRoutes.orderDetail}/$id';
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.otp}/:orderId',
+        redirect: (context, state) {
+          final id = state.pathParameters['orderId'] ?? '';
+          // OTP link never carries code — just order context
+          return '${AppRoutes.orderDetail}/$id';
+        },
+      ),
+      GoRoute(
+        path: '/seller/:userId',
+        pageBuilder: (context, state) {
+          final raw = state.pathParameters['userId']!;
+          return _premiumPage(_UsernameAwareProfile(raw: raw));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.userProfileAlias}/:userId',
+        pageBuilder: (context, state) {
+          final raw = state.pathParameters['userId']!;
+          return _premiumPage(_UsernameAwareProfile(raw: raw));
+        },
+      ),
+      GoRoute(
+        path: '/category/:name',
+        redirect: (context, state) {
+          final name = state.pathParameters['name'] ?? '';
+          final qs = state.uri.query;
+          return '${AppRoutes.categoryProducts}/'
+              '${Uri.encodeComponent(name)}$qs';
+        },
       ),
     ],
   );
+}
+
+class _UsernameAwareProfile extends StatefulWidget {
+  final String raw;
+  const _UsernameAwareProfile({required this.raw});
+  @override
+  State<_UsernameAwareProfile> createState() => _UsernameAwareProfileState();
+}
+
+class _UsernameAwareProfileState extends State<_UsernameAwareProfile> {
+  late final Future<String?> _uidFuture = UsernameService.instance.resolveToUid(widget.raw);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _uidFuture,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        final uid = snap.data ?? widget.raw;
+        return PublicProfileScreen(userId: uid, userName: widget.raw);
+      },
+    );
+  }
+}
+
+class _MissingRouteData extends StatelessWidget {
+  const _MissingRouteData();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // Guarded route opened without product: explain + offer recovery.
+    return Scaffold(
+      appBar: AppBar(leading: const BackButton()),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shopping_bag_outlined, size: 48, color: cs.onSurfaceVariant),
+              const SizedBox(height: 16),
+              Text(
+                context.tr('loading_error'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr(
+                  'missing_product_hint',
+                  'Bidhaa haikupatikana. Rudi dukani kuchagua tena.',
+                ),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.home),
+                  icon: const Icon(Icons.storefront_outlined),
+                  label: Text(context.tr('back_to_shop', 'Rudi dukani')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fallback loader for a `/category-products/:name` deep link whose name is
+/// not in the compiled-in taxonomy — a category the API added after this build
+/// shipped. Resolves through the live category tree, then shows the standard
+/// recovery screen when even that has no match.
+class _CategoryProductsLoader extends StatefulWidget {
+  const _CategoryProductsLoader({
+    required this.name,
+    this.initialSubcategory,
+    this.initialBrands,
+    this.initialAttributes,
+    this.initialFlags,
+  });
+
+  final String name;
+  final String? initialSubcategory;
+  final Set<String>? initialBrands;
+  final Map<String, Set<String>>? initialAttributes;
+  final Set<String>? initialFlags;
+
+  @override
+  State<_CategoryProductsLoader> createState() => _CategoryProductsLoaderState();
+}
+
+class _CategoryProductsLoaderState extends State<_CategoryProductsLoader> {
+  late final Future<Category?> _future = _load();
+
+  Future<Category?> _load() async {
+    final decoded = Uri.decodeComponent(widget.name).trim();
+    try {
+      // A live tree may know this category even when the shipped taxonomy
+      // does not; `_resolveCategorySync` already covered the compiled-in case.
+      final cached = CategoryService().cached;
+      final hit = cached.where(
+        (c) =>
+            c.id == decoded ||
+            c.name.toLowerCase() == decoded.toLowerCase() ||
+            c.nameSw.toLowerCase() == decoded.toLowerCase(),
+      );
+      if (hit.isNotEmpty) return hit.first;
+      return await CategoryService().getCategoryById(decoded);
+    } catch (e) {
+      debugPrint('DeepLink Category Load Error: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Category?>(
+      future: _future,
+      builder: (context, snapshot) {
+        final category = snapshot.data;
+        if (category != null) {
+          return CategoryProductsScreen(
+            category: category,
+            initialSubcategory: widget.initialSubcategory,
+            initialBrands: widget.initialBrands,
+            initialAttributes: widget.initialAttributes,
+            initialFlags: widget.initialFlags,
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return const _MissingCategoryData();
+      },
+    );
+  }
+}
+
+/// Recovery screen for a category route that resolved to nothing. Mirrors
+/// `_MissingRouteData` with category-specific copy instead of a product hint.
+class _MissingCategoryData extends StatelessWidget {
+  const _MissingCategoryData();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(leading: const BackButton()),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.category_outlined, size: 48, color: cs.onSurfaceVariant),
+              const SizedBox(height: 16),
+              Text(
+                context.tr('loading_error'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr(
+                  'missing_category_hint',
+                  '-category haikupatikana. Rudi dukani kuchagua tena.',
+                ),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.category),
+                  icon: const Icon(Icons.grid_view_rounded),
+                  label: Text(context.tr('all_categories')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductDetailLoader extends StatefulWidget {
+  const _ProductDetailLoader({required this.productId});
+
+  final String productId;
+
+  @override
+  State<_ProductDetailLoader> createState() => _ProductDetailLoaderState();
+}
+
+class _ProductDetailLoaderState extends State<_ProductDetailLoader> {
+  late final Future<Product?> _future = _load();
+
+  Future<Product?> _load() async {
+    try {
+      // V3 Alignment: Use ProductRepository (API) instead of direct Firestore
+      // call — authoritative price and stock come from Postgres via the API.
+      final result = await ProductRepository().getProduct(widget.productId);
+      return result.data;
+    } catch (e) {
+      debugPrint('DeepLink Product Load Error: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Product?>(
+      future: _future,
+      builder: (context, snapshot) {
+        final product = snapshot.data;
+        if (product != null) return ProductDetailPage(product: product);
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return const _MissingRouteData();
+      },
+    );
+  }
 }

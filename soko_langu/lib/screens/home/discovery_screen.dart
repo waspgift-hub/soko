@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../main.dart';
@@ -7,14 +9,17 @@ import '../../services/localization_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
+import '../../widgets/feed/feed_tabs.dart';
 import '../../widgets/product_card.dart';
+import '../../widgets/ds/ds_empty_state.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/dynamic_banner.dart';
-import '../../widgets/ad_banner.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
-import '../../utils/responsive.dart';
 
+/// Discovery marketplace: product cards in a 2-column grid, tabs filter the
+/// same products stream. Follow controls live on the profile of each seller.
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({super.key});
 
@@ -29,6 +34,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
   final FlashSaleService _flashSaleService = FlashSaleService();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
+  FeedTab _tab = FeedTab.forYou;
+  String _userLocation = '';
+  Stream<List<Product>>? _productStream;
 
   @override
   void initState() {
@@ -36,12 +44,36 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
+    _productStream = _productService.getProducts();
+    _loadMeta();
   }
 
-  @override
-  void dispose() {
-    _flashSub?.cancel();
-    super.dispose();
+  /// Re-subscribes the product stream so pull-to-refresh actually re-queries
+  /// instead of only reloading the user's location.
+  void _reloadProducts() {
+    setState(() => _productStream = _productService.getProducts());
+  }
+
+  Future<void> _refresh() async {
+    _reloadProducts();
+    await _loadMeta();
+  }
+
+  Future<void> _loadMeta() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      String location = '';
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        location = (doc.data()?['location'] ?? '').toString();
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _userLocation = location;
+        });
+      }
+    } catch (_) {}
   }
 
   void _showCurrencyPicker(BuildContext context) {
@@ -82,6 +114,38 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
     );
   }
 
+  List<Product> _forTab(List<Product> all) {
+    switch (_tab) {
+      case FeedTab.nearby:
+        final q = _userLocation.trim().toLowerCase();
+        if (q.isEmpty) return [];
+        return all.where((p) {
+          final loc = '${p.district} ${p.location}'.toLowerCase();
+          return loc.contains(q) || q.contains(p.district.toLowerCase());
+        }).toList();
+      case FeedTab.trending:
+        final list = List<Product>.from(all);
+        list.sort(
+          (a, b) => (b.viewCount + b.soldCount * 3).compareTo(a.viewCount + a.soldCount * 3),
+        );
+        return list;
+      case FeedTab.forYou:
+        final list = List<Product>.from(all);
+        list.shuffle();
+        return list;
+    }
+  }
+
+  void _openProduct(Product p) {
+    context.push('${AppRoutes.productDetail}/${p.id}', extra: p);
+  }
+
+  @override
+  void dispose() {
+    _flashSub?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -91,100 +155,124 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
         actions: [
           IconButton(
             icon: const Icon(Icons.monetization_on_outlined),
+            tooltip: context.tr('change_currency'),
             onPressed: () => _showCurrencyPicker(context),
           ),
         ],
       ),
-      body: StreamBuilder<List<Product>>(
-        stream: _productService.getProducts(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const GoogleLoadingPage();
-          }
-          if (snap.hasError) {
-            final err = snap.error.toString();
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.cloud_off,
-                      size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(
-                    err.contains('permission-denied')
-                        ? context.tr('permission_denied')
-                        : err.contains('UNAVAILABLE')
-                        ? context.tr('no_network')
-                        : context.tr('please_try_again'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-          final products = snap.data ?? [];
-          if (products.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inventory_2,
-                      size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(
-                    context.tr('no_products'),
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-          return CustomScrollView(
-            slivers: [
-              const SliverToBoxAdapter(child: DynamicBanner()),
-              SliverPadding(
-                padding: const EdgeInsets.all(12),
-                sliver: SliverGrid(
-                  gridDelegate:
-                      SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: Responsive.gridColumns(context),
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: Responsive.cardAspectRatio(context),
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final product = products[index];
-                      return ProductCard(
-                        product: product,
-                        flashSale: _flashSales[product.id],
-                        onTap: () => context.push(
-                          '${AppRoutes.productDetail}/${product.id}',
-                          extra: product,
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<List<Product>>(
+              stream: _productStream,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const GoogleLoadingPage();
+                }
+                if (snap.hasError) {
+                  return _errorState(context, snap.error.toString());
+                }
+                final items = _forTab(snap.data ?? []);
+                if (items.isEmpty) return _emptyForTab(context);
+                return RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      const SliverToBoxAdapter(child: DynamicBanner()),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 0.62,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final product = items[index];
+                              return ProductCard(
+                                product: product,
+                                onTap: () => _openProduct(product),
+                                flashSale: _flashSales[product.id],
+                              );
+                            },
+                            childCount: items.length,
+                            // Stateless tiles: no value in keeping them alive
+                            // off-screen in a long feed.
+                            addAutomaticKeepAlives: false,
+                          ),
                         ),
-                      );
-                    },
-                    childCount: products.length,
+                      ),
+
+                    ],
                   ),
-                ),
-              ),
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(12, 12, 12, 24),
-                  child: AdBanner(),
-                ),
-              ),
-            ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _errorState(BuildContext context, String err) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_off, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(height: 16),
+          Text(
+            err.contains('permission-denied')
+                ? context.tr('permission_denied')
+                : err.contains('UNAVAILABLE')
+                ? context.tr('no_network')
+                : context.tr('please_try_again'),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            // Re-subscribing is what actually retries the query; a bare
+            // setState left the failed stream in place and the button did
+            // nothing visible.
+            onPressed: _reloadProducts,
+            child: Text(context.tr('try_again')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyForTab(BuildContext context) {
+    switch (_tab) {
+      case FeedTab.nearby:
+        if (_userLocation.isEmpty) {
+          return DsEmptyState(
+            icon: Icons.location_off_outlined,
+            title: context.tr('set_location_title', 'Set your location to see nearby products.'),
+            actionLabel: context.tr('set_location', 'Set Location'),
+            onAction: () => context.push(AppRoutes.editProfile),
+            artwork: const SokoAnimatedIllustration(SokoIllustration.emptyLocation, size: 96),
+          );
+        }
+        return DsEmptyState(
+          icon: Icons.location_on_outlined,
+          title: context.tr('no_nearby', 'No products near you yet.'),
+          actionLabel: context.tr('explore_marketplace', 'Explore Marketplace'),
+          onAction: () => setState(() => _tab = FeedTab.forYou),
+          artwork: const SokoAnimatedIllustration(SokoIllustration.emptyLocation, size: 96),
+        );
+      case FeedTab.trending:
+      case FeedTab.forYou:
+        return DsEmptyState(
+          icon: Icons.inventory_2_outlined,
+          title: context.tr('no_products'),
+          actionLabel: context.tr('explore_marketplace', 'Explore Marketplace'),
+          onAction: () => setState(() => _tab = FeedTab.forYou),
+          artwork: const SokoAnimatedIllustration(SokoIllustration.emptyProducts, size: 96),
+        );
+    }
   }
 }

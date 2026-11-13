@@ -1,4 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash_background">#2D6A4F</color>
+    <color name="splash_background">#000000</color>
+    <!-- Adaptive-icon background layer. Must contrast with the black
+         ic_launcher_foreground mark, otherwise the launcher icon is invisible. -->
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <!-- Tints the notification small icon and accent colour in the status bar.
+         Was #000000, which is invisible against the black status bar. Matches the
+         brand accent in lib/theme/app_colors.dart (brandPrimary). -->
+    <color name="notification_accent">#FF00C853</color>
+
+    <!-- Widget: Dashboard (light) -->
+    <color name="widget_dashboard_bg">#FF000000</color>
+    <color name="widget_text_primary">#FFFFFFFF</color>
+    <color name="widget_text_secondary">#CCFFFFFF</color>
+    <color name="widget_button">#FF212121</color>
+    <color name="widget_divider">#33FFFFFF</color>
+
+    <!-- Widget: Flash Sales (light) -->
+    <color name="widget_flash_bg">#FF000000</color>
+    <color name="widget_flash_product_bg">#33FFFFFF</color>
+    <color name="widget_flash_price">#FFFFFFFF</color>
+    <color name="widget_flash_orig_price">#AAFFFFFF</color>
+    <color name="widget_flash_discount">#FFBDBDBD</color>
 </resources>

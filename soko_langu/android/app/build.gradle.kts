@@ -40,6 +40,12 @@ android {
         versionName = flutter.versionName
     }
 
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/x86_64/**", "lib/x86/**")
+        }
+    }
+
     val storeFilePath = keystoreProperties["storeFile"]?.toString()
     signingConfigs {
         create("release") {
@@ -68,9 +74,15 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("com.google.android.gms:play-services-auth-api-phone:18.1.0")
+    implementation("androidx.core:core:1.15.0")
 }
 
 flutter {
     source = "../.."
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("-Xlint:-options")
 }
 

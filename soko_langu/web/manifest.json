@@ -3,9 +3,9 @@
     "short_name": "Soko Vibe",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#4CAF50",
-    "theme_color": "#40916C",
-    "description": "Soko Vibe - Marketplace ya Tanzania",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "description": "Soko Vibe — Tanzania's Trusted Online Marketplace",
     "prefer_related_applications": false,
     "icons": [
         {

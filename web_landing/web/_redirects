@@ -1,0 +1,16 @@
+# Static legal/support pages are served from their folders; Flutter SPA handles app routes.
+/privacy-policy    /privacy-policy/    301
+/terms-of-service  /terms-of-service/  301
+/cookie-policy     /cookie-policy/     301
+/contact           /contact/           301
+/about             /                   200
+/how-it-works      /                   200
+/features          /                   200
+/buyers            /                   200
+/sellers           /                   200
+/pricing           /                   200
+/faq               /                   200
+/waitlist/success  /                   200
+/404               /404.html           200
+/404.html          /404.html           200
+/*                 /index.html         200

@@ -1,0 +1,54 @@
+// Append-only audit log for sensitive actions (admin ops, financial
+// transitions, security events). Never update or delete rows.
+const { getStore } = require('../config/database');
+
+async function writeAudit({
+  actorId = null,
+  actorType = 'system',
+  action,
+  entityType = null,
+  entityId = null,
+  oldState = null,
+  newState = null,
+  requestId = null,
+  ipAddress = null,
+  userAgent = null,
+}) {
+  if (!action) throw new Error('AUDIT_ACTION_REQUIRED');
+  try {
+    const store = getStore();
+    const data = {
+      actorId: actorId ?? null,
+      actorType,
+      action,
+      entityType: entityType ?? null,
+      entityId: entityId ?? null,
+      requestId: requestId ?? null,
+      ipAddress: ipAddress ?? null,
+      userAgent: userAgent ?? null,
+    };
+    // Firestore rejects undefined values; only set optional state snapshots
+    // when the caller actually provided them (null means "no snapshot").
+    if (oldState !== null && oldState !== undefined) data.oldState = oldState;
+    if (newState !== null && newState !== undefined) data.newState = newState;
+    return await store.auditLog.create({ data });
+  } catch (e) {
+    // Audit must never break the primary operation.
+    console.error('[AUDIT] write failed:', e.message);
+    return null;
+  }
+}
+
+function auditFromReq(req, extra = {}) {
+  const headers = (req && req.headers) || {};
+  return {
+    actorId: req.user?.id || null,
+    actorType: req.user ? 'user' : 'system',
+    requestId: req.id || headers['x-request-id'] || null,
+    ipAddress: (req && req.ip) || null,
+    userAgent: headers['user-agent'] || null,
+    ...extra,
+  };
+}
+
+module.exports = { writeAudit, auditFromReq };

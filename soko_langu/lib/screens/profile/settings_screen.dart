@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -8,11 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/localization_service.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/notification_service.dart';
-import '../../services/secure_storage_service.dart';
-import '../../services/app_lock_service.dart';
+import '../../services/local_notification_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../services/mfa_service.dart';
 import '../../main.dart' show themeManager, AppConfig;
 
 class SettingsScreen extends StatefulWidget {
@@ -24,110 +22,21 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  bool _pinConfigured = false;
 
   @override
   void initState() {
     super.initState();
     _load();
-    AppLockService.instance.addListener(_onLockStateChanged);
-  }
-
-  @override
-  void dispose() {
-    AppLockService.instance.removeListener(_onLockStateChanged);
-    super.dispose();
-  }
-
-  void _onLockStateChanged() {
-    if (mounted) setState(() => _pinConfigured = AppLockService.instance.pinConfigured);
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final pinSet = await AppLockService.instance.isPinSet();
     if (mounted) {
       setState(() {
         _notificationsEnabled =
             prefs.getBool('push_notifications_enabled') ?? true;
-        _pinConfigured = pinSet;
       });
     }
-  }
-
-  void _showPinSetupDialog() {
-    final pinController = TextEditingController();
-    final confirmController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('set_pin')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: pinController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: context.tr('enter_pin'),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirmController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: context.tr('confirm_pin'),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
-            onPressed: () async {
-              if (pinController.text.length < 4) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pin_too_short'))),
-                );
-                return;
-              }
-              if (pinController.text != confirmController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pin_mismatch'))),
-                );
-                return;
-              }
-              final hashedPin = sha256.convert(utf8.encode(pinController.text)).toString();
-              await SecureStorageService.write(
-                'app_lock_pin',
-                hashedPin,
-              );
-              await AppLockService.instance.onPinSaved();
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                setState(() => _pinConfigured = true);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pin_updated'))),
-                );
-              }
-            },
-            child: Text(
-              context.tr('save'),
-              style:  TextStyle(color: Theme.of(context).colorScheme.surface),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<String?> _promptPassword() {
@@ -158,12 +67,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _confirmRemovePin() async {
-    final remove = await showDialog<bool>(
+  /// Starts MFA enrollment by navigating to the MFA enrollment screen.
+  Future<void> _startMfaEnrollment() async {
+    final result = await context.push<bool>(AppRoutes.mfaEnrollment);
+    if (result == true && mounted) {
+      setState(() {}); // Refresh to show MFA enabled state
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('mfa_enabled_success'))),
+      );
+    }
+  }
+
+  /// Shows the MFA management dialog with options to view recovery codes or disable MFA.
+  Future<void> _showMfaManagementDialog() async {
+    final auth = context.read<AuthNotifier>();
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.tr('remove_pin')),
-        content: Text(context.tr('remove_pin_confirm')),
+        title: Text(context.tr('mfa_manage_title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('mfa_manage_description'),
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            if (auth.mfaEnrolled) ...[
+              Text(
+                context.tr('mfa_current_status_enabled'),
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(ctx).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('close')),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmDisableMfa();
+            },
+            child: Text(
+              context.tr('mfa_disable'),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Confirms and disables MFA for the current user.
+  Future<void> _confirmDisableMfa() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('mfa_disable_confirm_title')),
+        content: Text(context.tr('mfa_disable_confirm_body')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -172,21 +140,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              context.tr('delete'),
+              context.tr('mfa_disable'),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    final auth = context.read<AuthNotifier>();
+    try {
+      await auth.unenrollMfa();
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('mfa_disabled'))),
+        );
+      }
+    } on MfaError catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.userMessage)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('mfa_disable_failed'))),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmLogoutAll() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('logout_all_devices')),
+        content: Text(context.tr('logout_all_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              context.tr('logout'),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
         ],
       ),
     );
-    if (remove != true || !mounted) return;
-    await AppLockService.instance.clearPin();
-    setState(() => _pinConfigured = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('pin_removed'))),
-      );
-    }
+    if (confirm != true || !mounted) return;
+    await context.read<AuthNotifier>().logoutAllDevices();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.tr('logout_all_done'))),
+    );
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -206,19 +220,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const SizedBox(height: 20),
               _buildSectionTitle(context.tr('notifications')),
-              _buildTile(
-                icon: Icons.notifications,
-                title: context.tr('push_notifications'),
-                trailing: Switch(
+            _buildTile(
+                 icon: Icons.notifications,
+                 title: context.tr('push_notifications'),
+trailing: Switch(
                   value: _notificationsEnabled,
                   activeThumbColor: Theme.of(context).colorScheme.primary,
                   onChanged: (value) async {
                     final notif = NotificationService();
                     await notif.setEnabled(value);
-                    if (mounted) setState(() => _notificationsEnabled = value);
+                    if (!mounted) return;
+                    setState(() => _notificationsEnabled = value);
+                    if (!value) return;
+                    // Turning the switch on is not enough on Android 13+: the
+                    // OS permission may still be denied, and then every heads-up
+                    // is dropped without a word. Ask, and if the OS still says
+                    // no, send the user to settings — re-prompting will not help.
+                    final granted =
+                        await LocalNotificationService.requestPermission();
+                    if (granted || !mounted) return;
+                    final openSettings = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(context.tr('notifications')),
+                        content: Text(
+                          context.tr(
+                            'notifications_blocked_hint',
+                            'Itafanya araka za maombi ya taarifa. Ili kupata taarifa lazima uruhusu programu kutoa taarifa kwenye mipangilio ya mfano.',
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(context.tr('not_now')),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(context.tr('open_settings')),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (openSettings == true) {
+                      await LocalNotificationService.openSystemSettings();
+                    }
                   },
                 ),
-              ),
+               ),
+               _buildTile(
+                 icon: Icons.tune,
+                 title: context.tr('notification_preferences'),
+                 onTap: () => context.push(AppRoutes.notificationPreferences),
+               ),
               const Divider(),
               _buildSectionTitle(
                 '${context.tr('language')} & ${context.tr('currency')}',
@@ -228,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: context.tr('language'),
                 subtitle:
                     LocalizationService.supportedLanguages[config.langCode] ??
-                    'Swahili',
+                    context.tr('swahili'),
                 onTap: () => _showLanguagePicker(context, config),
               ),
               _buildTile(
@@ -239,24 +292,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => _showCurrencyPicker(context, config),
               ),
               const Divider(),
-              _buildTile(
-                icon: Icons.pin,
-                title: context.tr('set_pin'),
-                subtitle: _pinConfigured ? context.tr('pin_enabled') : null,
-                onTap: _showPinSetupDialog,
+              const Divider(),
+              // MFA (Two-Factor Authentication)
+              Consumer<AuthNotifier>(
+                builder: (context, auth, _) {
+                  return Column(
+                    children: [
+                      _buildTile(
+                        icon: Icons.security_rounded,
+                        title: context.tr('mfa_title'),
+                        subtitle: auth.mfaEnrolled
+                            ? context.tr('mfa_enabled')
+                            : context.tr('mfa_disabled'),
+                        onTap: auth.mfaEnrolled
+                            ? _showMfaManagementDialog
+                            : _startMfaEnrollment,
+                      ),
+                      if (auth.mfaEnrolled)
+                        _buildTile(
+                          icon: Icons.lock_open,
+                          title: context.tr('mfa_disable'),
+                          onTap: _confirmDisableMfa,
+                        ),
+                    ],
+                  );
+                },
               ),
-              if (_pinConfigured)
-                _buildTile(
-                  icon: Icons.lock_open,
-                  title: context.tr('remove_pin'),
-                  onTap: _confirmRemovePin,
-                ),
               const Divider(),
               _buildSectionTitle(context.tr('account')),
               _buildTile(
-                icon: Icons.person,
-                title: context.tr('edit_profile'),
-                onTap: () => context.push(AppRoutes.editProfile),
+                icon: Icons.devices_other,
+                title: context.tr('logout_all_devices'),
+                subtitle: context.tr('logout_all_devices_body'),
+                onTap: _confirmLogoutAll,
               ),
               const Divider(),
               _buildSectionTitle(context.tr('appearance')),
@@ -276,25 +344,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Divider(),
               _buildSectionTitle(context.tr('support')),
               _buildTile(
-                icon: Icons.help,
-                title: context.tr('help'),
-                onTap: () => context.push(AppRoutes.help),
-              ),
-              _buildTile(
-                icon: Icons.info,
-                title: context.tr('about'),
-                subtitle: context.tr('version'),
-                onTap: () => context.push(AppRoutes.about),
-              ),
-              _buildTile(
-                icon: Icons.privacy_tip_outlined,
-                title: context.tr('privacy_policy'),
-                onTap: () => context.push(AppRoutes.privacyPolicy),
-              ),
-              _buildTile(
-                icon: Icons.article_outlined,
-                title: context.tr('terms_of_service'),
-                onTap: () => context.push(AppRoutes.termsOfService),
+                icon: Icons.person_search_outlined,
+                title: context.tr('contact_discovery_title'),
+                onTap: () => context.push(AppRoutes.contactDiscovery),
               ),
               const SizedBox(height: 30),
               Padding(
@@ -462,6 +514,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
 
   void _showCurrencyPicker(BuildContext context, AppConfig config) {
     showModalBottomSheet(

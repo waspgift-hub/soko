@@ -1,6 +1,12 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'cloudinary_service.dart';
+import 'package:http/http.dart' as http;
+
+import 'api_config.dart';
+import 'media_service.dart';
+import 'username_service.dart';
 
 class UserProfile {
   final String uid;
@@ -19,6 +25,9 @@ class UserProfile {
   final String shopBannerColor;
   final String shopAccentColor;
   final bool kycApproved;
+  final String gender;
+  final String dateOfBirth;
+  final DateTime? lastActive;
 
   UserProfile({
     required this.uid,
@@ -37,6 +46,9 @@ class UserProfile {
     this.shopBannerColor = '',
     this.shopAccentColor = '',
     this.kycApproved = false,
+    this.gender = '',
+    this.dateOfBirth = '',
+    this.lastActive,
   });
 
   factory UserProfile.fromMap(String uid, Map<String, dynamic> data) {
@@ -51,12 +63,15 @@ class UserProfile {
       mood: data['mood'] ?? '',
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
-      profileImage: data['profileImage'] ?? '',
+      profileImage: data['profileImage'] ?? data['avatarUrl'] ?? '',
       paymentNumbers: Map<String, String>.from(data['paymentNumbers'] ?? {}),
       shopBanner: data['shopBanner'] ?? '',
       shopBannerColor: data['shopBannerColor'] ?? '',
       shopAccentColor: data['shopAccentColor'] ?? '',
       kycApproved: data['kyc']?['approved'] ?? false,
+      gender: data['gender'] ?? '',
+      dateOfBirth: data['dateOfBirth'] ?? '',
+      lastActive: (data['lastActive'] as dynamic)?.toDate(),
     );
   }
 
@@ -75,48 +90,379 @@ class UserProfile {
     'shopBanner': shopBanner,
     'shopBannerColor': shopBannerColor,
     'shopAccentColor': shopAccentColor,
+    'gender': gender,
+    'dateOfBirth': dateOfBirth,
   };
+
+  /// True when no profile content has ever been synced to Postgres (used to
+  /// absorb a Firestore-seeded profile over a blank API row).
+  bool isEmpty() =>
+      displayName.isEmpty &&
+      username.isEmpty &&
+      email.isEmpty &&
+      phone.isEmpty &&
+      profileImage.isEmpty;
+
+  /// Returns a profile preferring non-empty values from [other] over this one.
+  UserProfile absorb(UserProfile other) {
+    String pick(String a, String b) => a.isNotEmpty ? a : b;
+    return UserProfile(
+      uid: uid,
+      displayName: pick(displayName, other.displayName),
+      username: pick(username, other.username),
+      bio: pick(bio, other.bio),
+      phone: pick(phone, other.phone),
+      email: pick(email, other.email),
+      location: pick(location, other.location),
+      mood: pick(mood, other.mood),
+      latitude: latitude ?? other.latitude,
+      longitude: longitude ?? other.longitude,
+      profileImage: pick(profileImage, other.profileImage),
+      paymentNumbers:
+          paymentNumbers.isEmpty ? other.paymentNumbers : paymentNumbers,
+      shopBanner: pick(shopBanner, other.shopBanner),
+      shopBannerColor: pick(shopBannerColor, other.shopBannerColor),
+      shopAccentColor: pick(shopAccentColor, other.shopAccentColor),
+      kycApproved: kycApproved || other.kycApproved,
+      gender: pick(gender, other.gender),
+      dateOfBirth: pick(dateOfBirth, other.dateOfBirth),
+      lastActive: lastActive ?? other.lastActive,
+    );
+  }
 }
 
 class UserService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  DocumentReference _profileDoc() =>
+  /// Profiles already resolved this session, keyed by uid.
+  ///
+  /// Keyed rather than a single slot on purpose: one global slot would let
+  /// `getProfile(someOtherUid)` return the signed-in user's own cached profile
+  /// to any screen that asked, which is a cross-user data leak.
+  final Map<String, UserProfile> _profileCache = {};
+
+  /// Drops the cached profiles so the next read re-fetches.
+  ///
+  /// Call after any write that changes profile content. The whole map is
+  /// cleared rather than one entry because a shop-banner or avatar edit is
+  /// mirrored onto several docs by different screens, and a targeted delete
+  /// would leave a stale copy under a neighbouring key.
+  void invalidateProfileCache() => _profileCache.clear();
+
+  DocumentReference<Map<String, dynamic>> _profileDoc() =>
       _db.collection('users').doc(_auth.currentUser!.uid);
 
   Future<UserProfile?> getProfile(String uid) async {
-    final doc = await _db.collection('users').doc(uid).get();
+    // Only serve this uid's own entry.
+    final cached = _profileCache[uid];
+    if (cached != null) return cached;
+
+    final self = uid == _auth.currentUser?.uid;
+    final api = await _apiProfile(uid, self, await _currentToken());
+    if (api != null) {
+      // profile_setup/register wrote Firestore directly before the first API
+      // save; a blank Postgres row must not blank out an existing profile.
+      if (self && api.isEmpty()) {
+        final fb = await _db.collection('users').doc(uid).get();
+        if (fb.exists) {
+          final merged = api.absorb(UserProfile.fromMap(uid, fb.data()!));
+          _profileCache[uid] = merged;
+          return merged;
+        }
+      }
+      _profileCache[uid] = api;
+      return api;
+    }
+    final isSelf = uid == _auth.currentUser?.uid;
+    final collection = isSelf ? 'users' : 'userPublic';
+    final doc = await _db.collection(collection).doc(uid).get();
     if (!doc.exists) return null;
-    return UserProfile.fromMap(uid, doc.data()!);
+    final fbProfile = UserProfile.fromMap(uid, doc.data()!);
+    _profileCache[uid] = fbProfile;
+    return fbProfile;
+  }
+
+  Future<Map<String, UserProfile>> getProfiles(List<String> uids) async {
+    if (uids.isEmpty) return {};
+    final result = <String, UserProfile>{};
+    final missing = <String>[];
+    if (ApiConfig.kUseUsersApi) {
+      final self = _auth.currentUser?.uid;
+      final token = await _currentToken();
+      for (final uid in uids) {
+        final p = await _apiProfile(uid, uid == self, token);
+        if (p != null) {
+          result[uid] = p;
+        } else {
+          missing.add(uid);
+        }
+      }
+    } else {
+      missing.addAll(uids);
+    }
+    // Batch read of OTHER users goes through `userPublic/{uid}`.
+    //
+    // `users/{uid}` is owner-scoped by firestore.rules because it holds phone,
+    // email, KYC and balances; a batch read there would now be denied (which is
+    // the point). The projection carries the display fields a chat list or
+    // seller card renders, and maps onto the same `UserProfile` shape.
+    final refs = missing.map((id) => _db.collection('userPublic').doc(id)).toList();
+    final docs = await Future.wait(refs.map((r) => r.get()));
+    for (final doc in docs) {
+      if (doc.exists) {
+        result[doc.id] = UserProfile.fromMap(doc.id, doc.data()!);
+      }
+    }
+    return result;
+  }
+
+  Future<String?> _currentToken() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    try {
+      return await user.getIdToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<UserProfile?> _apiProfile(String uid, bool self, String? token) async {
+    if (!ApiConfig.kUseUsersApi || token == null) return null;
+    final path = self ? '/users/me' : '/users/public/$uid';
+    try {
+      final res = await http.get(
+        Uri.parse(ApiConfig.v1(path)),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode != 200) return null;
+      final decoded = jsonDecode(res.body);
+      final raw = decoded is Map<String, dynamic>
+          ? (decoded['data'] is Map<String, dynamic>
+              ? decoded['data'] as Map<String, dynamic>
+              : decoded)
+          : <String, dynamic>{};
+      if (raw.isEmpty) return null;
+      return _fromApi(uid, raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  UserProfile _fromApi(String uid, Map<String, dynamic> d) {
+    return UserProfile(
+      uid: uid,
+      displayName: d['displayName'] as String? ?? '',
+      username: d['username'] as String? ?? '',
+      bio: d['bio'] as String? ?? '',
+      phone: d['phone'] as String? ?? '',
+      email: d['email'] as String? ?? '',
+      location: d['location'] as String? ?? '',
+      mood: d['mood'] as String? ?? '',
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
+      profileImage: d['profileImage'] as String? ?? '',
+      paymentNumbers: Map<String, String>.from(
+        d['paymentNumbers'] is Map<String, dynamic>
+            ? d['paymentNumbers'] as Map<String, dynamic>
+            : <String, dynamic>{},
+      ),
+      shopBanner: d['shopBanner'] as String? ?? '',
+      shopBannerColor: d['shopBannerColor'] as String? ?? '',
+      shopAccentColor: d['shopAccentColor'] as String? ?? '',
+      kycApproved: d['kyc'] is Map<String, dynamic>
+          ? d['kyc']['approved'] == true
+          : false,
+      gender: d['gender'] as String? ?? '',
+      dateOfBirth: d['dateOfBirth'] as String? ?? '',
+      lastActive: _parseTs(d['lastActive']),
+    );
+  }
+
+  DateTime? _parseTs(dynamic v) {
+    if (v == null) return null;
+    if (v is String) return DateTime.tryParse(v);
+    if (v is num) return DateTime.fromMillisecondsSinceEpoch(
+      (v * 1000).round(),
+      isUtc: true,
+    );
+    return null;
+  }
+
+  Future<void> _updateSelf(Map<String, dynamic> data) async {
+    if (!ApiConfig.kUseUsersApi) return;
+    final token = await _currentToken();
+    if (token == null) return;
+    try {
+      await http.put(
+        Uri.parse(ApiConfig.v1('/users/me')),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(data),
+      );
+    } catch (_) {
+      // Firestore write below is the source of truth; a failed sync is
+      // non-fatal (mirror of the shop adapter rescue pattern).
+    }
   }
 
   Stream<UserProfile?> streamProfile(String uid) {
+    final self = uid == _auth.currentUser?.uid;
+    if (self) {
+      return _db
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .map((doc) => doc.exists ? UserProfile.fromMap(uid, doc.data()!) : null);
+    }
+    // Other users: only public projection, no PII.
     return _db
-        .collection('users')
+        .collection('userPublic')
         .doc(uid)
         .snapshots()
-        .map(
-          (doc) => doc.exists ? UserProfile.fromMap(uid, doc.data()!) : null,
-        );
+        .map((doc) => doc.exists ? UserProfile.fromMap(uid, doc.data()!) : null);
   }
 
   Future<void> saveProfile(UserProfile profile) async {
-    await _db.collection('users').doc(profile.uid).set(profile.toMap());
+    final m = profile.toMap();
+    // keep case-insensitive indexes for search
+    m['usernameLower'] = profile.username.toLowerCase();
+    m['displayNameLower'] = profile.displayName.toLowerCase();
+    if (profile.uid == _auth.currentUser?.uid) {
+      await _updateSelf(m);
+    }
+    await _db.collection('users').doc(profile.uid).set(m, SetOptions(merge: true));
+    // Clear profile cache so dependent screens see the updated data
+    invalidateProfileCache();
+  }
+
+  /// Persists the user's in-app language to their profile doc so the server
+  /// can localize push notifications to match what they chose in the app, and
+  /// pings the server so its per-user lang cache applies immediately (instead
+  /// of waiting for the 5-minute TTL).
+  Future<void> setLanguage(String uid, String langCode) async {
+    if (uid.isEmpty) return;
+    await _db.collection('users').doc(uid).set({'langCode': langCode}, SetOptions(merge: true));
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      if (token == null) return;
+      await http.put(
+        Uri.parse(ApiConfig.v1('/users/settings/language_region')),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'preferredLanguage': langCode}),
+      );
+    } catch (_) {
+      // Firestore write above is the source of truth; the server cache expires
+      // on its own, so a failed sync is non-fatal.
+    }
+  }
+
+  /// Persists the user's SMS language separately from the in-app language.
+  /// SMS going out (OTP, transactional) follows `smsLangCode`; push and
+  /// in-app notifications keep following `langCode`.
+  Future<void> setSmsLanguage(String uid, String smsLangCode) async {
+    if (uid.isEmpty) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .set({'smsLangCode': smsLangCode}, SetOptions(merge: true));
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      if (token == null) return;
+      await http.put(
+        Uri.parse(ApiConfig.v1('/users/settings/language_region')),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'smsLangCode': smsLangCode}),
+      );
+    } catch (_) {
+      // Firestore write is the source of truth; the server cache expires on
+      // its own, so a failed sync is non-fatal.
+    }
   }
 
   Future<String> uploadProfileImage(String filePath) async {
-    return CloudinaryService.uploadFromPath(filePath, folder: 'profiles');
+    return MediaService.uploadFromPath(
+      filePath,
+      folder: 'profiles',
+      owner: MediaOwner.user,
+    );
   }
 
   Future<void> updateProfileImage(String url) async {
+    // Retire the old avatar BEFORE pointing the profile at the new one: the
+    // delete endpoint only destroys the caller's CURRENT profile image, so it
+    // must run while the old url is still on the doc (that is what proves the
+    // caller owns the asset — disallows deleting another user's guessed url).
+    try {
+      final snap = await _profileDoc().get();
+      final old = snap.data()?['profileImage'] as String? ?? '';
+      if (old.isNotEmpty && old != url) await deleteProfileImage(old);
+    } catch (_) {}
+    await _updateSelf({'profileImage': url});
     await _profileDoc().update({'profileImage': url});
+    // Clear profile cache so dependent screens see the updated image
+    invalidateProfileCache();
+  }
+
+  /// Deletes the previous profile image from Cloudinary after it has been
+  /// replaced. Best-effort: the profile already points at the new image, so a
+  /// cleanup failure is swallowed instead of surfacing an error.
+  Future<void> deleteProfileImage(String imageUrl) async {
+    if (imageUrl.isEmpty || !imageUrl.contains('res.cloudinary.com')) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final token = await user.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/cloudinary/delete'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'imageUrl': imageUrl}),
+      );
+    } catch (_) {}
   }
 
   Future<bool> isUsernameTaken(String username, String currentUid) async {
     if (username.trim().isEmpty) return false;
+    if (ApiConfig.kUseUsersApi) {
+      final token = await _currentToken();
+      if (token != null) {
+        try {
+          final q = Uri.encodeQueryComponent(username.trim().toLowerCase());
+          final res = await http.get(
+            Uri.parse(
+              ApiConfig.v1(
+                '/users/check-username?username=$q&excludeUid=$currentUid',
+              ),
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (res.statusCode == 200) {
+            final decoded = jsonDecode(res.body);
+            final data = decoded['data'];
+            if (data is Map<String, dynamic>) {
+              return data['available'] == false;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    // Uniqueness is a public concern (anyone can hold a username), so it is
+    // checked against the public projection rather than the private doc.
     final snap = await _db
-        .collection('users')
+        .collection('userPublic')
         .where('username', isEqualTo: username.trim().toLowerCase())
         .get();
     for (var doc in snap.docs) {
@@ -146,39 +492,86 @@ class UserService {
   }
 
   Future<List<UserProfile>> searchUsers(String query) async {
-    final q = query.trim().toLowerCase();
+    var raw = query.trim();
+    if (raw.startsWith('@')) raw = raw.substring(1);
+    var q = raw.toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return [];
     final results = <String, UserProfile>{};
-    try {
-      final nameSnap = await _db
-          .collection('users')
-          .where('displayName', isGreaterThanOrEqualTo: q)
-          .where('displayName', isLessThan: '$q\uf8ff')
-          .limit(20)
-          .get();
-      for (final doc in nameSnap.docs) {
-        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
-      }
-      final usernameSnap = await _db
-          .collection('users')
-          .where('username', isGreaterThanOrEqualTo: q)
-          .where('username', isLessThan: '$q\uf8ff')
-          .limit(20)
-          .get();
-      for (final doc in usernameSnap.docs) {
-        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
-      }
-    } catch (_) {
-      final snap = await _db.collection('users').limit(50).get();
-      for (final doc in snap.docs) {
-        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
-      }
+    // Prefix search over the PUBLIC projection.
+    //
+    // Querying `users` here would (a) be denied by the tightened rules and
+    // (b) be a privacy leak even if it were allowed: a prefix scan walks other
+    // people's phone/email/KYC fields. `userPublic` is indexed on the same
+    // display names, so recall is unchanged for a user search.
+    Future<void> tryQuery(String field) async {
+      try {
+        final snap = await _db
+            .collection('userPublic')
+            .where(field, isGreaterThanOrEqualTo: q)
+            .where(field, isLessThan: '$q\uf8ff')
+            .limit(20)
+            .get();
+        for (final doc in snap.docs) {
+          results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
+        }
+      } catch (_) {}
+    }
+
+    await tryQuery('usernameLower');
+    await tryQuery('username');
+    // displayName is stored with original casing; try lower variant if exists
+    await tryQuery('displayNameLower');
+    // Last resort: substring scan over the PUBLIC projection.
+    //
+    // Previously this read `users` and was therefore both a privacy leak (it
+    // loaded other people's private docs into memory to do a substring match)
+    // and, after the rules tightening, a guaranteed permission error. Same
+    // recall, no PII, and it is now actually reachable.
+    if (results.isEmpty) {
+      try {
+        final snap = await _db.collection('userPublic').limit(50).get();
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final dn = (data['displayName'] ?? '').toString().toLowerCase();
+          final un = (data['username'] ?? '').toString().toLowerCase();
+          if (dn.contains(q) || un.contains(q)) {
+            results[doc.id] = UserProfile.fromMap(doc.id, data);
+            if (results.length >= 20) break;
+          }
+        }
+      } catch (_) {}
     }
     return results.values.toList();
   }
 
+  /// Whitelist of client-writable profile fields. Everything else (trust,
+  /// financial, admin state) is server-owned and rejected by Firestore rules.
+  static const _storefrontAllowedFields = {
+    'displayName', 'username', 'bio', 'location', 'mood',
+    'shopBanner', 'shopBannerColor', 'shopAccentColor',
+    'profileImage', 'paymentNumbers',
+  };
+
   Future<void> updateStorefront(String uid, Map<String, dynamic> data) async {
-    await _db.collection('users').doc(uid).update(data);
+    final update = <String, dynamic>{};
+    for (final entry in data.entries) {
+      if (_storefrontAllowedFields.contains(entry.key)) {
+        update[entry.key] = entry.value;
+      }
+    }
+    // keep lower-case indexes in sync
+    if (update.containsKey('username')) {
+      update['usernameLower'] = (update['username'] as String).toLowerCase();
+    }
+    if (update.containsKey('displayName')) {
+      update['displayNameLower'] = (update['displayName'] as String).toLowerCase();
+    }
+    if (update.isEmpty) return;
+    if (uid == _auth.currentUser?.uid) {
+      await _updateSelf(update);
+    }
+    await _db.collection('users').doc(uid).update(update);
   }
 
   Future<void> deleteMyAccount() async {
@@ -195,6 +588,66 @@ class UserService {
     await _auth.signOut();
   }
 
+  /// Update the user's lastActive timestamp for presence.
+  Future<void> updateLastActive() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      'lastActive': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Persist which chat room the user is currently viewing so the server can
+  /// suppress unread counts, pushes, and in-app rows for the live conversation.
+  /// null clears the marker.
+  Future<void> setActiveChatRoom(String? roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      if (roomId == null)
+        'activeChatRoom': FieldValue.delete()
+      else
+        'activeChatRoom': roomId,
+    });
+  }
+
+  /// Canonical KYC badge status stream.
+  ///
+  /// All seller-facing screens must consume this stream rather than
+  /// independently fetching `sellerKycApproved` from product models, so a KYC
+  /// change propagates to every dependent badge at once.
+  ///
+  /// Reads the coarse `kycApproved` flag on the PUBLIC projection. Listening to
+  /// `users/{sellerId}` directly would need access to the seller's private
+  /// document, which the rules deliberately deny to everyone but the owner and
+  /// admin — and a public badge must not require that.
+  Stream<bool> streamKycStatus(String sellerId) {
+    final ref = _db.collection('userPublic').doc(sellerId);
+    return ref.snapshots().map((doc) {
+      if (!doc.exists) return false;
+      return doc.data()?['kycApproved'] == true;
+    });
+  }
+
+  /// Stream the other user's lastActive for presence detection.
+  ///
+  /// Reads `userPublic/{uid}`: `lastActive` is presence metadata, not private
+  /// account data, and the projection mirrors it. Reading `users/{uid}` would be
+  /// denied for anyone but the owner.
+  Stream<DateTime?> streamLastActive(String uid) {
+    return _db.collection('userPublic').doc(uid).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      final ts = doc.data()!['lastActive'];
+      return (ts as dynamic)?.toDate();
+    });
+  }
+
+  /// Whether the user is considered online (active within last 2 minutes).
+  static bool isOnline(DateTime? lastActive) {
+    if (lastActive == null) return false;
+    return DateTime.now().difference(lastActive).inMinutes < 2;
+  }
+
   Future<void> reauthenticateAndDelete(String password) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not logged in');
@@ -206,5 +659,21 @@ class UserService {
     await _db.collection('users').doc(user.uid).delete();
     await user.delete();
     await _auth.signOut();
+  }
+
+  /// Reads the trusted visibility settings from the user's own doc.
+  /// Returns null if the doc or visibility map doesn't exist yet.
+  Future<Map<String, dynamic>?> getPrivateSettings() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final snap = await _db.collection('users').doc(uid).get();
+    if (!snap.exists) return null;
+    return snap.data()?['visibility'] as Map<String, dynamic>?;
+  }
+
+  /// Claims a username for the current user via the username service.
+  /// Throws if the username is already taken or invalid.
+  Future<void> claimUsername(String username) async {
+    return UsernameService.instance.claim(_auth.currentUser!.uid, username);
   }
 }

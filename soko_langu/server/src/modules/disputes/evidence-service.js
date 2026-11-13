@@ -1,0 +1,93 @@
+const { getStore } = require('../../config/database');
+const { requireLock, releaseLock } = require('../../config/redis');
+
+const EVIDENCE_TYPES = [
+  'LISTING_SNAPSHOT',
+  'UNBOXING_VIDEO',
+  'PRODUCT_PHOTO',
+  'DELIVERY_TRACKING',
+  'CHAT_SCREENSHOT',
+  'DISPATCH_PHOTO',
+  'PACKAGING_PHOTO',
+  'DISPATCH_RECEIPT',
+  'COMMUNICATION',
+  'PLATFORM_EVIDENCE',
+];
+
+/**
+ * Upload a piece of evidence into a dispute's evidence room.
+ * `type` must be one of EVIDENCE_TYPES; r2Key is the uploaded object key.
+ */
+async function addEvidence({ disputeId, submittedBy, type, r2Key, description }) {
+  const store = getStore();
+  const lock = await requireLock(`evidence:${disputeId}`, 60);
+
+  try {
+    return await store.$transaction(async (tx) => {
+      const dispute = await tx.dispute.findUnique({
+        where: { id: disputeId },
+        include: { order: { select: { buyerId: true, sellerId: true } } },
+      });
+      if (!dispute) throw httpError(404, 'DISPUTE_NOT_FOUND');
+      if (dispute.status !== 'open') throw httpError(409, 'DISPUTE_NOT_OPEN');
+
+      const requester = await tx.user.findUnique({
+        where: { id: submittedBy },
+        select: { role: true, sellerProfile: { select: { id: true } } },
+      });
+      const isParty =
+        dispute.order.buyerId === submittedBy ||
+        dispute.order.sellerId === (requester && requester.sellerProfile ? requester.sellerProfile.id : null) ||
+        dispute.filedBy === submittedBy;
+      const isAdmin = requester && ['super_admin', 'admin'].includes(requester.role);
+      if (!isParty && !isAdmin) throw httpError(403, 'FORBIDDEN');
+
+      if (!EVIDENCE_TYPES.includes(type)) throw httpError(400, 'INVALID_EVIDENCE_TYPE');
+
+      const evidence = await tx.disputeEvidence.create({
+        data: { disputeId, submittedBy, type, r2Key, description },
+      });
+
+      return evidence;
+    });
+  } finally {
+    if (lock.acquired) await releaseLock(`evidence:${disputeId}`, lock.token);
+  }
+}
+
+/**
+ * List evidence for a dispute. Access restricted to parties and admins.
+ */
+async function listEvidence({ disputeId, requesterId }) {
+  const store = getStore();
+  const dispute = await store.dispute.findUnique({
+    where: { id: disputeId },
+    include: { order: true },
+  });
+  if (!dispute) throw httpError(404, 'DISPUTE_NOT_FOUND');
+
+  const isParty =
+    dispute.order.buyerId === requesterId ||
+    dispute.order.sellerId === requesterId ||
+    dispute.filedBy === requesterId;
+
+  const requester = await store.user.findUnique({ where: { id: requesterId } });
+  const isAdmin = requester && ['super_admin', 'admin'].includes(requester.role);
+
+  if (!isParty && !isAdmin) throw httpError(403, 'FORBIDDEN');
+
+  const evidence = await store.disputeEvidence.findMany({
+    where: { disputeId },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return evidence;
+}
+
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+module.exports = { EVIDENCE_TYPES, addEvidence, listEvidence };

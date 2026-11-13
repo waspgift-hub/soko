@@ -1,24 +1,40 @@
 {
   "name": "soko-langu-server",
-  "version": "1.0.0",
-  "description": "Soko Vibe backend server (Mongike + Agora)",
-  "main": "index.js",
+  "version": "2.0.0",
+  "description": "Soko Vibe backend server - Production Trust-Commerce Platform",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
-    "start:listener": "node listener.js"
+    "start": "node --optimize-for-size --expose-gc src/index.js",
+    "dev": "node src/index.js",
+    "worker": "node src/workers/index.js",
+    "test": "node --test test/*.test.js",
+    "test:rules": "node --test test/firestore-rules.test.js",
+    "test:e2e": "node scripts/run-e2e.js",
+    "lint": "node scripts/lint.js",
+    "security:secrets": "node scripts/secret-scan.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1125.0",
+    "@aws-sdk/s3-request-presigner": "^3.1125.0",
+    "axios": "^1.18.1",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^5.12.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
-    "debug": "^4.4.3",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "firebase-admin": "^11.11.0",
-    "helmet": "^8.2.0",
-    "ioredis": "^5.11.1",
-    "nodemailer": "^6.9.8"
+    "helmet": "^7.1.0",
+    "ioredis": "^5.4.1",
+    "ip-range-check": "^0.2.1",
+    "nodemailer": "^6.9.8",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.2.0"
   }
 }

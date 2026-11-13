@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SSL Pinning removed (2026-08-20)
+  ================================
+  The previous per-domain pin-sets broke all TLS connections to
+  soko-langu-server.onrender.com, firestore.googleapis.com and other hosts
+  because Render/Google rotate their leaf certificates, and a single pin-set
+  pinned multiple hosts to one SPKI that no longer matched.
+
+  TODO(user): re-enable pinning before PRODUCTION with one pin-set per host
+  and a monthly cert-rotation check (certs rotate ~every 3 months).
+-->
+<network-security-config>
+
+  <!-- Default config: enforce HTTPS everywhere, block cleartext -->
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+
+</network-security-config>

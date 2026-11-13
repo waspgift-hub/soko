@@ -7,14 +7,19 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../app/app_transitions.dart';
 import '../../services/analytics_service.dart';
+import '../../models/analytics_models.dart';
 import '../../services/api_config.dart';
+import '../../utils/api_envelope.dart';
 import '../../services/fraud_prevention_service.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
-import 'admin_wallet_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'admin_transactions_tab.dart';
+import 'admin_kyc_document_view_screen.dart';
+import 'admin_banner_management_screen.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:intl/intl.dart';
 
 class BarEntry {
@@ -47,15 +52,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   List<Map<String, dynamic>> _disputedTxs = [];
   List<Map<String, dynamic>> _failedPayoutTxs = [];
-  List<Map<String, dynamic>> _pendingKycUsers = [];
-  bool _loadingExceptions = true;
+List<Map<String, dynamic>> _pendingKycUsers = [];
+  List<Map<String, dynamic>> _systemErrors = [];
 
-  @override
+  /// Non-null when the pending-KYC queue could not be read. Kept separate from
+  /// the list so an outage never renders as the green "nothing pending" state.
+  String? _kycQueueError;
+  bool _loadingExceptions = true;
+  bool _loadingKyc = false;
+
+@override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 12, vsync: this);
     _checkAdmin();
-    _loadFraudStats();
   }
 
   @override
@@ -69,9 +79,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (user == null) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('not_logged_in'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('not_logged_in'))));
       }
       return;
     }
@@ -80,18 +90,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         .doc(user.uid)
         .get();
     final data = doc.data();
-    if (data?['isAdmin'] != true && user.email != 'admin@soko-langu.com') {
+    // Admin is server-granted only via the users.isAdmin flag. Never trust the
+    // email address — anyone can register any email.
+    if (data?['isAdmin'] != true) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('access_denied'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('access_denied'))));
       }
       return;
     }
     setState(() => _isAdmin = true);
     try {
-      await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats(), _loadExceptions()]);
+      await Future.wait([
+        _loadAnalytics(),
+        _loadUsers(),
+        _loadProducts(),
+        _loadFraudStats(),
+        _loadExceptions(),
+      ]);
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
@@ -104,9 +122,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadUsers() async {
     setState(() => _loadingUsers = true);
     try {
-      final snap = await FirebaseFirestore.instance.collection('users').get();
+      final snap = await FirebaseFirestore.instance.collection('users').limit(100).get();
       if (mounted) {
-        setState(() => _users = snap.docs.map((d) => {'uid': d.id, ...d.data()}).toList());
+        setState(
+          () => _users = snap.docs
+              .map((d) => {'uid': d.id, ...d.data()})
+              .toList(),
+        );
       }
     } catch (e) {
       debugPrint('Admin loadUsers: $e');
@@ -124,14 +146,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadExceptions() async {
     setState(() => _loadingExceptions = true);
     try {
-      final futures = <Future>[
+       final futures = <Future>[
         FirebaseFirestore.instance
             .collection('transactions')
             .where('status', isEqualTo: 'disputed')
+            .limit(50)
             .get(),
         FirebaseFirestore.instance
             .collection('transactions')
             .where('payoutStatus', isEqualTo: 'failed_retry')
+            .limit(50)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('system_errors')
+            .orderBy('lastSeen', descending: true)
+            .limit(100)
             .get(),
       ];
 
@@ -144,11 +173,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final results = await Future.wait(futures);
       final disputedSnap = results[0] as QuerySnapshot;
       final failedSnap = results[1] as QuerySnapshot;
+      final errorsSnap = results.length > 2 ? results[2] as QuerySnapshot : null;
 
       if (mounted) {
         setState(() {
-          _disputedTxs = disputedSnap.docs.map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>}).toList();
-          _failedPayoutTxs = failedSnap.docs.map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>}).toList();
+          _disputedTxs = disputedSnap.docs
+              .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+              .toList();
+          _failedPayoutTxs = failedSnap.docs
+              .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+              .toList();
+          if (errorsSnap != null) {
+            _systemErrors = errorsSnap.docs
+                .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+                .toList();
+          }
         });
       }
     } catch (e) {
@@ -158,33 +197,54 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _loadPendingKyc() async {
+    setState(() {
+      _loadingKyc = true;
+      _kycQueueError = null;
+    });
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/pending'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 10));
-      if (resp.statusCode == 200) {
-        final body = jsonDecode(resp.body);
-        final pending = body['pending'] as List? ?? [];
+      final resp = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/pending'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
+        final pending = env.body['pending'] as List? ?? [];
         if (mounted) {
-          setState(() => _pendingKycUsers = pending.cast<Map<String, dynamic>>());
+          setState(
+            () => _pendingKycUsers = pending.cast<Map<String, dynamic>>(),
+          );
         }
+      } else if (mounted) {
+        setState(() => _kycQueueError = env.error ?? context.tr('error_generic'));
       }
     } catch (e) {
       debugPrint('Admin loadPendingKyc: $e');
+      // Never leave the list empty on failure: an empty list renders the green
+      // "nothing pending" state, which reads as "all verified" during an outage.
+      if (mounted) setState(() => _kycQueueError = context.tr('error_generic'));
     }
+    if (mounted) setState(() => _loadingKyc = false);
   }
 
   Future<void> _loadProducts() async {
     setState(() => _loadingProducts = true);
     try {
-      final snap = await FirebaseFirestore.instance.collection('products').get();
+      final snap = await FirebaseFirestore.instance
+          .collection('products')
+          .limit(100)
+          .get();
       if (mounted) {
-        setState(() => _products = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+        setState(
+          () => _products = snap.docs
+              .map((d) => {'id': d.id, ...d.data()})
+              .toList(),
+        );
       }
     } catch (e) {
       debugPrint('Admin loadProducts: $e');
@@ -209,11 +269,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         title: Text(context.tr('admin_dashboard')),
         actions: [
           IconButton(
+            tooltip: context.tr('refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() => _loading = true);
-              Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats(), _loadExceptions()])
-                  .then((_) => setState(() => _loading = false));
+              Future.wait([
+                _loadAnalytics(),
+                _loadUsers(),
+                _loadProducts(),
+                _loadFraudStats(),
+                _loadExceptions(),
+              ]).then((_) => setState(() => _loading = false));
             },
           ),
         ],
@@ -221,13 +287,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           controller: _tabController,
           isScrollable: true,
           tabs: [
-            Tab(icon: const Icon(Icons.dashboard), text: context.tr('dashboard')),
-            Tab(icon: const Icon(Icons.analytics), text: context.tr('analytics')),
+            Tab(
+              icon: const Icon(Icons.dashboard),
+              text: context.tr('dashboard'),
+            ),
+            Tab(
+              icon: const Icon(Icons.analytics),
+              text: context.tr('analytics'),
+            ),
             Tab(icon: const Icon(Icons.people), text: context.tr('users')),
-            Tab(icon: const Icon(Icons.inventory_2), text: context.tr('products')),
+            Tab(icon: const Icon(Icons.verified_user), text: context.tr('verification')),
+            Tab(
+              icon: const Icon(Icons.inventory_2),
+              text: context.tr('products'),
+            ),
             Tab(icon: const Icon(Icons.flag), text: context.tr('reports')),
             Tab(icon: const Icon(Icons.security), text: context.tr('fraud')),
-            Tab(icon: const Icon(Icons.payments), text: context.tr('payout')),
+            Tab(
+              icon: const Icon(Icons.receipt_long),
+              text: context.tr('transactions'),
+            ),
+            Tab(icon: const Icon(Icons.chat_bubble_outline), text: context.tr('chats')),
+            Tab(
+              icon: const Icon(Icons.account_balance),
+              text: context.tr('clickpesa_overview'),
+            ),
+            Tab(
+              icon: const Icon(Icons.campaign_outlined),
+              text: context.tr('banner_management'),
+            ),
           ],
         ),
       ),
@@ -238,10 +326,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildDashboardTab(),
             _buildAnalyticsTab(),
             _buildUsersTab(),
+            _buildVerificationTab(),
             _buildProductsTab(),
             _buildReportsTab(),
             _buildFraudTab(),
-            _buildPayoutTab(),
+            _buildTransactionsTab(),
+            _buildChatsTab(),
+            _buildClickPesaTab(),
+            _buildBannerManagementTab(),
           ],
         ),
       ),
@@ -255,7 +347,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final disputeCount = _disputedTxs.length;
     final failedCount = _failedPayoutTxs.length;
     final kycCount = _pendingKycUsers.length;
-    final totalExceptions = disputeCount + failedCount + kycCount;
+    final errorCount = _systemErrors.length;
+    final totalExceptions = disputeCount + failedCount + kycCount + errorCount;
 
     return RefreshIndicator(
       onRefresh: _loadExceptions,
@@ -272,21 +365,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   icon: Icons.gavel,
                   count: disputeCount,
                   label: context.tr('disputes'),
-                  color: Colors.orange,
+                  color: cs.tertiary,
                 ),
                 const SizedBox(width: 10),
                 _exceptionSummaryCard(
                   icon: Icons.error_outline,
                   count: failedCount,
                   label: context.tr('failed_payouts'),
-                  color: Colors.red,
+                  color: cs.error,
                 ),
                 const SizedBox(width: 10),
                 _exceptionSummaryCard(
                   icon: Icons.verified_user,
                   count: kycCount,
                   label: context.tr('pending_kyc'),
-                  color: Colors.blue,
+                  color: cs.secondary,
+                ),
+                const SizedBox(width: 10),
+                _exceptionSummaryCard(
+                  icon: Icons.bug_report,
+                  count: errorCount,
+                  label: 'System Errors',
+                  color: cs.onErrorContainer.withValues(alpha: 0.8),
                 ),
               ],
             ),
@@ -298,7 +398,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           else ...[
             // Disputed transactions
             if (disputeCount > 0) ...[
-              _buildSectionHeader('${context.tr('disputes')} ($disputeCount)', cs),
+              _buildSectionHeader(
+                '${context.tr('disputes')} ($disputeCount)',
+                cs,
+              ),
               const SizedBox(height: 8),
               ..._disputedTxs.map((tx) => _buildDisputeCard(tx, cs)),
               const SizedBox(height: 16),
@@ -306,17 +409,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
             // Failed payouts
             if (failedCount > 0) ...[
-              _buildSectionHeader('${context.tr('failed_payouts')} ($failedCount)', cs),
+              _buildSectionHeader(
+                '${context.tr('failed_payouts')} ($failedCount)',
+                cs,
+              ),
               const SizedBox(height: 8),
               ..._failedPayoutTxs.map((tx) => _buildFailedPayoutCard(tx, cs)),
               const SizedBox(height: 16),
             ],
 
-            // Pending KYC
+             // Pending KYC
             if (kycCount > 0) ...[
-              _buildSectionHeader('${context.tr('pending_kyc')} ($kycCount)', cs),
+              _buildSectionHeader(
+                '${context.tr('pending_kyc')} ($kycCount)',
+                cs,
+              ),
               const SizedBox(height: 8),
-              ..._pendingKycUsers.map((u) => _buildKycCard(u, cs)),
+              if (_loadingKyc)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: GoogleLoading()),
+                )
+              else
+                ..._pendingKycUsers.map((u) => _buildKycCard(u, cs)),
+              const SizedBox(height: 16),
+            ],
+            // System errors
+            if (errorCount > 0) ...[
+              _buildSectionHeader(
+                'System Errors ($errorCount)',
+                cs,
+              ),
+              const SizedBox(height: 8),
+              ..._systemErrors.map((e) => _buildSystemErrorCard(e, cs)),
               const SizedBox(height: 16),
             ],
           ],
@@ -332,14 +457,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Widget _exceptionSummaryCard({
-    required IconData icon, required int count, required String label, required Color color,
+    required IconData icon,
+    required int count,
+    required String label,
+    required Color color,
   }) {
     return Container(
       width: 140,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.08), color.withValues(alpha: 0.02)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.08),
+            color.withValues(alpha: 0.02),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
@@ -349,7 +481,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 10),
@@ -357,8 +492,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$count', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-              Text(label, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.71))),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color.withValues(alpha: 0.71),
+                ),
+              ),
             ],
           ),
         ],
@@ -371,12 +519,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
         children: [
-          Icon(Icons.check_circle_outline, size: 48, color: Colors.green.withValues(alpha: 0.5)),
+          Icon(
+            Icons.check_circle_outline,
+            size: 48,
+            color: cs.primary.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 12),
-          Text('Hakuna matatizo yanayohitaji umakini',
-              style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant)),
+          Text(
+            context.tr('no_issues_attention'),
+            style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
+          ),
           const SizedBox(height: 4),
-          Text('Kila kitu kiko sawa!', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+          Text(
+            context.tr('everything_ok'),
+            style: TextStyle(
+              fontSize: 12,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
         ],
       ),
     );
@@ -385,11 +545,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildDisputeCard(Map<String, dynamic> tx, ColorScheme cs) {
     final nf = NumberFormat('#,###', 'en');
     final dateStr = _formatTimestamp(tx['createdAt']);
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final price = (tx['productPrice'] ?? 0).toDouble();
-    final buyerName = tx['buyerName'] ?? tx['buyerId'] ?? '---';
-    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? '---';
-    final reason = tx['disputeInfo']?['reason'] ?? '---';
+    final buyerName = tx['buyerName'] ?? tx['buyerId'] ?? context.tr('unknown');
+    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? context.tr('unknown');
+    final reason = tx['disputeInfo']?['reason'] ?? context.tr('unknown');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -397,16 +557,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(Icons.gavel, size: 18, color: Colors.orange),
-              const SizedBox(width: 6),
-              Expanded(child: Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-              Text('TZS ${nf.format(price.toInt())}', style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
-            ]),
+            Row(
+              children: [
+                Icon(Icons.gavel, size: 18, color: cs.tertiary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    productName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Text(
+                  'TZS ${nf.format(price.toInt())}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: cs.primary,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Text('Mnunuzi: $buyerName  |  Muuzaji: $sellerName', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            Text('Sababu: $reason', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            Text(
+              '${context.tr('buyer')}$buyerName  |  ${context.tr('seller_label')}$sellerName',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            Text(
+              '${context.tr('reason')}: $reason',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            Text(
+              dateStr,
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -414,9 +602,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 icon: const Icon(Icons.gavel, size: 16),
                 label: Text(context.tr('resolve_dispute')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  backgroundColor: cs.tertiary,
+                  foregroundColor: Theme.of(context).colorScheme.onTertiary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   textStyle: const TextStyle(fontSize: 12),
                 ),
                 onPressed: () => _showResolveDisputeDialog(tx),
@@ -431,10 +622,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildFailedPayoutCard(Map<String, dynamic> tx, ColorScheme cs) {
     final nf = NumberFormat('#,###', 'en');
     final dateStr = _formatTimestamp(tx['payoutFailedAt'] ?? tx['createdAt']);
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final price = (tx['productPrice'] ?? 0).toDouble();
-    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? '---';
-    final error = tx['payoutError'] ?? 'Unknown error';
+    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? context.tr('unknown');
+    final error = tx['payoutError'] ?? context.tr('unknown_error');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -442,16 +633,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(Icons.error_outline, size: 18, color: Colors.red),
-              const SizedBox(width: 6),
-              Expanded(child: Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-              Text('TZS ${nf.format(price.toInt())}', style: TextStyle(fontWeight: FontWeight.bold, color: cs.error)),
-            ]),
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 18, color: cs.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    productName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Text(
+                  'TZS ${nf.format(price.toInt())}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: cs.error,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Text('Muuzaji: $sellerName', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            Text('Hitilafu: $error', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            Text(
+              '${context.tr('seller_label')}$sellerName',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            Text(
+              '${context.tr('error')}: $error',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            Text(
+              dateStr,
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -459,9 +678,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 icon: const Icon(Icons.refresh, size: 16),
                 label: Text(context.tr('retry_payout')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  backgroundColor: cs.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   textStyle: const TextStyle(fontSize: 12),
                 ),
                 onPressed: () => _retryPayout(tx),
@@ -476,10 +698,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildKycCard(Map<String, dynamic> user, ColorScheme cs) {
     final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
     final dateStr = _formatTimestamp(kyc['submittedAt']);
-    final fullName = kyc['fullName'] ?? user['displayName'] ?? '---';
-    final email = user['email'] ?? '---';
-    final phone = user['phone'] ?? '---';
-    final idType = kyc['idType'] ?? '---';
+    final fullName = kyc['fullName'] ?? user['displayName'] ?? context.tr('unknown');
+    final email = user['email'] ?? context.tr('unknown');
+    final phone = user['phone'] ?? context.tr('unknown');
+    final idType = kyc['idType'] ?? context.tr('unknown');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -487,16 +709,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(Icons.verified_user, size: 18, color: Colors.blue),
-              const SizedBox(width: 6),
-              Expanded(child: Text(fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-              Text(idType, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-            ]),
+            Row(
+              children: [
+                Icon(Icons.verified_user, size: 18, color: cs.secondary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    fullName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Text(
+                  idType,
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Text(email, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            Text(phone, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            Text(
+              email,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            Text(
+              phone,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            Text(
+              dateStr,
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -504,9 +751,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 icon: const Icon(Icons.rate_review, size: 16),
                 label: Text(context.tr('review_kyc')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  backgroundColor: cs.secondary,
+                  foregroundColor: Theme.of(context).colorScheme.onSecondary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   textStyle: const TextStyle(fontSize: 12),
                 ),
                 onPressed: () => _showKycReviewDialog(user),
@@ -519,29 +769,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   String _formatTimestamp(dynamic ts) {
-    if (ts == null) return '---';
+    if (ts == null) return context.tr('unknown');
     try {
       if (ts is Timestamp) {
         return DateFormat('MMM dd, HH:mm').format(ts.toDate());
       }
       return ts.toString();
     } catch (_) {
-      return '---';
+      return context.tr('unknown');
     }
   }
 
   Widget _buildSectionHeader(String title, ColorScheme cs) {
     return Row(
       children: [
-        Container(width: 4, height: 20, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
         const SizedBox(width: 10),
-        Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: cs.onSurface)),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
       ],
     );
   }
 
   // ─── BAR CHART ───────────────────────────────────────────
-  Widget _buildBarChart(List<BarEntry> entries, Color color, String Function(double) format) {
+  Widget _buildBarChart(
+    List<BarEntry> entries,
+    Color color,
+    String Function(double) format,
+  ) {
     if (entries.isEmpty) return const SizedBox();
     final maxVal = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
     final maxBar = maxVal > 0 ? maxVal : 1.0;
@@ -556,7 +824,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         crossAxisAlignment: CrossAxisAlignment.end,
         children: entries.map((e) {
           final fraction = e.value / maxBar;
-          final dayLabels = [context.tr('mon'), context.tr('tue'), context.tr('wed'), context.tr('thu'), context.tr('fri'), context.tr('sat'), context.tr('sun')];
+          final dayLabels = [
+            context.tr('mon'),
+            context.tr('tue'),
+            context.tr('wed'),
+            context.tr('thu'),
+            context.tr('fri'),
+            context.tr('sat'),
+            context.tr('sun'),
+          ];
           final dayLabel = dayLabels[e.date.weekday - 1];
           return Expanded(
             child: Padding(
@@ -564,10 +840,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text(format(e.value), style: TextStyle(fontSize: 9, color: color.withValues(alpha: 0.71), fontWeight: FontWeight.w500)),
+                  Text(
+                    format(e.value),
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: color.withValues(alpha: 0.71),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(6),
+                    ),
                     child: Container(
                       height: 140 * fraction.clamp(0.03, 1.0),
                       width: double.infinity,
@@ -581,7 +866,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(dayLabel, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text(
+                    dayLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -597,16 +888,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       spacing: 10,
       runSpacing: 10,
       children: [
-        _actionTile(Icons.account_balance_wallet, context.tr('wallet'), Theme.of(context).colorScheme.secondary, () => context.push(AppRoutes.adminWallet)),
-        _actionTile(Icons.monetization_on, context.tr('ad_revenue'), Theme.of(context).colorScheme.primary, () => context.push(AppRoutes.adminAdRevenue)),
-        _actionTile(Icons.notifications, context.tr('send_notification'), Theme.of(context).colorScheme.tertiary, _showSendNotificationDialog),
-        _actionTile(Icons.download, context.tr('export_users'), Theme.of(context).colorScheme.primary, _exportUsersCsv),
-        _actionTile(Icons.settings, context.tr('maintenance'), Theme.of(context).colorScheme.error, _toggleMaintenance),
+        _actionTile(
+          Icons.notifications,
+          context.tr('send_notification'),
+          Theme.of(context).colorScheme.tertiary,
+          _showSendNotificationDialog,
+        ),
+        _actionTile(
+          Icons.download,
+          context.tr('export_users'),
+          Theme.of(context).colorScheme.primary,
+          _exportUsersCsv,
+        ),
+        _actionTile(
+          Icons.analytics,
+          context.tr('app_analytics'),
+          Theme.of(context).colorScheme.primary,
+          () => context.push(AppRoutes.sellerAnalytics, extra: '__all__'),
+        ),
+        _actionTile(
+          Icons.settings,
+          context.tr('maintenance'),
+          Theme.of(context).colorScheme.error,
+          _toggleMaintenance,
+        ),
       ],
     );
   }
 
-  Widget _actionTile(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _actionTile(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return Material(
       color: color.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(14),
@@ -620,7 +935,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             children: [
               Icon(icon, color: color, size: 28),
               const SizedBox(height: 6),
-              Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -641,23 +966,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             TextField(
               controller: titleCtrl,
-              decoration: InputDecoration(labelText: context.tr('title'), border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: context.tr('title'),
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: bodyCtrl,
               maxLines: 3,
-              decoration: InputDecoration(labelText: context.tr('body'), border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: context.tr('body'),
+                border: OutlineInputBorder(),
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
           ElevatedButton(
             onPressed: () async {
               if (titleCtrl.text.isEmpty || bodyCtrl.text.isEmpty) return;
               Navigator.pop(ctx);
-              await _analyticsService.sendPushToAll(titleCtrl.text, bodyCtrl.text);
+              await _analyticsService.sendPushToAll(
+                titleCtrl.text,
+                bodyCtrl.text,
+              );
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(context.tr('notification_sent_all'))),
@@ -674,7 +1011,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── EXPORT USERS CSV ─────────────────────────────────
   Future<void> _exportUsersCsv() async {
     final buffer = StringBuffer();
-      buffer.writeln('UID,Name,Email,Phone,Admin,Suspended,Created');
+    buffer.writeln('UID,Name,Email,Phone,Admin,Suspended,Created');
     for (final u in _users) {
       buffer.writeln(
         '"${u['uid']}","${u['displayName'] ?? ''}","${u['email'] ?? ''}","${u['phone'] ?? ''}",'
@@ -689,18 +1026,111 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Users CSV saved to admin_exports collection')),
+        SnackBar(content: Text(context.tr('users_csv_saved'))),
       );
     }
   }
 
   // ─── TOGGLE MAINTENANCE ───────────────────────────────
   Future<void> _toggleMaintenance() async {
-    final enabled = await _analyticsService.getMaintenanceMode();
-    await _analyticsService.toggleMaintenanceMode(!enabled);
+    final currentlyEnabled = await _analyticsService.getMaintenanceMode();
+    final messageCtrl = TextEditingController(
+      text: currentlyEnabled ? '' : context.tr('maintenance_message'),
+    );
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('maintenance')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  context.tr('current_status'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: currentlyEnabled
+                        ? Theme.of(context).colorScheme.error.withValues(alpha: 0.12)
+                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    context.tr(currentlyEnabled ? 'maintenance_on' : 'maintenance_off'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: currentlyEnabled ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: messageCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: context.tr('maintenance_message_label'),
+                hintText: context.tr('maintenance_message_hint'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.tr('maintenance_warning'),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton.icon(
+            icon: Icon(
+              currentlyEnabled ? Icons.power_settings_new : Icons.warning_amber,
+            ),
+            label: Text(
+              context.tr(currentlyEnabled ? 'disable_maintenance' : 'enable_maintenance'),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: currentlyEnabled ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
+              foregroundColor: currentlyEnabled ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, {
+              'enable': !currentlyEnabled,
+              'message': messageCtrl.text.trim(),
+            }),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !mounted) return;
+    await _analyticsService.toggleMaintenanceMode(
+      result['enable'] as bool,
+      message: result['message'] as String?,
+    );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('maintenance_mode_status').replaceAll('{status}', !enabled ? 'ON' : 'OFF'))),
+        SnackBar(
+          content: Text(
+            context.tr(result['enable'] as bool ? 'maintenance_enabled' : 'maintenance_disabled'),
+          ),
+        ),
       );
     }
   }
@@ -708,7 +1138,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ACTION: Resolve Dispute ───────────────────────────────
   void _showResolveDisputeDialog(Map<String, dynamic> tx) {
     final orderId = tx['id'] as String;
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final nf = NumberFormat('#,###', 'en');
     final price = (tx['productPrice'] ?? 0).toDouble();
     final noteCtrl = TextEditingController();
@@ -722,10 +1152,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$productName — TZS ${nf.format(price.toInt())}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '$productName — TZS ${nf.format(price.toInt())}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              Text('${context.tr('reason')}: ${tx['disputeInfo']?['reason'] ?? '---'}'),
+              Text(
+                '${context.tr('reason')}: ${tx['disputeInfo']?['reason'] ?? context.tr('unknown')}',
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: noteCtrl,
@@ -736,17 +1170,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
               ),
               const SizedBox(height: 12),
-              Text(context.tr('choose_resolution'),
-                  style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(
+                context.tr('choose_resolution'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
           ElevatedButton.icon(
             icon: const Icon(Icons.person, size: 16),
             label: Text(context.tr('release_to_seller')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.tertiary,
+              foregroundColor: Theme.of(context).colorScheme.onTertiary,
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               _resolveDispute(orderId, 'release', noteCtrl.text);
@@ -755,7 +1200,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton.icon(
             icon: const Icon(Icons.replay, size: 16),
             label: Text(context.tr('refund_to_buyer')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               _resolveDispute(orderId, 'refund', noteCtrl.text);
@@ -766,7 +1214,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Future<void> _resolveDispute(String orderId, String resolution, String note) async {
+  Future<void> _resolveDispute(
+    String orderId,
+    String resolution,
+    String note,
+  ) async {
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final resp = await http.post(
@@ -775,22 +1227,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'orderId': orderId, 'resolution': resolution, 'note': note}),
+        body: jsonEncode({
+          'orderId': orderId,
+          'resolution': resolution,
+          'note': note,
+        }),
       );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200) {
+      // Releases or refunds real money, so require the server's own
+      // confirmation rather than inferring it from a 200.
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
         _loadExceptions();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result['message'] ?? context.tr('dispute_resolved')),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                env.body['message']?.toString() ?? context.tr('dispute_resolved'),
+              ),
+            ),
+          );
         }
       } else {
-        throw Exception(result['error'] ?? 'Failed to resolve dispute');
+        throw Exception(env.error ?? 'Failed to resolve dispute');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -798,18 +1262,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ACTION: Retry Failed Payout ───────────────────────────
   Future<void> _retryPayout(Map<String, dynamic> tx) async {
     final orderId = tx['id'] as String;
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final nf = NumberFormat('#,###', 'en');
     final price = (tx['productPrice'] ?? 0).toDouble();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(context.tr('retry_payout')),
-        content: Text(context.tr('retry_payout_confirm').replaceAll('{product}', '$productName (TZS ${nf.format(price.toInt())})')),
+        content: Text(
+          context
+              .tr('retry_payout_confirm')
+              .replaceAll(
+                '{product}',
+                '$productName (TZS ${nf.format(price.toInt())})',
+              ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('retry')),
           ),
@@ -828,178 +1305,211 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         },
         body: jsonEncode({'orderId': orderId}),
       );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200) {
+      // Moves seller money, so require the server's own confirmation.
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
         _loadExceptions();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result['message'] ?? context.tr('payout_retried')),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                env.body['message']?.toString() ?? context.tr('payout_retried'),
+              ),
+            ),
+          );
         }
       } else {
-        throw Exception(result['error'] ?? context.tr('retry_failed'));
+        throw Exception(env.error ?? context.tr('retry_failed'));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
 
   // ─── ACTION: Review KYC ─────────────────────────────────────
-  void _showKycReviewDialog(Map<String, dynamic> user) {
-    final uid = user['uid'] as String;
-    final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
-    final fullName = kyc['fullName'] ?? user['displayName'] ?? '---';
-    final idType = kyc['idType'] ?? '---';
-    final idNumber = kyc['idNumber'] ?? '---';
-    final idImageUrl = kyc['idImageUrl'] as String?;
-    final selfieUrl = kyc['selfieUrl'] as String?;
-    final notesCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('review_kyc')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Jina: $fullName', style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text('Aina ya Kitambulisho: $idType'),
-              Text('Namba: $idNumber'),
-              if (idImageUrl != null) ...[
-                const SizedBox(height: 8),
-                Text('Kitambulisho:'),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(idImageUrl, height: 120, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image)),
-                ),
-              ],
-              if (selfieUrl != null) ...[
-                const SizedBox(height: 8),
-                Text('Selfie:'),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(selfieUrl, height: 120, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image)),
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Maelezo (sababu ya kukataa)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.close, size: 16),
-            label: Text(context.tr('reject')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _submitKycReview(uid, false, notesCtrl.text);
-            },
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.check, size: 16),
-            label: Text(context.tr('approve')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _submitKycReview(uid, true, notesCtrl.text);
-            },
-          ),
-        ],
-      ),
+  Future<void> _showKycReviewDialog(Map<String, dynamic> user) async {
+    final changed = await Navigator.of(context).push<bool>(
+      buildAppRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
-  }
-
-  Future<void> _submitKycReview(String uid, bool approve, String notes) async {
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/review'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'userId': uid,
-          'approve': approve,
-          'notes': notes,
-        }),
-      );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200) {
-        _loadExceptions();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result['message'] ?? context.tr('kyc_status').replaceAll('{status}', approve ? 'approved' : 'rejected')),
-          ));
-        }
-      } else {
-        throw Exception(result['error'] ?? context.tr('kyc_review_failed'));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-      }
-    }
+    if (changed == true) _loadExceptions();
   }
 
   // ─── ANALYTICS TAB ───────────────────────────────────────
   Widget _buildAnalyticsTab() {
     final a = _analytics ?? AnalyticsData();
+    final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       onRefresh: _loadAnalytics,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(context.tr('user_analytics'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          _statRow(context.tr('total_users'), '${a.totalUsers}', '${context.tr('new_today')} ${a.newUsersToday}', '${context.tr('new_month')} ${a.newUsersThisMonth}'),
-          const SizedBox(height: 16),
-          Text(context.tr('product_analytics'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          _statRow(context.tr('total_products'), '${a.totalProducts}', '${context.tr('active_label')} ${a.activeProducts}', '${context.tr('inactive_label')} ${a.inactiveProducts}'),
-          const SizedBox(height: 16),
-          Text(context.tr('revenue'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            context.tr('user_analytics'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           _statRow(
-            context.tr('total_revenue'), 'TZS ${a.totalRevenue.toStringAsFixed(0)}',
-            'Today: TZS ${a.revenueToday.toStringAsFixed(0)}',
-            'Month: TZS ${a.revenueThisMonth.toStringAsFixed(0)}',
+            context.tr('total_users'),
+            '${a.totalUsers}',
+            '${context.tr('new_today')} ${a.newUsersToday}',
+            '${context.tr('new_month')} ${a.newUsersThisMonth}',
+          ),
+          const SizedBox(height: 16),
+          Text(
+            context.tr('product_analytics'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _statRow(
+            context.tr('total_products'),
+            '${a.totalProducts}',
+            '${context.tr('active_label')} ${a.activeProducts}',
+            '${context.tr('inactive_label')} ${a.inactiveProducts}',
+          ),
+          const SizedBox(height: 16),
+          Text(
+            context.tr('revenue'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _statRow(
+            context.tr('total_revenue'),
+            'TZS ${a.totalRevenue.toStringAsFixed(0)}',
+            '${context.tr('today')}: TZS ${a.revenueToday.toStringAsFixed(0)}',
+            '${context.tr('this_month')}: TZS ${a.revenueThisMonth.toStringAsFixed(0)}',
           ),
           const SizedBox(height: 20),
-          Text(context.tr('category_distribution'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            context.tr('category_distribution'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           _buildCategoryList(a.productsByCategory, a.totalProducts),
           const SizedBox(height: 20),
-          Text(context.tr('revenue_trend_7_days'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            context.tr('revenue_trend_7_days'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           _buildBarChart(
-            a.revenueOverTime.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
+            a.revenueOverTime
+                .map((m) => BarEntry(m.date, m.count.toDouble()))
+                .toList(),
             Theme.of(context).colorScheme.primary,
             (v) => 'TZS $v',
           ),
           const SizedBox(height: 20),
-          Text(context.tr('new_users_7_days'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            context.tr('new_users_7_days'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           _buildBarChart(
-            a.userGrowth.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
+            a.userGrowth
+                .map((m) => BarEntry(m.date, m.count.toDouble()))
+                .toList(),
             Theme.of(context).colorScheme.secondary,
             (v) => '$v',
+          ),
+          const SizedBox(height: 24),
+
+          // ── Active Users (Real-Time) ──
+          Text(
+            context.tr('active_users_realtime'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _timeStatRow(
+                    cs,
+                    context.tr('per_second'),
+                    '${a.activeUserCounts.perSecond}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    context.tr('per_minute'),
+                    '${a.activeUserCounts.perMinute}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(cs, context.tr('per_hour'), '${a.activeUserCounts.perHour}'),
+                  const Divider(height: 20),
+                  _timeStatRow(cs, context.tr('today'), '${a.activeUserCounts.perDay}'),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    context.tr('this_month'),
+                    '${a.activeUserCounts.perMonth}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    context.tr('this_year'),
+                    '${a.activeUserCounts.perYear}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    context.tr('all_time'),
+                    '${a.activeUserCounts.allTime}',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Location Distribution ──
+          Text(
+            context.tr('user_locations'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _buildDistributionList(
+            a.locationDistribution,
+            a.totalUsers,
+            Icons.location_on,
+            cs.primary,
+          ),
+          const SizedBox(height: 24),
+
+          // ── Age Distribution ──
+          Text(
+            context.tr('age_breakdown'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _buildDistributionList(
+            a.ageDistribution,
+            a.ageDistribution.values.fold(0, (a, b) => a + b),
+            Icons.people,
+            cs.secondary,
           ),
           const SizedBox(height: 20),
         ],
@@ -1017,9 +1527,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(mainValue, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text(
+                    mainValue,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1038,8 +1560,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Widget _buildCategoryList(Map<String, int> catMap, int total) {
-    if (catMap.isEmpty) return Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(context.tr('no_products'))));
-    final sorted = catMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    if (catMap.isEmpty)
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(context.tr('no_products')),
+        ),
+      );
+    final sorted = catMap.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1050,19 +1579,126 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  SizedBox(width: 120, child: Text(e.key, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
+                  SizedBox(
+                    width: 120,
+                    child: Text(
+                      e.key,
+                      style: const TextStyle(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   Expanded(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: e.value / total,
-                        backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.12),
                         minHeight: 8,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(width: 40, child: Text('$pct%', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                  SizedBox(
+                    width: 40,
+                    child: Text(
+                      '$pct%',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _timeStatRow(ColorScheme cs, String label, String value) {
+    return Row(
+      children: [
+        Icon(Icons.circle, size: 8, color: cs.primary),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurface)),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: cs.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDistributionList(
+    Map<String, int> data,
+    int total,
+    IconData icon,
+    Color color,
+  ) {
+    if (data.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            context.tr('no_data'),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+    final sorted = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: sorted.map((e) {
+            final pct = total > 0 ? (e.value / total * 100) : 0.0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(icon, size: 16, color: color.withValues(alpha: 0.7)),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      e.key,
+                      style: const TextStyle(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: total > 0 ? e.value / total : 0,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.12),
+                        color: color,
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 40,
+                    child: Text(
+                      '${pct.toStringAsFixed(1)}%',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -1080,45 +1716,86 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         Padding(
           padding: const EdgeInsets.all(8),
           child: TextField(
-            decoration: InputDecoration(hintText: context.tr('search_users'), prefixIcon: const Icon(Icons.search), border: const OutlineInputBorder()),
-            onChanged: (q) => setState(() => _userSearchQuery = q.toLowerCase()),
+            decoration: InputDecoration(
+              hintText: context.tr('search_users'),
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (q) =>
+                setState(() => _userSearchQuery = q.toLowerCase()),
           ),
         ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadUsers,
             child: ListView.builder(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 8,
+              ),
               itemCount: _users.where((u) {
-                final name = (u['displayName'] ?? u['email'] ?? '').toString().toLowerCase();
+                final name = (u['displayName'] ?? u['email'] ?? '')
+                    .toString()
+                    .toLowerCase();
                 final phone = (u['phone'] ?? '').toString().toLowerCase();
-                return name.contains(_userSearchQuery) || phone.contains(_userSearchQuery);
+                return name.contains(_userSearchQuery) ||
+                    phone.contains(_userSearchQuery);
               }).length,
               itemBuilder: (_, i) {
                 final filtered = _users.where((u) {
-                  final name = (u['displayName'] ?? u['email'] ?? '').toString().toLowerCase();
+                  final name = (u['displayName'] ?? u['email'] ?? '')
+                      .toString()
+                      .toLowerCase();
                   final phone = (u['phone'] ?? '').toString().toLowerCase();
-                  return name.contains(_userSearchQuery) || phone.contains(_userSearchQuery);
+                  return name.contains(_userSearchQuery) ||
+                      phone.contains(_userSearchQuery);
                 }).toList();
                 final u = filtered[i];
-                final name = u['displayName'] ?? u['email'] ?? context.tr('unknown');
+                final name =
+                    u['displayName'] ?? u['email'] ?? context.tr('unknown');
                 final suspended = u['isSuspended'] == true;
                 final phone = u['phone'] ?? '';
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: suspended ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
-                      child: Text(name.toString()[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.surface)),
+                      backgroundColor: suspended
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.primary,
+                      child: Text(
+                        name.toString()[0].toUpperCase(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.surface,
+                        ),
+                      ),
                     ),
-                    title: Text('$name${suspended ? ' (Suspended)' : ''}'),
+                    onTap: () => context.push('${AppRoutes.adminUserDetail}/${u['uid']}'),
+                    title: Text('$name${suspended ? context.tr('suspended_badge') : ''}'),
                     subtitle: Text(phone),
                     trailing: PopupMenuButton<String>(
                       onSelected: (v) => _updateUser(u['uid'] as String, v),
                       itemBuilder: (_) => [
-                        PopupMenuItem(value: 'toggle_admin', child: Text(context.tr('toggle_admin'))),
-                        PopupMenuItem(value: suspended ? 'unsuspend' : 'suspend', child: Text(suspended ? context.tr('unsuspend') : context.tr('suspend'))),
-                        PopupMenuItem(value: 'full_delete', child: Text(context.tr('full_delete'), style: const TextStyle(color: Colors.red))),
+                        PopupMenuItem(
+                          value: 'toggle_admin',
+                          child: Text(context.tr('toggle_admin')),
+                        ),
+                        PopupMenuItem(
+                          value: suspended ? 'unsuspend' : 'suspend',
+                          child: Text(
+                            suspended
+                                ? context.tr('unsuspend')
+                                : context.tr('suspend'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'full_delete',
+                          child: Text(
+                            context.tr('full_delete'),
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1146,8 +1823,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             title: Text(context.tr('delete_user_forever')),
             content: Text(context.tr('delete_user_forever_confirm')),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('delete_forever'), style: const TextStyle(color: Colors.red))),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.tr('cancel')),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(
+                  context.tr('delete_forever'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
             ],
           ),
         );
@@ -1157,11 +1843,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           headers: authHeaders,
         );
         if (resp.statusCode != 200) {
-          throw Exception(jsonDecode(resp.body)['error'] ?? context.tr('error'));
+          throw Exception(
+            jsonDecode(resp.body)['error'] ?? context.tr('error'),
+          );
         }
         _loadUsers();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('user_permanently_deleted'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('user_permanently_deleted'))),
+          );
         }
         return;
       }
@@ -1180,17 +1870,138 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         body: jsonEncode({'updates': body}),
       );
       if (resp.statusCode != 200) {
-        throw Exception(jsonDecode(resp.body)['error'] ?? 'Update failed');
+        throw Exception(jsonDecode(resp.body)['error'] ?? context.tr('update_failed'));
       }
       _loadUsers();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('user_updated').replaceAll('{action}', action))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr('user_updated').replaceAll('{action}', action),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
+  }
+
+  // ─── VERIFICATION (KYC) TAB ──────────────────────────────────
+  Widget _buildVerificationTab() {
+    final cs = Theme.of(context).colorScheme;
+    return RefreshIndicator(
+      onRefresh: _loadExceptions,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Icon(Icons.verified_user, color: cs.primary),
+              const SizedBox(width: 8),
+              Text(
+                context.tr('pending_kyc'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _pendingKycUsers.isNotEmpty ? cs.secondary.withValues(alpha: 0.12) : cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  // "?" not 0: a failed load is not an empty queue.
+                  _kycQueueError != null ? '?' : '${_pendingKycUsers.length}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: _pendingKycUsers.isNotEmpty ? cs.secondary : cs.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_loadingKyc)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: GoogleLoading()))
+          else if (_kycQueueError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  children: [
+                    Icon(Icons.cloud_off_outlined, size: 64, color: cs.error.withValues(alpha: 0.6)),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('kyc_queue_unavailable'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _loadPendingKyc,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(context.tr('retry')),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_pendingKycUsers.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 64, color: cs.primary.withValues(alpha: 0.5)),
+                    const SizedBox(height: 16),
+                    Text(context.tr('no_pending_kyc'), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
+                  ],
+                ),
+              ),
+            )
+          else
+            ..._pendingKycUsers.map((u) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildKycCard(u, cs),
+            )),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.verified_user, size: 18),
+              label: Text(context.tr('open_full_kyc_management')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => context.push(AppRoutes.adminKyc),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: Text(context.tr('send_broadcast')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => context.push(AppRoutes.adminBroadcast),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ─── PRODUCTS TAB ─────────────────────────────────────────────
@@ -1213,20 +2024,60 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  width: 48, height: 48, color: Theme.of(context).colorScheme.outlineVariant,
+                  width: 48,
+                  height: 48,
+                  color: Theme.of(context).colorScheme.outlineVariant,
                   child: p['images'] != null && (p['images'] as List).isNotEmpty
-                      ? CachedNetworkImage(imageUrl: (p['images'] as List).first, fit: BoxFit.cover)
-                      : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                      ? ProductCachedImage(
+                          url: (p['images'] as List).first,
+                          fit: BoxFit.cover,
+                        )
+                      : Icon(
+                          Icons.image,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
                 ),
               ),
               title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('$seller — TZS $price${!active ? context.tr('hidden') : ''}${featured ? ' ⭐' : ''}'),
+              subtitle: Text(
+                '$seller — TZS $price${!active ? context.tr('hidden') : ''}${featured ? ' ⭐' : ''}',
+              ),
               trailing: PopupMenuButton<String>(
-                onSelected: (v) => _updateProduct(p['id'] as String, v),
+                onSelected: (v) {
+                  if (v == 'feature') {
+                    _showFeatureDurationDialog(p['id'] as String);
+                  } else {
+                    _updateProduct(p['id'] as String, v);
+                  }
+                },
                 itemBuilder: (_) => [
-                  PopupMenuItem(value: active ? 'deactivate' : 'activate', child: Text(active ? context.tr('deactivate') : context.tr('activate'))),
-                  PopupMenuItem(value: featured ? 'unfeature' : 'feature', child: Text(featured ? context.tr('remove_featured') : context.tr('mark_featured'))),
-                  PopupMenuItem(value: 'delete', child: Text(context.tr('delete'), style: TextStyle(color: Theme.of(context).colorScheme.error))),
+                  PopupMenuItem(
+                    value: active ? 'deactivate' : 'activate',
+                    child: Text(
+                      active
+                          ? context.tr('deactivate')
+                          : context.tr('activate'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: featured ? 'unfeature' : 'feature',
+                    child: Text(
+                      featured
+                          ? context.tr('remove_featured')
+                          : context.tr('mark_featured'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(
+                      context.tr('delete'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1234,6 +2085,72 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         },
       ),
     );
+  }
+
+  void _showFeatureDurationDialog(String productId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('set_featured_duration')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(context.tr('days_3')),
+              subtitle: Text(context.tr('featured_for_days_3')),
+              leading: const Icon(Icons.timer_outlined),
+              onTap: () {
+                Navigator.pop(ctx);
+                _setFeatured(productId, 3);
+              },
+            ),
+            ListTile(
+              title: Text(context.tr('days_7')),
+              subtitle: Text(context.tr('featured_for_days_7')),
+              leading: const Icon(Icons.timer_outlined),
+              onTap: () {
+                Navigator.pop(ctx);
+                _setFeatured(productId, 7);
+              },
+            ),
+            ListTile(
+              title: Text(context.tr('days_30')),
+              subtitle: Text(context.tr('featured_for_days_30')),
+              leading: const Icon(Icons.timer_outlined),
+              onTap: () {
+                Navigator.pop(ctx);
+                _setFeatured(productId, 30);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setFeatured(String productId, int days) async {
+    try {
+      final now = DateTime.now();
+      await FirebaseFirestore.instance.collection('products').doc(productId).update({
+        'isFeatured': true,
+        'featuredUntil': Timestamp.fromDate(now.add(Duration(days: days))),
+      });
+      _loadProducts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('product_featured_for_days').replaceAll('{days}', '$days'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))),
+        );
+      }
+    }
   }
 
   Future<void> _updateProduct(String id, String action) async {
@@ -1245,8 +2162,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             title: Text(context.tr('delete_product')),
             content: Text(context.tr('delete_confirm')),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('delete'), style: TextStyle(color: Theme.of(context).colorScheme.error))),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.tr('cancel')),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(
+                  context.tr('delete'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
             ],
           ),
         );
@@ -1274,18 +2200,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         return;
       }
       Map<String, dynamic> body = {};
-      if (action == 'activate') { body = {'isActive': true}; }
-      else if (action == 'deactivate') { body = {'isActive': false}; }
-      else if (action == 'feature') { body = {'isFeatured': true, 'featuredUntil': Timestamp.fromDate(DateTime.now().add(const Duration(days: 30)))}; }
-      else if (action == 'unfeature') { body = {'isFeatured': false, 'featuredUntil': null}; }
-      await FirebaseFirestore.instance.collection('products').doc(id).update(body);
+      if (action == 'activate') {
+        body = {'isActive': true};
+      } else if (action == 'deactivate') {
+        body = {'isActive': false};
+      } else if (action == 'unfeature') {
+        body = {'isFeatured': false, 'featuredUntil': null};
+      }
+      await FirebaseFirestore.instance
+          .collection('products')
+          .doc(id)
+          .update(body);
       _loadProducts();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('product_updated').replaceAll('{action}', action))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr('product_updated').replaceAll('{action}', action),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -1295,9 +2235,123 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return const AdminReportsScreen(embedded: true);
   }
 
-  // ─── PAYOUT TAB ───────────────────────────────────────────────
-  Widget _buildPayoutTab() {
-    return const AdminWalletScreen(embedded: true);
+  // ─── TRANSACTIONS TAB ───────────────────────────────────────
+  Widget _buildTransactionsTab() {
+    return const AdminTransactionsTab();
+  }
+
+  Widget _buildClickPesaTab() {
+    return const Center(child: Text('ClickPesa admin (not available)'));
+  }
+
+  Widget _buildChatsTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('chat_rooms')
+          .orderBy('last_timestamp', descending: true)
+          .limit(100)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const GoogleLoadingPage();
+        }
+        if (snap.hasError) {
+          return Center(child: Text(context.tr('imeshindwa').replaceAll('{0}', '${snap.error}')));
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              context.tr('no_chat_rooms_yet'),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(12),
+          itemCount: docs.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final doc = docs[index];
+            final data = doc.data();
+            final isAi = data['is_ai_dalali_room'] == true;
+            final participants = List<String>.from(data['participants'] ?? []);
+            final buyerId = data['buyer_id'] ?? '-';
+            final sellerId = data['seller_id'] ?? '-';
+            final productTitle = data['product_title'] as String?;
+            final unreadBuyer = data['unread_count_buyer'] ?? 0;
+            final unreadSeller = data['unread_count_seller'] ?? 0;
+            final lastMessage = data['last_message']?.toString() ?? '';
+            final ts = data['last_timestamp'];
+            final date = ts is Timestamp
+                ? DateFormat('dd/MM HH:mm').format(ts.toDate())
+                : '-';
+            return Card(
+              child: ExpansionTile(
+                leading: CircleAvatar(
+                  backgroundColor: isAi
+                      ? Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.12)
+                      : Theme.of(context).colorScheme.primaryContainer,
+                  child: Icon(isAi ? Icons.smart_toy : Icons.chat),
+                ),
+                title: Text(
+                  isAi ? context.tr('ai_dalali_name') : doc.id,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  lastMessage.isEmpty ? context.tr('no_messages') : lastMessage,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(date, style: const TextStyle(fontSize: 11)),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.tr('buyer_seller_unread_counts').replaceAll('{buyer}', '$unreadBuyer').replaceAll('{seller}', '$unreadSeller'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                children: [
+                  _adminDetailRow(context.tr('customer'), buyerId.toString()),
+                  _adminDetailRow(context.tr('seller_ai_label'), sellerId.toString()),
+                  _adminDetailRow(context.tr('participants_label'), participants.join(', ')),
+                  if (productTitle?.isNotEmpty == true)
+                    _adminDetailRow(context.tr('product'), productTitle!),
+                  _adminDetailRow(context.tr('room_id_label'), doc.id),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _adminDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(child: SelectableText(value)),
+        ],
+      ),
+    );
   }
 
   // ─── FRAUD TAB ────────────────────────────────────────────────
@@ -1310,44 +2364,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             child: Row(
               children: [
                 _fraudStatChip(context.tr('total'), _fraudStats['total'] ?? 0),
-                _fraudStatChip(context.tr('open'), _fraudStats['unresolved'] ?? 0),
-                _fraudStatChip(context.tr('high'), _fraudStats['high'] ?? 0, isHigh: true),
+                _fraudStatChip(
+                  context.tr('open'),
+                  _fraudStats['unresolved'] ?? 0,
+                ),
+                _fraudStatChip(
+                  context.tr('high'),
+                  _fraudStats['high'] ?? 0,
+                  isHigh: true,
+                ),
               ],
             ),
           ),
         Expanded(
           child: StreamBuilder<List<FraudAlert>>(
-      stream: _fraudService.getFraudAlerts(resolved: false),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) return const GoogleLoadingPage();
-        final alerts = snap.data ?? [];
-        if (alerts.isEmpty) {
-          return Center(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.security, size: 64, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
-                  const SizedBox(height: 16),
-                  Text(context.tr('no_active_fraud_alerts'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            stream: _fraudService.getFraudAlerts(resolved: false),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting)
+                return const GoogleLoadingPage();
+              final alerts = snap.data ?? [];
+              if (alerts.isEmpty) {
+                return Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.security,
+                          size: 64,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.7),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          context.tr('no_active_fraud_alerts'),
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
 
-                  Text(context.tr('test_mode_status').replaceAll('{status}', _fraudService.isTestMode ? 'ON' : 'OFF'),
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
-                ],
-              ),
-            ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: _loadFraudStats,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: alerts.length,
-            itemBuilder: (_, i) => _buildFraudCard(alerts[i]),
+                        Text(
+                          context
+                              .tr('test_mode_status')
+                              .replaceAll(
+                                '{status}',
+                                _fraudService.isTestMode ? 'ON' : 'OFF',
+                              ),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: _loadFraudStats,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: alerts.length,
+                  itemBuilder: (_, i) => _buildFraudCard(alerts[i]),
+                ),
+              );
+            },
           ),
-        );
-      },
-    ),
         ),
       ],
     );
@@ -1365,8 +2453,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ),
         child: Column(
           children: [
-            Text('$value', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 18)),
-            Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            Text(
+              '$value',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontSize: 18,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
           ],
         ),
       ),
@@ -1377,8 +2475,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final severityColor = alert.severity == 'high'
         ? Theme.of(context).colorScheme.error
         : alert.severity == 'medium'
-            ? Theme.of(context).colorScheme.tertiary
-            : Theme.of(context).colorScheme.tertiary;
+        ? Theme.of(context).colorScheme.tertiary
+        : Theme.of(context).colorScheme.tertiary;
     final dateStr = DateFormat('MMM dd, HH:mm').format(alert.detectedAt);
 
     return Card(
@@ -1388,8 +2486,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           backgroundColor: severityColor.withValues(alpha: 0.10),
           child: Icon(Icons.warning_amber, color: severityColor, size: 22),
         ),
-        title: Text(alert.sellerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text('${alert.description}\n$dateStr', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        title: Text(
+          alert.sellerName,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        subtitle: Text(
+          '${alert.description}\n$dateStr',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         trailing: TextButton(
           onPressed: () => _fraudService.markResolved(alert.id),
           child: Text(context.tr('dismiss'), style: TextStyle(fontSize: 12)),
@@ -1398,4 +2505,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
+  /// One row of the server-reported `systemErrors` collection. Every field is
+  /// read defensively — the docs are written by the backend.
+  Widget _buildSystemErrorCard(Map<String, dynamic> e, ColorScheme cs) {
+    final dateStr = _formatTimestamp(e['lastSeen'] ?? e['timestamp']);
+    final severity = e['severity']?.toString() ?? 'error';
+    final feature = e['feature']?.toString() ?? context.tr('unknown');
+    final errId = e['errorId']?.toString() ?? e['id']?.toString() ?? '';
+    final count = e['occurrenceCount']?.toString() ?? '1';
+    final msg = e['errorMessage']?.toString() ?? '';
+    final tech = e['sanitizedTechnicalError']?.toString() ?? '';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ExpansionTile(
+        title: Text('​$errId • $severity • $feature'),
+        subtitle: Text('$dateStr • ${context.tr('occurrences')}: $count'),
+        childrenPadding: const EdgeInsets.all(12),
+        children: [
+          if (msg.isNotEmpty)
+            ListTile(
+              title: Text(context.tr('user_message')),
+              subtitle: Text(msg),
+            ),
+          if (tech.isNotEmpty)
+            ListTile(
+              title: Text(context.tr('technical_details')),
+              subtitle: Text(tech, style: const TextStyle(fontSize: 11)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── BANNER MANAGEMENT TAB ───────────────────────────────────────
+  Widget _buildBannerManagementTab() {
+    return const AdminBannerManagementScreen();
+  }
 }

@@ -1,0 +1,13 @@
+﻿Doctor summary (to see all details, run flutter doctor -v):
+[√] Flutter (Channel stable, 3.41.9, on Microsoft Windows [Version 10.0.26200.9550], locale en-TZ)
+[√] Windows Version (Windows 11 or higher, 25H2, 2009)
+[!] Android toolchain - develop for Android devices (Android SDK version 36.1.0)
+    ! Some Android licenses not accepted. To resolve this, run: flutter doctor --android-licenses
+[√] Chrome - develop for the web
+[!] Visual Studio - develop Windows apps (Visual Studio Build Tools 2026 18.5.1)
+    X The current Visual Studio installation is incomplete.
+      Please use Visual Studio Installer to complete the installation or reinstall Visual Studio.
+[√] Connected device (3 available)
+[√] Network resources
+
+! Doctor found issues in 2 categories.

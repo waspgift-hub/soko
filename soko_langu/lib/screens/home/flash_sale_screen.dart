@@ -6,11 +6,12 @@ import '../../services/flash_sale_service.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/ad_banner.dart';
+import '../../widgets/banners/campaign_banner_slot.dart';
+import '../../models/banner_model.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/chat_utils.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../services/product_service.dart';
 
 class FlashSaleScreen extends StatefulWidget {
@@ -20,66 +21,128 @@ class FlashSaleScreen extends StatefulWidget {
   State<FlashSaleScreen> createState() => _FlashSaleScreenState();
 }
 
-class _FlashSaleScreenState extends State<FlashSaleScreen>
-    with WidgetsBindingObserver {
+class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingObserver {
   final FlashSaleService _service = FlashSaleService();
   Timer? _timer;
-  int _refreshKey = 0;
+
+  // The sale LIST is subscribed once and held in state.
+  //
+  // Previously `stream:` was built inline inside build() and keyed on
+  // `_refreshKey`, while a 1 Hz timer drove setState. So the screen opened a
+  // fresh Firestore listener â€” a full re-read of the flash_sales collection â€”
+  // once every second, for as long as it was on screen. That is the single most
+  // expensive realtime pattern in the app.
+  //
+  // Now: one subscription for the list; the 1 Hz timer only repaints the
+  // countdown text. A resume re-subscribes deliberately, and the active-sale
+  // window is re-evaluated in place rather than by re-reading the collection.
+  StreamSubscription<List<FlashSale>>? _sub;
+  List<FlashSale>? _sales;
+  Object? _error;
+  bool _loading = true;
+  DateTime _now = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _now = DateTime.now();
+    _subscribe();
+    // 1 Hz for the countdown only. No network, no subscription churn.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
     });
+  }
+
+  void _subscribe() {
+    _sub?.cancel();
+    _sub = _service
+        .getActiveFlashSalesAtNow(_now)
+        .listen(
+          (sales) {
+            if (!mounted) return;
+            setState(() {
+              _sales = sales;
+              _loading = false;
+              _error = null;
+            });
+          },
+          onError: (e) {
+            if (!mounted) return;
+            setState(() {
+              _error = e;
+              _loading = false;
+            });
+          },
+        );
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _sub?.cancel();
+    _sub = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A flash sale can start or end while the app was backgrounded, so the
+    // active set is genuinely stale on resume. Re-subscribing once here is
+    // correct; doing it every second was not.
     if (state == AppLifecycleState.resumed && mounted) {
-      setState(() => _refreshKey++);
+      setState(() => _now = DateTime.now());
+      _subscribe();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(child: GoogleLoading(size: 32)),
+      );
+    }
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 48, color: cs.outline),
+              const SizedBox(height: 12),
+              Text(context.tr('loading_error')),
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: _subscribe, child: Text(context.tr('retry', 'Retry'))),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLow,
-      body: StreamBuilder<List<FlashSale>>(
-        key: ValueKey('flash_sale_$_refreshKey'),
-        stream: _service.getActiveFlashSalesAtNow(DateTime.now()),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: GoogleLoading(size: 32));
-          }
-          final sales = snapshot.data!;
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Builder(
+        builder: (context) {
+          final sales = _sales ?? const <FlashSale>[];
           if (sales.isEmpty) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.local_fire_department,
-                    size: 64,
-                    color: cs.outline,
-                  ),
+                  Icon(Icons.local_fire_department, size: 64, color: cs.outline),
                   const SizedBox(height: 16),
                   Text(
-                    'Hakuna Flash Sale kwa sasa',
+                    context.tr('no_flash_sales'),
                     style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Subiri flash sale inayofuata!',
+                    context.tr('wait_next_flash_sale'),
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                   ),
                 ],
@@ -88,6 +151,9 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
           }
           return CustomScrollView(
             slivers: [
+              const SliverToBoxAdapter(
+                child: CampaignBannerSlot(placement: BannerPlacement.flashSalePage),
+              ),
               _buildHeroBanner(sales.length),
               SliverToBoxAdapter(
                 child: Padding(
@@ -101,7 +167,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${sales.length} Flash Deals',
+                        '${sales.length} ${context.tr('flash_deals')}',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -110,7 +176,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       ),
                       const Spacer(),
                       Text(
-                        'Inaisha muda wowote',
+                        context.tr('ends_anytime'),
                         style: TextStyle(
                           fontSize: 11,
                           color: cs.onSurfaceVariant.withValues(alpha: 0.6),
@@ -131,7 +197,6 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
           );
         },
       ),
-      bottomNavigationBar: const AdBanner(),
     );
   }
 
@@ -156,21 +221,19 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                 Row(
                   children: [
                     IconButton(
+                      tooltip: context.tr('back'),
                       icon: Icon(Icons.arrow_back, color: cs.surface),
                       onPressed: () => context.pop(),
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: cs.tertiary.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        '$saleCount Deals',
+                        '$saleCount ${context.tr('deals')}',
                         style: TextStyle(
                           color: cs.surface,
                           fontSize: 10,
@@ -192,16 +255,13 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: cs.tertiary.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                'SOKO LANGU',
+                                context.tr('soko_langu_badge'),
                                 style: TextStyle(
                                   color: cs.tertiary,
                                   fontSize: 9,
@@ -212,7 +272,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'FLASH SALE',
+                              context.tr('flash_sale_label'),
                               style: TextStyle(
                                 color: cs.surface,
                                 fontSize: 26,
@@ -222,7 +282,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'BIG DISCOUNTS · LIMITED OFFERS',
+                              context.tr('banner_tagline'),
                               style: TextStyle(
                                 color: cs.surface.withValues(alpha: 0.7),
                                 fontSize: 10,
@@ -232,14 +292,10 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                Icon(
-                                  Icons.local_fire_department,
-                                  color: cs.surface,
-                                  size: 12,
-                                ),
+                                Icon(Icons.local_fire_department, color: cs.surface, size: 12),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '$saleCount deals live',
+                                  '$saleCount ${context.tr('deals_live')}',
                                   style: TextStyle(
                                     color: cs.surface.withValues(alpha: 0.8),
                                     fontSize: 10,
@@ -274,7 +330,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '$saleCount Active',
+                              '$saleCount ${context.tr('active')}',
                               style: TextStyle(
                                 color: cs.surface.withValues(alpha: 0.8),
                                 fontSize: 10,
@@ -296,7 +352,9 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
 
   Widget _buildSaleCard(FlashSale sale) {
     final cs = Theme.of(context).colorScheme;
-    final remaining = sale.endTime.difference(DateTime.now());
+    // Reads the ticker's `_now` so the countdown repaints from the single 1 Hz
+    // setState rather than each card calling DateTime.now() independently.
+    final remaining = sale.endTime.difference(_now);
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
     final secs = remaining.inSeconds.remainder(60);
@@ -307,9 +365,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: cs.tertiary.withValues(alpha: 0.5).withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: cs.tertiary.withValues(alpha: 0.5).withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
             color: cs.primary.withValues(alpha: 0.85).withValues(alpha: 0.06),
@@ -336,30 +392,23 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                 Icon(Icons.timer, color: cs.surface, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  '${hours}h ${minutes}m ${secs}s',
-                  style: TextStyle(
-                    color: cs.surface,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  context
+                      .tr('duration_format')
+                      .replaceAll('{h}', '$hours')
+                      .replaceAll('{m}', '$minutes')
+                      .replaceAll('{s}', '$secs'),
+                  style: TextStyle(color: cs.surface, fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
                     color: cs.surface.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '-${sale.discountPercent.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      color: cs.surface,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: cs.surface, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -372,25 +421,11 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: sale.productImage,
+                  child: ProductCachedImage(
+                    url: sale.productImage,
                     width: 90,
                     height: 90,
                     fit: BoxFit.cover,
-                    placeholder: (_, _) => Container(
-                      width: 90,
-                      height: 90,
-                      color: cs.outlineVariant,
-                      child: const Center(
-                        child: GoogleLoading(size: 20, strokeWidth: 2),
-                      ),
-                    ),
-                    errorWidget: (_, _, _) => Container(
-                      width: 90,
-                      height: 90,
-                      color: cs.outlineVariant,
-                      child: Icon(Icons.image, color: cs.onSurfaceVariant),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -400,10 +435,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                     children: [
                       Text(
                         sale.productName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -449,10 +481,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             const SizedBox(width: 4),
                             Text(
                               sale.location,
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                             ),
                           ],
                         ),
@@ -478,13 +507,11 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       }
                     },
                     icon: const Icon(Icons.visibility, size: 18),
-                    label: const Text('Angalia'),
+                    label: Text(context.tr('view')),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: cs.primary,
                       side: BorderSide(color: cs.primary),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -500,13 +527,11 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       productPrice: sale.originalPrice,
                     ),
                     icon: const Icon(Icons.chat_outlined, size: 18),
-                    label: Text('Chat'),
+                    label: Text(context.tr('chat')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.whatsappGreen,
                       foregroundColor: cs.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),

@@ -1,9 +1,141 @@
 class ApiConfig {
-  static const String baseUrl = 'https://soko-langu-server-production.up.railway.app';
+  // Edge-cached via the Cloudflare Worker (soko-api-edge); the Render origin
+  // is only hit on a worker cache miss.
+  static const String baseUrl = 'https://api.sokovibe.co.tz';
+
+  /// Backend v2 (Trust-Commerce) base: all new endpoints live under /api/v1.
+  /// Use v1('/auth/send-otp') instead of '$baseUrl/api/auth/send-otp'.
+  static String v1(String path) => '$baseUrl/api/v1$path';
+
+  /// Longest `q` the v1 search/catalog routes accept (server validates 100).
+  ///
+  /// Search text is sent in the URL, and proxies reject oversized URIs with
+  /// 414/431 before the request reaches Express. Callers may pass a whole AI
+  /// prompt, so every GET query is clamped here instead of trusting the input.
+  static const int maxSearchQueryLength = 100;
+
+  /// Trims and truncates [query] to [maxSearchQueryLength] UTF-16 units
+  /// without splitting a surrogate pair.
+  static String clampSearchQuery(String query) {
+    final trimmed = query.trim();
+    if (trimmed.length <= maxSearchQueryLength) return trimmed;
+    final buffer = StringBuffer();
+    var units = 0;
+    for (final rune in trimmed.runes) {
+      final width = rune > 0xFFFF ? 2 : 1;
+      if (units + width > maxSearchQueryLength) break;
+      buffer.writeCharCode(rune);
+      units += width;
+    }
+    return buffer.toString().trimRight();
+  }
+
+  /// Phase C bridge switch: when true, the catalog feed reads from the v2 API
+  /// (/api/v1/products, Postgres) and falls back to Firestore. Flipped true on
+  /// 2026-09-17 after the Firestore→Postgres product backfill ran in production
+  /// (7 products live); repository callers still fall back to Firestore/cache.
+  static const bool kUseProductsApi = true;
+
+  /// Phase B/C order bridge switch: when true, lifecycle mutations go through
+  /// [OrderApiClient] to /api/v1/orders (Postgres state machine) instead of the
+  /// legacy Firestore compat handlers. Flipped true after the escrow-orders
+  /// backfill (42 orders live), the seller-balance cutover, and the OTP release
+  /// path (handover issueOtp + verifyOtpAndComplete) shipped together with the
+  /// wallet flip. Cancel and dispute intentionally stay on legacy compat.
+  static const bool kUseOrdersApi = true;
+
+  /// Phase B/C wallet bridge switch: when true, seller withdrawal UIs read the
+  /// Postgres wallet (/api/v1/wallet) instead of legacy Firestore sellerBalance
+  /// payouts. Flipped true on the coordinated release flip: the seller-balance
+  /// cutover ran (0 eligible TZS in Firestore), ensureWallet guards settlement,
+  /// and withdrawals.phone_number exists in Postgres.
+  static const bool kUseWalletApi = true;
+
+  /// Phase B notifications bridge switch: when true, the in-app notification
+  /// center reads from /api/v1/notifications (Postgres) instead of Firestore.
+  /// Push delivery (OneSignal) is unchanged; only the persistent inbox migrates.
+  /// Flipped true after the 369-row notifications backfill landed in production.
+  static const bool kUseNotificationsApi = true;
+
+  /// Phase C trust bridge switch: when true, TrustPassportCard reads the seller
+  /// trust passport from /api/v1/trust/sellers/:id/passport (Postgres) instead
+  /// of the legacy Firestore compat endpoint /api/trust/passport/:id. The v1
+  /// endpoint resolves sellers by Firebase UID (SellerProfile.userId) as well
+  /// as by Postgres UUID, so app order-detail sellerId (a Firebase UID) works
+  /// unchanged. Flipped true after the product/order backfill + verification
+  /// flows went live in production.
+  static const bool kUseTrustApi = true;
+
+  /// Phase C search bridge switch: when true, the search screen's product
+  /// results are fetched from /api/v1/search/products (Postgres) first, with
+  /// the legacy /api/search/global-search + Firestore fallback intact.
+  /// Flipped true after the product backfill ran (Postgres catalog is live).
+  static const bool kUseSearchApi = true;
+
+  /// Phase D categories bridge switch: when true, the home category grid and
+  /// category pages resolve categories from /api/v1/products/categories
+  /// (Postgres, UUID ids) instead of the Firestore `categories` collection.
+  /// Flipped true after the 12-category seed landed — `kUseProductsApi` already
+  /// routes the category product lists through the catalog list API, which
+  /// resolves legacy category names to the Postgres uuid server-side.
+  static const bool kUseCategoriesApi = true;
+
+  /// Phase D reviews bridge switch: when true, review reads/writes go through
+  /// /api/v1/reviews (Postgres) instead of the Firestore `reviews` collection.
+  /// List reads become one-shot fetches (the v1 API is HTTP, not a stream);
+  /// writes upsert by (userId, productId), and "helpful" + seller replies route
+  /// to the API too. Flipped true after the product backfill (7 live) and the
+  /// 20-row reviews backfill (opaque legacy product ids survive both eras).
+  static const bool kUseReviewsApi = true;
+
+  /// Phase D KYC bridge switch: when true, the seller KYC submission and status
+  /// reads go through /api/v1/kyc (Postgres) instead of the Firestore
+  /// users/{uid}.kyc embedded doc. Flipped true after `prisma db push` created
+  /// kyc_applications in production and the 1 approved application was
+  /// backfilled; admin panel stays on legacy /api/admin/kyc/*.
+  static const bool kUseKycApi = true;
+
+  /// Phase F (R2/MEDIA) bridge switch: when true, product image/video uploads
+  /// go through `r2_media_service.dart` using the `/api/v1/media/upload-url`
+  /// presigned PUT flow (media bytes go straight to Cloudflare R2, no
+  /// Cloudinary credentials ever touch the client) with `r2PublicUrl` as the
+  /// public read base — mirroring the `CloudinaryService` API so callers swap
+  /// via one const. Now enabled after the fresh-start reset: buckets
+  /// (soko-vibe-{images,videos,thumbnails,backups}) exist and presigned PUT
+  /// generation is verified on the live R2 account. R2 env vars must be set
+  /// on the Render dashboard (both soko-langu-api and soko-langu-worker)
+  /// or uploads will 503 R2_NOT_CONFIGURED.
+  static const bool kUseMediaApi = true;
+
+  /// Public read origin for R2 media (server: `R2_PUBLIC_URL`), served by the
+  /// `soko-media` Worker which fronts all four buckets on this one hostname and
+  /// picks the bucket from the first path segment. Object keys are
+  /// `<kind>s/<ownerType>/<ownerId>/<uuid>.<ext>`, e.g.
+  /// `media.sokovibe.co.tz/images/product/<uid>/<uuid>.webp`.
+  static const String r2PublicUrl = 'https://media.sokovibe.co.tz';
+
+  /// Phase D user-profile bridge switch: when true, the current user's profile
+  /// read/write (/api/v1/users/me) and other users' public profiles
+  /// (/api/v1/users/public/:id) come from Postgres with Firestore as the
+  /// degraded fallback. Firestore stays the source for realtime presence
+  /// (lastActive/activeChatRoom streams), username search, and the direct
+  /// register/profile_setup doc writes until Phase D2.
+  static const bool kUseUsersApi = true;
+
+  /// Phase E comments bridge switch: when true, product comments (add/reply/
+  /// list/delete) go through /api/v1/products/:id/comments (Postgres,
+  /// Comment.targetId is VarChar so legacy opaque product ids resolve via
+  /// snapshot.legacyId) with Firestore as the degraded fallback. The live
+  /// stream becomes a short polling refresh so the widget API stays `Stream`.
+  static const bool kUseCommentsApi = true;
 
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 
-  /// Ads-specific flag — true = test ads, false = production AdMob
-  static const bool kAdsTestMode = true;
+  /// Ads-specific flag — false = production AdMob, true = test ads (dev only).
+  /// Keep in sync with [kIsTestMode]; a release build must not request test ads.
+  static const bool kAdsTestMode = false;
+
+  // OneSignal App ID from https://dashboard.onesignal.com
+  static const String oneSignalAppId = '2e50d6a7-de2f-4b74-af36-4f1b0b28a1b2';
 }

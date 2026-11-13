@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
+
+/// Customer support phone number. Change this when the real number is ready.
+const String kSupportPhone = '+255000000000';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -29,6 +35,13 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 title: context.tr('getting_started'),
                 subtitle: context.tr('getting_started_sub'),
                 children: [
+                  _contactActionTile(
+                    icon: Icons.school_outlined,
+                    title: context.tr('tutorials_title'),
+                    subtitle: context.tr('tutorials_help_sub'),
+                    onTap: () => context.push(AppRoutes.tutorials),
+                  ),
+                  const SizedBox(height: 12),
                   _helpTile(
                     title: context.tr('register_login'),
                     content: context.tr('help_register_login'),
@@ -66,10 +79,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     content: context.tr('help_seller_dashboard'),
                   ),
                   _helpTile(
-                    title: context.tr('boosting'),
-                    content: context.tr('help_boosting'),
-                  ),
-                  _helpTile(
                     title: context.tr('flash_sales'),
                     content: context.tr('help_flash_sales'),
                   ),
@@ -85,14 +94,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     title: context.tr('chat_feature'),
                     content: context.tr('help_chat'),
                   ),
-                  _helpTile(
-                    title: context.tr('audio_music'),
-                    content: context.tr('help_audio'),
-                  ),
-                  _helpTile(
-                    title: context.tr('youtube_music'),
-                    content: context.tr('help_youtube'),
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -101,6 +102,13 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 title: context.tr('account_verification'),
                 subtitle: context.tr('verification_sub'),
                 children: [
+                  _contactActionTile(
+                    icon: Icons.verified_user_outlined,
+                    title: context.tr('verification_center_title'),
+                    subtitle: context.tr('verification_center_subtitle'),
+                    onTap: () => context.push(AppRoutes.verificationCenter),
+                  ),
+                  const SizedBox(height: 12),
                   _helpTile(
                     title: context.tr('kyc'),
                     content: context.tr('help_kyc'),
@@ -120,6 +128,13 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   _helpTile(
                     title: context.tr('email'),
                     content: 'langusoko@gmail.com',
+                  ),
+                  const SizedBox(height: 4),
+                  _contactActionTile(
+                    icon: Icons.phone_rounded,
+                    title: context.tr('call_support'),
+                    subtitle: context.tr('support_hours_value'),
+                    onTap: () => _launchPhone(kSupportPhone),
                   ),
                 ],
               ),
@@ -226,5 +241,74 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
         ],
       ),
     );
+  }
+
+  Widget _contactActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.primary.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: cs.primary, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.phone_rounded, color: cs.primary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchPhone(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 }

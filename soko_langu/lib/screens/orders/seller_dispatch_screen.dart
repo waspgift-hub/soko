@@ -1,12 +1,21 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
+import '../../services/order_api.dart';
+import '../../utils/api_envelope.dart';
 import '../../extensions/context_tr.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/ds/ds.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/animations/soko_animated_illustration.dart';
 
+/// Seller flow after escrow: hela ikiwekwa escrow, seller anaweka gharama ya
+/// usafirishaji, kisha anaweka taarifa za kutuma mzigo (courier). Hatua zote
+/// mbili ziko kwenye screen hii kwa kila order.
 class SellerDispatchScreen extends StatefulWidget {
   const SellerDispatchScreen({super.key});
 
@@ -16,53 +25,154 @@ class SellerDispatchScreen extends StatefulWidget {
 
 class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   String? _dispatchingTxId;
-  final _trackingCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
-  String? _receiptUrl;
-  String? _photoUrl;
+  String? _settingCostTxId;
+  final Map<String, TextEditingController> _shippingCostCtrls = {};
+  final Map<String, TextEditingController> _courierNameCtrls = {};
+  final Map<String, TextEditingController> _trackingCtrls = {};
+  final Map<String, TextEditingController> _driverPhoneCtrls = {};
+  final Map<String, TextEditingController> _notesCtrls = {};
+  final Map<String, bool> _freeDelivery = {};
 
-  Future<void> _dispatchOrder(String txId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  // Memoised per seller. Built inline, this query re-opened a Firestore listener
+  // on every rebuild — and dispatch mutates several controllers at once, so each
+  // field edit rebuilt the screen and re-read the seller's whole transaction list.
+  String? _txStreamKey;
+  Stream<QuerySnapshot>? _txStream;
 
-    setState(() => _dispatchingTxId = txId);
-
-    try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'orderId': txId,
-          'userId': user.uid,
-          'trackingNumber': _trackingCtrl.text,
-          'receiptUrl': _receiptUrl ?? '',
-          'photoUrl': _photoUrl ?? '',
-          'note': _noteCtrl.text,
-        }),
-      );
-
-      final result = jsonDecode(resp.body);
-
-      if (resp.statusCode == 200 && result['success'] == true) {
-        _trackingCtrl.clear();
-        _noteCtrl.clear();
-        setState(() { _receiptUrl = null; _photoUrl = null; });
-        if (mounted) _showSuccess('Bidhaa imesafirishwa!');
-      } else {
-        if (mounted) _showError(result['error'] ?? 'Failed to dispatch');
-      }
-    } catch (e) {
-      if (mounted) _showError('Error: $e');
+  Stream<QuerySnapshot> _transactionsFor(String uid) {
+    if (_txStreamKey != uid) {
+      _txStreamKey = uid;
+      _txStream = FirebaseFirestore.instance
+          .collection('transactions')
+          .where('sellerId', isEqualTo: uid)
+          .snapshots();
     }
-
-    setState(() => _dispatchingTxId = null);
+    return _txStream!;
   }
 
   @override
   void dispose() {
-    _trackingCtrl.dispose();
-    _noteCtrl.dispose();
+    for (final c in _shippingCostCtrls.values) c.dispose();
+    for (final c in _courierNameCtrls.values) c.dispose();
+    for (final c in _trackingCtrls.values) c.dispose();
+    for (final c in _driverPhoneCtrls.values) c.dispose();
+    for (final c in _notesCtrls.values) c.dispose();
     super.dispose();
+  }
+
+  TextEditingController _shipCtrl(String txId) =>
+      _shippingCostCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _courierCtrl(String txId) =>
+      _courierNameCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _trackCtrl(String txId) =>
+      _trackingCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _phoneCtrl(String txId) =>
+      _driverPhoneCtrls.putIfAbsent(txId, () => TextEditingController());
+  TextEditingController _notesCtrl(String txId) =>
+      _notesCtrls.putIfAbsent(txId, () => TextEditingController());
+
+  void _toggleFreeDelivery(String txId, bool value) {
+    setState(() => _freeDelivery[txId] = value);
+    if (value) _shipCtrl(txId).clear();
+  }
+
+  Future<void> _setShippingCost(String txId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final free = _freeDelivery[txId] == true;
+    // Free delivery submits TZS 0; otherwise a positive cost is required.
+    final cost = free ? 0.0 : double.tryParse(_shipCtrl(txId).text.trim().replaceAll(',', ''));
+    if (cost == null || (!free && cost <= 0)) {
+      _showError(context.tr('enter_valid_shipping_cost'));
+      return;
+    }
+    setState(() => _settingCostTxId = txId);
+    HapticFeedback.lightImpact();
+    try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Quote runs the Postgres state machine (→ AWAITING_ESCROW_PAYMENT on
+        // NORMAL, mirrored to Firestore); the totals stay server-locked.
+        await OrderApiClient().submitShippingQuote(txId, amount: cost.round(), estimatedDays: 1);
+        _shipCtrl(txId).clear();
+        if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
+        return;
+      }
+
+      // Legacy engine path (updates totalAmount + notifies buyer); Shipping cost
+      // and totals are only ever written by the server, never the app directly.
+      final token = await user.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/set-shipping-cost'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'orderId': txId, 'shippingCost': cost}),
+      );
+      final env = ApiEnvelope.from(resp);
+      if (env.ok) {
+        _shipCtrl(txId).clear();
+        if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
+        return;
+      }
+      _showError(env.error ?? context.tr('dispatch_failed'));
+    } catch (e) {
+      if (mounted) _showError(context.trError(e));
+    } finally {
+      if (mounted) setState(() => _settingCostTxId = null);
+    }
+  }
+
+  Future<void> _dispatchOrder(String txId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final courier = _courierCtrl(txId).text.trim();
+    final tracking = _trackCtrl(txId).text.trim();
+    if (courier.isEmpty || tracking.isEmpty) {
+      _showError(context.tr('required'));
+      return;
+    }
+    setState(() => _dispatchingTxId = txId);
+    try {
+      if (ApiConfig.kUseOrdersApi) {
+        // Phase B/C: dispatch runs the Postgres state machine (IN_ESCROW →
+        // OTP_PENDING). The server's presentation mirror advances the Firestore
+        // doc, so the stream below hides the card on success. driverPhone/notes
+        // are not yet v1 fields — they keep working once the flag flips.
+        await OrderApiClient().dispatchOrder(txId, courierName: courier, trackingNumber: tracking);
+        _clearDispatchFields(txId);
+        if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
+        return;
+      }
+
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
+        body: jsonEncode({
+          'orderId': txId,
+          'userId': user.uid,
+          'courierName': courier,
+          'trackingNumber': tracking,
+          'driverPhone': _phoneCtrl(txId).text.trim(),
+          'notes': _notesCtrl(txId).text.trim(),
+        }),
+      );
+      final result = jsonDecode(resp.body);
+      if (resp.statusCode == 200 && result['success'] == true) {
+        _clearDispatchFields(txId);
+        if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
+      } else {
+        if (mounted) _showError(result['error'] ?? context.tr('dispatch_failed'));
+      }
+    } catch (e) {
+      if (mounted) _showError(context.trError(e));
+    }
+    if (mounted) setState(() => _dispatchingTxId = null);
+  }
+
+  void _clearDispatchFields(String txId) {
+    for (final c in [_courierCtrl(txId), _trackCtrl(txId), _phoneCtrl(txId), _notesCtrl(txId)])
+      c.clear();
   }
 
   @override
@@ -71,29 +181,27 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Tuma Bidhaa')),
+        appBar: AppBar(title: Text(context.tr('dispatch_title'))),
         body: Center(child: Text(context.tr('login_required'))),
       );
     }
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Tuma Bidhaa')),
+      appBar: AppBar(
+        title: Text(context.tr('dispatch_title')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('transactions')
-            .where('sellerId', isEqualTo: user.uid)
-            .where('status', whereIn: ['escrow_hold', 'dispatched'])
-            .snapshots(),
+        stream: _transactionsFor(user.uid),
         builder: (context, snap) {
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
-          if (!snap.hasData) {
-            return const Center(child: GoogleLoading());
-          }
-
+          if (snap.hasError) return Center(child: Text('${context.tr('error')}: ${snap.error}'));
+          if (!snap.hasData) return const Center(child: GoogleLoading());
           final docs = snap.data!.docs
-              .where((d) => (d.data() as Map)['status'] == 'escrow_hold')
+              .where((d) {
+                final s = (d.data() as Map)['status'] as String? ?? '';
+                return s == 'escrow_hold' || s == 'paid_escrow_hold' || s == 'paid_escrow_held';
+              })
+              .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();
           docs.sort((a, b) {
             final ta = (a.data() as Map)['createdAt'];
@@ -101,130 +209,329 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
             if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
             return 0;
           });
-
           if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.inventory_2_outlined, size: 64, color: cs.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text('Hakuna bidhaa zinazosubiri kusafirishwa',
-                      style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-                ],
-              ),
+            return DsEmptyState(
+              icon: Icons.check_circle_outline,
+              title: context.tr('no_products_to_dispatch'),
+              body: context.tr('paid_products_only_hint'),
+              tint: cs.successGreen,
+              artwork: const SokoAnimatedIllustration(SokoIllustration.emptyProducts, size: 96),
             );
           }
+          return RefreshIndicator(
+            onRefresh: () async => setState(() {}),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              itemCount: docs.length,
+              itemBuilder: (_, i) {
+                final d = docs[i].data() as Map<String, dynamic>;
+                final txId = docs[i].id;
+                return _buildDispatchCard(context, cs, d, txId);
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (_, i) {
-              final d = docs[i].data() as Map<String, dynamic>;
-              final txId = docs[i].id;
-              final productName = d['productName'] ?? 'Product';
-              final price = (d['productPrice'] ?? 0).toDouble();
-              final buyerPhone = d['buyerPhone'] ?? '';
-              final buyerName = d['buyerName'] ?? '';
+  Widget _buildDispatchCard(
+    BuildContext context,
+    ColorScheme cs,
+    Map<String, dynamic> d,
+    String txId,
+  ) {
+    final productName = d['productName'] ?? context.tr('product');
+    final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
+    final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
+    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? productPrice + shippingCost;
+    final buyerPhone = d['buyerPhone'] ?? '';
+    final buyerName = d['buyerName'] ?? '';
+    final addr =
+        d['deliveryAddress'] as Map<String, dynamic>? ??
+        (d['region'] != null
+            ? {
+                'region': d['region'],
+                'district': d['district'],
+                'ward': d['ward'],
+                'street': d['street'],
+                'latitude': d['latitude'],
+                'longitude': d['longitude'],
+              }
+            : null);
+    final hasShipping = shippingCost > 0;
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: DsCard(
+        radius: 20,
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [cs.primary, cs.primary.withValues(alpha: 0.35)],
+                  ),
+                ),
+              ),
+              Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.inventory_2, color: cs.tertiary, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Inasubiri kusafirishwa',
-                              style: TextStyle(color: cs.tertiary, fontWeight: FontWeight.w600, fontSize: 13)),
+                          DsBadge(
+                            label: context.tr('paid_label'),
+                            color: cs.successGreen,
+                            icon: Icons.lock_outline,
+                          ),
                           const Spacer(),
-                          Text(context.formatPrice(price),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(
+                            context.formatPrice(totalAmount),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 17,
+                              color: cs.primary,
+                            ),
+                          ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        productName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
                       const SizedBox(height: 8),
-                      Text(productName, style: const TextStyle(fontSize: 15)),
                       if (buyerName.isNotEmpty)
-                        Text('Mnunuzi: $buyerName',
-                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
                       if (buyerPhone.isNotEmpty)
-                        Text('Simu: $buyerPhone',
-                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                      const Divider(height: 20),
-                      TextField(
-                        controller: _trackingCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Namba ya Tracking (si lazima)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
+                        _infoRow(
+                          cs,
+                          Icons.phone_outlined,
+                          context.tr('phone'),
+                          buyerPhone.toString(),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _noteCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Maelezo (si lazima)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
+                      if (addr != null)
+                        _infoRow(
+                          cs,
+                          Icons.place_outlined,
+                          context.tr('address'),
+                          '${addr['region'] ?? ''}, ${addr['district'] ?? ''}${(addr['ward'] as String? ?? '').isNotEmpty ? ', ${addr['ward']}' : ''}, ${addr['street'] ?? ''}',
                         ),
-                        maxLines: 2,
-                      ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                // In a real app, this would open image picker
-                                setState(() => _receiptUrl = 'https://example.com/receipt.jpg');
-                              },
-                              icon: Icon(Icons.receipt, size: 18,
-                                  color: _receiptUrl != null ? cs.primary : null),
-                              label: Text(_receiptUrl != null ? 'Receipt ✓' : 'Pakia Receipt'),
-                            ),
+                      // ── Step 1: Seller sets shipping cost after escrow ──
+                      if (!hasShipping) ...[
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                setState(() => _photoUrl = 'https://example.com/photo.jpg');
-                              },
-                              icon: Icon(Icons.camera_alt, size: 18,
-                                  color: _photoUrl != null ? cs.primary : null),
-                              label: Text(_photoUrl != null ? 'Photo ✓' : 'Piga Picha'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _dispatchingTxId == txId
-                              ? null
-                              : () => _dispatchOrder(txId),
-                          icon: _dispatchingTxId == txId
-                              ? const SizedBox(width: 16, height: 16, child: GoogleLoading(size: 16, strokeWidth: 2))
-                              : const Icon(Icons.local_shipping, size: 18),
-                          label: Text(_dispatchingTxId == txId
-                              ? 'Inasafirisha...'
-                              : '✅ Tumia Bidhaa'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: cs.primary,
-                            foregroundColor: cs.surface,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.payments_outlined, size: 16, color: cs.primary),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    context.tr('set_cost_note'),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: cs.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                context.tr('seller_quote_subtitle'),
+                                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.card_giftcard_rounded,
+                                    size: 18,
+                                    color: cs.successGreen,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          context.tr('free_delivery'),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                            color: cs.onSurface,
+                                          ),
+                                        ),
+                                        Text(
+                                          context.tr('free_delivery_note'),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: _freeDelivery[txId] == true,
+                                    onChanged: (v) => _toggleFreeDelivery(txId, v),
+                                    activeTrackColor: cs.primary,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              if (_freeDelivery[txId] == true)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: cs.successGreen.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: cs.successGreen.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    context.tr('free_delivery_confirmed'),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurface),
+                                  ),
+                                )
+                              else
+                                DsTextField(
+                                  controller: _shipCtrl(txId),
+                                  label: context.tr('shipping_cost'),
+                                  hint: 'TZS 0',
+                                  prefixIcon: Icons.monetization_on_outlined,
+                                  keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+                                  ],
+                                ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 44,
+                                child: ElevatedButton.icon(
+                                  onPressed: _settingCostTxId == txId
+                                      ? null
+                                      : () => _setShippingCost(txId),
+                                  icon: _settingCostTxId == txId
+                                      ? const GoogleLoading(size: 18, strokeWidth: 2)
+                                      : const Icon(Icons.check, size: 18),
+                                  label: Text(
+                                    _settingCostTxId == txId
+                                        ? context.tr('sending_label')
+                                        : context.tr('send_shipping_to_buyer'),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: cs.primary,
+                                    foregroundColor: cs.surface,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                      ] else ...[
+                        _infoRow(
+                          cs,
+                          Icons.local_shipping_outlined,
+                          context.tr('shipping_cost'),
+                          context.formatPrice(shippingCost),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
+                        const SizedBox(height: 12),
+                        // ── Step 2: Dispatch after cost set ──
+                        DsTextField(
+                          controller: _courierCtrl(txId),
+                          label: context.tr('courier_company_name'),
+                          prefixIcon: Icons.business_outlined,
+                        ),
+                        const SizedBox(height: 12),
+                        DsTextField(
+                          controller: _trackCtrl(txId),
+                          label: context.tr('tracking_number'),
+                          prefixIcon: Icons.qr_code_2,
+                        ),
+                        const SizedBox(height: 12),
+                        DsTextField(
+                          controller: _phoneCtrl(txId),
+                          label: context.tr('driver_phone'),
+                          prefixIcon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 12),
+                        DsTextField(
+                          controller: _notesCtrl(txId),
+                          label: context.tr('additional_notes'),
+                          prefixIcon: Icons.notes,
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 14),
+                        DsButton(
+                          label: _dispatchingTxId == txId
+                              ? context.tr('dispatching')
+                              : context.tr('confirm_dispatch'),
+                          icon: Icons.local_shipping_outlined,
+                          loading: _dispatchingTxId == txId,
+                          onPressed: _dispatchingTxId == txId ? null : () => _dispatchOrder(txId),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              );
-            },
-          );
-        },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(ColorScheme cs, IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text('$label: ', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 13, color: cs.onSurface, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
       ),
     );
   }
