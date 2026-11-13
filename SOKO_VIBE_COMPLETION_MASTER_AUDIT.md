@@ -109,7 +109,7 @@ Flutter analysis was started separately; results are recorded in
 | 40 | Social follow/block/report | COMPLETE | `modules/social/*` | — |
 | 41 | AI assistant + failover | COMPLETE | `modules/ai/*`, `cf-worker-ai/` | `ai-*.test.js` green. |
 | 42 | Agent approvals/permissions | COMPLETE | `modules/agent/*` | Tests green. |
-| 43 | Notifications (push/email/SMS/WA) | PARTIALLY COMPLETE | `services/notification-*`, `modules/notifications` | Channel config verification needed; OTP default skips SMS. |
+| 43 | Notifications (push/email/SMS/WA) | PARTIALLY COMPLETE | `services/notification-*`, `modules/notifications` | OTP channel order fixed to `push,whatsapp,sms`; actual delivery still needs provider credentials. |
 | 44 | Subscriptions | COMPLETE AND VERIFIED | `modules/subscriptions/plans.js` | `trialing` canonical; transitions covered. |
 | 45 | Advertising / boosts | COMPLETE | `modules/ads/*` | — |
 | 46 | Referrals | COMPLETE | `modules/referrals/*` | — |
@@ -120,7 +120,7 @@ Flutter analysis was started separately; results are recorded in
 | 51 | Postgres/Prisma | RETIRED (artifacts remain) | `docker-compose.yml`, `prisma/` | Runtime uses Firestore facade. |
 | 52 | Redis / queues | NEEDS VERIFICATION | `config/redis.js`, `services/queue.js` | Requires Redis instance. |
 | 53 | Cloudflare / R2 | NEEDS VERIFICATION | `cf-worker*`, `deploy/` | Requires account secrets. |
-| 54 | CI/CD | IMPLEMENTED BUT NOT FULLY VERIFIED | `.github/workflows/ci.yml` | Full verification workflow added; not yet executed on GitHub. |
+| 54 | CI/CD | COMPLETE AND VERIFIED | `.github/workflows/ci.yml` | GitHub Actions run `43412666806`: backend, Firestore rules (emulator) and Flutter jobs all green. |
 | 55 | Monitoring / backups | MISSING (documented only) | — | No RTO/RPO or restore test evidence. |
 | 56 | Flutter test suite | COMPLETE AND VERIFIED | `test/` 46 `*_test.dart` files | `flutter analyze` clean; `flutter test --no-pub` → 431 tests passed |
 
@@ -335,6 +335,13 @@ These are marked **BLOCKED BY EXTERNAL DEPENDENCY**, not "complete".
 - No secrets printed (names only).
 - Every code change is accompanied by a test or an explicit "unverified" label.
 
+**Post-delivery, on explicit owner instruction:** the work was committed (`5148debf`), pushed to
+`feat/website-v2`, merged into `main` (`a84e7580`, keep-alive workflow kept from main), followed by
+`284411fe` (Turnstile key and AzamPay boot alignment with the live service, plus release-build
+diagnostics) and `657113be` (Gradle heap fix). CI is green on `main`, the release APK/AAB build is
+green, and the Render service was switched from branch `master` to `main` and deployed. Details, run
+IDs and the environment findings are in `SOKO_VIBE_FINAL_COMPLETION_REPORT.md` §11.
+
 
 ---
 
@@ -357,10 +364,14 @@ command was executed in this session and its output is quoted in `SOKO_VIBE_FINA
 | F-09 | `kAdsTestMode = true` | FIXED | `lib/services/api_config.dart` |
 | F-10 | Admin console source missing | RESOLVED AS DOCUMENTATION | `server/admin/` is authoritative; `apps/admin-console/` is build output only. Nothing deleted; noted in report |
 | F-11 | Stale/stubbed tests | FIXED | `order-transition-auth`, `launch-contact-routes`, `escrow-release-ownership` updated to current contracts; `completion-hardening.test.js` added. No test weakened |
-| F-12 | CI does not run tests | IMPLEMENTED, NOT FULLY VERIFIED | `.github/workflows/ci.yml` (backend, firestore-rules, flutter jobs, no deploy). Commands run locally; no Actions run observed |
+| F-12 | CI does not run tests | FIXED AND VERIFIED | `.github/workflows/ci.yml` (backend, firestore-rules, flutter jobs, no deploy). GitHub Actions run `43412666806`: all three jobs success |
 | F-13 | Legacy/new data model coexistence (`transactions` vs `withdrawals`) | DOCUMENTED, NO DESTRUCTIVE ACTION | Dual-write preserved; no collection dropped, no migration forced |
 | F-14 | Provider fees not reconciled | NOT CHANGED (by design) | Fee tiers are quoted by the provider and stored; reconciliation needs live sandbox data → external dependency |
 | F-15 | Store URLs missing | BLOCKED BY EXTERNAL DEPENDENCY | App unpublished; links remain placeholders rather than fabricated |
+| F-16 | Release APK job failing on every push since 2026-09-04 | FIXED AND VERIFIED | Cause exposed through new check-run annotations: `ERROR: R8: java.lang.OutOfMemoryError` at `:app:minifyReleaseWithR8` and an OOM at `:audio_service:lintVitalAnalyzeRelease`. Gradle heap raised 2 GB → 4 GB in `android/gradle.properties`. Run `43459260416`: APK and AAB built and uploaded; first green run since 2026-08-21 |
+| F-17 | Render deployed branch `master` while the repository default branch is `main` | FIXED AND VERIFIED | Branch switched to `main` through the Render API; deploy `dep-dbrj3obm8hqs73d6s94g` live on `284411fe`. `/health` 200 (database + redis), `/admin` 200, `/api/v1/company` 401, rotated Turnstile key served |
+| F-18 | Production boots as development (`NODE_ENV` unset on Render) | DOCUMENTED — OWNER ACTION | `ADMIN_SECRET` (48 chars, non-placeholder) and `APP_URL` satisfy the production boot checks, but enabling production also makes admin MFA fail closed, so it must be smoke-tested with a real admin sign-in before switching |
+| F-19 | v1 product list returns 0 items while `products/` holds 3 active legacy-shaped documents | DOCUMENTED, NO DATA MUTATION | The v1 query filters `status == 'published'`; the live docs carry `name`/`isActive` only. The Flutter app reads Firestore directly, so the in-app catalog is unaffected. Remediation is an additive backfill (`status`, `deletedAt`, `title`) or a legacy fallback in the read path |
 
 Additional defects found while verifying the above (all fixed, all analyzer- or test-checked):
 
