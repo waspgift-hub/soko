@@ -2,33 +2,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soko_vibe/models/transaction_model.dart';
 
 void main() {
-  group('getUssdPushFee', () {
+  group('getMnoCheckoutFee', () {
     test('returns 0 below the smallest published tier', () {
-      // ClickPesa's cheapest band starts at 500. Anything under it is not a
-      // chargeable push, so the fee is zero — previously this fell through to
+      // AzamPay's cheapest band starts at 500. Anything under it is not a
+      // chargeable checkout, so the fee is zero — previously this fell through to
       // the top band and quoted 7,960 on a 300 TZS purchase.
-      expect(getUssdPushFee(0), 0);
-      expect(getUssdPushFee(300), 0);
-      expect(getUssdPushFee(499), 0);
+      expect(getMnoCheckoutFee(0), 0);
+      expect(getMnoCheckoutFee(300), 0);
+      expect(getMnoCheckoutFee(499), 0);
     });
 
-    test('matches the published ClickPesa tiers', () {
-      expect(getUssdPushFee(500), 54);
-      expect(getUssdPushFee(899), 54);
-      expect(getUssdPushFee(900), 92);
-      expect(getUssdPushFee(100000), 3240);
-      expect(getUssdPushFee(3000000), 7960);
+    test('matches the published AzamPay MNO tiers', () {
+      expect(getMnoCheckoutFee(500), 54);
+      expect(getMnoCheckoutFee(899), 54);
+      expect(getMnoCheckoutFee(900), 92);
+      expect(getMnoCheckoutFee(100000), 3240);
+      expect(getMnoCheckoutFee(3000000), 7960);
     });
 
     test('holds at the top band above the published ceiling', () {
-      expect(getUssdPushFee(3000001), 7960);
-      expect(getUssdPushFee(90000000), 7960);
+      expect(getMnoCheckoutFee(3000001), 7960);
+      expect(getMnoCheckoutFee(90000000), 7960);
     });
 
     test('tier boundaries are contiguous with no gaps', () {
-      for (final tier in ussdPushFeeTiers) {
-        expect(getUssdPushFee(tier.$1.toDouble()), tier.$3.toDouble());
-        expect(getUssdPushFee(tier.$2.toDouble()), tier.$3.toDouble());
+      for (final tier in mnoCheckoutFeeTiers) {
+        expect(getMnoCheckoutFee(tier.$1.toDouble()), tier.$3.toDouble());
+        expect(getMnoCheckoutFee(tier.$2.toDouble()), tier.$3.toDouble());
       }
     });
   });
@@ -52,7 +52,7 @@ void main() {
       expect(b.processingFee, 3240);
     });
 
-    test('prefers ClickPesa quoted fee over the local tier table', () {
+    test('prefers the AzamPay quoted fee over the local tier table', () {
       final b = TransactionFeeBreakdown(
         productPrice: 100000,
         quotedProcessingFee: 5040,

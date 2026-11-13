@@ -72,8 +72,9 @@ function sanitize(str) {
   return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
 }
 
-// v2 auto-release window: 48h after dispatch (matches /cron/auto-release).
-const AUTO_RELEASE_MS = 48 * 60 * 60 * 1000;
+// Auto-release is owned by `finance.inspectionAutoRelease` and the canonical
+// `autoRelease()` service (ESCROW_AUTO_RELEASE_DAYS, default 14). Do not add a
+// second window here: the old 48h constant contradicted the approved policy.
 // Historical spellings of "funds held" produced by the engine over time.
 const ESCROW_STATES = ['pending', 'quoted', 'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
 const DISPATCH_STATES = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];

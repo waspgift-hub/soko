@@ -2,6 +2,7 @@ const { Router } = require('express');
 const crypto = require('crypto');
 const config = require('../../config');
 const { optionalAuth } = require('../../middleware/auth');
+const { can } = require('../../middleware/admin-rbac');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const { presignKycDocument, DOCUMENT_IDS } = require('../media/kyc-documents');
@@ -47,9 +48,49 @@ function requireKycReviewer(req, res, next) {
     return next();
   }
 
+  // Staff session token (admin_staff + staff_sessions). Reviewed here as well
+  // as by authenticateAdmin so a KYC reviewer can work from the panel without
+  // the owner's break-glass secret. Permission is checked against the same
+  // role matrix (`kyc:read`) rather than a second hand-written role list.
+  const staffToken = req.headers['x-staff-token'];
+  if (staffToken && typeof staffToken === 'string' && /^[a-f0-9]{32,128}$/i.test(staffToken)) {
+    return (async () => {
+      try {
+        const commerceStore = require('../../services/commerce-store');
+        const session = await commerceStore.getDocument('staff_sessions', staffToken);
+        if (!session) return res.status(401).json({ success: false, error: { code: 'KYC_REVIEW_REQUIRED' } });
+        const expiresMs = session.expiresAtMs
+          ? Number(session.expiresAtMs)
+          : new Date(session.expiresAt || 0).getTime();
+        if (!Number.isFinite(expiresMs) || expiresMs < Date.now()) {
+          return res.status(401).json({ success: false, error: { code: 'STAFF_SESSION_EXPIRED' } });
+        }
+        const staff = await commerceStore.getDocument('admin_staff', session.staffId);
+        if (!staff || staff.active === false) {
+          return res.status(403).json({ success: false, error: { code: 'STAFF_INACTIVE' } });
+        }
+        const principal = {
+          adminStaff: {
+            id: session.staffId,
+            role: staff.role || session.role || 'support',
+            permissions: Array.isArray(staff.permissions) ? staff.permissions : [],
+          },
+        };
+        if (can(principal, 'kyc:read') || can(principal, 'kyc:write')) {
+          req.kycReviewer = `staff:${principal.adminStaff.id}`;
+          return next();
+        }
+        return res.status(403).json({ success: false, error: { code: 'KYC_PERMISSION_REQUIRED' } });
+      } catch (e) {
+        console.error('[AUTH] KYC staff session lookup failed:', e && e.message);
+        return res.status(503).json({ success: false, error: { code: 'AUTH_SERVICE_UNAVAILABLE' } });
+      }
+    })();
+  }
+
   // optionalAuth already verified the token cryptographically and loaded the
   // user row; role comes from that row, not from anything the client sent.
-  if (req.user && (['admin', 'super_admin'].includes(req.user.role) || isBootstrapSuperAdminEmail(req.user.email))) {
+  if (req.user && (['admin', 'super_admin', 'kyc_reviewer'].includes(req.user.role) || isBootstrapSuperAdminEmail(req.user.email))) {
     req.kycReviewer = `role:${req.user.role || 'super_admin'}`;
     return next();
   }

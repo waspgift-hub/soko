@@ -53,6 +53,7 @@ const commentsRouter = require('./modules/comments/routes');
 const kycRouter = require('./modules/kyc/routes');
 const engagementRouter = require('./modules/engagement/routes');
 const socialRouter = require('./modules/social/routes');
+const companyRouter = require('./modules/company/routes');
 const deletionRequestRouter = require('./modules/data-deletion/routes');
 const { seoRouter } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
@@ -417,6 +418,10 @@ app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1/kyc', kycRouter);
 app.use('/api/v1', engagementRouter);
 app.use('/api/v1/social', socialRouter);
+// Company OS. The router mounts its own `authenticate` + membership + RBAC
+// gates, so the namespace is safe to expose; before this mount every Company
+// Console request from the Flutter app returned 404.
+app.use('/api/v1/company', generalLimiter, companyRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat; both mount

@@ -21,6 +21,11 @@ const { confirmLegacyTransaction } = require('./legacy-transaction-confirm');
  *  4. Status priority check before any state change
  */
 
+// Methods the provider factory actually implements. ClickPesa was removed;
+// card and bank collection are not implemented by AzamPayProvider, so accepting
+// them at the route only produced a 500 after the buyer had chosen a method.
+const SUPPORTED_PAYMENT_PROVIDERS = new Set(['azampay', 'mno_checkout']);
+
 // Create a payment record and initiate the provider collection.
 async function initiatePayment({
   orderId,
@@ -29,6 +34,11 @@ async function initiatePayment({
   amount,
   phoneNumber,
 }) {
+  if (!SUPPORTED_PAYMENT_PROVIDERS.has(providerName)) {
+    // Typed 400 rather than letting getProvider() throw an unhandled 500: the
+    // request is invalid, not the server.
+    throw httpError(400, 'UNSUPPORTED_PAYMENT_PROVIDER');
+  }
   const store = getStore();
   const lock = await requireLock(`payment:${orderId}`, 60);
 

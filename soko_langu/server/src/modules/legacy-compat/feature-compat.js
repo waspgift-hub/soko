@@ -277,65 +277,41 @@ async function sendOneSignalBulk(db, userIds, title, body, data = {}) {
 
 // ─── Cron helpers (ported from server/index.js) ────────────────────────
 async function releaseExpiredEscrows(db) {
-  if (!db) return;
+  const summary = { released: 0, blocked: 0, skipped: 0, errored: 0, processed: 0 };
+  if (!db) return summary;
   try {
     const now = admin.firestore.Timestamp.now();
     const expired = await db.collection('transactions')
       .where('status', 'in', ['escrow_hold', 'dispatched'])
       .where('escrowExpiresAt', '<=', now)
-      .where('escrowReleased', '!=', true)
       .limit(20)
       .get();
 
+    // Ledger-backed release only. This cron predates the canonical escrow
+    // service and used to increment `sellerBalance` directly, which could pay
+    // out a disputed hold and left no immutable ledger row. Delegating keeps
+    // the endpoint working while routing every payout through `autoRelease()`:
+    // holding-only, dispute-aware, idempotent.
+    const { autoRelease } = require('../disputes/auto-release-service');
+
     for (const doc of expired.docs) {
-      const tx = doc.data();
-      const sellerReceives = tx.sellerReceives || 0;
-      const sellerId = tx.sellerId;
-
-      await doc.ref.update({
-        status: 'delivered',
-        escrowReleased: true,
-        escrowReleasedAt: commerceStore.serverTimestamp(),
-        escrowAutoReleased: true,
-      });
-
-      if (sellerId && sellerReceives > 0) {
-        const autoSeller = await commerceStore.getDocument("users", sellerId);
-        const autoPending = autoSeller ? (autoSeller.pendingEscrow || 0) : 0;
-        const actualPending = Math.min(sellerReceives, autoPending);
-        await commerceStore.updateDocument("users", sellerId, {
-          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
-        });
-
-        await commerceStore.addDocument("notifications", {
-          userId: sellerId,
-          title: 'Escrow Imefunguliwa Kiotomatiki',
-          body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
-          isRead: false,
-          createdAt: commerceStore.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(sellerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_auto_release', transactionId: doc.id });
-        } catch (_) {}
-      }
-
-      if (tx.buyerId) {
-        await commerceStore.addDocument("notifications", {
-          userId: tx.buyerId,
-          title: 'Escrow Imefunguliwa Kiotomatiki',
-          body: `Muda wa escrow ya ${tx.productName || 'Bidhaa'} umeisha. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda.`,
-          isRead: false,
-          createdAt: commerceStore.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(tx.buyerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`, { type: 'escrow_auto_release', transactionId: doc.id });
-        } catch (_) {}
+      const tx = doc.data() || {};
+      const orderId = tx.orderId || doc.id;
+      summary.processed += 1;
+      try {
+        const result = await autoRelease({ orderId, triggeredBy: 'cron.release-escrows' });
+        if (result && result.status === 'AUTO_RELEASED') summary.released += 1;
+        else if (result && result.status === 'BLOCKED') summary.blocked += 1;
+        else summary.skipped += 1;
+      } catch (e) {
+        summary.errored += 1;
+        console.error('[CRON] autoRelease', orderId, e.message);
       }
     }
   } catch (e) {
     console.error('Auto-release escrow error:', e);
   }
+  return summary;
 }
 
 // Maps raw AzamPay status rows to 'success' | 'failed' | '' (still pending/unknown).
@@ -1813,9 +1789,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       if (!verifyAdminSecret(secret)) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-      await releaseExpiredEscrows(db);
+      const summary = await releaseExpiredEscrows(db);
       await failStalePendingBoosts(db);
-      res.json({ success: true, message: 'Escrow release triggered' });
+      res.json({ success: true, message: 'Escrow release triggered', data: summary });
     } catch (e) {
       console.error('Cron release-escrows error:', e);
       res.status(500).json({ error: 'Internal server error' });

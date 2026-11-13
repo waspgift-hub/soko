@@ -1,11 +1,15 @@
 // OTP delivery chain for phone numbers.
 //
-// Channel order is env-driven (OTP_CHANNEL_ORDER, default "push,whatsapp") so a
-// deployment can prioritise cheap channels without code changes:
+// Channel order is env-driven (OTP_CHANNEL_ORDER, default "push,whatsapp,sms")
+// so a deployment can prioritise cheap channels without code changes:
 //   1. push — OneSignal to the Firebase UID (only when the request is
 //             authenticated; pre-auth send-otp has no uid to target)
-//   2. whatsapp — Zernio WhatsApp (always available, replaces SMS)
+//   2. whatsapp — WhatsApp Cloud API (replaces SMS when configured)
 //   3. sms  — Meseji → Notify Africa fallback (always available)
+//
+// SMS is the final fallback in the default order because push needs an
+// authenticated device and WhatsApp needs a WhatsApp-capable number. Without
+// SMS, a user with neither received no code at all.
 //
 // The OTP ends up delivered exactly once per request: if a higher channel
 // accepts it, lower channels are not attempted.
@@ -15,7 +19,7 @@ const { sendWhatsApp } = require('./whatsapp-service');
 
 function channelsFromEnv() {
   const raw = process.env.OTP_CHANNEL_ORDER;
-  if (!raw) return ['push', 'whatsapp'];
+  if (!raw) return ['push', 'whatsapp', 'sms'];
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 

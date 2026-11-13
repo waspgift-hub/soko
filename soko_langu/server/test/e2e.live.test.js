@@ -6,10 +6,23 @@
  * payments, sends SMS, or mutates money — so it is safe to run against
  * production.
  *
- * Run:  cd server && node --test test/e2e.live.test.js
+ * Opt-in only: `npm test` must stay hermetic and offline, so this suite skips
+ * unless it is explicitly requested. It talks to a *deployed* server, which
+ * means its results describe that deployment, not the working tree.
+ *
+ * Run:  cd server && npm run test:e2e          (uses the default URL)
+ *       E2E_BASE_URL=https://host npm run test:e2e
  */
-const test = require('node:test');
+const nodeTest = require('node:test');
 const assert = require('node:assert/strict');
+
+// E2E_LIVE=1 opts in without changing the target; E2E_BASE_URL implies opt-in
+// because naming a host is itself an explicit request to test it.
+const LIVE = process.env.E2E_LIVE === '1' || Boolean(process.env.E2E_BASE_URL);
+
+const test = LIVE
+  ? nodeTest
+  : (name) => nodeTest.skip(`${name} (live E2E disabled: set E2E_LIVE=1)`, () => {});
 
 const BASE = process.env.E2E_BASE_URL || 'https://soko-langu-server.onrender.com';
 

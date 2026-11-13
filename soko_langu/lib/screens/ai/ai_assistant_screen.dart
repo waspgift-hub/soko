@@ -1,19 +1,15 @@
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../services/persistent_ai_chat_service.dart';
-import '../../services/ai_voice_player.dart';
 import '../../models/ai_chat_models.dart';
 import '../../app/routes.dart';
 import '../../main.dart';
 import '../../services/product_search_service.dart';
 import '../../services/voice_search_service.dart';
 import '../../widgets/staggered_fade_in.dart';
-import '../../design_system/tokens/one_ui_tokens.dart';
-import 'package:just_audio/just_audio.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   const AiAssistantScreen({super.key});
@@ -39,10 +35,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   bool _isLoading = false;
   bool _isRecording = false;
   bool _loadingConversations = true;
-  bool _hasText = false;
   final FocusNode _inputFocus = FocusNode();
   String? _loadError;
-  final Set<String> _playingVoice = {};
 
   @override
   void initState() {
@@ -55,7 +49,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
 
   void _refreshInputDecor() {
     if (!mounted) return;
-    setState(() => _hasText = _controller.text.trim().isNotEmpty);
+    // The composer's enabled state and counter both derive from the controller,
+    // so the rebuild is the work; no separate flag is needed.
+    setState(() {});
   }
 
   Future<void> _bootstrap() async {

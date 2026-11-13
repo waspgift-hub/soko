@@ -2,7 +2,7 @@
 ///
 /// Exports the live theme tokens, the DS widget kit, and Samsung One UI-inspired
 /// helpers. Keep exports aligned with files that exist in the repo.
-library soko_vibe_ds;
+library;
 
 export '../theme/app_colors.dart';
 export '../theme/app_dimens.dart';

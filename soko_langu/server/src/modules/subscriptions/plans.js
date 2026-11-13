@@ -69,8 +69,8 @@ const SUBSCRIPTION_STATUS = {
 
 // Valid transitions. Anything not listed is rejected by `transition()`.
 const VALID_TRANSITIONS = {
-  inactive: ['trailing', 'pending_payment', 'active'],
-  trailing: ['active', 'expired', 'pending_payment'],
+  inactive: ['trialing', 'pending_payment', 'active'],
+  trialing: ['active', 'expired', 'pending_payment'],
   pending_payment: ['active', 'payment_failed', 'expired'],
   active: ['cancel_pending', 'past_due', 'suspended', 'expired'],
   past_due: ['active', 'expired', 'suspended'],

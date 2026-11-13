@@ -58,7 +58,7 @@ router.post(
   requireActive,
   validate({
     body: z.object({
-      provider: z.enum(['azampay', 'card', 'bank']),
+      provider: z.enum(['azampay', 'mno_checkout']),
       amount: z.number().int().positive(),
       phoneNumber: z.string().regex(/^\+?[0-9]{9,15}$/),
     }),

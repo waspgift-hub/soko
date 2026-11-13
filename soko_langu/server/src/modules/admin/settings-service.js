@@ -46,13 +46,16 @@ const DEFAULTS = {
   paymentsAndCurrency: {
     currency: 'TZS',
     taxRatePct: 0,
-    platformCommissionPct: 0,
+    // Fraction of the product price (0.035 = 3.5%). The admin field is
+    // labelled "(%)" and `commissionPercent()` accepts either unit, so the
+    // stored default may be written as 3.5 or 0.035.
+    platformCommissionPct: 3.5,
     enableEscrow: true,
-    escrowReleaseDays: 7,
-    primaryGateway: 'clickpesa',
+    escrowReleaseDays: 14,
+    primaryGateway: 'azampay',
     gateways: {
-      clickpesa: { enabled: true, merchantId: '', apiKey: '', secretKey: '' },
-      azamPay: { enabled: false, merchantId: '', apiKey: '', secretKey: '' },
+      clickpesa: { enabled: false, merchantId: '', apiKey: '', secretKey: '' },
+      azamPay: { enabled: true, merchantId: '', apiKey: '', secretKey: '' },
       selcom: { enabled: false, merchantId: '', apiKey: '', secretKey: '' },
       stripe: { enabled: false, secretKey: '' },
       paypal: { enabled: false, clientId: '', secretKey: '' },

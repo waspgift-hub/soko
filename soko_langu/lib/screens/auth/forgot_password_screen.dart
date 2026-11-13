@@ -11,7 +11,6 @@ import '../../app/routes.dart';
 import '../../utils/rate_limiter.dart';
 import '../../utils/validators.dart';
 import '../../models/otp_verification_models.dart';
-import '../../screens/auth/otp_verification_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -349,8 +348,41 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     validator: _emailValidator,
                   ),
-                  // New password + confirm password collected before OTP verification.
-                  const SizedBox(height: 16),
+                ] else ...[
+                  // The phone branch rendered no input at all: the button called
+                  // _sendPhoneOtp with an empty controller, so every phone reset
+                  // failed. The controller, normaliser and validator already
+                  // existed; only the field was missing.
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      hintText: context.tr('phone_number'),
+                      prefixIcon: Icon(
+                        Icons.phone_android,
+                        color: cs.onSurface.withValues(alpha: 0.59),
+                      ),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.outlineVariant),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.outlineVariant),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.primary, width: 2),
+                      ),
+                    ),
+                    validator: _phoneValidator,
+                  ),
+                ],
+                // New password + confirm password collected before OTP verification.
+                const SizedBox(height: 16),
                     TextFormField(
                       controller: _newPasswordController,
                       obscureText: _obscureNew,
@@ -421,7 +453,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                       ),
                     ),
-                ],
+                if (_serverError != null)
+                  // Errors were stored in _serverError but never rendered, so a
+                  // failed reset looked like a dead button. Surface them next to
+                  // the action instead of only in logs.
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      _serverError!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: cs.error, fontSize: 13),
+                    ),
+                  ),
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -76,6 +76,13 @@ stub('../src/services/mailer', mailer);
 stub('../src/middleware/rateLimiter', {
   rateLimit: () => (req, res, next) => next(),
 });
+// Bot protection is a production gate that fails closed when Cloudflare
+// Turnstile is not configured (503). These tests exercise form validation,
+// consent, storage and email, so the verifier is stubbed as "human" here; the
+// fail-closed behaviour has its own coverage in turnstile tests.
+stub('../src/utils/turnstile', {
+  verifyTurnstile: async () => ({ ok: true }),
+});
 
 const launchRouter = require('../src/modules/launch/routes');
 const contactRouter = require('../src/modules/contact/routes');

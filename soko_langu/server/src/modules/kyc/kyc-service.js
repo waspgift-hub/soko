@@ -496,12 +496,11 @@ async function sendContactOtp({ userId, channel, value }) {
   await saveOtp(key, createOtpHash(otp), CONTACT_OTP_TTL_SECONDS);
   const subject = 'Soko Vibe — Uthibitisho wa anwani';
   const html = `
-    <html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto">
       <h2 style="color:#40916C">Soko Vibe</h2>
       <p>Namba yako ya uthibitisho:</p>
       <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p>
       <p>Inaisha kwa dakika 5. Usiishirikishe na mtu yeyote.</p>
-    </body></html>`;
+    `;
   const sent = await sendMail(email, subject, html);
   // sendMail now treats a 200 with permanent_bounces/suppressed_recipients as a
   // failure, so a bounced or suppressed address lands here rather than being

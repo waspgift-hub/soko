@@ -17,7 +17,6 @@ import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
 import 'admin_transactions_tab.dart';
-import 'admin_azampay_screen.dart';
 import 'admin_kyc_document_view_screen.dart';
 import 'admin_banner_management_screen.dart';
 import '../../widgets/product_cached_image.dart';

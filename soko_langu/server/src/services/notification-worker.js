@@ -13,7 +13,7 @@ async function handleNotificationJob(job) {
   const data = (job && job.data) || {};
   if (job.name === 'email') {
     const { sendMail } = require('./mailer');
-    const ok = await sendMail(data.to, data.subject, data.html);
+    const ok = await sendMail(data.to, data.subject, data.html, null, { action: data.action || 'generic', context: data.context || {} });
     if (!ok) throw new Error('NOTIFICATION_EMAIL_FAILED');
     return { channel: 'email' };
   }
