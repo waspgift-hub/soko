@@ -307,7 +307,7 @@ were broken on the remote side.
 | Post-merge verification | CI `43420220921` success, CodeQL `43428704362` success, "Push on main" `43420196219` success |
 | Drift reconciliation | `284411fe` — `master` had two fixes that never reached `main`: the rotated Cloudflare Turnstile site key (`0x4AAAAAAF7BcGI4YHafDh77`, which is the value configured on Render) and a production boot that derives the AzamPay webhook from `APP_URL` instead of refusing to start. Both ported; `APP_URL` remains mandatory in production |
 | Release build fix | `657113be` — Gradle heap raised from 2 GB to 4 GB (see §11.3) |
-| Final state | `main` = `657113be`; CI `43459260216` success; release build `43459260416` success |
+| Final state | `main` = `657113be` (code) plus the docs commit that carries this section. CI `43459260216` and release build `43459260416` are green on it; the docs-only commit re-runs both |
 
 ### 11.2 Deployment
 
@@ -372,7 +372,7 @@ code.
 | Render runs with `NODE_ENV` unset → the server boots as **development** (stack traces in 5xx bodies, development defaults) | **OWNER ACTION.** `ADMIN_SECRET` is 48 chars and not a placeholder and `APP_URL` is set, so the production boot checks would pass, but turning it on also makes admin MFA fail closed — smoke-test an admin sign-in first, then set `NODE_ENV=production` |
 | No `AZAMPAY_*` variables on Render | **BLOCKED BY EXTERNAL DEPENDENCY** — AzamPay onboarding. The service now boots and warns; AzamPay calls fail explicitly instead of at startup |
 | v1 catalog returns 0 items although `products/` contains 3 active documents | **DOCUMENTED.** The live documents are the legacy shape (`name`, `isActive`, no `status`/`title`/`deletedAt`); the v1 list query filters `status == 'published'`. The Flutter app reads Firestore directly, so the in-app catalog is unaffected; the v1 API needs either an additive backfill (`status:'published'`, `deletedAt:null`, `title`) or a legacy fallback in the read path. No production data was modified |
-| Auto-deploy did not fire for the last `main` push (android-only change) | Explicit deploys work; verify auto-deploy on the next commit that touches `soko_langu/server` |
+| Auto-deploy did not fire for the two pushes after the branch switch (`657113be` android-only, `d439eecd` docs-only) | Explicit deploys are verified working; whether Render applies a path filter or the GitHub webhook stopped delivering could not be determined with the available access. Verify with the next commit that touches `soko_langu/server`, or keep triggering deploys explicitly |
 | "Keep Render Server Awake" scheduled runs | Pre-existing failures; the last recorded run predates the deploy. The workflow pings `/health`, which now answers in under a second |
 
 ### 11.5 What this release does and does not mean
