@@ -43,11 +43,14 @@ const config = {
     allowedIps: process.env.AZAMPAY_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
     // The ONE AzamPay collection callback URL. Every payment-initiation path
     // must use this value — providers must never receive a guessed/derived URL.
-    // Kept separate from APP_URL: the webhook host is not the canonical app URL.
+    // Derived from APP_URL when the dedicated variable is unset, because the
+    // live Render service has APP_URL but not AZAMPAY_COLLECTION_WEBHOOK_URL.
     collectionWebhookUrl: process.env.AZAMPAY_COLLECTION_WEBHOOK_URL ||
-      (process.env.NODE_ENV === 'production'
-        ? ''
-        : 'http://localhost:3000/api/v1/payments/webhook/azampay'),
+      (process.env.APP_URL
+        ? `${process.env.APP_URL.replace(/\/$/, '')}/api/v1/payments/webhook/azampay`
+        : (process.env.NODE_ENV === 'production'
+          ? ''
+          : 'http://localhost:3000/api/v1/payments/webhook/azampay')),
   },
   
   // SMS
@@ -176,18 +179,16 @@ const config = {
   },
 };
 
-// Fail fast in production: a missing APP_URL / collection webhook URL silently
-// points payment callbacks at an empty or dead host — never recover from that
-// at runtime. Development keeps documented local defaults.
+// Fail fast in production only for values that have no safe fallback and would
+// silently misroute traffic. AzamPay may be unconfigured before company/access
+// setup; keep the server bootable and let AzamPay operations fail explicitly
+// when invoked until AZAMPAY_* env vars are set.
 if (config.nodeEnv === 'production') {
   if (!config.urls.app) {
     throw new Error('APP_URL must be configured in production (e.g. https://api.sokovibe.co.tz)');
   }
-  if (!config.azampay.collectionWebhookUrl) {
-    throw new Error('AZAMPAY_COLLECTION_WEBHOOK_URL must be configured in production (e.g. https://api.sokovibe.co.tz/api/v1/payments/webhook/azampay)');
-  }
-  if (!config.azampay.callbackPassword) {
-    throw new Error('AZAMPAY_CALLBACK_PASSWORD must be configured in production (AzamPay callback password)');
+  if (!config.azampay.collectionWebhookUrl || !config.azampay.callbackPassword) {
+    console.warn('[CONFIG] AzamPay not fully configured in production; AzamPay payments/callbacks will be unavailable until AZAMPAY_COLLECTION_WEBHOOK_URL and AZAMPAY_CALLBACK_PASSWORD are set.');
   }
 }
 

@@ -165,7 +165,7 @@ class _RegisterSectionState extends State<RegisterSection> {
   final _email = TextEditingController();
   final _api = LaunchApi();
   final _turnstile = TurnstileController();
-  static const _turnstileSiteKey = '0x4AAAAAAF68ooCj8ZHajCRz';
+  static const _turnstileSiteKey = '0x4AAAAAAF7BcGI4YHafDh77';
   late final int _startedAt;
   bool _loading = false;
   bool _success = false;

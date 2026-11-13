@@ -9,7 +9,7 @@
 
   var STORAGE_KEY = 'sv_lang';
   var PAGE_STARTED = Date.now();
-  var TURNSTILE_SITE_KEY = '0x4AAAAAAF68ooCj8ZHajCRz';
+  var TURNSTILE_SITE_KEY = '0x4AAAAAAF7BcGI4YHafDh77';
   var originalContent = new WeakMap();
   var originalAttrs = new WeakMap();
   var currentLang = 'sw';

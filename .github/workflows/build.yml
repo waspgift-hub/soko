@@ -31,23 +31,61 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/release-keystore.jks
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "::error title=Missing signing secret::KEYSTORE_BASE64 is empty; the release build cannot be signed."
+            exit 1
+          fi
+          echo "${KEYSTORE_BASE64}" | base64 --decode > android/release-keystore.jks
 
       - name: Create key.properties
+        env:
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${KEYSTORE_STORE_PASSWORD}" ] || missing="${missing} KEYSTORE_STORE_PASSWORD"
+          [ -n "${KEYSTORE_KEY_ALIAS}" ] || missing="${missing} KEYSTORE_KEY_ALIAS"
+          [ -n "${KEYSTORE_KEY_PASSWORD}" ] || missing="${missing} KEYSTORE_KEY_PASSWORD"
+          if [ -n "${missing}" ]; then
+            echo "::error title=Missing signing secrets::Release signing needs:${missing}"
+            exit 1
+          fi
           echo "storeFile=../release-keystore.jks" > android/key.properties
-          echo "storePassword=${{ secrets.KEYSTORE_STORE_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.KEYSTORE_KEY_ALIAS }}" >> android/key.properties
-          echo "keyPassword=${{ secrets.KEYSTORE_KEY_PASSWORD }}" >> android/key.properties
+          echo "storePassword=${KEYSTORE_STORE_PASSWORD}" >> android/key.properties
+          echo "keyAlias=${KEYSTORE_KEY_ALIAS}" >> android/key.properties
+          echo "keyPassword=${KEYSTORE_KEY_PASSWORD}" >> android/key.properties
+
+      - name: Verify signing config
+        env:
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ ! -s android/release-keystore.jks ]; then
+            echo "::error title=Keystore decode failed::android/release-keystore.jks is empty after base64 decode."
+            exit 1
+          fi
+          if ! keytool -list -keystore android/release-keystore.jks \
+              -storepass "${KEYSTORE_STORE_PASSWORD}" -alias "${KEYSTORE_KEY_ALIAS}" > /dev/null 2>&1; then
+            echo "::error title=Keystore unusable::Cannot open the keystore with KEYSTORE_STORE_PASSWORD, or KEYSTORE_KEY_ALIAS does not exist."
+            exit 1
+          fi
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee /tmp/apk-build.log
 
       - name: Build AAB
-        run: flutter build appbundle --release
+        run: |
+          set -o pipefail
+          flutter build appbundle --release 2>&1 | tee /tmp/aab-build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -60,3 +98,21 @@ jobs:
         with:
           name: release-aab
           path: soko_langu/build/app/outputs/bundle/release/app-release.aab
+
+      # GitHub job logs are only readable when signed in, but check-run
+      # annotations are public on this repository. Surface the fatal Gradle
+      # lines as annotations so the cause is visible from the API.
+      - name: Report build failure
+        if: failure()
+        run: |
+          set -uo pipefail
+          for log in /tmp/apk-build.log /tmp/aab-build.log; do
+            [ -f "${log}" ] || continue
+            echo "=== last 60 lines of ${log} ==="
+            tail -n 60 "${log}"
+          done
+          grep -hE "What went wrong|FAILURE: Build failed|Execution failed for task|Caused by:|error:|Error:|Keystore was tampered|Unresolved reference|Duplicate class" \
+            /tmp/apk-build.log /tmp/aab-build.log 2>/dev/null \
+            | tail -n 10 \
+            | sed -e 's/%/%25/g' -e 's/\r//g' \
+            | while IFS= read -r line; do echo "::error title=Release build::${line}"; done || true
