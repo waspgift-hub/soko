@@ -2,6 +2,7 @@ const { getStore } = require('../../config/database');
 const { requireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { RELEASE_REASON } = require('../escrow/escrow-release');
+const { GATE_THRESHOLDS } = require('../trust/quality-gates');
 
 const REQUIRED_SAFEGUARDS = [
   'NO_ACTIVE_DISPUTE',
@@ -19,10 +20,9 @@ const TRUSTED_DELIVERY_ATTESTORS = new Set(['courier', 'admin', 'system']);
 // Moderation states that still represent an unresolved abuse claim.
 const OPEN_REPORT_STATUSES = ['pending', 'open', 'reviewing'];
 
-// `reliabilityScore` is persisted as a 0..1 decimal (seller-reliability.js), so
-// the risk floor is on the same scale. Exactly 0 means "no completed history
-// yet", not "proven bad", so only a positive-but-low score counts as a signal.
-const HIGH_RISK_RELIABILITY = 0.3;
+// Exactly 0 means "no completed history yet", not "proven bad", so only a
+// positive-but-low score counts as a signal. The floor itself lives in
+// GATE_THRESHOLDS so the distribution gate and the payout gate cannot drift.
 
 /**
  * Delivery evidence strong enough to settle without the buyer's OTP.
@@ -59,7 +59,11 @@ async function evaluateFraudSignals(tx, order) {
   }
 
   const reliabilityScore = Number(sellerProfile && sellerProfile.reliabilityScore);
-  if (Number.isFinite(reliabilityScore) && reliabilityScore > 0 && reliabilityScore < HIGH_RISK_RELIABILITY) {
+  if (
+    Number.isFinite(reliabilityScore) &&
+    reliabilityScore > 0 &&
+    reliabilityScore < GATE_THRESHOLDS.highRiskSellerScore
+  ) {
     signals.push('SELLER_HIGH_RISK');
   }
 
