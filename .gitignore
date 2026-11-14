@@ -36,3 +36,5 @@ soko_langu/apps/admin-console/.wrangler/
 soko_langu/apps/admin-console/node_modules/
 soko_langu/apps/admin-console/.env.local
 soko_langu/apps/admin-console/.env*.local
+
+soko_langu/android/.kotlin/
