@@ -112,7 +112,7 @@ class OrderData {
     // lose shillings on large orders and disagree with the server total.
     int money(Object? v, [int fallback = 0]) {
       if (v is int) return v;
-      if (v is num) return v.round();
+      if (v is num) return v.isFinite ? v.round() : fallback;
       if (v is String) return int.tryParse(v) ?? fallback;
       return fallback;
     }
@@ -151,7 +151,7 @@ class OrderData {
   static int? _intOf(dynamic v) {
     if (v == null) return null;
     if (v is int) return v;
-    if (v is num) return v.round();
+    if (v is num) return v.isFinite ? v.round() : null;
     if (v is String) return int.tryParse(v);
     return null;
   }

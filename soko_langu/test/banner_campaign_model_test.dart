@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/models/banner_model.dart';
+import 'package:soko_vibe/models/banner_model.dart';
 
 BannerCampaign _campaign({
   BannerStatus status = BannerStatus.active,

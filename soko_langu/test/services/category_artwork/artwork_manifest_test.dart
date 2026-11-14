@@ -16,7 +16,7 @@ String validAsset({
   return jsonEncode({
     'id': id,
     'type': type,
-    if (categoryId != null) 'categoryId': categoryId,
+    'categoryId': ?categoryId,
     'file': file,
     'sha256': sha256 ?? ('a' * 64),
     'size': size,

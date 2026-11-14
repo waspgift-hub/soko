@@ -27,6 +27,8 @@ class LaunchApi {
   Future<LaunchSubscribeResult> subscribe({
     required String email,
     String? name,
+    String userType = 'both',
+    required bool consent,
     required String lang,
     required int formStartedAt,
     required String turnstileToken,
@@ -44,8 +46,10 @@ class LaunchApi {
             body: jsonEncode({
               'email': email.trim(),
               'name': (name ?? '').trim(),
+              'userType': userType,
+              'consent': consent,
               'lang': lang,
-              'source': 'web_launch',
+              'source': source,
               'formStartedAt': formStartedAt,
               'website': '',
               'cf-turnstile-response': turnstileToken,
@@ -79,30 +83,26 @@ class LaunchApi {
         return const LaunchSubscribeResult(
           ok: false,
           duplicate: false,
-          message: 'Too many requests. Please try again later.',
+          message: 'RATE_LIMITED',
         );
       }
       if (response.statusCode == 400 || response.statusCode == 403 || response.statusCode == 503) {
         return LaunchSubscribeResult(
           ok: false,
           duplicate: false,
-          message: message.isNotEmpty
-              ? message
-              : 'Please enter a valid email address.',
+          message: message.isNotEmpty ? message : 'INVALID_INPUT',
         );
       }
       return LaunchSubscribeResult(
         ok: false,
         duplicate: false,
-        message: message.isNotEmpty
-            ? message
-            : 'Something went wrong. Please try again.',
+        message: message.isNotEmpty ? message : 'SERVER_ERROR',
       );
     } catch (_) {
       return const LaunchSubscribeResult(
         ok: false,
         duplicate: false,
-        message: 'Unable to connect right now. Please try again.',
+        message: 'NETWORK_ERROR',
       );
     }
   }

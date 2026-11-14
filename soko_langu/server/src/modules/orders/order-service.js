@@ -1,11 +1,13 @@
 const { getStore } = require('../../config/database');
 const { requireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
-const { computeSellerParity } = require('../../utils/commission-parity');
+const { computeSellerParity, resolvePlatformRate } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { refundOnCancel, isRefundableEscrowState } = require('../refunds/refund-service');
 const { submitQuote, approveQuote } = require('../shipping/shipping-quote-service');
 const { fileDispute } = require('../disputes/dispute-service');
+const { evaluateAutoRelease } = require('../disputes/auto-release-service');
+const { evaluateOrderRisk, raiseFraudAlerts } = require('../trust/order-risk');
 const {
   releaseEscrowAndSettle,
   RELEASE_REASON,
@@ -62,6 +64,9 @@ async function audit(tx, data) {
  */
 async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
   const store = getStore();
+  // The admin panel's saved rate wins over the env default; resolved outside the
+  // transaction so the Firestore read never widens the write commit.
+  const commissionRate = await resolvePlatformRate();
 
   return store.$transaction(async (tx) => {
     const product = await tx.product.findUnique({ where: { id: productId } });
@@ -76,7 +81,17 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     const address = await tx.address.findUnique({ where: { id: addressId } });
     if (!address || address.userId !== buyerId) throw httpError(400, 'INVALID_ADDRESS');
 
-    const { commission, totalAmount } = computeSellerParity(product.price, 0n);
+    // Commission is charged on the line subtotal (unit price × quantity), never
+    // on shipping, and is added on top of what the buyer pays. Storing the unit
+    // price here made a multi-item order under-charge and under-commission.
+    const lineTotal = product.price * BigInt(quantity);
+    const { commission, totalAmount } = computeSellerParity(lineTotal, 0n, commissionRate);
+
+    // Self-dealing and trading velocity are checked before the order exists, so
+    // a fake purchase never reaches escrow, reviews or settlement.
+    const now = new Date();
+    const risk = await evaluateOrderRisk(tx, { buyerId, sellerId: product.sellerId, now });
+    if (risk.blocked) throw httpError(403, 'SELF_DEALING_BLOCKED');
 
     const order = await tx.order.create({
       data: {
@@ -84,6 +99,8 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
         buyerId,
         sellerId: product.sellerId,
         status: ORDER_STATES.PENDING_SHIPPING_FEE,
+        riskSignals: risk.signals,
+        riskScore: risk.score,
         productSnapshot: {
           productId: product.id,
           title: product.title,
@@ -102,13 +119,13 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
           country: address.country || 'TZ',
         },
         shippingQuoteSnapshot: { amount: 0, source: 'v1_create_order' },
-        productPrice: product.price,
+        productPrice: lineTotal,
         shippingFee: 0n,
         platformCommission: commission,
         totalAmount,
         currency: product.currency,
         paidAt: null,
-        placedAt: new Date(),
+        placedAt: now,
       },
     });
 
@@ -136,6 +153,20 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
       oldState: null,
       newState: { status: ORDER_STATES.PENDING_SHIPPING_FEE },
     });
+
+    // Alerts are best-effort and live in the same commit as the order so the
+    // admin panel cannot see the order without the reason it was flagged.
+    if (risk.signals.length) {
+      await raiseFraudAlerts(tx, {
+        ...risk,
+        buyerId,
+        sellerId: product.sellerId,
+        productId: product.id,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        now,
+      });
+    }
 
     return tx.order.findUnique({ where: { id: order.id } });
   });
@@ -173,7 +204,7 @@ async function submitShippingQuote({ orderId, sellerId, amount, estimatedDays, n
  * self-delivery stays at DISPATCHED; the logistics chain only advances when
  * the courier flow (or markDelivered) moves it.
  */
-async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
+async function markDispatched({ orderId, sellerId, courierName, trackingNumber, courierId }) {
   const store = getStore();
   const lock = await requireLock(`dispatch:${orderId}`, 60);
 
@@ -215,6 +246,9 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
         data: {
           status: ORDER_STATES.DISPATCHED,
           courierName: courierName || null,
+          // Binding courier identity: once present, only this user may attest
+          // delivery, which is what makes the courier an accountable party.
+          courierId: courierId || order.courierId || null,
           trackingNumber: trackingNumber || null,
           dispatchedAt: new Date(),
           statusChangedBy: sellerId,
@@ -242,10 +276,17 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
 }
 
 /**
- * Seller/courier/admin marks the order delivered (IN_TRANSIT -> DELIVERED).
- * Delivery is what arms the buyer's OTP/QR handover, so escrow stays held.
+ * Courier/admin attests delivery (IN_TRANSIT -> DELIVERED).
+ *
+ * `actor` is the state-machine actor ('courier' | 'admin'); the seller is
+ * rejected outright because this transition arms the auto-release clock.
+ * `deliveredBy`/`deliveredByRole` are the delivery evidence the auto-release
+ * safeguards read back.
  */
-async function markDelivered({ orderId, actorId }) {
+async function markDelivered({ orderId, actorId, actor = 'courier' }) {
+  if (actor !== 'courier' && actor !== 'admin') {
+    throw httpError(403, 'SELLER_CANNOT_MARK_DELIVERED');
+  }
   const store = getStore();
   const lock = await requireLock(`deliver:${orderId}`, 60);
 
@@ -266,10 +307,13 @@ async function markDelivered({ orderId, actorId }) {
       const machine = new OrderStateMachine(order.status);
       const visited = new Set([order.status]);
       for (const next of [ORDER_STATES.IN_TRANSIT, ORDER_STATES.DELIVERED]) {
-        if (!visited.has(next) && machine.canTransition(next)) {
-          machine.transition(next, { actor: 'seller', actorId, reason: 'Seller delivered' });
-          visited.add(next);
-        }
+        if (visited.has(next) || !machine.canTransition(next)) continue;
+        // Intermediate logistics hops are the machine normalizing the route, so
+        // they are attributed to `system`; only the delivery attestation itself
+        // carries the courier/admin identity.
+        const stepActor = next === ORDER_STATES.DELIVERED ? actor : 'system';
+        machine.transition(next, { actor: stepActor, actorId, reason: `${actor} delivered` });
+        visited.add(next);
       }
       if (!visited.has(ORDER_STATES.DELIVERED)) {
         throw httpError(409, `INVALID_DELIVERY_STATE:${order.status}`);
@@ -277,7 +321,13 @@ async function markDelivered({ orderId, actorId }) {
 
       const updated = await tx.order.update({
         where: { id: orderId },
-        data: { status: ORDER_STATES.DELIVERED, deliveredAt: new Date(), statusChangedBy: actorId },
+        data: {
+          status: ORDER_STATES.DELIVERED,
+          deliveredAt: new Date(),
+          deliveredBy: actorId,
+          deliveredByRole: actor,
+          statusChangedBy: actorId,
+        },
       });
 
       await audit(tx, {
@@ -319,6 +369,21 @@ async function completeOrder({ orderId, actorId = 'system', method = 'OTP_VERIFY
       }
       if (![ORDER_STATES.DELIVERY_CONFIRMED, ORDER_STATES.DELIVERED, ORDER_STATES.INSPECTION_PERIOD].includes(current.status)) {
         throw httpError(409, `INVALID_ORDER_STATE:${current.status}`);
+      }
+
+      // The timer may only settle an order whose delivery evidence passes every
+      // safeguard. DELIVERY_CONFIRMED is already authorized (the buyer's OTP/QR
+      // or an admin ruling), so the check applies to the timer-driven states.
+      if (method === 'AUTO_RELEASE' && current.status !== ORDER_STATES.DELIVERY_CONFIRMED) {
+        const { canRelease, missingSafeguards, fraudSignals } = await evaluateAutoRelease(tx, orderId);
+        if (!canRelease) {
+          return {
+            status: 'BLOCKED',
+            order: current,
+            missingSafeguards,
+            fraudSignals: fraudSignals || [],
+          };
+        }
       }
 
       const started = new OrderStateMachine(current.status);
@@ -430,15 +495,14 @@ async function cancelOrder({ orderId, actorId, reason }) {
 }
 
 /**
- * File a dispute (buyer or seller). Seller comparison resolves the acting
- * user to their SellerProfile because Order.sellerId is a profile id.
+ * File a dispute (buyer or seller). The role is derived from the order itself by
+ * `fileDispute` — never from "does this user happen to have a seller profile",
+ * which mislabelled any buyer who also sells and handed them the seller-only
+ * reason list.
  */
 async function disputeOrder({ orderId, filedBy, reason, description }) {
   const store = getStore();
-  const profile = await store.sellerProfile.findUnique({ where: { userId: filedBy } });
-  const role = profile ? 'seller' : 'buyer';
-
-  const dispute = await fileDispute({ orderId, filedBy, reason, description, role });
+  const dispute = await fileDispute({ orderId, filedBy, reason, description });
 
   const order = await store.order.findUnique({ where: { id: orderId } });
   if (order) await syncLegacyOrderStatus(order);

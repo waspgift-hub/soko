@@ -121,7 +121,7 @@ class WithdrawalData {
     return WithdrawalData(
       id: json['id']?.toString() ?? '',
       amount: _moneyOf(json['amount']),
-      provider: json['provider']?.toString() ?? 'clickpesa',
+      provider: json['provider']?.toString() ?? 'azampay',
       status: json['status']?.toString() ?? 'pending',
       providerPayoutId: json['providerPayoutId']?.toString(),
       idempotencyKey: json['idempotencyKey']?.toString(),

@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../models/chat_room.dart';
 import '../models/message_model.dart';
-import 'api_config.dart';
 import 'local_cache_service.dart';
 
 /// Firestore owner of DM chat (`chat_rooms`, `chat_rooms/<id>/messages`).
@@ -57,10 +54,10 @@ class ChatService {
     if (user == null) throw Exception('Not logged in');
     final roomId = roomIdFor(user.uid, otherUserId);
 
-    final existing = await _db.collection('chat_rooms').doc(roomId).get();
-    if (existing.exists) return roomId;
+    final roomRef = _db.collection('chat_rooms').doc(roomId);
+    if (await _roomExists(roomRef)) return roomId;
 
-    await _db.collection('chat_rooms').doc(roomId).set({
+    await roomRef.set({
       'participants': [user.uid, otherUserId],
       'last_message': '',
       'last_timestamp': FieldValue.serverTimestamp(),
@@ -79,21 +76,43 @@ class ChatService {
     return roomId;
   }
 
-Stream<List<ChatRoom>> getRooms() {
+  /// Whether the room document already exists.
+  ///
+  /// A `get` on a document that does not exist is rejected by rulesets that
+  /// gate reads on `resource.data` (production ran such a ruleset until
+  /// `resource == null` was added). Treat that denial as "missing" so the
+  /// caller can fall through to `create`, which the rules do allow.
+  Future<bool> _roomExists(DocumentReference<Map<String, dynamic>> roomRef) async {
+    try {
+      return (await roomRef.get()).exists;
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') return false;
+      rethrow;
+    }
+  }
+
+  Stream<List<ChatRoom>> getRooms() async* {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream.value([]);
+    if (user == null) {
+      yield const [];
+      return;
+    }
 
-    // Emit cached rooms immediately, then switch to live stream
-    final cachedStream = _getCachedRooms(user.uid).asStream();
+    // Cached rooms paint the list instantly while the live query warms up.
+    final cached = await _getCachedRooms(user.uid);
+    yield cached;
 
-    // Return a stream that first emits cached, then merges with live
-    return cachedStream
-        .asyncExpand((cached) => _getLiveRooms(user.uid).map((live) {
-              final liveIds = live.map((r) => r.id).toSet();
-              final extraCached = cached.where((r) => !liveIds.contains(r.id));
-              return [...live, ...extraCached];
-            }))
-        .handleError((_) => []);
+    try {
+      await for (final live in _getLiveRooms(user.uid)) {
+        final liveIds = live.map((r) => r.id).toSet();
+        final extraCached = cached.where((r) => !liveIds.contains(r.id));
+        yield [...live, ...extraCached];
+      }
+    } catch (e) {
+      // Keep the cached list on screen instead of collapsing to "no
+      // conversations" when the live query fails (offline, denied, index).
+      if (kDebugMode) debugPrint('ChatService: rooms stream error: $e');
+    }
   }
 
   /// Get cached rooms from Hive for instant UI
@@ -118,9 +137,17 @@ Stream<List<ChatRoom>> getRooms() {
         .limit(50)
         .snapshots()
         .map((snap) {
-      final rooms = snap.docs
-          .map((doc) => ChatRoom.fromMap(doc.id, doc.data()))
-          .toList();
+      final rooms = <ChatRoom>[];
+      for (final doc in snap.docs) {
+        try {
+          rooms.add(ChatRoom.fromMap(doc.id, doc.data()));
+        } catch (e) {
+          // One legacy/malformed room must not blank the whole inbox.
+          if (kDebugMode) {
+            debugPrint('ChatService: skipping malformed room ${doc.id}: $e');
+          }
+        }
+      }
       rooms.sort((a, b) => (b.lastTimestamp?.millisecondsSinceEpoch ?? 0)
           .compareTo(a.lastTimestamp?.millisecondsSinceEpoch ?? 0));
       unawaited(LocalCacheService.cacheRooms(rooms));
@@ -194,109 +221,127 @@ Stream<List<ChatRoom>> getRooms() {
 
     // Ensure room exists
     final roomRef = _db.collection('chat_rooms').doc(roomId);
-    final existing = await roomRef.get();
-    if (!existing.exists) {
-      await roomRef.set({
-        'participants': [user.uid, receiverId],
-        'last_message': '',
-        'last_timestamp': FieldValue.serverTimestamp(),
-        'unread_counts': {user.uid: 0, receiverId: 0},
-        'unread_count_buyer': 0,
-        'unread_count_seller': 0,
+
+    try {
+      if (!await _roomExists(roomRef)) {
+        await roomRef.set({
+          'participants': [user.uid, receiverId],
+          'last_message': '',
+          'last_timestamp': FieldValue.serverTimestamp(),
+          'unread_counts': {user.uid: 0, receiverId: 0},
+          'unread_count_buyer': 0,
+          'unread_count_seller': 0,
+          'product_id': ?productId,
+          'product_title': ?productName,
+        });
+      }
+
+      final msgId = clientMessageId ?? const Uuid().v4();
+      final msgRef = roomRef.collection('messages').doc(msgId);
+      await msgRef.set({
+        'sender_id': user.uid,
+        'senderId': user.uid,
+        'receiver_id': receiverId,
+        'receiverId': receiverId,
+        'content': content,
+        'text': content,
+        'timestamp': FieldValue.serverTimestamp(),
+        'is_read': false,
+        'isRead': false,
+        'is_delivered': true,
+        'isDelivered': true,
         'product_id': ?productId,
-        'product_title': ?productName,
+        'product_name': ?productName,
+        'reply_to': ?replyTo,
+        'reply_to_content': ?replyToContent,
+        'reply_to_sender': ?replyToSender,
+        'client_message_id': msgId,
       });
+
+      await roomRef.update({
+        'last_message': content,
+        'last_timestamp': FieldValue.serverTimestamp(),
+        'unread_counts.$receiverId': FieldValue.increment(1),
+      });
+
+      unawaited(LocalCacheService.cacheSingleMessage(roomId, Message(
+        id: msgId,
+        senderId: user.uid,
+        receiverId: receiverId,
+        content: content,
+        timestamp: DateTime.now(),
+        isRead: false,
+        isDelivered: true,
+        productId: productId,
+        productName: productName,
+        replyTo: replyTo,
+        replyToContent: replyToContent,
+        replyToSender: replyToSender,
+      )));
+      return msgId;
+    } catch (e) {
+      // Surface the failure to the caller so the bubble can be retried
+      // instead of silently staying "sending" forever.
+      if (kDebugMode) debugPrint('ChatService: send failed: $e');
+      return null;
     }
-
-    final msgId = clientMessageId ?? const Uuid().v4();
-    final msgRef = roomRef.collection('messages').doc(msgId);
-    await msgRef.set({
-      'sender_id': user.uid,
-      'senderId': user.uid,
-      'receiver_id': receiverId,
-      'receiverId': receiverId,
-      'content': content,
-      'text': content,
-      'timestamp': FieldValue.serverTimestamp(),
-      'is_read': false,
-      'isRead': false,
-      'is_delivered': true,
-      'isDelivered': true,
-      'product_id': ?productId,
-      'product_name': ?productName,
-      'reply_to': ?replyTo,
-      'reply_to_content': ?replyToContent,
-      'reply_to_sender': ?replyToSender,
-      'client_message_id': msgId,
-    });
-
-    await roomRef.update({
-      'last_message': content,
-      'last_timestamp': FieldValue.serverTimestamp(),
-      'unread_counts.$receiverId': FieldValue.increment(1),
-    });
-
-    unawaited(LocalCacheService.cacheSingleMessage(roomId, Message(
-      id: msgId,
-      senderId: user.uid,
-      receiverId: receiverId,
-      content: content,
-      timestamp: DateTime.now(),
-      isRead: false,
-      isDelivered: true,
-      productId: productId,
-      productName: productName,
-      replyTo: replyTo,
-      replyToContent: replyToContent,
-      replyToSender: replyToSender,
-    )));
-    return msgId;
   }
 
   /// Mark all unread incoming messages as read in Firestore.
+  ///
+  /// Best-effort: opening a chat must never throw because the room is new,
+  /// missing, or denied by rules — the inbox badge self-corrects on refresh.
   Future<void> markMessagesAsRead(String roomId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final snap = await _db
-        .collection('chat_rooms')
-        .doc(roomId)
-        .collection('messages')
-        .where('is_read', isEqualTo: false)
-        .get();
+    try {
+      final snap = await _db
+          .collection('chat_rooms')
+          .doc(roomId)
+          .collection('messages')
+          .where('is_read', isEqualTo: false)
+          .get();
 
-    if (snap.docs.isEmpty) return;
+      if (snap.docs.isEmpty) return;
 
-    final batch = _db.batch();
-    for (final doc in snap.docs) {
-      final data = doc.data();
-      // Only mark messages sent by the other person
-      final senderId = data['sender_id'] ?? data['senderId'] ?? '';
-      if (senderId != user.uid) {
-        batch.update(doc.reference, {'is_read': true, 'isRead': true});
+      final batch = _db.batch();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        // Only mark messages sent by the other person
+        final senderId = data['sender_id'] ?? data['senderId'] ?? '';
+        if (senderId != user.uid) {
+          batch.update(doc.reference, {'is_read': true, 'isRead': true});
+        }
       }
+      await batch.commit();
+    } catch (e) {
+      if (kDebugMode) debugPrint('ChatService: markMessagesAsRead failed: $e');
     }
-    await batch.commit();
   }
 
   Future<void> markAsRead(String roomId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final roomDoc = await _db.collection('chat_rooms').doc(roomId).get();
-    final room = roomDoc.data();
-    if (room == null) return;
+    try {
+      final roomDoc = await _db.collection('chat_rooms').doc(roomId).get();
+      final room = roomDoc.data();
+      if (room == null) return;
 
-    final userDoc = await _db.collection('users').doc(user.uid).get();
-    final userData = userDoc.data();
-    final isBuyer = userData?['isBuyer'] == true;
-    final legacyField = isBuyer ? 'unread_count_buyer' : 'unread_count_seller';
+      final userDoc = await _db.collection('users').doc(user.uid).get();
+      final userData = userDoc.data();
+      final isBuyer = userData?['isBuyer'] == true;
+      final legacyField = isBuyer ? 'unread_count_buyer' : 'unread_count_seller';
 
-    // Clear this user's unread (per-user map first, legacy field second).
-    await _db.collection('chat_rooms').doc(roomId).update({
-      'unread_counts.${user.uid}': 0,
-      legacyField: 0,
-    });
+      // Clear this user's unread (per-user map first, legacy field second).
+      await _db.collection('chat_rooms').doc(roomId).update({
+        'unread_counts.${user.uid}': 0,
+        legacyField: 0,
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('ChatService: markAsRead failed: $e');
+    }
   }
 
   Future<void> addReaction({

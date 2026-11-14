@@ -112,7 +112,7 @@ const TERMS = [
     title: { sw: '5. Bei na taarifa za bidhaa', en: '5. Pricing and product information' },
     body: [
       { sw: 'Bei zinazoonyeshwa ni za kabla ya uzinduzi, zinatokana na usanidi wa sasa wa mfumo, na zinaweza kubadilika. Bei halisi itakuwa wazi ndani ya app kabla ya malipo yoyote.', en: 'Prices shown are pre-launch, reflect the current system configuration, and may change. The price that applies will be clear inside the app before any payment.' },
-      { sw: 'Hakuna kamisheni ya jukwaa iliyowekwa kwenye mfumo kwa sasa. Watoa huduma wa malipo wanaweza kutoza ada zao, na ada hizo hazidhibitiwi na Soko Vibe.', en: 'No platform commission is currently configured. Payment providers may charge their own fees, and those fees are not controlled by Soko Vibe.' },
+      { sw: 'Soko Vibe inatoza kamisheni ya jukwaa inayolipwa na mnunuzi juu ya bei ya bidhaa (kwa sasa asilimia 3.5); muuzaji hupokea bei kamili ya bidhaa pamoja na usafirishaji. Kiwango kilicho hai kinaonyeshwa kabla ya malipo. Watoa huduma wa malipo wanaweza kutoza ada zao, na ada hizo hazidhibitiwi na Soko Vibe.', en: 'Soko Vibe charges a buyer-pays-top platform commission on the item price (currently 3.5%); the seller still receives the full item price plus shipping. The live rate is shown before payment. Payment providers may charge their own fees, and those fees are not controlled by Soko Vibe.' },
     ],
   },
   {

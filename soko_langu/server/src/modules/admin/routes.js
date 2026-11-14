@@ -2,6 +2,7 @@ const { Router } = require('express');
 const commerceStore = require('../../services/commerce-store');
 const bcrypt = require('bcryptjs');
 const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth');
+const { requireAdminPermission } = require('../../middleware/admin-rbac');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const adminService = require('./admin-service');
@@ -15,6 +16,7 @@ const { publicPayload, normalizeRelease } = require('../config/app-release');
 const { buildFacts, maybePolish } = require('./insights');
 const cache = require('../../../cache');
 const productStore = require('../products/product-store');
+const { resolvePlatformRate } = require('../../utils/commission-parity');
 const crypto = require('crypto');
 
 // A write to a product invalidates its detail entry by id and slug plus every
@@ -51,10 +53,12 @@ router.get('/config/app-version', async (req, res) => {
 
 router.get('/config/commission', async (req, res) => {
   try {
-    const s = (await settingsService.getSettings()) || {};
+    // Same resolver the money paths use, so the rate the app shows is exactly
+    // the rate checkout will charge (panel value first, env fallback).
+    const platformCommissionPct = await resolvePlatformRate();
     res.json({
       success: true,
-      data: { platformCommissionPct: settingsService.commissionPercent(s) },
+      data: { platformCommissionPct },
     });
   } catch (e) {
     // Must not block the client. It falls back to charging 0, which is the same
@@ -96,6 +100,7 @@ router.get(
 router.put(
   '/users/:userId/status',
   requireActiveAdmin,
+  requireAdminPermission('users:write'),
   validate({
     body: z.object({
       accountStatus: z.enum(['active', 'pending', 'suspended', 'deleted']),
@@ -288,6 +293,7 @@ function withdrawalError(res, e) {
 // List withdrawals (default pending first)
 router.get(
   '/withdrawals',
+  requireAdminPermission('finance:read'),
   validate({
     query: z.object({
       status: z.string().optional(),
@@ -319,7 +325,7 @@ router.get(
 );
 
 // Withdrawal status + payout attempts
-router.get('/withdrawals/:id/status', async (req, res) => {
+router.get('/withdrawals/:id/status', requireAdminPermission('finance:read'), async (req, res) => {
   const store = getStore();
   const withdrawal = await store.withdrawal.findUnique({
     where: { id: req.params.id },
@@ -330,7 +336,7 @@ router.get('/withdrawals/:id/status', async (req, res) => {
 });
 
 // Process a pending withdrawal: sends the ClickPesa mobile-money payout.
-router.post('/withdrawals/:id/process', async (req, res) => {
+router.post('/withdrawals/:id/process', requireAdminPermission('finance:write'), async (req, res) => {
   try {
     const result = await walletService.processWithdrawal({
       withdrawalId: req.params.id,
@@ -350,7 +356,7 @@ router.post('/withdrawals/:id/process', async (req, res) => {
 });
 
 // Retry a failed withdrawal: resets to pending, then processes again.
-router.post('/withdrawals/:id/retry', async (req, res) => {
+router.post('/withdrawals/:id/retry', requireAdminPermission('finance:write'), async (req, res) => {
   try {
     const store = getStore();
     const current = await store.withdrawal.findUnique({ where: { id: req.params.id } });
@@ -382,6 +388,7 @@ router.post('/withdrawals/:id/retry', async (req, res) => {
 // Confirm a payout completed (provider callback or manual confirmation).
 router.post(
   '/withdrawals/:id/confirm',
+  requireAdminPermission('finance:write'),
   validate({ body: z.object({ providerPayoutId: z.string().optional() }) }),
   async (req, res) => {
     try {
@@ -782,6 +789,10 @@ router.get('/settings', async (req, res, next) => {
 // Any key not present in DEFAULTS is rejected inside safeMerge.
 router.put(
   '/settings',
+  // Platform settings include the commission rate, escrow window and gateway
+  // credentials, so a support or moderator session must not be able to change
+  // them. Only super_admin/admin (or an explicit `settings:write` grant) pass.
+  requireAdminPermission('settings:write'),
   validate({
     body: z.object({
       patch: z.record(z.string(), z.any()).optional().default({}),
@@ -898,15 +909,11 @@ router.post(
       const name = byEmail[email] && byEmail[email].name ? String(byEmail[email].name).split(' ')[0] : '';
       const greet = name ? 'Habari ' + escapeHtml(name) + ',' : 'Habari,';
       return (
-        '<!doctype html><html><body style="margin:0;background:#f4f0ee;font-family:Segoe UI,Arial,sans-serif">' +
-        '<div style="max-width:560px;margin:24px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e7dddd">' +
-        '<div style="padding:20px 28px;background:linear-gradient(120deg,#5a44e8,#c0004c,#e07900);color:#fff;font-size:20px;font-weight:800;letter-spacing:-.02em">Soko Vibe</div>' +
         '<div style="padding:28px;color:#201a1b;line-height:1.6">' +
         '<p style="margin:0 0 14px">' + greet + '</p>' +
         '<div style="white-space:pre-line">' + escapeHtml(body) + '</div>' +
         '<p style="margin:26px 0 0;color:#6f6768;font-size:13px">Soko Vibe — dinasikiliza maoni yako.<br>' +
-        'Hutaki kupokea ujumbe huu tena? Tujibu na barua hii tutakuondoa kwenye orodha.</p>' +
-        '</div></div></body></html>'
+        'Hutaki kupokea ujumbe huu tena? Tujibu na barua hii tutakuondoa kwenye orodha.</p>'
       );
     };
 
@@ -1116,6 +1123,7 @@ router.get(
 router.post(
   '/staff',
   requireActiveAdmin,
+  requireAdminPermission('staff:write'),
   validate({
     body: z.object({
       email: z.string().email(),
@@ -1166,6 +1174,7 @@ router.post(
 router.put(
   '/staff/:id',
   requireActiveAdmin,
+  requireAdminPermission('staff:write'),
   validate({
     params: z.object({ id: z.string().min(1) }),
     body: z.object({
@@ -1217,6 +1226,7 @@ router.put(
 router.delete(
   '/staff/:id',
   requireActiveAdmin,
+  requireAdminPermission('staff:write'),
   validate({ params: z.object({ id: z.string().min(1) }) }),
   async (req, res) => {
     const cur = await commerceStore.getDocument(STAFF_COLL, req.params.id);
@@ -1263,7 +1273,10 @@ router.post(
     await commerceStore.setDocument(SESSION_COLL, token, {
       token, staffId: doc.id, email: d.email, role: d.role, name: d.name,
       createdAt: commerceStore.serverTimestamp(),
-      expiresAt: commerceStore.serverTimestamp(),
+      // expiresAtMs is what `authenticateAdmin` compares; a serverTimestamp
+      // here made every session expire at creation time.
+      expiresAtMs: expiresAt.getTime(),
+      expiresAt,
     });
     await commerceStore.updateDocument(STAFF_COLL, doc.id, { lastLoginAt: commerceStore.serverTimestamp() });
     res.json({ success: true, data: { token, staff: { id: doc.id, email: d.email, name: d.name, role: d.role, permissions: d.permissions || permsFor(d.role) }, expiresAt: expiresAt.toISOString() } });

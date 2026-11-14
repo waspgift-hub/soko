@@ -1,0 +1,125 @@
+name: CI
+
+# Verification only. Nothing here deploys, publishes a release, or talks to a
+# live payment provider: the deploy path stays manual and separate so a red
+# build can never move traffic.
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop, 'feat/**', 'fix/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — lint, secret scan, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: soko_langu/server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: soko_langu/server/.node-version
+          cache: npm
+          cache-dependency-path: soko_langu/server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Parses every src file and proves each relative require resolves. This is
+      # the gate that used to be `eslint src/` against a linter that was never
+      # installed, so it silently never ran.
+      - name: Lint
+        run: npm run lint
+
+      # Blocks committed provider tokens / private keys. Tracked files only:
+      # .env and keystores are gitignored.
+      - name: Secret scan
+        run: npm run security:secrets
+
+      # Hermetic: the live E2E suite is opt-in and skips without E2E_LIVE=1, so
+      # this job needs no network access to the deployed server.
+      - name: Tests
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee backend-tests.log
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-log
+          path: soko_langu/server/backend-tests.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  firestore-rules:
+    name: Firestore rules — emulator suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: soko_langu/server/.node-version
+          cache: npm
+          cache-dependency-path: soko_langu/server/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Install dependencies
+        working-directory: soko_langu/server
+        run: npm ci
+
+      # Rules can only be proven against the emulator (the suite asserts that
+      # writes are denied, which a mock cannot show). Without a live emulator
+      # the suite would skip and report green, so the emulator is mandatory and
+      # its absence fails the job.
+      - name: Start emulator and run rules tests
+        working-directory: soko_langu
+        run: |
+          npx --yes firebase-tools@13 emulators:exec \
+            --only firestore --project soko-test \
+            "cd server && npm run test:rules"
+
+  flutter:
+    name: Flutter — analyze, tests, build validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: soko_langu
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Tests
+        run: flutter test --no-pub --reporter expanded
+
+      # Build validation, not release: debug artifacts need no signing keys, so
+      # this runs on every PR. The signed release APK/AAB stays in build.yml,
+      # which is push-only to main/master.
+      - name: Build (debug APK, proves the Android target compiles)
+        run: flutter build apk --debug --no-pub

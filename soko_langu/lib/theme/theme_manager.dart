@@ -141,7 +141,7 @@ class ThemeManager extends ChangeNotifier {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: _isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: _isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: _isDark ? const Color(0xFF0B0B0B) : Colors.white,
+        systemNavigationBarColor: _isDark ? const Color(0xFF000000) : Colors.white,
         systemNavigationBarIconBrightness: _isDark ? Brightness.light : Brightness.dark,
       ),
     );

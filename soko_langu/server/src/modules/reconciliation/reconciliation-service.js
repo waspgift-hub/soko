@@ -1,5 +1,5 @@
 const { getStore } = require('../../config/database');
-const { clickpesaQueryPayments, clickpesaQueryPayouts } = require('../../../clickpesa');
+const { azampayQueryPayments, azampayQueryPayouts } = require('../../../clickpesa');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -29,7 +29,7 @@ function isSuccessful(status) {
   return ['SUCCESS', 'SUCCESSFUL', 'PAID', 'COMPLETED'].includes(String(status || '').toUpperCase());
 }
 
-async function runReconciliation({ provider = 'clickpesa', periodStart, periodEnd, skipWhenQuiet = false }) {
+async function runReconciliation({ provider = 'azampay', periodStart, periodEnd, skipWhenQuiet = false }) {
   if (!periodStart || !periodEnd) throw httpError(400, 'periodStart and periodEnd required');
   const start = new Date(periodStart);
   const end = new Date(periodEnd);
@@ -54,11 +54,11 @@ async function runReconciliation({ provider = 'clickpesa', periodStart, periodEn
   const providerErrors = [];
   try {
     const [payments, payouts] = await Promise.all([
-      clickpesaQueryPayments({}).catch((e) => {
+      azampayQueryPayments({}).catch((e) => {
         providerErrors.push(`payments: ${e.message}`);
         return [];
       }),
-      clickpesaQueryPayouts({}).catch((e) => {
+      azampayQueryPayouts({}).catch((e) => {
         providerErrors.push(`payouts: ${e.message}`);
         return [];
       }),

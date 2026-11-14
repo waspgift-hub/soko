@@ -39,7 +39,7 @@ class ErrorKeys {
 ///
 /// [serverMessage] should be the raw `error` string the API returned in its
 /// body (if any). It wins for business-level rejections (e.g. 422 validation
-/// or a ClickPesa 400 with a human-readable reason) so the user sees the
+/// or an AzamPay 400 with a human-readable reason) so the user sees the
 /// actual cause instead of a guessed key.
 String translateHttpStatus(int statusCode, {String? serverMessage}) {
   switch (statusCode) {

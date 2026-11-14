@@ -11,13 +11,13 @@
 //     transaction and credited the wallet in a SECOND one, so a crash between
 //     them left the money deducted and the anti-double-refund flag already set.
 //
-// Firestore, ClickPesa and Redis are all faked; nothing here touches a network.
+// Firestore, AzamPay and Redis are all faked; nothing here touches a network.
 const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 const FIREBASE_CONFIG = require.resolve('../src/config/firebase');
 const PROVIDER_FACTORY = require.resolve('../src/modules/payments/provider-factory');
-const CLICKPESA = require.resolve('../clickpesa');
+const AZAMPAY = require.resolve('../azampay');
 const WALLET_SERVICE = require.resolve('../src/modules/wallet/wallet-service');
 
 const locks = require('./helpers/locks');
@@ -144,7 +144,7 @@ function seedDb() {
         sellerId: SELLER,
         amount: AMOUNT,
         status: 'reserved',
-        provider: 'clickpesa',
+        provider: 'azampay',
         phoneNumber: '0754000000',
       },
     },
@@ -168,13 +168,13 @@ function installStubs() {
     loaded: true,
     exports: { getProvider: () => provider },
   };
-  // `processWithdrawal` lazily requires the root clickpesa client to ask whether
+  // `processWithdrawal` lazily requires the root azampay client to ask whether
   // the gateway already holds a payout.
-  require.cache[CLICKPESA] = {
-    id: CLICKPESA,
-    filename: CLICKPESA,
+  require.cache[AZAMPAY] = {
+    id: AZAMPAY,
+    filename: AZAMPAY,
     loaded: true,
-    exports: { clickpesaQueryPayouts: async (filters) => gatewayPayouts(filters) },
+    exports: { azampayQueryPayouts: async (filters) => gatewayPayouts(filters) },
   };
   delete require.cache[WALLET_SERVICE];
 }
@@ -198,7 +198,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const k of [FIREBASE_CONFIG, PROVIDER_FACTORY, CLICKPESA, WALLET_SERVICE]) {
+  for (const k of [FIREBASE_CONFIG, PROVIDER_FACTORY, AZAMPAY, WALLET_SERVICE]) {
     delete require.cache[k];
   }
   locks.restoreLocks();

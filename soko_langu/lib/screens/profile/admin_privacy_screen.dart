@@ -12,8 +12,6 @@ import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
-import '../../theme/app_typography.dart';
-import '../../theme/design_tokens.dart';
 
 /// Admin Privacy & Verification settings screen.
 ///
@@ -22,7 +20,7 @@ import '../../theme/design_tokens.dart';
 /// * Claim / change their username (unique, server-validated)
 /// * See their current Blue Tick / verification status
 ///
-/// Everything here is written to server-owned documents — the client never
+/// Everything here is written to server-owned documents â€” the client never
 /// writes trust or verification state directly.
 class AdminPrivacyScreen extends StatefulWidget {
   const AdminPrivacyScreen({super.key});
@@ -38,7 +36,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
 
   bool _isPrivate = false;
   bool _isLoading = true;
-  String? _username;
   String? _usernameError;
   final TextEditingController _usernameController = TextEditingController();
   bool _isSavingUsername = false;
@@ -69,7 +66,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
 
       final name = profile?.username ?? '';
       setState(() {
-        _username = name;
         _usernameController.text = name;
         _isPrivate = visibility?['isPrivate'] == true;
         _isLoading = false;
@@ -145,7 +141,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
       if (!mounted) return;
 
       setState(() {
-        _username = newName;
         _usernameError = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,12 +166,12 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.tr('ads_config_title')), // placeholder — will fix
+        title: Text(context.tr('ads_config_title')), // placeholder â€” will fix
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppInsets.s4),
         children: [
-          _SectionHeader(title: context.tr('privacy_settings')),
+          _sectionHeader(title: context.tr('privacy_settings')),
 
           const SizedBox(height: AppInsets.s2),
 
@@ -221,7 +216,7 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
           const SizedBox(height: AppInsets.s6),
 
           // Username claim
-          _SectionHeader(title: context.tr('username')),
+          _sectionHeader(title: context.tr('username')),
 
           Padding(
             padding: const EdgeInsets.all(AppInsets.s4),
@@ -236,7 +231,6 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
                     errorText: _usernameError,
                     prefixIcon: const Icon(Icons.person_outline),
                   ),
-                  onChanged: (v) => setState(() => _username = v),
                 ),
                 const SizedBox(height: AppInsets.s2),
                 SizedBox(
@@ -259,7 +253,7 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
           const SizedBox(height: AppInsets.s6),
 
           // Blue Tick status (read-only)
-          _SectionHeader(title: context.tr('blue_tick')),
+          _sectionHeader(title: context.tr('blue_tick')),
 
           Padding(
             padding: const EdgeInsets.all(AppInsets.s4),
@@ -312,7 +306,7 @@ class _AdminPrivacyScreenState extends State<AdminPrivacyScreen> {
     );
   }
 
-  Widget _SectionHeader({required String title}) {
+  Widget _sectionHeader({required String title}) {
     return Padding(
       padding: const EdgeInsets.only(
         left: AppInsets.s4,

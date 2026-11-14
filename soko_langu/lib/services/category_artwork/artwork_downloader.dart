@@ -103,7 +103,7 @@ class ArtworkDownloader {
     final uri = baseUrl.resolve('manifest.json');
     try {
       final resp = await _client
-          .get(uri, headers: {if (etag != null) 'If-None-Match': etag})
+          .get(uri, headers: {'If-None-Match': ?etag})
           .timeout(const Duration(seconds: 20));
       if (resp.statusCode == 304) {
         throw const ArtworkDownloadException(

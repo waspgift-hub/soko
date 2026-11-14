@@ -2,14 +2,10 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/banner_model.dart';
-import '../../services/banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/design_tokens.dart';
-import '../../theme/app_typography.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/banners/campaign_banner_card.dart';
 
@@ -127,6 +123,24 @@ class _AdminBannerManagementScreenState extends State<AdminBannerManagementScree
     _loadCampaigns();
   }
 
+  // The chips used to write their field and stop, so the result list only
+  // refreshed after some other action. The filter fields are read inside
+  // _loadCampaigns, so applying a filter means set state, then reload once.
+  void _applyTypeFilter(BannerType? v) {
+    setState(() => _typeFilter = v);
+    _onFilterChanged();
+  }
+
+  void _applyPlacementFilter(BannerPlacement? v) {
+    setState(() => _placementFilter = v);
+    _onFilterChanged();
+  }
+
+  void _applyStatusFilter(BannerStatus? v) {
+    setState(() => _statusFilter = v);
+    _onFilterChanged();
+  }
+
   Future<void> _onRefresh() async {
     await _loadCampaigns();
   }
@@ -200,14 +214,14 @@ class _AdminBannerManagementScreenState extends State<AdminBannerManagementScree
                 label: 'All Types',
                 value: _typeFilter,
                 selected: _typeFilter == null,
-                onSelected: (v) => setState(() => _typeFilter = v),
+                onSelected: (v) => _applyTypeFilter(v),
               ),
               ...BannerType.values.map(
                 (type) => _FilterChip<BannerType?>(
                   label: type.name,
                   value: type,
                   selected: _typeFilter == type,
-                  onSelected: (v) => setState(() => _typeFilter = v),
+                  onSelected: (v) => _applyTypeFilter(v),
                 ),
               ),
               const SizedBox(width: Ds.sp3),
@@ -215,14 +229,14 @@ class _AdminBannerManagementScreenState extends State<AdminBannerManagementScree
                 label: 'All Placements',
                 value: _placementFilter,
                 selected: _placementFilter == null,
-                onSelected: (v) => setState(() => _placementFilter = v),
+                onSelected: (v) => _applyPlacementFilter(v),
               ),
               ...BannerPlacement.values.map(
                 (p) => _FilterChip<BannerPlacement?>(
                   label: p.name,
                   value: p,
                   selected: _placementFilter == p,
-                  onSelected: (v) => setState(() => _placementFilter = v),
+                  onSelected: (v) => _applyPlacementFilter(v),
                 ),
               ),
               const SizedBox(width: Ds.sp3),
@@ -230,14 +244,14 @@ class _AdminBannerManagementScreenState extends State<AdminBannerManagementScree
                 label: 'All Status',
                 value: _statusFilter,
                 selected: _statusFilter == null,
-                onSelected: (v) => setState(() => _statusFilter = v),
+                onSelected: (v) => _applyStatusFilter(v),
               ),
               ...BannerStatus.values.map(
                 (s) => _FilterChip<BannerStatus?>(
                   label: s.name,
                   value: s,
                   selected: _statusFilter == s,
-                  onSelected: (v) => setState(() => _statusFilter = v),
+                  onSelected: (v) => _applyStatusFilter(v),
                 ),
               ),
             ],
@@ -325,7 +339,7 @@ class _AdminBannerManagementScreenState extends State<AdminBannerManagementScree
       child: ListView.separated(
         padding: const EdgeInsets.all(Ds.sp3),
         itemCount: _campaigns.length + (_hasMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: Ds.sp2),
+        separatorBuilder: (_, _) => const SizedBox(height: Ds.sp2),
         itemBuilder: (context, index) {
           if (index >= _campaigns.length) {
             return const Center(
@@ -785,7 +799,6 @@ class _CampaignTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isActive = campaign.isCurrentlyActive();
 
     return Card(
       child: InkWell(

@@ -5,6 +5,7 @@
 /// expressed through [OtpVerificationRequest] and resolved through
 /// [OtpVerificationResult]. The UI is shared; each flow supplies its own
 /// backend verification operation via the controller/service layer.
+library;
 
 /// Purpose of the OTP challenge. The purpose is bound to the verification
 /// challenge server-side so a code issued for one purpose cannot be reused

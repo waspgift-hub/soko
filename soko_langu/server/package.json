@@ -9,8 +9,9 @@
     "worker": "node src/workers/index.js",
     "test": "node --test test/*.test.js",
     "test:rules": "node --test test/firestore-rules.test.js",
-    "test:e2e": "node --test test/e2e.live.test.js",
-    "lint": "eslint src/"
+    "test:e2e": "node scripts/run-e2e.js",
+    "lint": "node scripts/lint.js",
+    "security:secrets": "node scripts/secret-scan.js"
   },
   "engines": {
     "node": ">=18"

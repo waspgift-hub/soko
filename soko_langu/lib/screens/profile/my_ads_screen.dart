@@ -10,7 +10,6 @@ import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ds/ds.dart';
-import '../../theme/app_colors.dart';
 
 class MyAdsScreen extends StatefulWidget {
   const MyAdsScreen({super.key});

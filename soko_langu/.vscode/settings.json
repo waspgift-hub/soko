@@ -3,5 +3,6 @@
     "CodeGPT.apiKey": "Ollama",
     "k6.executable": "C:/Program Files/k6/k6.exe",
     "k6.thresholdsOnRun": true,
-    "k6.autoRunEnabled": true
+    "k6.autoRunEnabled": true,
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

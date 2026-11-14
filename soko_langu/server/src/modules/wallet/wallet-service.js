@@ -7,6 +7,7 @@
 // return shapes are unchanged so routes, admin routes, and finance-jobs keep
 // their contracts.
 const { getFirebaseFirestore } = require('../../config/firebase');
+const { getStore } = require('../../config/database');
 const { resolvePayoutPhone } = require('../../services/payout-phone');
 const { requireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('../payments/provider-factory');
@@ -225,6 +226,30 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
 }
 
 /**
+ * Identity gate for payouts.
+ *
+ * A withdrawal is the one action that turns platform-held money into cash sent
+ * to a phone number chosen at request time. Without a verified identity, a
+ * hijacked seller account can drain the wallet to an attacker's number even
+ * though every balance/limit check passes. The gate is fail-closed: no approved
+ * KYC application means no payout, and there is no operator bypass on this path.
+ *
+ * KYC rows are keyed by the seller's user id; the store collapses
+ * `sellerProfile.id` to `userId`, but both are read so the rule survives a
+ * data layer where the two differ.
+ */
+async function assertWithdrawalKyc(sellerId) {
+  const store = getStore();
+  const profile = await store.sellerProfile.findUnique({ where: { id: sellerId } });
+  const userId = profile ? (profile.userId || profile.id) : sellerId;
+
+  const kyc = await store.kycApplication.findUnique({ where: { userId } });
+  if (!kyc || kyc.status !== 'approved' || kyc.approved !== true) {
+    throw httpError(403, 'KYC_REQUIRED');
+  }
+}
+
+/**
  * Seller requests a withdrawal. Debits the ledger atomically (idempotent on
  * `ledger_withdrawal_{id}`), then returns the withdrawal + freshly serialized
  * wallet.
@@ -260,6 +285,10 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
       throw httpError(400, 'INVALID_AMOUNT');
     }
 
+    // Identity before money. This also runs for the agent/tool withdrawal path,
+    // not just the HTTP route, so no caller can skip it.
+    await assertWithdrawalKyc(sellerId);
+
     const wallet = await commerceStore.getWallet(sellerId);
     if (wallet.status !== 'active') throw httpError(409, 'WALLET_FROZEN');
 
@@ -282,7 +311,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
     await ref.set({
       sellerId: String(sellerId),
       amount: Math.round(requested),
-      provider: 'clickpesa',
+      provider: 'azampay',
       status: WITHDRAWAL_STATUS.REQUESTED,
       phoneNumber: phoneNumber || null,
       idempotencyKey: `withdrawal_${sellerId}_${ref.id}`,
@@ -357,8 +386,8 @@ async function _gatewayHasPayout(orderReference) {
     // Lazy require: `clickpesa.js` pulls in the axios client and token cache, and
     // wallet-service is imported by many tests that never touch the gateway.
     // eslint-disable-next-line global-require
-    const { clickpesaQueryPayouts } = require('../../../clickpesa');
-    rows = await clickpesaQueryPayouts({ orderReference });
+    const { azampayQueryPayouts } = require('../../../azampay');
+    rows = await azampayQueryPayouts({ orderReference });
   } catch (e) {
     console.warn(
       `[wallet] payout lookup failed for ${orderReference}: ${e.message} — treating as unknown`,
@@ -457,7 +486,7 @@ async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const provider = getProvider(withdrawal.provider || 'clickpesa');
+    const provider = getProvider(withdrawal.provider || 'azampay');
     const payout = await provider.initiatePayout({
       amount: withdrawal.amount,
       orderReference,
@@ -784,6 +813,7 @@ module.exports = {
   getWalletDetail,
   ensureWallet,
   requestWithdrawal,
+  assertWithdrawalKyc,
   processWithdrawal,
   confirmPayout,
   creditLegacyBalance,

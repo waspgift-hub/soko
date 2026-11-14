@@ -24,8 +24,10 @@ const { optionalAuth } = require('../../middleware/auth');
 const paymentService = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
-const { computeSellerParity } = require('../../utils/commission-parity');
+const { computeSellerParity, resolvePlatformRate } = require('../../utils/commission-parity');
+const { evaluateOrderRisk, raiseFraudAlerts } = require('../trust/order-risk');
 const { resolveEffectivePrice } = require('../../../money');
+const { normalizePaymentMethod, assertCanonicalPaymentMethod } = require('../../utils/payment-method');
 const { LEGACY_STATUS } = require('../legacy-compat/legacy-status');
 
 function httpError(status, message) {
@@ -38,15 +40,20 @@ function httpError(status, message) {
 // `transactions` collections use these exact field names in the Flutter app.
 function buildLegacyMirror(order, body) {
   const productPrice = Number(order.productPrice);
-  // Soko Vibe charges no fees; ClickPesa's own charges are deducted by
-  // ClickPesa outside this ledger, so the mirror shows zero platform/ClickPesa
-  // lines and the full amount flowing to the seller.
-  const platformFee = 0;
+  // Buyer pays the 3.5% commission on top (Terms 8.2); the mirror must show the
+  // same fee the escrow actually charged, otherwise the invoice screen invents
+  // a different total from the server's.
+  const platformFee = Number(order.platformCommission ?? 0);
   const clickpesaFee = 0;
+  const paymentMethod = normalizePaymentMethod(body.preferredPaymentMethod || body.paymentMethod || 'escrow') || 'escrow';
   return {
     orderId: order.id,
     status: LEGACY_STATUS[order.status] || 'pending',
     escrowStatus: 'none',
+    paymentMethod,
+    paymentStatus: paymentMethod === 'cod' ? 'cash_due' : 'unpaid',
+    fulfillmentStatus: 'awaiting_shipping_quote',
+    quoteAcceptedByBuyer: false,
     buyerId: body.buyerId || null, // Firebase uid where available
     sellerId: body.sellerId || null,
     buyerName: body.buyerName || null,
@@ -199,6 +206,7 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
   const body = req.body || {};
   if (body.buyerId && body.buyerId !== req.user.firebaseUid) throw httpError(403, 'FORBIDDEN');
 
+  const paymentMethod = assertCanonicalPaymentMethod(body.preferredPaymentMethod || body.paymentMethod || 'escrow');
   const clientPrice = Math.round(Number(body.productPrice));
   if (!Number.isFinite(clientPrice) || clientPrice <= 0) throw httpError(400, 'INVALID_PRICE');
   const quantity = Math.max(1, Math.round(Number(body.quantity) || 1));
@@ -216,16 +224,29 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
   const sellerId = await ensureSellerProfile(body.sellerId, body.sellerName, body.sellerPhone);
   if (!sellerId) throw httpError(404, 'SELLER_NOT_FOUND');
 
-  const { commission, totalAmount } = computeSellerParity(BigInt(productPrice), 0n);
+  const { commission, totalAmount } = computeSellerParity(
+    BigInt(productPrice),
+    0n,
+    await resolvePlatformRate(),
+  );
 
+  // Same creation-time gate as the app checkout: a fake self-purchase must not
+  // become an order, and velocity is recorded for the admin fraud panel.
+  const now = new Date();
+  const risk = await evaluateOrderRisk(store, { buyerId: req.user.id, sellerId, now });
+  if (risk.blocked) throw httpError(403, 'SELF_DEALING_BLOCKED');
+
+  const orderNumber = generateOrderNumber();
   const order = await store.order.create({
     data: {
-      orderNumber: generateOrderNumber(),
+      orderNumber,
       buyerId: req.user.id,
       sellerId,
       // Born needing a shipping quote: the seller sets cost, the NORMAL quote
       // auto-approves, then and only then can the buyer fund the escrow.
       status: ORDER_STATES.PENDING_SHIPPING_FEE,
+      riskSignals: risk.signals,
+      riskScore: risk.score,
       productSnapshot: {
         productId: body.productId || null,
         name: body.productName || 'Mall',
@@ -250,13 +271,25 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
       totalAmount,
       currency: 'TZS',
       shippingMethod: body.deliveryType || 'local',
-      placedAt: new Date(),
+      placedAt: now,
     },
   });
 
+  if (risk.signals.length) {
+    await raiseFraudAlerts(store, {
+      ...risk,
+      buyerId: req.user.id,
+      sellerId,
+      productId: body.productId || null,
+      orderId: order.id,
+      orderNumber,
+      now,
+    });
+  }
+
   // App-parity mirror: legacy Flutter screens read Firestore orders/transactions.
   if (body.buyerPhone || body.sellerId) {
-    await mirrorOrderToLegacy(order, { ...body, buyerPhone: body.buyerPhone || req.user.phone || null });
+    await mirrorOrderToLegacy(order, { ...body, buyerPhone: body.buyerPhone || req.user.phone || null, preferredPaymentMethod: paymentMethod });
   }
 
   return res.json({ success: true, order: { orderId: order.id, buyerId: req.user.id } });
@@ -360,6 +393,44 @@ router.get('/orders/guest/list', optionalAuth, resolveShopBuyer, async (req, res
       };
     }),
   });
+});
+
+// Buyer accepts the seller's shipping quote (required before dispatch, esp. COD).
+router.post('/orders/:id/accept-quote', optionalAuth, resolveShopBuyer, async (req, res) => {
+  const store = getStore();
+  const orderId = req.params.id;
+  const order = await store.order.findUnique({ where: { id: orderId } });
+  if (!order) return res.status(404).json({ error: 'ORDER_NOT_FOUND' });
+  if (order.buyerId !== req.user.id) return res.status(403).json({ error: 'FORBIDDEN' });
+
+  const tx = await commerceStore.getDocument('transactions', orderId).catch(() => null)
+    || await commerceStore.getDocument('orders', orderId).catch(() => null);
+  if (!tx) return res.status(404).json({ error: 'ORDER_NOT_FOUND' });
+
+  const pm = normalizePaymentMethod(tx.paymentMethod || 'escrow');
+  if (pm !== 'cod' && pm !== 'escrow') return res.status(400).json({ error: 'INVALID_PAYMENT_METHOD' });
+
+  const status = String(tx.status || '').toLowerCase();
+  if (status !== 'quoted') {
+    return res.status(409).json({ error: 'INVALID_ORDER_STATE', message: 'Quote not ready or already accepted' });
+  }
+
+  const totalAmount = Number(tx.totalAmount || 0);
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    return res.status(400).json({ error: 'INVALID_AMOUNT' });
+  }
+
+  const patch = {
+    quoteAcceptedByBuyer: true,
+    quoteAcceptedAt: commerceStore.serverTimestamp(),
+    paymentStatus: pm === 'cod' ? 'cash_due' : 'unpaid',
+    fulfillmentStatus: 'ready_for_dispatch',
+    updatedAt: commerceStore.serverTimestamp(),
+  };
+  await commerceStore.upsertDocument('orders', orderId, patch);
+  await commerceStore.upsertDocument('transactions', orderId, patch);
+
+  return res.json({ success: true, orderId, paymentMethod: pm, totalAmount });
 });
 
 module.exports = router;

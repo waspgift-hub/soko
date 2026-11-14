@@ -70,6 +70,7 @@ const MODELS = {
   boost: { col: 'boosts', money: ['price'] },
   kycApplication: { col: 'kycApplications', unique: ['userId'] },
   moderationReport: { col: 'moderationReports' },
+  fraudAlert: { col: 'fraud_alerts' },
   adminSetting: { col: 'adminSettings', keyField: 'key' },
   reconciliation: { col: 'reconciliations' },
   dataDeletionRequest: { col: 'dataDeletionRequests' },

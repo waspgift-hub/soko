@@ -210,25 +210,12 @@ async function requireActive(req, res, next) {
   next();
 }
 
-// Verify admin secret or admin role
+// Legacy alias for the single admin gate. A second, weaker implementation let
+// routes outside /admin (disputes, products, refunds, moderation, referrals)
+// accept the shared secret without the TOTP step-up enforced by
+// authenticateAdmin. Delegating keeps one rule everywhere.
 async function verifyAdmin(req, res, next) {
-  const secret = req.headers['x-admin-secret'];
-  
-  if (secret && secret === config.security.adminSecret) {
-    req.isAdmin = true;
-    return next();
-  }
-
-  if (!req.user) {
-    return apiError(res, 401, 'AUTH_REQUIRED');
-  }
-
-  if (!['admin', 'super_admin'].includes(req.user.role)) {
-    return apiError(res, 403, 'ADMIN_REQUIRED');
-  }
-
-  req.isAdmin = true;
-  next();
+  return authenticateAdmin(req, res, next);
 }
 
 // The single admin gate: x-admin-secret only. No Firebase path — the panel
@@ -258,6 +245,45 @@ async function authenticateAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
   const expected = config.security.adminSecret;
 
+  // Staff session token (admin_staff + staff_sessions). Checked before the
+  // shared secret so a staff member never needs the owner's break-glass key.
+  // Previously the login endpoint issued these tokens but no middleware ever
+  // validated them, and the issued expiry used serverTimestamp() (i.e. "now"),
+  // so staff accounts were effectively unusable and permissions unenforced.
+  const staffToken = req.headers['x-staff-token'];
+  if (staffToken && typeof staffToken === 'string' && /^[a-f0-9]{32,128}$/i.test(staffToken)) {
+    try {
+      const commerceStore = require('../services/commerce-store');
+      const session = await commerceStore.getDocument('staff_sessions', staffToken);
+      if (session) {
+        const expiresMs = session.expiresAtMs
+          ? Number(session.expiresAtMs)
+          : session.expiresAt && typeof session.expiresAt.toMillis === 'function'
+            ? session.expiresAt.toMillis()
+            : new Date(session.expiresAt || 0).getTime();
+        if (!Number.isFinite(expiresMs) || expiresMs < Date.now()) {
+          return apiError(res, 401, 'STAFF_SESSION_EXPIRED');
+        }
+        const staff = await commerceStore.getDocument('admin_staff', session.staffId);
+        if (!staff || staff.active === false) {
+          return apiError(res, 403, 'STAFF_INACTIVE');
+        }
+        req.isAdmin = true;
+        req.adminStaff = {
+          id: session.staffId,
+          email: staff.email || session.email || null,
+          name: staff.name || session.name || '',
+          role: staff.role || session.role || 'support',
+          permissions: Array.isArray(staff.permissions) ? staff.permissions : null,
+        };
+        return next();
+      }
+    } catch (e) {
+      console.error('[AUTH] staff session lookup failed:', e && e.message);
+      return apiError(res, 503, 'STAFF_AUTH_UNAVAILABLE');
+    }
+  }
+
   // timingSafeEqual throws on length mismatch, so the length gate is the
   // constant-time side channel here; both branches cost ~the same.
   if (
@@ -283,7 +309,16 @@ async function authenticateAdmin(req, res, next) {
           }
         }
         next();
-      }).catch(() => { next(); });
+      }).catch((err) => {
+        // Cannot know whether MFA is enrolled, so production fails closed.
+        // Development stays usable without a Firestore emulator; set
+        // ADMIN_MFA_STRICT=false only to accept that risk deliberately.
+        console.error('[AUTH] admin MFA lookup failed:', err && err.message);
+        if (config.nodeEnv === 'production' && process.env.ADMIN_MFA_STRICT !== 'false') {
+          return apiError(res, 503, 'MFA_UNAVAILABLE');
+        }
+        next();
+      });
       return; // async path
     } catch (_) {
       req.isAdmin = true;

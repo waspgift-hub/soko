@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../app/routes.dart';
 import '../../models/chat_room.dart';
 import '../../services/chat_service.dart';
-import '../tokens.dart';
 
 class ChatV2Screen extends StatelessWidget {
   const ChatV2Screen({super.key});

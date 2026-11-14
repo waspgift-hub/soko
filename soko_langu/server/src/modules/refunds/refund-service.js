@@ -311,7 +311,7 @@ async function disburseRefund(refund) {
 
   try {
     const payment = await store.payment.findUnique({ where: { id: refund.paymentId } });
-    const provider = getProvider((payment && payment.provider) || 'clickpesa');
+    const provider = getProvider((payment && payment.provider) || 'azampay');
     const payout = await provider.initiatePayout({
       amount: Number(refund.amount),
       orderReference: refund.correlationId,

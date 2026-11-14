@@ -1,0 +1,3852 @@
+================================================================================
+SOKO VIBE - WARAKA KAMILI WA MRADI (PROJECT FULL DOCUMENTATION)
+================================================================================
+
+Jina la faili : SOKO_VIBE_PROJECT_FULL_DOCUMENTATION.txt
+Aina          : Plain text (UTF-8)
+Lugha         : Kiswahili (istilahi za kiufundi kwa Kiingereza)
+Tarehe        : 12 Novemba 2026
+Toleo la code : soko_vibe 1.0.1+2  |  server 2.0.0
+Git           : branch feat/website-v2, commit f1f0b0a3
+Chanzo        : Code halisi ya sasa (Flutter app, Node/Express API, Cloudflare
+                Workers, Firestore rules/indexes, static admin panel,
+                web_landing, deploy files). Docs za zamani zimetumika kama
+                marejeo tu na zimetajwa pale zinapogongana na code.
+
+KUMBUKA MUHIMU
+- Waraka huu umeandaliwa kutoka kwenye code, si kutoka kwenye README pekee.
+  Baadhi ya docs za zamani (README.md, ARCHITECTURE_SOKO_VIBE.txt) bado
+  zinasema ClickPesa/Postgres/Render-only wakati code ya sasa inatumia
+  AzamPay + Firestore Store Facade + Cloudflare Workers. Pale panapotofautiana,
+  code ndiyo ukweli (source of truth) na tofauti imeorodheshwa Section 16.
+- Siri (secrets) hazijachapishwa. Majina ya environment variables pekee
+  yameorodheshwa (Section 17). Hakuna thamani ya .env.production iliyonakiliwa.
+- Namba za faili/mistari zinaweza kubadilika baada ya kuandika waraka huu;
+  takwimu zilizotolewa ni za commit f1f0b0a3.
+
+YALIYOMO (TABLE OF CONTENTS)
+--------------------------------------------------------------------------------
+ 0. Muhtasari wa haraka (executive summary)
+ 1. Bidhaa, soko na modeli ya biashara
+ 2. Mpangilio wa repository (repo layout)
+ 3. Tech stack
+ 4. Frontend architecture (Flutter app)
+    4.1 Boot sequence
+    4.2 App shell na overlays
+    4.3 Routing na guards (route table kamili)
+    4.4 State management
+    4.5 Repositories na data access
+    4.6 Local cache, offline na secure storage
+    4.7 Lugha, currency na localization
+    4.8 Deep links, app links na share receive
+    4.9 Notifications (push, local, in-app)
+    4.10 Media pipeline (R2, compression, audio/video)
+    4.11 Security ya client (App Check, lock, MFA, root detection)
+    4.12 Feature bridge flags
+ 5. Design system
+    5.1 Falsafa na kanuni
+    5.2 Rangi (color tokens)
+    5.3 Typography
+    5.4 Spacing, radius, elevation, motion
+    5.5 Component library
+    5.6 Layout, grid na responsiveness
+    5.7 Iconography, illustration na artwork pack
+    5.8 Dark mode, light mode na dynamic color
+    5.9 Accessibility
+    5.10 UI v2 na One UI
+ 6. Screen inventory (screen kwa screen)
+ 7. Backend architecture
+    7.1 Boot sequence (server)
+    7.2 Express middleware pipeline
+    7.3 Route mounts
+    7.4 Module structure
+    7.5 Middleware ya usalama na validation
+    7.6 Services layer
+    7.7 Workers, queues na cron jobs
+    7.8 SEO, static pages, admin panel na landing
+    7.9 Error handling na API envelope
+ 8. API catalogue (endpoint kwa endpoint)
+ 9. Data model (Firestore collections na rules)
+10. Money model (order, escrow, wallet, commission, refunds)
+11. End-to-end flows (kila flow kwa hatua)
+    11.1 Install, first launch, onboarding
+    11.2 Usajili (registration)
+    11.3 Kuingia (login) na MFA
+    11.4 Password reset
+    11.5 App lock, session na logout-all
+    11.6 Profile setup na username
+    11.7 Browse, feed, search na discovery
+    11.8 Seller onboarding, KYC na Blue Tick
+    11.9 Kuweka bidhaa (listing/publish)
+    11.10 Chat, social, follow, groups na status
+    11.11 Checkout, shipping quote na malipo
+    11.12 AzamPay webhook na escrow hold
+    11.13 Dispatch, delivery, OTP/QR handover
+    11.14 Auto-release na settlement
+    11.15 Wallet na withdrawal
+    11.16 Refund
+    11.17 Dispute
+    11.18 Cancel na expire
+    11.19 Reviews, comments na ratings
+    11.20 Boost, ads, flash sale na banners
+    11.21 Subscriptions, trials, entitlements na referrals
+    11.22 Buyer requests
+    11.23 Notifications na daily engagement
+    11.24 AI assistant, persistent chat, voice na agent
+    11.25 Admin panel, Company OS na staff console
+    11.26 Landing, waitlist na contact
+    11.27 Data export, deletion na consent
+    11.28 Sharing, deep links na OG previews
+12. Cloudflare, R2 na infrastructure
+13. Security na compliance
+14. Reliability, monitoring na operations
+15. Code inventory (faili kwa faili)
+16. Mapungufu, hatari na docs zilizopitwa na wakati
+17. Environment variables (majina pekee)
+18. Glossary
+19. Appendices (quick reference)
+
+================================================================================
+0. MUHTASARI WA HARAKA (EXECUTIVE SUMMARY)
+================================================================================
+
+Soko Vibe ni marketplace ya mtandaoni ya Tanzania inayounganisha wanunuzi na
+wauzaji wa bidhaa halisi (physical goods) kwa modeli ya "trust commerce":
+malipo yanashikiliwa kwenye escrow, bidhaa inatumwa, mnunuzi anathibitisha
+kupokea kwa OTP/QR, kisha seller analipwa. Jukwaa linajenga trust kupitia
+utambulisho (KYC), Blue Tick, trust passport, reviews, dispute resolution na
+ulinzi wa mnunuzi.
+
+Muundo wa mfumo (high level):
+
+  Flutter app (Android/iOS/Web/Desktop)
+        |
+        | HTTPS  https://api.sokovibe.co.tz
+        v
+  Cloudflare Worker "soko-api-edge"  (cache + proxy + edge security)
+        |
+        v
+  Node.js/Express API (Render, region Frankfurt, plan free)
+        |            |              |
+        |            |              +--> Redis (rate limit, locks, BullMQ, OTP)
+        |            +------------------> AzamPay (collections + payouts)
+        +-------------------------------> Firestore (source of truth)
+                                         |
+                                         +--> Firebase Auth / App Check
+                                         +--> OneSignal (push)
+                                         +--> Meseji / Notify Africa (SMS)
+                                         +--> WhatsApp Cloud API (OTP)
+                                         +--> Cloudflare R2 (media, KYC docs)
+                                         +--> Groq / Gemini / Workers AI (AI)
+
+Sifa kuu zilizopo kwenye code:
+- App ya Flutter yenye screen 87 na service 97+ (lib/), iko tayari kwa
+  Android, iOS, Web, Windows, macOS, Linux.
+- Lugha mbili: Kiswahili (sw) na English (en); currency 9.
+- Auth: email/password, Google Sign-In, phone OTP, email OTP, MFA (TOTP),
+  app lock kwa PIN/biometric, logout-all (session revocation).
+- Marketplace: feed, search (v1 API + Firestore fallback), categories,
+  discovery filters, wishlist, recently viewed, buyer requests, flash sales.
+- Uuzaji: kuunda bidhaa, media upload moja kwa moja R2, publish/unpublish,
+  moderation, boost/ads, seller analytics, subscriptions.
+- Manunuzi: order state machine kamili, shipping quote, escrow payment kwa
+  AzamPay, dispatch, delivery, OTP/QR handover, auto-release.
+- Fedha: wallet ya seller, ledger isiyobadilika, withdrawal state machine,
+  refunds, disputes na split resolution, reconciliation, audit logs.
+- Jamii: chat 1:1 na group, reactions, typing, status, follow/block,
+  comments na replies.
+- AI: assistant wa Soko Vibe (Groq -> Gemini -> Cloudflare AI failover),
+  persistent chat na memory, voice replies, agent yenye tools na
+  ruhusa/approvals.
+- Admin: static browser panel (admin.js ~3,192 mistari) + Flutter admin
+  screens + staff console + Company OS UI.
+- Infra: Cloudflare edge cache, R2 media worker, AI edge worker, Firebase
+  App Check, Cloudflare Turnstile kwenye public forms.
+
+Takwimu za haraka:
+
+  Kipengele                          Thamani
+  ---------------------------------  ------------------------------------------
+  Flutter files (lib/)               375 .dart
+  Screens                            87
+  Services                           97 (pamoja na subfolders)
+  Widgets                            111
+  Models                             31
+  Theme files                        11
+  Design-system files                4 (+ widgets/ds 30+)
+  Server JS files (src/)             ~200; ~38,246 lines
+  Server tests                       77 test files (node --test)
+  Flutter tests                      46 unit/widget test files
+  Integration tests                  16 files
+  API base                           https://api.sokovibe.co.tz
+  API version mpya                   /api/v1
+  Legacy API                         /api (compat layer)
+  Payment gateway                    AzamPay (ClickPesa imeondolewa)
+  Database                           Firestore (Store Facade)
+  Queue/cache                        Redis + BullMQ
+  Media                              Cloudflare R2 + soko-media worker
+  Admin panel                        server/admin (vanilla JS + Tailwind CDN)
+
+================================================================================
+1. BIDHAA, SOKO NA MODELI YA BIASHARA
+================================================================================
+
+1.1 Taswira ya bidhaa
+Soko Vibe ni "soko la kidijitali la Tanzania" lenye mwelekeo wa kuaminiana.
+Mtumiaji anaweza kuwa:
+- Buyer (mnunuzi): anatafuta, anaangalia, anachat na seller, analipa kwa
+  escrow, anafuatilia oda, anathibitisha kupokea, anaacha review.
+- Seller (muuzaji): anaomba seller mode, anaweka bidhaa, anapokea oda,
+  anatoa shipping quote, anasafirisha, anapokea malipo kwenye wallet.
+- Admin / staff: wanasimamia watumiaji, bidhaa, oda, migogoro, refunds,
+  KYC, withdrawals, banners, matangazo, settings na audit.
+- Company member (Company OS): mtazamo wa shirika (legal entities, audit,
+  settings) - UI ipo, backend routes zipo lakini hazijamountiwa (Section 16).
+
+1.2 Value proposition
+- Escrow: pesa haitoki kwa seller mpaka mnunuzi athibitishe kupokea.
+- OTP/QR handover: uthibitisho wa makabidhiano upo kwenye mfumo, si kwa
+  mazungumzo ya nje.
+- Trust passport: seller anapata alama za uaminifu (fulfilment, disputes,
+  verification, reviews).
+- Blue Tick: uthibitisho wa seller unaoonekana kwenye profile na bidhaa.
+- Dispute resolution yenye ushahidi na split ya escrow.
+- Multi-channel notifications: push, SMS, WhatsApp, email, in-app.
+- AI assistant wa kununua/kuuza kwa Kiswahili.
+
+1.3 Modeli ya mapato (kwa mujibu wa code ya sasa)
+- Platform commission default ni 0%. `computeSellerParity()` inarudisha
+  commission 0 na seller anapata productPrice + shippingFee kamili.
+- Commission inaweza kuwekwa kwa `PLATFORM_COMMISSION_PERCENT` (config) au
+  admin settings (`paymentsAndCurrency.platformCommissionPct`); admin field
+  inakubali 3.5 au 0.035 (coin ya juu ya 1 inachukuliwa kama percent).
+- Ada za gateway (AzamPay collection/payout) zinakatwa na AzamPay nje ya
+  ledger ya Soko Vibe; haziongezwa kwenye totalAmount ya mnunuzi.
+- Mapato mengine yanayopatikana kwenye code: boost/ads packages, flash sale
+  promotion, seller subscriptions (Seller Plus 14,900 TZS/mwezi, Seller Pro
+  29,900, Business 79,900), KYC verification fee 15,000 TZS (one-time),
+  ad revenue (AdMob), referrals.
+- HATARI: docs za zamani zinasema "commission 3.5%". Code ya sasa haitumii
+  3.5% kama default; 3.5% ni legacy/thamani inayoweza kuwekwa.
+
+1.4 Watumiaji na majukumu (roles)
+- buyer (default)
+- seller (baada ya seller profile)
+- admin / super_admin (isAdmin flag kwenye users)
+- staff (admin panel staff accounts)
+- company_member (Company OS; RBAC kwa permissions)
+- system (jobs, webhooks, auto-release)
+
+1.5 Kanuni za msingi za biashara
+- Server ndiyo mamlaka ya bei na stock; client haiaminiki kwa totalAmount.
+- Order haiwezi kulipwa mpaka shipping quote ikubaliwe.
+- Escrow release inatokea tu kwenye state COMPLETED (au dispute ruling).
+- Pesa haiwezi kutoka wallet bila ledger entry (idempotent key).
+- Withdrawal haiwezi kuanza bila reservation ya fedha.
+- Disputed escrow hairuhusiwi auto-release.
+- OTP haitumwi kwenye push payload; push ni ping tu.
+- KYC documents haziko kwenye bucket ya public media.
+
+1.6 Taratibu za lugha na eneo
+- App languages: sw, en.
+- Currency: TZS, USD, EUR, GBP, KES, UGX, NGN, ZAR, CNY.
+- Timezone ya biashara: Africa/Dar_es_Salaam.
+- Nchi ya default ya address: TZ.
+- Districts za Tanzania ziko `lib/constants/tanzania_districts.dart`.
+
+================================================================================
+2. MPANGILIO WA REPOSITORY (REPO LAYOUT)
+================================================================================
+
+2.1 Top level
+
+  ttr/
+  |- soko_langu/                 App kuu (Flutter + Node server + workers)
+  |- web_landing/                Flutter Web marketing site (landing v2)
+  |- deploy/                     Deployment docs/scripts
+  |- load-testing/               k6 load tests
+  |- docs/                       (baadhi ya docs za mradi ziko root)
+  |- _attic/                     code ya zamani/iliyoachwa
+  |- .github/                    CI workflows
+  |- docker-compose.yml          API + worker + Postgres + Redis + Nginx
+  |- Dockerfile / Dockerfile.prod
+  |- render.yaml                 Render web service (API)
+  |- railway.json                Railway config
+  |- .env.production             secrets (HAKUNA thamani hapa)
+  |- APP_FLOWS.txt, SYSTEM_FLOWS.txt, SOKO_VIBE_SYSTEM_FLOW.txt,
+  |  FLOW_DOCUMENTATION.txt, NOTIFICATION_FLOW.txt, n.k. (docs za zamani)
+  |- SOKO_VIBE_*_AUDIT/REPORT.md (reports mbalimbali)
+
+2.2 soko_langu/ (app + backend)
+
+  soko_langu/
+  |- lib/                        Flutter source (375 .dart)
+  |  |- app/                     app_state, router, routes, transitions
+  |  |- constants/               Tanzania districts
+  |  |- data/                    marketplace taxonomy
+  |  |- design_system/           One UI tokens/theme, DS showcase
+  |  |- extensions/              context.tr()
+  |  |- models/                  31 models
+  |  |- notifiers/               auth_notifier
+  |  |- providers/               product_feed_provider
+  |  |- repositories/            auth_repository, product_repository
+  |  |- screens/                 87 screens (admin, ai, auth, boost, chat,
+  |  |                           company, home, kyc, legal, notification,
+  |  |                           onboarding, orders, profile, report,
+  |  |                           requests, search, seller, verification)
+  |  |- services/                97 services (+ agent/, ai/, category_artwork/,
+  |  |                           transfer/)
+  |  |- theme/                   colors, typography, dimens, motion, tokens,
+  |  |                           themes, manager, surface policy, neumorphic
+  |  |- ui/                      UI v2 (theme, tokens, 8 screens, widgets)
+  |  |- utils/                   helpers, validators, phone, network, etc.
+  |  |- widgets/                 111 widgets (+ ds/, auth/, commerce/, feed/,
+  |  |                           inputs/, marketplace/, profile/, social/,
+  |  |                           banners/, animations/, transfer/)
+  |  |- firebase_options.dart
+  |  |- main.dart
+  |- server/                     Node/Express backend
+  |  |- src/
+  |  |  |- app.js                Express app + mounts + static/SEO
+  |  |  |- index.js              boot + workers + cron + shutdown
+  |  |  |- config/               index, database (Store Facade), firebase, redis
+  |  |  |- middleware/           auth, appCheck, otpGuard, rateLimiter,
+  |  |  |                        loadShedder, requestId, validation
+  |  |  |- modules/              40 modules (payments, orders, wallet, ...)
+  |  |  |- services/             24 services (firestore-store, commerce-store,
+  |  |  |                        ledger, escrow, notifications, queue, ...)
+  |  |  |- workers/ + jobs/      BullMQ worker, finance jobs
+  |  |  |- seo/                  robots, sitemaps, meta
+  |  |  |- utils/                money, http, circuit breaker, PII, etc.
+  |  |- admin/                   static admin panel (index.html/css/js)
+  |  |- landing/                 static marketing/legal pages (HTML)
+  |  |- test/                    77 test files
+  |- cf-worker/                  soko-api-edge (cache/proxy)
+  |- cf-worker-ai/               soko-ai-edge (Workers AI)
+  |- cf-worker-media/            soko-media (R2 public origin)
+  |- apps/                       apps/admin-console (build artifacts only)
+  |- assets/                     brand, docs, icons, sounds
+  |- fonts/                      Inter, Space Grotesk, JetBrains Mono
+  |- web/ ios/ android/ windows/ macos/ linux/
+  |- test/ integration_test/ k6/
+  |- firestore.rules             (1,042 lines)
+  |- firestore.indexes.json
+  |- firebase.json
+  |- pubspec.yaml / package.json
+  |- docs/                       AI_SEARCH, DESIGN_SYSTEM,
+  |                              PAYMENT_ESCROW_ARCHITECTURE,
+  |                              RELIABILITY_RUNBOOK, UI_AUDIT
+  |- README.md, SECURITY.md, TODO.md, n.k.
+
+2.3 web_landing/ (marketing site ya Flutter Web)
+
+  web_landing/lib/
+  |- main.dart
+  |- localization/app_strings.dart
+  |- models/models.dart
+  |- pages/            about, buyers, contact, content, faq, features,
+  |                    how_it_works, landing, not_found, pricing, sellers,
+  |                    waitlist_success
+  |- router/app_router.dart
+  |- sections/         coming_soon_sections, site_nav
+  |- services/         launch_api
+  |- theme/            breakpoints, colors, theme, design_tokens
+  |- widgets/          animated_reveal, open_link, responsive_container,
+  |                    section_header, turnstile_widget
+  |  |- layout/site_shell
+  |  |- sections/page_sections
+  Routes: /, /about, /how-it-works, /features, /buyers, /sellers, /pricing,
+          /faq, /contact, /waitlist/success, /privacy, /terms, /cookies
+
+2.4 deploy/ na load-testing/
+  deploy/README.md - docs za deployment
+  load-testing/ - k6 scripts
+
+2.5 Umbile la code (architecture shape)
+- Monorepo yenye app moja ya Flutter inayoshiriki models/services kwa
+  mobile, web na desktop.
+- Backend ni modular monolith (Express) yenye modules zinazojitegemea,
+  lakini zote zinaingia kwenye Firestore moja.
+- Kuna "compat layer" kubwa ya legacy `/api/*` ili clients za zamani
+  zisiweke kuvunjika wakati backend inahamia `/api/v1`.
+- Edge layer ni Cloudflare Workers tatu tofauti kwa majukumu tofauti
+  (cache, AI, media) - kutenganisha billable AI na cacheable reads.
+
+================================================================================
+3. TECH STACK
+================================================================================
+
+3.1 Frontend (Flutter)
+- Flutter (Dart SDK ^3.11.5), Material 3.
+- State: Provider (ChangeNotifier) + InheritedWidget (`AppConfig`).
+- Routing: go_router ^17.2.3 (declarative, guards, deep links).
+- Local storage: Hive + hive_flutter, shared_preferences,
+  flutter_secure_storage.
+- Firebase: firebase_core ^4.7.0, firebase_auth ^6.4.0,
+  cloud_firestore ^6.3.0, firebase_app_check ^0.4.4+1,
+  firebase_crashlytics ^5.2.2, firebase_performance ^0.11.4+1.
+- Auth: google_sign_in ^7.2.0, local_auth ^3.0.2 (biometric).
+- Media: image_picker, flutter_image_compress, cached_network_image,
+  flutter_cache_manager, video_player, just_audio + audio_service,
+  record (voice), speech_to_text, mobile_scanner (QR), qr_flutter.
+- Notifications: onesignal_flutter ^5.2.0, flutter_local_notifications.
+- Nyingine: connectivity_plus, geolocator, geocoding, permission_handler,
+  flutter_contacts, share_plus, app_links, url_launcher, package_info_plus,
+  device_info_plus, uuid, crypto, base32 (TOTP), pdf + printing (receipts),
+  gal, open_file, webview_flutter, flutter_animate,
+  flutter_staggered_animations, safe_text (profanity), dynamic_color,
+  intl, rxdart, carousel_slider, file_picker? (not listed), etc.
+- Fonts: Inter (400/500/600), Space Grotesk (600/700), JetBrains Mono
+  (400/500/600) - bundled locally.
+
+3.2 Backend (Node/Express)
+- Node >= 18 (Render sets NODE_VERSION=20).
+- Express ^4.18.2 (with a Layer patch for async errors).
+- firebase-admin ^11.11.0 (Auth, Firestore, Storage? media uses S3 SDK).
+- Redis: ioredis ^5.4.1; queues: bullmq ^5.12.0.
+- Validation: zod ^3.23.8.
+- Security/infra: helmet ^7.1.0 (dependency; headers pia zimewekwa kwa
+  mkono), cors, compression, ip-range-check.
+- Media: @aws-sdk/client-s3 + s3-request-presigner (R2 ni S3-compatible).
+- Email: nodemailer ^6.9.8.
+- Auth hashing: bcryptjs (admin staff passwords).
+- HTTP client: axios.
+- Tests: node --test; firebase rules unit testing; firebase JS SDK.
+
+3.3 Data
+- Firestore (Firebase) ndiyo database halisi. `config/database.js`
+  inatoa Store Facade yenye API inayofanana na Prisma (`store.user`,
+  `store.order`, `store.$transaction`, n.k.) lakini nyuma yake ni
+  Firestore.
+- Postgres/Prisma ni retired. `docker-compose.yml` bado ina postgres
+  service na comments za Prisma zipo kwenye code - ni legacy remnants.
+- Redis: rate limiting, distributed locks, OTP store, BullMQ queues,
+  presence/activity counters.
+- Indexes: `firestore.indexes.json`.
+- Rules: `firestore.rules` (deny-by-default catch-all mwishoni).
+
+3.4 Cloudflare
+- `soko-api-edge`: cache + reverse proxy mbele ya Render API.
+- `soko-ai-edge`: Workers AI binding; server-to-server tu.
+- `soko-media`: R2 public origin `media.sokovibe.co.tz`.
+- R2 buckets: images, videos, thumbnails, backups, artwork, KYC
+  (KYC haiko bound kwenye media worker).
+- Turnstile: bot protection kwa public email/contact forms.
+
+3.5 Third-party services
+- AzamPay: mobile money collections na payouts.
+- Firebase: Auth, Firestore, App Check, Crashlytics, Performance.
+- OneSignal: push notifications.
+- Meseji + Notify Africa: SMS fallback chain.
+- WhatsApp Business Cloud API: OTP delivery + inbound webhook.
+- Groq, Google Gemini, Cloudflare Workers AI: AI failover.
+- Tavily: AI web search tool.
+- ElevenLabs: voice synthesis (env vars zipo).
+- Cloudinary: legacy image destroy endpoint tu.
+- AdMob: ads (app side).
+- Google Sign-In.
+
+3.6 Deployment
+- API: Render web service (Frankfurt, free plan) - `render.yaml`.
+- Worker process: `node src/workers/index.js` (BullMQ media + finance +
+  notifications). Inaweza kuwa service tofauti.
+- Docker: `docker-compose.yml` (api, worker, postgres, redis, nginx).
+- Static marketing: `server/landing` inatumiwa na Express; pia
+  `web_landing` ni Flutter Web toleo jipya.
+- Admin panel: `server/admin` static, mounted `/admin`.
+- App distribution: Android/iOS builds (build_release.bat ipo); store
+  links hazijawekwa (`ANDROID_STORE_URL`/`IOS_STORE_URL` empty kwa makusudi).
+
+================================================================================
+4. FRONTEND ARCHITECTURE (FLUTTER APP)
+================================================================================
+
+4.1 Boot sequence (`lib/main.dart`)
+
+Mpangilio halisi wa kuanzisha app:
+
+1. `WidgetsFlutterBinding.ensureInitialized()`.
+2. Image cache cap: `PaintingBinding.instance.imageCache.maximumSizeBytes =
+   200 * 1024 * 1024` (200 MB) - kuzuia OOM kwenye simu ndogo.
+3. `themeManager.load()` - theme mode/preferences.
+4. `SafeTextFilter.init(language: Language.swahili)` - profanity filter.
+5. `Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)`
+   kwa timeout 15s. Kwenye native: Firestore settings
+   `persistenceEnabled: false` - app ni ONLINE-ONLY kwa Firestore ili
+   data ya cache isionekane kama authoritative; offline inashughulikiwa na
+   Hive/local cache tofauti.
+6. `LocalCacheService.init()` (Hive; timeout 20s; inafanya kazi pia web
+   kupitia IndexedDB).
+7. `PlatformConfigService.instance.loadCommissionRate()` (fire-and-forget).
+8. Global error handlers (native only): FlutterError -> Crashlytics +
+   ErrorReportingService; PlatformDispatcher.onError -> Crashlytics fatal.
+9. `GoogleSignIn.instance.initialize()` (native, timeout 10s).
+10. `LocalNotificationService().initialize()` (native).
+11. `initSokoMediaAudio()` (audio_service background playback; native).
+12. `runApp(const SokoVibeApp())`.
+
+Ndani ya `SokoVibeApp.initState()`:
+- `NetworkStateService().start()` - connectivity truth moja.
+- `ProductFeedProvider(repo: ProductRepository(networkState))`.
+- `AuthRepository()`, `OnboardingService()`, `AuthNotifier(...)`.
+- WidgetsBinding observer; theme listener; appState listener.
+- `_initApp()` (async): SharedPreferences; language default `sw`;
+  currency default TZS; `authNotifier.initialize()`; sync language to
+  Firestore; `appStateNotifier.setAppInitialized()`; session tracking;
+  `DeepLinkService.flushPending()`; phone sync; `AppLockService.load()`;
+  notification callbacks; artwork pack init; banner service start;
+  background services.
+- `_setupNavigateChannel()` - Android MethodChannel `soko_lang/navigate`.
+- `_setupDeepLinks()` - `DeepLinkService` + app_links.
+- `_setupShareReceive()` - `ReceiveShareService` (share media into sell
+  composer).
+
+Background services (`_initBackgroundServices`):
+- Crashlytics collection enabled.
+- Performance collection enabled.
+- App Check: Android Play Integrity (debug: AndroidDebugProvider), Apple
+  DeviceCheck; debug token inaprintiwa.
+- `SecurityService().initialize()` - root/jailbreak detection.
+- `notificationService.initialize()` - OneSignal + in-app.
+- `ExchangeRateService().initialize()` - multi-currency display.
+- `AiService.initialize(GroqService())`.
+- `ServerKeepAlive.instance.start()` - inawasha Render free tier.
+
+4.2 App shell na overlays
+
+`MaterialApp.router` ina:
+- `routerConfig: appRouter`
+- `locale: Locale(_langCode)`, supported `[en, sw]`
+- `theme` / `darkTheme` / `themeMode` kutoka `ThemeManager`
+- `builder: _appBuilder`
+
+`_appBuilder` hufunga tabaka zifuatazo (kutoka ndani kwenda nje):
+1. `Responsive.init(context)`.
+2. Web desktop: `ConstrainedBox(maxWidth: 1200)` katikati.
+3. `PremiumBackground`.
+4. `ConnectivityWrapper` - offline banner/retry.
+5. `MaintenanceGate` - maintenance mode.
+6. `AppLockOverlay` - PIN/biometric lock.
+7. `TransactionStatusWatcher` - inafuatilia malipo yanayotokea.
+8. `_AgeGateOverlay` - age gate mara moja (haizuii app).
+9. `AppConfig` (InheritedWidget) - langCode, currencyCode, smsLangCode
+   na callbacks za kubadilisha.
+
+`AppConfig` ni njia kuu ya screens kupata lugha/currency; `context.tr()`
+extension inatumia `AppConfig` + `LocalizationService.translations`.
+
+4.3 Routing na guards
+
+Router: `lib/app/router.dart` (`buildRouter()`), `GoRouter` yenye:
+- `navigatorKey: rootNavigatorKey`
+- `initialLocation: AppRoutes.home` (`/`)
+- `refreshListenable: app_state.appStateNotifier`
+- `redirect` guard.
+
+Guard logic (kwa mpangilio):
+1. Kama app haijaanza (`!appInitialized`) -> ruhusu (splash).
+2. Kama onboarding imechunguzwa na haijakamilika -> kurasa zote isipokuwa
+   onboarding, login, register, forgot-password, privacy, terms,
+   otp-verification, verify-email zinapelekwa `/onboarding`.
+3. Kama onboarding imekamilika na uko `/onboarding` -> `/`.
+4. Kama umeingia na uko login/register -> `/`.
+5. Admin-only routes: kama haujaingia -> `/login`; kama si admin -> `/`.
+6. Auth-required routes: kama haujaingia -> `/login`.
+
+`_adminOnlyRoutes` na `_authRequiredRoutes` zinafafanua routes
+zinazolindwa. Admin anaamuliwa na `appStateNotifier.isAdmin` ambao
+unatokana na `users/{uid}.isAdmin == true` (si email).
+
+Route table (constants zote za `AppRoutes` + parameterized):
+
+  Path                              Screen / matumizi
+  --------------------------------  ----------------------------------------
+  /                                 AuthGate (home au auth flow)
+  /login                            LoginScreen
+  /register                         RegisterScreen (phone/OTP extras)
+  /forgot-password                  ForgotPasswordScreen
+  /onboarding                       OnboardingScreen
+  /account-selection                AccountSelectionScreen
+  /contact-discovery                ContactDiscoveryScreen
+  /tutorials                        TutorialsScreen
+  /artwork-pack                     ArtworkPackScreen (allowDismiss)
+  /v2                               HomeV2Screen
+  /search-v2                        SearchV2Screen
+  /checkout-v2                      CheckoutV2Screen
+  /chat-v2                          ChatV2Screen
+  /product-v2                       ProductDetailV2Screen
+  /orders-v2                        OrdersV2Screen
+  /profile-v2                       ProfileV2Screen
+  /seller-v2                        SellerDashboardV2Screen
+  /oneui/home                       One UI home (route constants)
+  /oneui/shell                      One UI shell
+  /oneui/register                   One UI register
+  /oneui/login                      One UI login
+  /chats                            ChatsListScreen
+  /chat/:receiverId                 ChatPage
+  /create-group                     CreateGroupScreen
+  /group-chat/:groupId              GroupChatScreen
+  /profile                          ProfilePage (alias: /profile/:userId)
+  /profile/:userId                  PublicProfileScreen (username-aware)
+  /public-profile/:userId           PublicProfileScreen
+  /edit-profile                     EditProfileScreen
+  /followers/:userId                FollowerFollowingScreen
+  /following/:userId                FollowerFollowingScreen
+  /follow-requests                  FollowRequestsScreen
+  /suggested-accounts               SuggestedAccountsScreen
+  /blocked-accounts                 BlockedAccountsScreen
+  /settings                         SettingsScreen
+  /notification-preferences         NotificationPreferencesScreen
+  /notifications                    NotificationScreen
+  /wishlist                         WishlistScreen
+  /my-ads                           MyAdsScreen
+  /discovery                        DiscoveryScreen
+  /search                           SearchScreen
+  /user-search                      UserSearchScreen
+  /category                         CategoryScreen
+  /category/:name                   redirect -> /category-products/:name
+  /category-products/:name          CategoryProductsScreen (taxonomy/live)
+  /product/:id                      ProductDetailPage (repository loader)
+  /product-reviews                  ProductReviewsScreen (extra product)
+  /checkout                         CheckoutScreen
+  /my-purchases                     MyPurchasesScreen
+  /order-flow                       OrderFlowScreen
+  /order/:orderId                   redirect -> /order-detail/:orderId
+  /order-detail/:docId              OrderDetailScreen
+  /orders                           (legacy alias mapping)
+  /receipt/:orderId                 ReceiptScreen
+  /otp/:orderId                     redirect -> order detail
+  /seller                           SellerDashboardScreen
+  /seller-dashboard                 (alias)
+  /seller-orders                    SellerOrdersScreen
+  /seller-quote                     SellerQuoteScreen
+  /seller-dispatch                  SellerDispatchScreen
+  /seller-earnings                  SellerEarningsScreen
+  /seller-analytics                 SellerAnalyticsScreen
+  /add-product                      AddProductScreen (sharedMedia extra)
+  /boost-product                    BoostProductScreen
+  /flash-sale                       FlashSaleScreen
+  /create-flash-sale                CreateFlashSaleScreen
+  /buyer-requests                   BuyerRequestsScreen
+  /post-buyer-request               PostBuyerRequestScreen
+  /kyc                              KycScreen
+  /verification-center              VerificationCenterScreen
+  /subscription                     SubscriptionScreen
+  /report                           ReportScreen
+  /help                             HelpCenterScreen
+  /about                            AboutAppScreen
+  /privacy-policy                   PrivacyPolicyScreen
+  /terms-of-service                 TermsOfServiceScreen
+  /admin                            AdminDashboardScreen
+  /admin/user/:uid                  AdminUserDetailScreen
+  /admin/kyc                        AdminKycScreen
+  /admin/broadcast                  AdminBroadcastScreen
+  /admin/reports                    AdminReportsScreen
+  /admin/privacy                    AdminPrivacyScreen
+  /ai-assistant                     AiAssistantScreen
+  /ai-settings                      AiSettingsScreen
+  /agent                            AgentScreen
+  /company                          CompanyConsoleScreen
+  /staff                            staff dashboard (web)
+  /mfa-enrollment                   MfaEnrollmentScreen
+  /mfa-challenge                    MfaChallengeScreen
+  /verify-email                     VerifyEmailScreen
+  /otp-verification                 OtpVerificationScreen
+  /otp                              (alias)
+  /lock                             LockScreen
+  /profile-setup                    ProfileSetupScreen
+
+Route loaders maalum:
+- `_ProductDetailLoader`: inapata product kwa `ProductRepository()`
+  (API v1), inaonyesha loading/error recovery.
+- `_CategoryProductsLoader`: inatafuta category kwenye `CategoryService`
+  cached au API; ikikosa inaonyesha `_MissingCategoryData`.
+- `_UsernameAwareProfile`: inabadilisha username -> uid kwa
+  `UsernameService`, kisha `PublicProfileScreen`.
+- `_MissingRouteData`: error recovery ya product isiyopatikana.
+
+Deep link query parsing:
+- `attrs=key:value,key:value` -> `Map<String, Set<String>>` kwa filters.
+- `brands=a,b` -> Set.
+- OTP request inaweza kupitishwa kama typed object au plain map extra.
+
+4.4 State management
+
+Provider tree (MultiProvider):
+- `ProductFeedProvider` (ChangeNotifier) - feed, pagination, filters.
+- `NetworkStateService` (ChangeNotifier) - online/offline.
+- `ThemeManager` (ChangeNotifier) - theme mode, dynamic color.
+- `BalancePrivacyService` (ChangeNotifier) - balance visibility.
+- `AuthRepository` (Provider).
+- `OnboardingService` (Provider).
+- `AuthNotifier` (ChangeNotifier) - auth status, admin, suspension,
+  profile completeness, MFA state, phone/email OTP state.
+- `SellerVerificationService` (ChangeNotifier) - KYC/Blue Tick cache kwa
+  badges zote.
+- `BannerService` (Provider) - first-party banners.
+
+Global app state: `lib/app/app_state.dart` - `appStateNotifier`
+(`appInitialized`, `isAuthenticated`, `isAdmin`, `onboardingChecked`,
+`hasCompletedOnboarding`). Router inasikiliza hii.
+
+AuthNotifier:
+- `AuthStatus { loading, unauthenticated, authenticated }`
+- `PhoneOtpState`, `EmailOtpState`.
+- `isAdmin` kutoka `users/{uid}.isAdmin`.
+- `isSuspended` kutoka `users/{uid}.isSuspended`.
+- `needsProfileSetup` - gender, dateOfBirth, location zote zipo?
+- MFA: enrolled, enrollment in progress, pending enrollment data.
+- `_safely()` inaweka timeout 10s ili Firestore cold start isikwamishe
+  spinner.
+- `_syncAppState()` inasambaza auth/admin kwa router.
+
+ProductFeedProvider/ProductRepository:
+- Feed inasoma API kwanza (kama flag), fallback Firestore/cache.
+- Inatumia `NetworkStateService` kuepuka probes za duplicative.
+
+4.5 Repositories na data access
+
+- `AuthRepository`: FirebaseAuth wrapper (currentUser, authStateChanges,
+  signIn, register, signOut, reset, Google).
+- `ProductRepository`: catalog read path; `getProduct`, feed, seller
+  products; inajua API vs Firestore fallback.
+- `AuthService` (service, si repository): register/login/Google/reset,
+  phone normalization E.164, profile creation, email verification,
+  logout, error mapping.
+- `ProductService`: kuandika/kuuza bidhaa (Firestore + media), duplicate
+  detection, upload progress, video background attach.
+- `ProductApi`: API v1 catalog (list, detail, my products, seller
+  products, by ids, categories, create, update, publish, media).
+- `OrderApiClient`: v1 orders (fetch, shipping quote, dispatch, complete,
+  issue OTP, cancel, dispute).
+- `WalletApiClient`: v1 wallet (fetch wallet, withdrawals, request
+  withdrawal).
+- `PaymentService` (client): legacy transactions stream, platform
+  earnings, revenue stats.
+- `AzamPayService` (client): payment initiation/status, fee calc, method
+  availability.
+- `SearchService`: v1 global search first, Firestore fallback,
+  autocomplete, trending, most-rated, click recording.
+- `ChatService`: Firestore realtime chat 1:1 (rooms, messages, reactions,
+  mute/pin/archive/favourite, block).
+- `NotificationService`: OneSignal + Firestore fallback + local heads-up.
+- `KycService` / `KycApi`: KYC submission na status.
+- `SellerVerificationService`: Trusted KYC/Blue Tick cache.
+- `BoostService`, `SubscriptionService`, `FlashSaleService`,
+  `BuyerRequestService`, `FollowService`, `ReviewService`, `CommentService`.
+- `R2MediaService`: presigned PUT uploads moja kwa moja R2.
+- `PersistentAiChatService`: /api/ai/chats SSE streaming, memory,
+  preferences, voice.
+- `AgentService`: /api/agent tools, permissions, actions (approve/deny/
+  execute), SSE turn stream.
+- `CategoryArtworkService`: optional artwork pack downloader/manifest.
+- `LocalCacheService`: Hive boxes for products/chats/messages.
+- `SecureStorageService`: tokens/PIN secrets.
+- `DeepLinkService`, `ReceiveShareService`, `ShareService`,
+  `ShortcutService`, `WidgetService`.
+
+4.6 Local cache, offline na secure storage
+
+- Hive: `LocalCacheService` - product cache, chat rooms/messages cache
+  (`CachedProduct`, `CachedChatRoom`, `CachedMessage` na `.g.dart`).
+- SharedPreferences: language, currency, sms language, onboarding flags,
+  age gate, artwork throttle, phone sync flag, session timestamps.
+- flutter_secure_storage: sensitive tokens/PIN (AppLockService).
+- Firestore: `persistenceEnabled: false` kwenye native - online-only;
+  app inaonyesha connectivity state badala ya kuficha outage.
+- `NetworkStateService` + `ConnectivityWrapper`: offline banner na retry.
+- `SokoCacheManager` / `cached_network_image`: image cache.
+- `ServerKeepAlive`: inaamsha Render free tier.
+
+4.7 Lugha, currency na localization
+
+- `LocalizationService`:
+  - `supportedLanguages = {sw: Kiswahili, en: English}`
+  - `supportedCurrencies` = TZS, USD, EUR, GBP, KES, UGX, NGN, ZAR, CNY
+    (symbol + name).
+  - `translations` map yenye maelfu ya keys; `context.tr(key, fallback)`.
+  - Language saved kwenye SharedPreferences (`language_code`) na
+    kusynced kwa `users/{uid}.language`.
+  - SMS language ni tofauti (`sms_language` -> `users/{uid}.smsLanguage`).
+- Currency ni ya kuonyesha; bei halisi za marketplace ni TZS.
+- `ExchangeRateService` inapata rates kwa display conversion.
+- `notification_lang.dart`: localization ya notification content.
+- `intl`: date/number formatting.
+- `safe_text`: profanity filter kwa Kiswahili.
+
+4.8 Deep links, app links na share receive
+
+- `DeepLinkService` (app_links): cold start + runtime links; inahifadhi
+  pending link mpaka auth/init ikamilike; `flushPending()`.
+- `_onDeepLink`: `appRouter.go(location)`.
+- `DeepLinkParser`: inabadilisha URL ya product/seller/category kwenda
+  route ya app.
+- Android app links: `/.well-known/assetlinks.json` (server).
+- iOS universal links: `/.well-known/apple-app-site-association`.
+- Fallback: `product-fallback.html` kwa wasio na app (store links
+  hazijawekwa kwa makusudi).
+- `ReceiveShareService`: inapokea media share kutoka apps nyingine;
+  inafungua `/add-product` na `extra.sharedMedia`; kama user hajaingia,
+  inahifadhi pending na kuelekeza `/login`.
+- `ShareService`: ku-share product/seller links; `sharing` module ya
+  server inazalisha OG preview.
+
+4.9 Notifications
+
+Client:
+- `NotificationService`: OneSignal init, permission, external user id,
+  in-app notification stream, unread count, mark read, delete,
+  Firestore fallback subscription (`notifications` collection) kama push
+  haipatikani.
+- `LocalNotificationService`: heads-up display kwa Android/iOS.
+- `NotificationService.onNotificationTap` routing:
+  - `order`: seller new-order -> `/seller-quote`; vingine ->
+    `/order-detail/:id`.
+  - `payment`: `/receipt/:orderId`.
+  - `chat`: `/chat/:senderId` au `/chats`.
+  - `flash_sale`: `/flash-sale`.
+  - `product`: `/product/:id`.
+  - default: `/notifications`.
+- `TransactionStatusWatcher`: inafuatilia hali ya malipo na kuonyesha
+  status changes.
+
+Server:
+- `notification-orchestrator.js`: event catalogue, categories, channel
+  selection, user preferences, dedupe (24h window), templates.
+- Categories: SECURITY (priority 10), VERIFICATION (9), PAYMENT (9),
+  ACCOUNT (8), ESCROW (8), ORDER (7), DELIVERY, KYC, WALLET,
+  WITHDRAWAL, SELLER, BUYER, SUPPORT, ENGAGEMENT.
+- Channels: push, email, SMS, WhatsApp (kwa event category).
+- `notification-worker.js`: BullMQ async delivery (security mail, event
+  SMS).
+- `push-service.js`: OneSignal send.
+- `sms-service.js`: Meseji -> Notify Africa fallback.
+- `whatsapp-service.js`: Cloudflare/Meta WhatsApp Cloud API.
+- `mailer.js` + `email-templates.js` + `email-layout.js`: SMTP email.
+- `notifications` module: in-app inbox CRUD.
+- `engagement` module: daily engagement cron + unsubscribe.
+
+4.10 Media pipeline
+
+Upload (bidhaa/profile/KYC):
+1. Client inaomba presigned URL: `POST /api/v1/media/upload-url`
+   (authenticated) na metadata (kind, contentType, ownerType, size).
+2. Server inaunda key: `<kind>s/<ownerType>/<ownerId>/<uuid>.<ext>`
+   (mfano `images/product/<uid>/<uuid>.webp`).
+3. Client inapakia bytes moja kwa moja R2 kwa PUT (progress callbacks).
+4. Client inahifadhi public URL (`https://media.sokovibe.co.tz/...`)
+   kwenye product/profile.
+5. `soko-media` worker inasoma first path segment (`images/`, `videos/`,
+   `thumbnails/`, `backups/`, `artwork/`) na kuchagua bucket.
+6. KYC documents: bucket `soko-vibe-kyc` haiko bound kwenye worker;
+   read tu kwa presigned GET ya muda mfupi baada ya authorization.
+
+Client media services:
+- `R2MediaService`: upload picha/video/avatar/kyc, batch upload,
+  progress.
+- `MediaService` / `CloudinaryService`: legacy compatibility (Cloudinary
+  destroy tu kwa cleanup).
+- `ImageCompressor` (`utils`): compression kabla ya upload.
+- `MediaUtils`, `ProfileMediaController`, `ProfileMediaSession`.
+- `Audio`: `just_audio` + `audio_service` (background playback,
+  notification controls); `AiVoicePlayer`; `MediaAudioHandler`.
+- `Video`: `video_player`, `ProductVideoPlayer`.
+- Receipts: `ReceiptPdfService` (pdf + printing) na `receipt` screen.
+
+4.11 Security ya client
+
+- Firebase App Check: Play Integrity / DeviceCheck; debug provider kwa
+  debug builds; token inaprintiwa dev.
+- `SecurityService`: root/jailbreak detection; inaweza kuzuia/onya.
+- `AppLockService`: PIN na biometric (local_auth); lock on background;
+  resume inahitaji uthibitisho; overlay `AppLockOverlay`.
+- MFA: `MfaService` + `totp` (server) + `base32`/`qr_flutter` (client);
+  enrollment na challenge screens.
+- Session revocation: server `logout-all` + `session-revocation`
+  service; client inatuma token.
+- `flutter_secure_storage` kwa secrets.
+- `SafeText`/`profanity_filter` kwa content.
+- `FraudPreventionService` + `fraud_alerts` collection.
+- `ConsentRecordingService` + `consentRecords`.
+- `ErrorReportingService`: `system_errors` collection + Crashlytics.
+- `AppUpdateService` / `PlatformConfigService`: forced/soft update,
+  maintenance mode, commission rate.
+
+4.12 Feature bridge flags (`lib/services/api_config.dart`)
+
+Zote zimewashwa (`true`) kwenye code ya sasa:
+- `kUseProductsApi` - catalog inasoma /api/v1/products, fallback
+  Firestore.
+- `kUseOrdersApi` - order lifecycle -> /api/v1/orders; cancel/dispute
+  zinaendelea legacy.
+- `kUseWalletApi` - wallet/withdrawal -> /api/v1/wallet.
+- `kUseNotificationsApi` - inbox -> /api/v1/notifications.
+- `kUseTrustApi` - trust passport -> /api/v1/trust.
+- `kUseSearchApi` - search -> /api/v1/search/products.
+- `kUseCategoriesApi` - categories -> /api/v1/products/categories.
+- `kUseReviewsApi` - reviews -> /api/v1/reviews.
+- `kUseKycApi` - KYC submit/status -> /api/v1/kyc.
+- `kUseMediaApi` - uploads -> R2 presigned.
+- `kUseUsersApi` - profile -> /api/v1/users.
+- `kUseCommentsApi` - comments -> /api/v1/products/:id/comments.
+- `kIsTestMode = false`; `kAdsTestMode = true` (test ads).
+- `maxSearchQueryLength = 100` (clamped kabla ya URL).
+- `oneSignalAppId` ipo kwenye code (public identifier).
+
+Kumbuka: comments za flags bado zinasema "Postgres" - ni legacy
+comments; storage halisi ni Firestore.
+
+================================================================================
+5. DESIGN SYSTEM
+================================================================================
+
+5.1 Falsafa na kanuni
+
+Design system ya Soko Vibe inafuata:
+- Monochrome base (black/white) + accent moja ya kijani kwa commerce.
+- 8pt grid (spacing 4, 8, 12, 16, 20, 24, 32, 40, 48, 64).
+- "90% flat, 10% soft UI": nyuso nyingi ni flat; soft/neumorphic
+  inatumika kwa vipengele vichache vya premium/celebration.
+- Semantic tokens badala ya rangi za ad-hoc.
+- Motion yenye madhumuni: press, page, sheet, hero, celebration.
+- Mobile-first, inayorespect text scaling na accessibility.
+- Lugha mbili kwa urefu tofauti wa maneno (sw/en) - layouts zinapaswa
+  kuvumilia.
+
+Vyanzo:
+- `lib/theme/app_colors.dart`
+- `lib/theme/app_typography.dart`
+- `lib/theme/app_dimens.dart`
+- `lib/theme/app_motion.dart`
+- `lib/theme/design_tokens.dart` (`Ds`, `DsContext`)
+- `lib/theme/app_themes.dart`, `theme_manager.dart`
+- `lib/theme/surface_policy.dart`, `neumorphic.dart`,
+  `dynamic_scheme.dart`, `responsive_typography.dart`
+- `lib/design_system/tokens/one_ui_tokens.dart`,
+  `design_system/theme/one_ui_theme.dart`,
+  `design_system/soko_vibe_ds.dart`
+- `lib/ui/tokens.dart`, `lib/ui/theme.dart`
+- `docs/DESIGN_SYSTEM.md`
+
+5.2 Rangi (color tokens)
+
+Semantic ramp (light / dark):
+
+  Token                Dark        Light       Matumizi
+  -------------------  ----------  ----------  ----------------------------
+  bgCanvas              #000000     #FFFFFF     scaffold background
+  surfaceSubtle         #121212     #F7F7F7     grouped cards, sheet headers
+  surfaceRaised         #181818     #FFFFFF     cards, dialogs
+  contentPrimary        #FFFFFF     #000000     headings, emphasized labels
+  contentSecondary      #A7A7A7     #6B6B6B     body copy
+  contentMuted          #8E8E93     #737373     metadata, placeholders
+  hairline              #292929     #E5E5E5     dividers/borders
+  brandPrimary          #00C853     #00C853     brand fill
+  brandAccent           #00C853     #009624     icons/text on light
+  brandSuccess          #00C853     #009624     success
+  brandWarning          #F59E0B     #F59E0B     warning
+  brandInfo             #A7A7A7     #3B3B3B     info
+  brandBorder           #292929     #E5E5E5     border
+  brandTextPrimary      #FFFFFF     #000000     text
+  brandTextSecondary    #A7A7A7     #6B6B6B     secondary text
+  surfaceDark           #000000     #FAFAFA     dark surface alias
+  surfaceLight          #121212     #FFFFFF     light surface alias
+  cardBase              #121212     #FFFFFF     card base
+  cardElevated          #1E1E1E     #FFFFFF     elevated card
+  glassBg               #1AFFFFFF   #CCFFFFFF   glass container
+  glassBorder           #33FFFFFF   #16000000   glass border
+  whatsappGreen         #25D366     #25D366     WhatsApp CTA
+  trendingOrange        #FFFFFF     #000000     trending emphasis
+  successGreen          #00C853     #009624     success
+  premiumAmber          #F59E0B     #B45309     premium
+  premiumTeal           #A7A7A7     #3B3B3B     premium secondary
+
+Kanuni za contrast:
+- #00C853 ni kwa fills zenye black text; kwa text/icons juu ya light
+  surface tumia #009624 ili contrast ipite ~3.9:1.
+- Grays (#6B6B6B / #A7A7A7) ni kwa hierarchy ya information tu.
+- Hakuna rangi zaidi ya kijani kwa emphasis ya commerce (isipokuwa
+  WhatsApp green na warning amber).
+
+5.3 Typography
+
+Familia:
+- Inter: body, labels, UI text.
+- Space Grotesk: display, headlines, titles, brand.
+- JetBrains Mono: metadata/technical (mono labels, time indicators).
+
+Scale (base, inarespect text scaling):
+
+  Token             Size  Weight  Family          Matumizi
+  ----------------  ----  ------  --------------  --------------------------
+  displayLarge      34    700     Space Grotesk   hero
+  displayMedium     28    700     Space Grotesk   hero ndogo
+  headlineLarge     24    600     Space Grotesk   screen hero
+  headlineMedium    20    600     Space Grotesk   section hero
+  titleLarge        18    600     Space Grotesk   card/section title
+  titleMedium       16    600     Inter           subtitle
+  titleSmall        14    600     Inter           small title
+  bodyLarge         16    400     Inter           body
+  bodyMedium        14    400     Inter           body
+  bodySmall         12    400     Inter           small body
+  labelLarge        13    -       Inter           buttons/labels
+  labelMedium       11    -       Inter           chips/metadata
+  labelSmall        10    -       Inter           caption
+
+Semantic helpers (`AppTypography`): displayLarge, displayMedium,
+screenTitle, sectionTitle, cardTitle, productTitle, price, priceLarge,
+bodyLarge/Medium/Small, metadata, caption, labelLarge/Medium/Small,
+buttonText, buttonTextSmall, formLabel, inputHint, statusChip, badge,
+amount, amountLarge, error, bannerTitle, bannerSubtitle, bannerCta,
+brandTitle, appBarTitle, monoLabel, timeIndicator.
+
+`Ds` facade inatoa helpers zote hizi kwa `Ds.xxx(color)`.
+
+5.4 Spacing, radius, elevation, motion
+
+Spacing (`AppSpacing`): s1=4, s2=8, s3=12, s4=16, s5=20, s6=24, s7=32,
+s8=40, s9=48, s10=64. Pia `AppInsets` (xs..xxl, s1/s2/s4/s6).
+
+Radius (`AppRadius`): sm=8, md=12, lg=16, xl=24, full=999.
+`AppRadius2`: xl=20, xxl=24 - kwa sheets/cards kubwa.
+
+Font sizes (`AppFontSize`): xs=10, sm=12, md=14, lg=16, xl=20, xxl=24,
+display=28.
+
+Elevation/shadows (`Ds`):
+- shadowSm: blur 8, offset (0,2), black 5% light / 30% dark.
+- shadowMd: blur 16, offset (0,4), black 8% light / 40% dark.
+
+Motion (`Motion`):
+- ripple 200ms, press 100ms, pressSpringBack 300ms.
+- page 350ms, cardEnter 300ms, cardPress 150ms.
+- sheet 350ms, hero 450ms, celebration 900ms.
+- shimmerLoop 1200ms, snackbar 250ms, countUp 800ms.
+- Curves: easeOutCubic, easeInOutCubic, easeOutQuart,
+  overshootSpring (easeOutBack).
+- Springs: expressiveSpring (mass 1, stiffness 200, damping 16.97),
+  standardSpring (mass 1, stiffness 300, damping 27.71) - M3 Expressive.
+
+5.5 Component library
+
+`lib/widgets/ds/` (design-system primitives):
+- animated_press, ds_ad_badge, ds_avatar, ds_badge, ds_button, ds_card,
+  ds_celebration_rain, ds_chat_bubble, ds_chip, ds_confetti, ds_divider,
+  ds_empty_state, ds_escrow_shield, ds_like_button, ds_loading_dots,
+  ds_microburst, ds_payment_status_timeline, ds_price,
+  ds_quantity_selector, ds_rating_stars, ds_report_dialog, ds_sheet,
+  ds_skeleton, ds_stock_indicator, ds_text_field, ds_verified_check,
+  input_validators, one_ui.
+- `ds.dart` ni barrel export; `one_ui.dart` ni One UI variant.
+
+`lib/widgets/` nyingine:
+- Structure/navigation: bottom_nav_bar, soko_app_bar, soko_dialog,
+  soko_feedback, soko_widgets, auth_wall.
+- Commerce: product_card, compact_product_card, product_grid,
+  product_cached_image, product_preview_sheet, product_video_player,
+  checkout_summary, order_card, payment_method_tile,
+  order_status_config, receipt-related.
+- Trust: trust_passport_card, verified_badge, blue_tick_badge,
+  seller_card, seller_profile_header, review_section, comment_section.
+- Social/chat: follow_button, profile_header, profile_stat,
+  profile_menu_tile, profile_media_section.
+- Discovery: category_card, category_image, discovery_filter_sheet,
+  brand_select_sheet, soko_search_bar, soko_dropdown,
+  soko_price_input.
+- Banners: banner_rotator, dynamic_banner, flash_sale_banner,
+  campaign_banner_card, campaign_banner_slot, soko_banner_theme.
+- Feedback/state: soko_vibe_loading, soko_vibe_states,
+  soko_vibe_watermark, soko_feedback, connectivity_wrapper,
+  maintenance_gate, app_lock_overlay, transaction_status_watcher.
+- Utility: glass, glass_container, premium_background,
+  premium_widgets, safe_dropdown, age_gate_dialog,
+  location_disclosure_dialog, raise_dispute_dialog,
+  barcode_scanner_widget, call_seller_button, recently_viewed_row,
+  staggered_fade_in, animated_gradient_line, soko_animated_art/
+  illustration/marketplace_art.
+- Auth: auth_phone_field, auth_scene, auth_success_check,
+  auth_text_field, otp_input_field, password_strength_indicator.
+- Transfer: media_upload_list, transfer_progress_bar.
+
+`lib/ui/` (UI v2):
+- `theme.dart`, `tokens.dart`, `widgets/ui_button.dart`
+- screens: home_v2, search_v2, product_detail_v2, checkout_v2,
+  orders_v2, profile_v2, seller_dashboard_v2, chat_v2.
+
+`lib/design_system/`:
+- `soko_vibe_ds.dart` (barrel/entry)
+- `theme/one_ui_theme.dart`
+- `tokens/one_ui_tokens.dart`
+- `showcase/ds_showcase_screen.dart` (development showcase)
+
+5.6 Layout, grid na responsiveness
+
+- `utils/responsive.dart`: breakpoints na `Responsive.init(context)`;
+  `Responsive.isDesktop`.
+- Web desktop: content max width 1200 katikati.
+- Product grids zina adapt column count kwa width.
+- `responsive_typography.dart` inarekebisha scale kwa screen size na
+  text scaling.
+- Safe areas, bottom nav, app bars vinazingatia insets.
+- Sheets/dialogs zinatumia `DsSheet`/`SokoDialog`.
+
+5.7 Iconography, illustration na artwork pack
+
+- Material Icons (`uses-material-design: true`).
+- Brand icons: `assets/icons/app_icon_full.png`, adaptive icon
+  (Android 8+) iko `android/app/src/main/res/mipmap-anydpi-v26/` na
+  vector foreground/monochrome.
+- `tools/brand-icon/` inazalisha brand mark.
+- Category artwork: hiari, haiko bundled; inapakuliwa post-install kutoka
+  R2 (`artwork/<version>/...`) kupitia `services/category_artwork/`.
+  App inaonyesha icon fallbacks mpaka pack ipakuliwe.
+- `SokoAnimatedArt`, `SokoAnimatedIllustration`,
+  `SokoMarketplaceArt` kwa empty states/onboarding.
+- Sounds: `assets/sounds/`.
+
+5.8 Dark mode, light mode na dynamic color
+
+- `ThemeManager` inasimamia `ThemeMode` (system/light/dark), inahifadhi
+  choice.
+- `DynamicColorBuilder` inachukua OS wallpaper colors (Android 12+,
+  desktop accents); `themeManager.setDynamicSchemes()` inatumia
+  dynamic scheme kama ipo, otherwise brand themes.
+- `dynamic_scheme.dart` inajenga scheme salama (contrast guard).
+- `surface_policy.dart` inaamua wapi soft/glass inaruhusiwa; 90% flat
+  kanuni inatekelezwa hapa.
+- `neumorphic.dart` inatoa soft shadows kwa premium surfaces tu.
+- Pure black dark theme (OLED-friendly) na pure white light theme.
+
+5.9 Accessibility
+
+- Text scaling inarespectiwa (semantic sizes, `ResponsiveTypography`).
+- Contrast: green text/icon -> #009624 light; #00C853 fills na black
+  text.
+- Touch targets: buttons >= 48dp; `DsButton` ina min height.
+- Semantic labels kwenye icons/buttons muhimu.
+- Motion: `MediaQuery.disableAnimations` inazingatiwa kwenye animated
+  widgets; reduced motion fallbacks.
+- Age gate, permission dialogs, error messages zenye lugha rahisi.
+- Forms: `input_validators.dart`, `standard_input_field.dart`,
+  `soko_dropdown.dart` zina error text na labels.
+
+5.10 UI v2 na One UI
+
+- `ui/` ni toleo la pili la UI (V2) lenye theme/tokens zake na screens
+  8; zinafunguliwa kwa routes `/v2`, `/search-v2`, `/checkout-v2`,
+  `/chat-v2`, `/product-v2`, `/orders-v2`, `/profile-v2`, `/seller-v2`.
+- `one_ui_tokens.dart` + `one_ui_theme.dart`: One UI (Samsung-inspired)
+  tokens kwa `/oneui/*` routes.
+- `DSShowcaseScreen`: dev-only showcase ya components.
+- V2 na legacy zinaishi pamoja; navigation ya msingi bado inatumia
+  legacy screens isipokuwa route maalum.
+
+================================================================================
+
+================================================================================
+6. SCREEN INVENTORY (SCREEN KWA SCREEN)
+================================================================================
+
+Takwimu: `lib/screens/` ina faili 87 za Dart. Kati yake, 80+ ni screens
+kamili; `admin/admin_transactions_tab.dart` ni tab, `chat/chat_navigation.dart`
+ni helper ya navigation, na `boost/boost_tiers.dart` ni data/tiers (si screen).
+Screens za UI v2 ziko `lib/ui/screens/` (8) na zimeorodheshwa Section 5.10.
+
+Kanuni: kila screen inapokea data kupitia constructor au `GoRouterState.extra`,
+inatumia providers/services (Section 4.5), na haiandiki Firestore moja kwa moja.
+Screen haiweki biashara kwenye UI pekee; validation ipo kwenye services/backend.
+
+6.1 Auth, OTP, MFA na onboarding (15)
+
+- `auth/auth_gate.dart` - geti la mwanzo la `/`; linaamua onboarding, login au
+  home kulingana na `AppState` na `AuthService`. Haina UI yake kubwa; ina
+  splash/brand loader na inasubiri Firebase auth + profile bootstrap.
+- `auth/login_screen.dart` (`/login`) - kuingia kwa email/password, phone OTP,
+  au email OTP; link za forgot password, register, terms/privacy; inaonyesha
+  error za auth zilizotafsiriwa na `AuthErrorMapper`.
+- `auth/register_screen.dart` (`/register`) - usajili wa email/phone/password,
+  ridhaa ya sheria, referral code, na routing kwenda OTP/verify email.
+- `auth/forgot_password_screen.dart` (`/forgot-password`) - reset kwa email
+  link au phone OTP; inafuata `reset-password-by-phone`.
+- `auth/otp_screen.dart` (`/otp/:id`, web alias) - OTP ya order handover
+  inayofunguliwa kwa link; inaonyesha order summary na input ya tarakimu 6.
+- `auth/otp_verification_screen.dart` (`/otp-verification`) - OTP ya account
+  (phone/email) yenye resend countdown, attempts, na channel hint (push/WhatsApp/SMS).
+- `auth/verify_email_screen.dart` (`/verify-email`) - email verification link
+  state, resend, na continue baada ya kuthibitisha.
+- `auth/mfa_enrollment_screen.dart` (`/mfa-enrollment`) - TOTP enrollment:
+  QR/manual secret, code confirmation, recovery codes.
+- `auth/mfa_challenge_screen.dart` (`/mfa-challenge`) - changamoto ya TOTP
+  wakati wa login kwa admin/staff au account iliyoamilishwa MFA.
+- `auth/lock_screen.dart` (overlay) - app lock (PIN/biometric) inayojitokeza
+  juu ya app yote baada ya idle/background; haipitiki kwa back button.
+- `auth/profile_setup_screen.dart` (post-register) - jina, username, photo,
+  location, role (buyer/seller), na makubaliano ya trust.
+- `onboarding/onboarding_screen.dart` (`/onboarding`) - karatasi 3-4 za
+  kueleza escrow, usalama na uuzaji; inaweka `hasCompletedOnboarding`.
+- `onboarding/account_selection_screen.dart` (`/account-selection`) - kuchagua
+  Buyer, Seller au Both; inaathiri menu na onboarding ya KYC.
+- `onboarding/artwork_pack_screen.dart` (`/artwork-pack`) - gallery ya brand
+  artwork/illustrations zinazopakuliwa na watu wa marketing.
+- `onboarding/tutorials_screen.dart` (`/tutorials`) - video/guide za jinsi ya
+  kuuza, kupakia bidhaa, kutuma na kutoa pesa.
+
+6.2 Home, discovery na commerce (10)
+
+- `home/home_screen.dart` (`/`) - feed ya nyumbani: banners, categories,
+  trending, flash sale, recommended products, stories/status, search bar,
+  notification badge na bottom navigation.
+- `home/category_screen.dart` (`/category`) - orodha ya categories/subcategories
+  yenye icons na counts.
+- `home/category_products_screen.dart` (`/category-products`) - grid ya bidhaa
+  za category, filters (bei, eneo, rating, condition), sort na pagination.
+- `home/product_detail.dart` (`/product`) - picha/video gallery, bei, variant,
+  seller trust passport, reviews summary, shipping estimate, wishlist, chat,
+  share, buy now na add to cart-like flow.
+- `home/product_reviews_screen.dart` (`/product-reviews`) - reviews zote,
+  rating breakdown, helpful votes, seller replies na filter kwa nyota.
+- `home/search_screen.dart` (`/search`) - search yenye autocomplete, history,
+  trending, filters na voice input; inatumia `/api/v1/search/products`.
+- `home/discovery_screen.dart` (`/discovery`) - discovery ya makundi, sellers,
+  buyer requests, flash sales na categories.
+- `home/flash_sale_screen.dart` (`/flash-sale`) - flash sale live na countdown,
+  stock iliyobaki, na host wa sale.
+- `home/checkout_screen.dart` (`/checkout`) - anwani, shipping quote, order
+  summary, escrow explanation, payment method (AzamPay), na kuthibitisha order.
+- `home/add_product_screen.dart` (`/add-product`) - kuweka bidhaa: picha/video,
+  title, category, bei, stock, condition, location, shipping, na publish.
+
+6.3 Orders, escrow na fulfillment (7)
+
+- `orders/my_purchases_screen.dart` (`/my-purchases`) - orders za mnunuzi kwa
+  tabs (pending payment, processing, shipped, delivered, completed, refunded,
+  disputed) na actions zinazoruhusiwa.
+- `orders/order_detail_screen.dart` (`/order-detail`) - timeline ya order,
+  payment status, shipping quote, tracking, OTP/QR handover, refund/dispute,
+  chat na receipt.
+- `orders/receipt_screen.dart` (`/receipt`) - risiti ya malipo/order yenye
+  breakdown, transaction reference na share/download.
+- `orders/seller_dispatch_screen.dart` (`/seller-dispatch`) - seller anaweka
+  courier + tracking number na kuthibitisha dispatch.
+- `orders/seller_orders_screen.dart` (`/seller-orders`) - orders za seller kwa
+  hali, ikiwa ni pamoja na requests za shipping quote na handover.
+- `orders/seller_quote_screen.dart` (`/seller-quote`) - seller anaingiza
+  shipping amount, siku za delivery na maelezo; buyer/admin approval.
+- `profile/order_flow_screen.dart` (`/order-flow`) - mwongozo wa hatua za order
+  (payment -> dispatch -> delivery -> OTP -> settlement) kwa msaada.
+
+6.4 Chat, groups na social (6 + helpers)
+
+- `chat/chat_inbox_screen.dart` (helper) - inbox widget inayojumlisha
+  conversations, requests na unread counts.
+- `chat/chat_navigation.dart` (helper) - routing/argument helper kwa chat.
+- `chat/chat_page.dart` (`/chat`) - conversation ya 1:1: text, picha, sauti,
+  product share, order share, typing, read receipts na block/report.
+- `chat/chats_list_screen.dart` (`/chats`) - orodha ya conversations na tabs
+  (all, unread, requests, groups).
+- `chat/create_group_screen.dart` (`/create-group`) - kutengeneza group, kuongeza
+  wanachama, photo na rules.
+- `chat/group_chat_screen.dart` (`/group-chat`) - group chat yenye admin,
+  members, pinned message na moderation.
+
+6.5 Profile, settings na social graph (16)
+
+- `profile/profile_screen.dart` (`/profile`) - profile ya mtumiaji: stats,
+  listings, reviews, followers, settings shortcuts na verification badges.
+- `profile/public_profile_screen.dart` (`/public-profile`) - profile ya
+  seller/mtumiaji mwingine, follow/block/report, listings na trust passport.
+- `profile/settings_screen.dart` (`/settings`) - account, privacy, security,
+  notifications, language, currency, theme, cache na legal links.
+- `profile/edit_profile_screen.dart` (`/edit-profile`) - jina, username, bio,
+  location, photo/cover, links na visibility.
+- `profile/about_app_screen.dart` (`/about`) - version, mission, links na
+  credits.
+- `profile/help_center_screen.dart` (`/help`) - FAQ, contact support, tutorials
+  na report issue.
+- `profile/blocked_accounts_screen.dart` (`/blocked-accounts`) - orodha na
+  unblock.
+- `profile/contact_discovery_screen.dart` (`/contact-discovery`) - opt-in/out
+  ya kutafuta marafiki kwa contacts, privacy explanation.
+- `profile/create_flash_sale_screen.dart` (`/create-flash-sale`) - seller
+  anatengeneza flash sale (muda, discount, products).
+- `profile/follow_requests_screen.dart` (`/follow-requests`) - accept/reject
+  kwa private account.
+- `profile/follower_following_screen.dart` (`/followers`, `/following`) -
+  orodha ya followers/following.
+- `profile/my_ads_screen.dart` (`/my-ads`) - boosts/ads zilizonunuliwa na
+  performance yake.
+- `profile/suggested_accounts_screen.dart` (`/suggested-accounts`) - suggested
+  sellers/accounts.
+- `profile/subscription_screen.dart` (`/subscription`) - plans, trial, benefits
+  na AI quota.
+- `profile/wishlist_screen.dart` (`/wishlist`) - saved products.
+- `profile/admin_privacy_screen.dart` (`/admin/privacy`) - admin privacy
+  requests/data deletion queue.
+
+6.6 KYC na trust (2)
+
+- `kyc/kyc_screen.dart` (`/kyc`) - KYC submission: aina ya ID, namba, picha
+  mbele/nyuma/selfie, business documents, fee 15,000 TZS na status.
+- `verification/verification_center_screen.dart` (`/verification-center`) -
+  kituo cha verification: phone, email, KYC, Blue Tick, trust score na next
+  steps.
+
+6.7 Seller tools (7)
+
+- `profile/seller_dashboard_screen.dart` (`/seller`) - dashboard ya seller:
+  sales, orders, earnings, low stock, boosts, analytics shortcuts na payout.
+- `seller/seller_earnings_screen.dart` (`/seller-earnings`) - earnings,
+  pending/available balance, withdrawals na ledger.
+- `seller/seller_analytics_screen.dart` (`/seller-analytics`) - views, clicks,
+  conversion, revenue, top products na boosts performance.
+- `orders/seller_orders_screen.dart` (`/seller-orders`) - (tazama 6.3).
+- `orders/seller_dispatch_screen.dart` (`/seller-dispatch`) - (tazama 6.3).
+- `orders/seller_quote_screen.dart` (`/seller-quote`) - (tazama 6.3).
+- `home/add_product_screen.dart` (`/add-product`) - (tazama 6.2).
+
+6.8 Admin console (9)
+
+- `admin/admin_dashboard_screen.dart` (`/admin`) - dashboard ya admin: KPIs,
+  orders, users, revenue, pending KYC, disputes, reports na quick actions.
+- `admin/admin_azampay_screen.dart` (admin tab) - transactions za AzamPay,
+  status, reconciliation na manual checks.
+- `admin/admin_banner_management_screen.dart` - banners za home, schedule,
+  active state na image upload.
+- `admin/admin_broadcast_screen.dart` (`/admin/broadcast`) - broadcast
+  notification kwa segment (all, buyers, sellers, location).
+- `admin/admin_kyc_screen.dart` (`/admin/kyc`) - queue ya KYC, approve/reject,
+  reason na documents.
+- `admin/admin_kyc_document_view_screen.dart` - viewer ya documents kwa
+  presigned URL ya muda mfupi; hakuna URL ya kudumu.
+- `admin/admin_transactions_tab.dart` (tab) - transactions/filter/export.
+- `admin/admin_user_detail_screen.dart` (`/admin/user`) - user profile, orders,
+  wallet, KYC, status (active/suspended/banned) na audit.
+- `report/admin_reports_screen.dart` (`/admin/reports`) - moderation reports,
+  evidence, decision na history.
+
+6.9 AI na agent (3)
+
+- `ai/ai_assistant_screen.dart` (`/ai-assistant`) - chat na AI, suggestions,
+  streaming, voice input/output, persistent conversations na memory.
+- `ai/ai_settings_screen.dart` (`/ai-settings`) - provider/model preference,
+  memory on/off, voice, data usage na quota.
+- `ai/agent_screen.dart` (`/agent`) - agent orchestration: tools, pending
+  actions, approve/deny/execute, permissions na audit trail.
+
+6.10 Boost, requests, reports na legal (6)
+
+- `boost/boost_product_screen.dart` (`/boost-product`) - tiers za boost, muda,
+  reach estimate, checkout na results.
+- `boost/boost_tiers.dart` (data) - tiers, pricing na benefits.
+- `boost/widgets/*` - hero panel, tier card, checkout bar, result overlays,
+  value prop grid.
+- `requests/buyer_requests_screen.dart` (`/buyer-requests`) - requests za
+  wanunuzi na offers za sellers.
+- `requests/post_buyer_request_screen.dart` (`/post-buyer-request`) - kutuma
+  request (bidhaa, budget, location, deadline).
+- `report/report_screen.dart` (`/report`) - report ya product/user/message
+  yenye category, maelezo na evidence.
+- `legal/privacy_policy_screen.dart` (`/privacy-policy`) - privacy policy.
+- `legal/terms_of_service_screen.dart` (`/terms-of-service`) - terms.
+
+6.11 Notifications na company (3)
+
+- `notification/notification_screen.dart` (`/notifications`) - notifications
+  zote, filters, mark read, deep link kwenda order/chat/product.
+- `notification/notification_preferences_screen.dart`
+  (`/notification-preferences`) - per-channel (push/email/SMS/WhatsApp) na
+  per-type preferences.
+- `company/company_console_screen.dart` (`/company`) - Company OS console
+  (HR, finance, projects, calendar) inayozungumza `/api/v1/company/*`; backend
+  haija-mount (Section 16).
+
+6.12 V2 screens (8, `lib/ui/screens/`)
+
+- `home_v2_screen.dart` (`/v2`), `search_v2_screen.dart` (`/search-v2`),
+  `product_detail_v2_screen.dart` (`/product-v2`), `checkout_v2_screen.dart`
+  (`/checkout-v2`), `chat_v2_screen.dart` (`/chat-v2`), `orders_v2_screen.dart`
+  (`/orders-v2`), `profile_v2_screen.dart` (`/profile-v2`),
+  `seller_dashboard_v2_screen.dart` (`/seller-v2`).
+
+6.13 Screens zilizozimwa / za zamani
+
+- `music` route ipo kwenye `routes.dart` lakini router.dart imecomment out
+  (`MusicScreen` haipo) - haiwezi kufikiwa.
+- `HomeV2..SellerV2` zinaishi pamoja na legacy; hakuna redirect ya lazima.
+- `adminConsole`, `staffDashboardWeb`, `companyOs` ni web-only aliases za
+  `/admin`, `/staff`, `/company`; Flutter app inatumia admin screens zake.
+
+================================================================================
+7. BACKEND ARCHITECTURE (NODE.JS / EXPRESS)
+================================================================================
+
+7.1 Boot sequence (server)
+
+Faili kuu: `server/src/index.js`, `server/src/app.js`.
+
+1. `src/index.js` inaita `dotenv.config()` kabla ya module nyingine.
+2. Inaunda Express app kwa `createApp()`/`app` na kusikiliza `PORT` (default
+   3000). Production inatumia `node --optimize-for-size --expose-gc`.
+3. `initialize()` inaunganisha Firestore Admin (`connectDatabase`) na Redis
+   (`connectRedis`). Firestore ni store ya lazima; Redis ni best-effort
+   (cache, rate limit, OTP, queues) - ikikosekana, baadhi ya features zinashuka
+   salama.
+4. Inaanzisha finance worker ndani ya process kama
+   `FINANCE_WORKER_IN_PROCESS !== 'false'`, na `scheduleFinanceJobs()`.
+5. Inaandika startup log yenye providers za AI, persistent chat na agent.
+6. Process signals (SIGTERM/SIGINT) zinafunga queues/worker kwa graceful
+   shutdown.
+
+Tabia muhimu:
+- `BigInt.prototype.toJSON = Number` - TZS hutumia BigInt/Decimal; JSON
+  haitishi BigInt.
+- `app.set('trust proxy', 1)` - IP halisi ni ya client nyuma ya Cloudflare
+  Worker + Render.
+- Production inakataa kuanza bila `APP_URL`, `AZAMPAY_COLLECTION_WEBHOOK_URL`
+  na `AZAMPAY_CALLBACK_PASSWORD` (fail fast).
+
+7.2 Express middleware pipeline (kwa mpangilio halisi)
+
+1. `express-async` patch - async route rejections zinaenda kwenye error handler
+   badala ya kunyongwa hadi 504.
+2. `loadShedder()` - kwanza kabisa; inarudisha 503 mapema event loop/heap
+   ikizidiwa.
+3. `requestId` - inachukua `x-request-id` ya edge au `crypto.randomUUID()`;
+   inaweka header na kuongeza `requestId` kwenye kila JSON response.
+4. `compression()` - gzip.
+5. Security headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+   `X-XSS-Protection`, HSTS, `Referrer-Policy`, CSP (CDN allow-list kwa
+   landing/admin), `Permissions-Policy`.
+6. URI length guard - zaidi ya 8 KiB => 414 `REQUEST_URI_TOO_LONG`.
+7. API hit counter - `recordApiHit()` kwa path `/api*` (fire-and-forget,
+   Redis-backed).
+8. Canonical host middleware:
+   - `www.sokovibe.co.tz` ni host rasmi.
+   - apex `sokovibe.co.tz` inarudishwa 301 www, isipokuwa `SERVE_APEX=1`.
+   - `admin.sokovibe.co.tz` inaandika upya path kwenda `/admin` static panel.
+   - `api.sokovibe.co.tz` haigusi (edge worker).
+   - subdomain nyingine zinafoldiwa www.
+9. HTTPS-only redirect kwa domain halisi.
+10. Trailing-slash normalization (301) kwa public pages; `/api`, `/health`,
+    `/.well-known`, `/admin` haziguswi.
+11. CORS - origin allow-list kutoka `ALLOWED_ORIGINS`, methods 6, headers
+    `Authorization`, `x-admin-secret`, `x-admin-totp`; credentials false.
+12. `express.json({ limit: '1mb' })` - hakuna bytes za media kwenye JSON.
+13. Request timeout - `res.setTimeout(20000)` => 504 `REQUEST_TIMED_OUT`;
+    `_startTime` inarekodiwa.
+14. App Links/Universal Links: `/.well-known/assetlinks.json`,
+    `apple-app-site-association` (JSON content-type).
+15. SEO router: `robots.txt`, `sitemap.xml`, meta/OG routes.
+16. Public HTML pages (15): `/about`, `/about/founder`, `/how-it-works`,
+    `/features`, `/buyers`, `/sellers`, `/pricing`, `/faq`, `/contact`,
+    `/privacy`, `/terms`, `/cookies`, `/data-deletion`, `/waitlist/success`,
+    `/unsubscribe` - `no-cache`, `406` kama client haikubali HTML.
+17. Legacy path redirects (301): `/how-soko-vibe-works`, `/soko-vibe-fees`,
+    `/soko-vibe-escrow`, `/support`, `/privacy-policy`, `/terms-of-service`,
+    `/tanzania-marketplace`, `/categories`.
+18. Legacy `.html` redirects (301) kwenda clean URLs.
+19. `/marketing` na `/shop` => 301 `/`.
+20. `/admin` static panel; `/admin.html`, `/dashboard`, `/admin/index.html` =>
+    301 `/admin/`.
+21. Landing static (`server/landing`): HTML/manifest `no-cache`; assets
+    versioned `immutable`; favicons `no-cache`; `/favicon.ico` redirect.
+22. Deep-link fallback router (`sharing/fallback-routes`) kabla ya static.
+23. Rate limiter: `/api/v1` general; `/api/v1/admin` admin; AI own limiters.
+24. Module mounts (Section 7.3).
+25. 404 handler: JSON envelope kwa `/api` na `/health`; branded `404.html` kwa
+    HTML; `text/plain` kwa wengine.
+26. Error handler: structured JSON log yenye `requestId`, method, path, status,
+    errorName, message, durationMs, code; `Retry-After: 5` kwa
+    `LOCK_UNAVAILABLE`/`REDIS_UNAVAILABLE`; production message generic.
+
+7.3 Route mounts (halisi kutoka `app.js`)
+
+Public/infra:
+- `/health` -> health router (`/`, `/live`)
+- `/api/v1/auth` -> auth
+- `/api/v1/users/settings` -> settings router
+- `/api/v1/users` -> profile router
+- `/api/v1/sellers` -> sellers
+- `/api/v1/orders` -> orders
+- `/api/v1/payments` -> payments
+- `/api/v1/shipping` -> shipping
+- `/api/v1/handover` -> handover
+- `/api/v1/wallet` -> wallet
+- `/api/v1/disputes` -> disputes
+- `/api/v1/refunds` -> refunds
+- `/api/v1/media` -> media
+- `/api/v1/feed` -> feed
+- `/api/v1/search` -> search
+- `/api/v1/share` -> sharing
+- `/api/v1/trust` -> trust
+- `/api/v1/launch` -> launch
+- `/api/v1/contact` na `/api/v1/launch/contact` -> contact
+- `/api/v1/admin/kyc` -> admin KYC documents (own gate)
+- `/api/v1/admin` -> ads admin, kisha admin
+- `/api/v1/products` -> products
+- `/api/v1/reviews` -> reviews
+- `/api/v1/referrals` -> referrals
+- `/api/v1/moderation` -> moderation
+- `/api/v1/data-deletion` -> data deletion
+- `/api/v1/reconciliation` -> reconciliation
+- `/api/v1/notifications` -> notifications
+- `/api/v1` -> seller analytics
+- `/api/v1/subscriptions` -> subscriptions
+- `/api/v1` -> comments
+- `/api/v1/kyc` -> KYC
+- `/api/v1` -> engagement (cron/unsubscribe)
+- `/api/v1/social` -> social
+- `/api/ai` -> legacy AI proxy (OpenAI-shaped)
+- `/api/ai` -> persistent AI chat/memory/voice
+- `/api/agent` -> agent orchestration
+- `/api` -> legacy shop
+- `/api` + `/api/payouts` -> legacy payouts
+- `/api/orders` -> legacy delivery
+- `/api/search` -> legacy search
+- `/api/notification(s)` -> legacy notifications
+- `/api`, `/api/escrow`, `/api/cod`, `/api/admin` -> legacy-compat routers
+- `/api` -> admin compat public (mwisho)
+
+7.4 Module structure na majukumu
+
+Kila module iko `server/src/modules/<jina>/` na kwa kawaida ina:
+`routes.js` (Express + zod + middleware), `*-service.js` (biashara),
+`*-controller.js` (HTTP orchestration), `*-store.js` (data seam), na
+`state-machine.js` pale inapohitajika.
+
+- **admin** - dashboard/KPIs, users, sellers, products, orders, withdrawals
+  (process/confirm/retry), refunds, disputes, ledger, audit, staff accounts na
+  login, settings, landing broadcast, AI insights, KYC document read-url.
+- **ads** - ads config, Blue Tick eligibility na grant/revoke; inatumika na
+  admin panel na seller dashboard.
+- **agent** - agent tools registry, permissions, pending actions
+  (approve/deny/execute/cancel) na audit.
+- **ai** - gateway ya providers (Groq -> Gemini -> Cloudflare), streaming,
+  tool loop, Tavily search, transcription; persistent chat/memory/voice.
+- **auth** - OTP phone/email, phone-login, email-otp-login, otp-sign-in,
+  reset-password-by-phone, logout-all; controller inaprovision user mpya.
+- **comments** - comments na replies kwa products, moderation na delete.
+- **company** - Company OS: legal entities, RBAC, HR, finance, projects,
+  calendar, audit. **Hazijamountiwa `app.js`** (Section 16).
+- **contact** - public contact/launch form yenye Turnstile na rate limiting.
+- **data-deletion** - requests za kufuta data na status workflow.
+- **disputes** - dispute creation, evidence, resolution, auto-release service.
+- **engagement** - daily engagement campaign cron na unsubscribe links.
+- **escrow** - release logic inayotumika na orders/jobs.
+- **feed** - ranked home feed (trending, following, nearby, boosts).
+- **handover** - OTP issue/verify na QR verify kwa delivery.
+- **health** - liveness/detailed health (Redis, Firestore, queues).
+- **kyc** - submission, phone/email verification, fee initiate/status na
+  document read-url.
+- **launch** - waitlist stats, subscribers, export, subscribe/unsubscribe.
+- **legacy-compat** - routers za app ya zamani chini ya `/api`: admin panel
+  compat, payouts, delivery, search, notifications, escrow, COD, orders,
+  trust, moderation, feature compat.
+- **legacy-shop** - web shop checkout/status za zamani zinazotumia store hiyo
+  hiyo.
+- **media** - presigned R2 PUT, CDN service, KYC documents.
+- **moderation** - text moderation, reports queue na review decisions.
+- **notifications** - list, unread count, mark read, read-all, delete;
+  orchestrator inaamua channel.
+- **orders** - create, get, list, shipping quote/approve, payment initiate,
+  dispatch, delivered, complete, cancel, dispute; state machine.
+- **payments** - AzamPay provider, provider factory, webhook ingestion,
+  idempotency, webhook outbox, legacy confirm paths.
+- **products** - CRUD, categories, seller products, publish/unpublish, media,
+  moderation, legacy mapping/mirror.
+- **reconciliation** - run na list reconciliation reports.
+- **referrals** - code, mine, apply, complete.
+- **refunds** - create, list, process; inahusiana na escrow na wallet.
+- **reviews** - product/seller reviews, helpful votes, seller reply.
+- **search** - product search, ranking, filters, suggestions.
+- **seller-analytics** - overview, boost impressions/clicks.
+- **sellers** - seller request, profile, me, dashboard, state machine.
+- **sharing** - OG previews, product/seller share pages, fallback HTML.
+- **shipping** - quote create/approve/block, validation.
+- **social** - follow/unfollow/accept/reject/cancel/block/unblock.
+- **subscriptions** - plans, entitlements, subscription, trial, AI quota.
+- **trust** - passport, quality gates, buyer/seller reliability.
+- **users** - me, update, username check, public profile, contact discovery,
+  admin list, domain update, deletion request, data export.
+- **wallet** - balance, ledger, withdrawals (request/list).
+- **whatsapp** - webhook verification na inbound messages (OTP delivery
+  receipts/status).
+
+7.5 Middleware ya usalama na validation
+
+- `middleware/auth.js`:
+  - `authenticate` inathibitisha Firebase ID token (`Authorization: Bearer`),
+    inapakia/linaunda user kwenye Firestore, na kuweka `req.user`.
+  - `optionalAuth` kwa public routes zinazotaka personalization.
+  - `requireActive` inakataza account zilizosimamishwa/kufungwa.
+  - `authenticateAdmin` inakagua `x-admin-secret` + `x-admin-totp`; admin
+    router ya KYC ina gate yake ya database role.
+- `middleware/appCheck.js` - Firebase App Check verification kwa endpoints
+  za nyeti (inatumika kwa client ya app).
+- `middleware/validation.js` - zod schema validation ya `body`, `query`,
+  `params`; inarudisha 400 yenye `details`.
+- `middleware/rateLimiter.js` - Redis sliding/fixed window; general 100/min,
+  admin 300/min, auth 10/15min, login 5/15min, payment 5/min, search 30/min,
+  AI 20/min, OTP request/verify, handover 10/5min, checkout 5/min,
+  withdrawal 3/hour, comment/message/AI-chat/AI-voice limiters.
+- `middleware/otpGuard.js` - OTP attempt limits, lockout na audit.
+- `middleware/loadShedder.js` - 503 mapema kwa overload.
+- `middleware/requestId.js` - correlation ID.
+
+7.6 Services layer (cross-cutting)
+
+- `firestore-store.js` - Store Facade: model registry, relations, money
+  conversion (BigInt/Decimal), pagination, unique constraints.
+- `commerce-store.js` - order/commerce queries zilizojengwa juu ya facade.
+- `escrow-service.js` - hold/release/refund state.
+- `finance-runner.js` + `queue.js` - BullMQ queues na repeatable jobs.
+- `otp-store.js`, `otp-delivery.js` - OTP hashing, TTL, attempts na channel
+  fallback (push -> WhatsApp -> SMS).
+- `notification-orchestrator.js`, `notification-worker.js`,
+  `push-service.js` - channel routing, dedupe, push (OneSignal).
+- `mailer.js`, `email-layout.js`, `email-templates.js` - email.
+- `sms-service.js`, `whatsapp-service.js` - SMS/WhatsApp providers.
+- `session-revocation.js` - logout-all/session invalidation.
+- `auth-risk.js` - risk scoring ya login.
+- `password-policy.js`, `totp.js` - password rules na MFA.
+- `audit.js` - audit log writer.
+- `activity.js` - API hit counters.
+- `payout-phone.js` - normalization ya namba za payout.
+- `profanity.js` - text moderation.
+- `account-store.js` - account/profile helpers.
+- `seed-categories.js` - categories za mwanzo.
+
+7.7 Workers, queues na cron jobs
+
+Queues (BullMQ, Redis):
+- `media` - image thumbnail/processing (sharp optional; ffmpeg optional).
+- `notifications` - delivery ya notifications kwa channel.
+- `finance` - jobs za fedha (concurrency 1).
+
+Repeatable finance jobs (`services/queue.js`):
+- `finance.paymentExpire` kila dakika 15 - expiring stale payments.
+- `finance.inspectionAutoRelease` kila saa 1 - auto-release ya escrow
+  (default siku 14, `ESCROW_AUTO_RELEASE_DAYS`).
+- `finance.withdrawalProcess` kila dakika 30 - withdrawals zilizokwama.
+- `finance.reconciliationRun` kila saa 1 - reconciliation.
+- `finance.disputeEscalate` kila dakika 30 - SLA ya disputes (default 72h).
+- `finance.refundUnstuck` kila dakika 30 - refunds zilizokwama.
+
+Jobs (`jobs/finance-jobs.js`): `expireStalePayments`, `runAutoReleaseSweep`,
+`processPendingWithdrawals`, `runReconciliationSweep`, `escalateDisputes`,
+`refundUnstuck`. Zote zina idempotency keys na state guards; zinaweza
+kuendeshwa kwenye instances kadhaa bila double-processing.
+
+Cron HTTP endpoints (kwa scheduler ya nje, zinalindwa):
+- `POST /api/v1/cron/daily-engagement`
+- `GET /api/v1/unsubscribe`
+- legacy: `POST /api/cron/release-escrows`, `POST /api/flash-sales/deactivate-expired`.
+
+7.8 SEO, static pages, admin panel na landing
+
+- `seo/routes.js` - `robots.txt`, `sitemap.xml` (static, hakuna Firestore).
+- `server/landing/` - landing pages, legal pages, i18n, assets, 404, manifest,
+  `.well-known` app links.
+- `server/admin/` - admin panel ya browser (vanilla HTML/JS + Tailwind CDN +
+  Chart.js): dashboard, users, products, orders, KYC, withdrawals, refunds,
+  disputes, reports, settings, broadcast, audit, MFA.
+- `modules/sharing/` - OG meta generator, product/seller share HTML, deep-link
+  fallback (`/product/:slug`, `/seller/:username`, `/order/:id`, `/otp/:id`,
+  `/category/:name`, `/search`).
+- `cf-worker/` - edge cache/proxy mbele ya API (Section 12).
+- `web_landing/` - chanzo cha landing ya kisasa (static site) kinachotumika
+  kuzalisha `server/landing`.
+
+7.9 Error handling na API envelope
+
+Mafanikio (mara nyingi): `{ success: true, data: ... }` au payload ya module.
+Makosa: `jsonError()` inarudisha:
+
+```
+{
+  "success": false,
+  "data": null,
+  "error": "CODE",
+  "code": "CODE",
+  "message": "Human readable",
+  "requestId": "uuid",
+  "details": ...   // optional
+}
+```
+
+- `error` ni string code ya zamani (clients za zamani zinaiparse).
+- `requestId` inarudi kwenye header `x-request-id` na kwenye body.
+- Status za kawaida: 400 validation, 401 auth, 403 permission/role, 404,
+  409 conflict/state, 422 business rule, 429 rate limit, 500, 503 overload,
+  504 timeout.
+- Production haitoi stack wala message za ndani; dev inaonyesha message halisi.
+- Logs ni JSON zenye requestId, durationMs na code; hii ndiyo inayotumika
+  kwenye support na monitoring.
+
+================================================================================
+
+================================================================================
+8. API CATALOGUE (ENDPOINT KWA ENDPOINT)
+================================================================================
+
+8.0 Misingi ya API
+
+- Base URL ya production: `https://api.sokovibe.co.tz` (mbele yake Cloudflare
+  Worker `soko-api-edge`); origin ya Render pia inaweza kuhudumia moja kwa moja.
+- API version: `/api/v1` kwa surface mpya; `/api/*` ni legacy/compat kwa apps
+  za zamani na web shop; `/api/ai` na `/api/agent` zina shape yao.
+- Auth: `Authorization: Bearer <Firebase ID token>`. Admin routes zinaongeza
+  `x-admin-secret` na `x-admin-totp` (admin ya KYC inatumia database-verified
+  admin role).
+- Content-Type: `application/json`; ukubwa wa juu 1 MB.
+- Success envelope: `{ "success": true, "data": ... }` au payload ya module.
+- Error envelope: Section 7.9. Kila response ina `x-request-id`.
+- Pagination: `limit`/`take`, `cursor`/`startAfter`, `skip`; modules zinarudisha
+  `{ items, nextCursor }` au `{ data, pagination }`.
+- Idempotency: payments (`idempotencyKey`), webhooks (`dedupKey`), wallet ledger
+  (`idempotencyKey`), withdrawals (`idempotencyKey`).
+- Rate limits: Section 7.5.
+- Tarehe: ISO 8601; pesa: integer TZS (BigInt/Decimal nyuma ya pazia).
+
+8.1 Auth na account (`/api/v1/auth`)
+
+| Method | Path | Maelezo |
+|---|---|---|
+| POST | `/send-otp` | Tuma OTP ya phone (push -> WhatsApp -> SMS) |
+| POST | `/verify-otp` | Thibitisha OTP ya phone; login au verification |
+| POST | `/send-email-otp` | Tuma OTP ya email |
+| POST | `/verify-email-otp` | Thibitisha OTP ya email |
+| POST | `/check-phone` | Angalia kama phone ipo; inarudisha exists/available |
+| POST | `/check-email` | Angalia kama email ipo |
+| POST | `/phone-login` | Login kwa phone + password/OTP flow |
+| POST | `/email-otp-login` | Login kwa email OTP (passwordless) |
+| POST | `/otp-sign-in` | Sign-in kwa OTP moja kwa moja |
+| POST | `/reset-password-by-phone` | Reset password kwa phone OTP |
+| POST | `/logout-all` | Revoke sessions zote (sessionRevokedAt) |
+
+8.2 Users, settings na contact discovery (`/api/v1/users`)
+
+| Method | Path | Maelezo |
+|---|---|---|
+| GET | `/me` | Profile ya mtumiaji aliyeingia |
+| PUT | `/me` | Update profile (jina, username, bio, photo, location) |
+| GET | `/check-username` | Username availability |
+| GET | `/public/:identifier` | Public profile kwa uid/username |
+| GET | `/` | Orodha ya users (admin) |
+| PUT | `/:domain` | Update domain/settings maalum |
+| POST | `/request-deletion` | Ombi la kufuta account/data |
+| POST | `/export` | Data export (JSON/archive) |
+| GET | `/contact-discovery/status` | Opt-in state |
+| POST | `/contact-discovery/opt-in` | Opt-in kutafuta kwa contacts |
+| POST | `/contact-discovery/opt-out` | Opt-out |
+| POST | `/contact-discovery/match` | Match contacts zilizohashiwa |
+
+Settings (`/api/v1/users/settings`): `GET/PUT /` - notification, privacy,
+language, currency, theme na visibility preferences.
+
+8.3 Sellers, KYC na trust
+
+Sellers (`/api/v1/sellers`):
+| Method | Path | Maelezo |
+|---|---|---|
+| POST | `/request` | Ombi la kuwa seller |
+| POST | `/profile` | Tengeneza seller profile/store |
+| GET | `/me` | Seller profile yangu |
+| PUT | `/me` | Update store/profile |
+| GET | `/dashboard` | Dashboard metrics za seller |
+
+KYC (`/api/v1/kyc`):
+| Method | Path | Maelezo |
+|---|---|---|
+| POST | `/submit` | Wasilisha KYC (ID, selfie, business docs) |
+| GET | `/status/:userId` | Hali ya KYC |
+| POST | `/verify/phone/send` | Tuma OTP ya phone |
+| POST | `/verify/phone/confirm` | Thibitisha OTP ya phone |
+| POST | `/verify/email/send` | Tuma OTP ya email |
+| POST | `/verify/email/confirm` | Thibitisha OTP ya email |
+| POST | `/verify/phone` | Verification ya phone (legacy) |
+| POST | `/verify/email` | Verification ya email (legacy) |
+| GET | `/fee/status` | Hali ya fee ya KYC (15,000 TZS) |
+| POST | `/fee/initiate` | Anzisha malipo ya fee |
+| GET | `/documents/:documentId/read-url` | Presigned GET ya muda mfupi |
+
+Trust (`/api/v1/trust`):
+| Method | Path | Maelezo |
+|---|---|---|
+| GET | `/sellers/:sellerId/passport` | Trust passport (score, badges, history) |
+| GET | `/sellers/:sellerId/gates` | Quality gates za seller |
+| POST | `/sellers/:sellerId/reliability` | Recompute reliability (admin/job) |
+
+8.4 Products, media, feed, search, comments na reviews
+
+Products (`/api/v1/products`):
+| Method | Path | Maelezo |
+|---|---|---|
+| GET | `/` | Orodha/search ya bidhaa (filters, sort, pagination) |
+| GET | `/categories` | Categories |
+| GET | `/seller` | Bidhaa za seller aliyeingia |
+| GET | `/:idOrSlug` | Bidhaa moja kwa id/slug |
+| POST | `/` | Tengeneza bidhaa |
+| PUT | `/:id` | Update bidhaa |
+| DELETE | `/:id` | Futa/soft-delete |
+| POST | `/:id/media` | Ambatanisha media |
+| POST | `/:id/publish` | Publish |
+| POST | `/:id/unpublish` | Unpublish |
+| PUT | `/:id/moderate` | Admin moderation decision |
+
+Media (`/api/v1/media`): `POST /upload-url` - presigned R2 PUT + key/public URL.
+KYC documents zina read-url tofauti (Section 8.3).
+
+Feed (`/api/v1/feed`): `GET /` - ranked feed (trending, following, nearby,
+boosted, new).
+
+Search (`/api/v1/search`): `GET /products` - full-text + ranking; filters
+(category, price, location, rating, condition), suggestions.
+
+Comments (`/api/v1`): `GET/POST /products/:id/comments`,
+`GET/POST /comments/:id/replies`, `DELETE /comments/:id`,
+`DELETE /comments/:id/replies/:replyId`.
+
+Reviews (`/api/v1/reviews`): `GET /product/:productId`,
+`GET /product/:productId/me`, `GET /seller/:sellerId/summary`, `POST /`,
+`POST /:id/helpful`, `POST /:id/reply`.
+
+8.5 Orders, shipping na handover
+
+Orders (`/api/v1/orders`):
+| Method | Path | Maelezo |
+|---|---|---|
+| POST | `/` | Buyer anaunda order (productId, quantity, addressId) |
+| GET | `/` | Orders za mtumiaji (buyer/seller) |
+| GET | `/:orderId` | Order moja (id au orderNumber) |
+| POST | `/:orderId/shipping-quote` | Seller anaweka shipping quote |
+| POST | `/:orderId/shipping-quote/approve` | Admin/buyer approval |
+| POST | `/:orderId/payments/initiate` | Anzisha malipo (AzamPay/card/bank) |
+| POST | `/:orderId/dispatch` | Seller dispatch + courier/tracking |
+| POST | `/:orderId/delivered` | Mark delivered |
+| POST | `/:orderId/complete` | Buyer confirm/complete |
+| POST | `/:orderId/cancel` | Cancel |
+| POST | `/:orderId/dispute` | Fungua dispute |
+
+Shipping (`/api/v1/shipping`): `POST /:orderId/quote`,
+`POST /:orderId/quote/approve`, `POST /:orderId/quote/block`.
+
+Handover (`/api/v1/handover`): `POST /:orderId/otp/issue`,
+`POST /:orderId/otp/verify`, `POST /:orderId/qr/verify`.
+
+8.6 Payments, escrow, refunds, disputes na reconciliation
+
+Payments (`/api/v1/payments`):
+| Method | Path | Maelezo |
+|---|---|---|
+| POST | `/webhook/azampay` | Callback ya AzamPay (IP allow-list, checksum, dedupe) |
+
+Escrow haiko kwenye router ya v1; inaendeshwa na order service, jobs na
+legacy `/api/escrow/*`.
+
+Refunds (`/api/v1/refunds`): `POST /`, `GET /:orderId`,
+`PUT /:refundId/process`.
+
+Disputes (`/api/v1/disputes`): `POST /`, `GET /:disputeId/evidence`,
+`POST /:disputeId/evidence`, `PUT /:disputeId/resolve`.
+
+Reconciliation (`/api/v1/reconciliation`): `GET /`, `POST /run`.
+
+8.7 Wallet na withdrawals (`/api/v1/wallet`)
+
+| Method | Path | Maelezo |
+|---|---|---|
+| GET | `/` | Balance (available, pending, frozen, totalEarned, totalWithdrawn) |
+| GET | `/withdrawals` | Historia ya withdrawals |
+| POST | `/withdrawals` | Ombi la kutoa pesa |
+
+Payout provider huitwa na admin/job, si client.
+
+8.8 Notifications, engagement, referrals, boosts, ads, subscriptions
+
+Notifications (`/api/v1/notifications`): `GET /`, `GET /unread-count`,
+`POST /:id/read`, `POST /read-all`, `DELETE /:id`, `DELETE /`.
+
+Engagement (`/api/v1`): `POST /cron/daily-engagement`, `GET /unsubscribe`.
+
+Referrals (`/api/v1/referrals`): `GET /code`, `GET /mine`, `POST /apply`,
+`POST /:id/complete`.
+
+Seller analytics (`/api/v1`): `GET /sellers/:sellerId/analytics/overview`,
+`POST /boosts/:boostId/impressions`, `POST /boosts/:boostId/clicks`.
+
+Ads (`/api/v1/admin`): `GET/PUT /config/ads`,
+`GET/PUT /sellers/:userId/blue-tick`, `GET /ads/eligibility`.
+
+Subscriptions (`/api/v1/subscriptions`): `GET /plans`, `GET /entitlements`,
+`GET /subscription`, `POST /trial`, `GET /ai-quota`.
+
+8.9 AI na agent
+
+Legacy AI (`/api/ai`): `POST /chat` (OpenAI-shaped payload; server injects
+keys), `POST /transcribe` (voice -> text).
+
+Persistent AI (`/api/ai`):
+| Method | Path | Maelezo |
+|---|---|---|
+| GET | `/chats` | Orodha ya conversations |
+| POST | `/chats` | Conversation mpya |
+| GET | `/chats/:id` | Conversation |
+| DELETE | `/chats/:id` | Futa conversation |
+| DELETE | `/chats` | Futa zote |
+| GET | `/chats/:id/messages` | Messages |
+| POST | `/chats/:id/messages` | Tuma message (stream) |
+| DELETE | `/messages/:id` | Futa message |
+| GET | `/messages/:id/voice` | Voice rendering/URL |
+| POST | `/messages/:id/voice` | Generate voice |
+| GET | `/memory` | Memory entries |
+| DELETE | `/memory` | Futa memory |
+| GET | `/preferences` | AI preferences |
+| PATCH | `/preferences` | Update preferences |
+
+Agent (`/api/agent`):
+| Method | Path | Maelezo |
+|---|---|---|
+| POST | `/chat` | Agent chat |
+| GET | `/tools` | Tools zilizopo |
+| GET | `/permissions` | Permissions za user |
+| POST | `/permissions/grant` | Grant permission |
+| DELETE | `/permissions/revoke` | Revoke |
+| GET | `/actions` | Pending actions |
+| POST | `/actions/:id/approve` | Idhinisha |
+| POST | `/actions/:id/deny` | Kataa |
+| POST | `/actions/:id/execute` | Tekeleza |
+| POST | `/actions/:id/cancel` | Cancel |
+
+8.10 Admin (`/api/v1/admin`, adminLimiter)
+
+| Method | Path | Maelezo |
+|---|---|---|
+| GET | `/dashboard` | KPIs na summary |
+| GET | `/metrics` | Metrics za mfumo |
+| GET | `/analytics/active` | Active users |
+| GET | `/analytics/requests` | Request analytics |
+| GET | `/analytics/users/top` | Top users |
+| POST | `/ai/insights` | AI insights juu ya data |
+| GET | `/users` | Users |
+| GET | `/users/:userId` | User detail |
+| PUT | `/users/:userId/status` | Active/suspend/ban |
+| GET | `/sellers` | Sellers |
+| PUT | `/sellers/:sellerId/verification` | Verification/Blue Tick |
+| GET | `/products` | Products |
+| GET | `/products/:id` | Product detail |
+| DELETE | `/products/:id` | Delete |
+| POST | `/products/:id/restore` | Restore |
+| GET | `/orders` | Orders |
+| GET | `/withdrawals` | Withdrawals |
+| GET | `/withdrawals/:id/status` | Provider status |
+| POST | `/withdrawals/:id/process` | Process payout |
+| POST | `/withdrawals/:id/confirm` | Confirm payout |
+| POST | `/withdrawals/:id/retry` | Retry |
+| GET | `/refunds` | Refunds |
+| GET | `/disputes` | Disputes |
+| GET | `/ledger` | Revenue/ledger |
+| GET | `/audit-logs` | Audit trail |
+| GET | `/reports` | Reports (legacy admin) |
+| GET | `/data-deletion-requests` | Data deletion queue |
+| PUT | `/data-deletion-requests/:id/status` | Update status |
+| GET | `/referrals` | Referrals |
+| GET | `/config/commission` | Commission config |
+| GET | `/config/app-version` | App version/release |
+| GET | `/settings` | Admin settings |
+| PUT | `/settings` | Update settings |
+| GET | `/landing` | Landing/waitlist stats |
+| POST | `/landing/broadcast` | Broadcast email/notification |
+| GET/POST/PUT/DELETE | `/staff`, `/staff/:id`, `/staff/:id` | Staff accounts |
+| POST | `/staff/login` | Staff login (MFA) |
+
+Admin KYC (`/api/v1/admin/kyc`): `GET /:userId/:documentId/read-url`.
+
+Staff/Company web routes (`/staff`, `/company`) zipo kwenye static/web surface,
+si API ya v1.
+
+8.11 Sharing, launch, contact, health
+
+Sharing (`/api/v1/share`): `GET /product/:slugOrId`, `GET /seller/:username`.
+Fallback HTML: `/product/:slug`, `/seller/:username`, `/order/:orderId`,
+`/otp/:orderId`, `/category/:name`, `/search`.
+
+Launch (`/api/v1/launch`): `GET /stats`, `GET /subscribers`,
+`GET /subscribers/export`, `POST /subscribe`, `POST /unsubscribe`.
+
+Contact (`/api/v1/contact`): `POST /` - Turnstile + rate limit.
+
+Health: `GET /health`, `GET /health/live`.
+
+8.12 Legacy na compatibility surface
+
+Legacy shop (`/api`):
+`POST /orders/create`, `POST /create-marketplace-payment-link`,
+`GET /orders/:orderId/status`, `GET /orders/guest/list`,
+`POST /orders/:id/accept-quote`.
+
+Legacy compat:
+- `/api` + `/api/payouts`: seller withdraw, payout status.
+- `/api/orders`: delivery OTP/dispatch/confirm.
+- `/api/search`: legacy search.
+- `/api/notification(s)`: legacy notifications.
+- `/api/escrow`: dispatch/release/cancel/dispute/admin-resolve/admin-transfer.
+- `/api/cod`: dispatch, confirm-delivery, confirm-cash-collected,
+  report-delivery-issue, report-payment-issue.
+- `/api`: transactions, `/transaction/:id`, `POST /transactions/create`,
+  `GET/PATCH /orders/:id`.
+- `/api/trust/passport/:sellerId`.
+- `/api/moderation/check-text`.
+- `/api/admin`: admin compat (stats, transactions, withdrawals, analytics,
+  timeseries, online, finance, revenue, users, products, orders, KYC, audit,
+  reports, fraud alerts, MFA).
+- `/api`: feature compat (auth checks, sms, notifications, kyc, chat, boost,
+  seller balance/analytics/statement, cloudinary sign/delete, broadcast,
+  cron release, stats, flash sale, payment methods, wallet deposit).
+
+8.13 Company OS (HAIJAMOUNTIWA)
+
+`server/src/modules/company/*` ina endpoints kamili lakini `app.js`
+haija-mount. Zikiamountiwa zingeonekana hivi:
+
+- `/api/v1/company`: GET `/me`, GET `/overview`, POST `/bootstrap`,
+  GET/POST `/legal-entities`, GET `/audit`, GET/PUT `/settings`.
+- `/api/v1/company`: GET/POST `/employees`, GET/PUT `/employees/:id`,
+  GET/POST `/departments`, GET/POST `/leave`, POST `/leave/:id/decision`.
+- `/api/v1/company`: GET/POST `/accounts`, `/budgets`, `/invoices`,
+  POST `/invoices/:id/status`, GET/POST `/expenses`,
+  POST `/expenses/:id/decision`, GET/POST `/journals`,
+  POST `/journals/:id/post`, POST `/journals/:id/reverse`, GET/POST `/payments`.
+- `/api/v1/company`: GET/POST `/projects`, GET/PUT `/projects/:id`,
+  GET `/projects/:id/milestones`, POST `/milestones`,
+  POST `/milestones/:id/accept`, GET/POST `/tasks`,
+  POST `/tasks/:id/transition`.
+- `/api/v1/company`: GET/POST `/events`, PUT/DELETE `/events/:id`.
+
+Kwa sasa Flutter `company_console_screen.dart` inaita `/api/v1/company/*` na
+hupata 404 - gap iliyorodheshwa Section 16.
+
+================================================================================
+9. DATA MODEL (FIRESTORE COLLECTIONS NA RULES)
+================================================================================
+
+9.1 Kanuni za data
+
+- Runtime store ni Firestore pekee kupitia `services/firestore-store.js`
+  (Store Facade). Prisma/Postgres haitumiki tena; `docker-compose.yml` bado
+  ina postgres kwa legacy dev.
+- Admin SDK (server) inaandika collections nyeti; client SDK inaweza kuandika
+  tu collections zilizoruhusiwa na rules.
+- Pesa huhifadhiwa kama integer TZS (BigInt/Decimal nyuma ya pazia); hakuna
+  floating point kwenye ledger.
+- Timestamps: `createdAt`, `updatedAt`, `deletedAt`; server timestamps
+  zinatumika kwa maandishi ya backend.
+- Soft delete kwa products/orders/users pale inapowezekana; audit log ni
+  append-only.
+- Unique constraints zinatekelezwa na facade (`.unique` registry) na
+  transactions.
+
+9.2 Core collections (model registry ya `firestore-store.js`)
+
+| Model | Collection | Key/Unique | Maelezo |
+|---|---|---|---|
+| user | `users` | firebaseUid, phone, email, username | Profile, role, status, trust |
+| sellerProfile | `sellerProfiles` | userId, storeSlug | Store, rating, KYC state |
+| product | `products` | id/slug | Bei, stock, status, category, location |
+| productMedia | `productMedia` | productId | Picha/video, order, thumbnails |
+| category | `categories` | id/slug | Mti wa categories, sortOrder |
+| order | `orders` | orderNumber, legacyFirestoreId | Order + money fields |
+| orderItem | `orderItems` | orderId | Line items, unit/total price |
+| shippingQuote | `shippingQuotes` | orderId | Quote, siku, status |
+| payment | `payments` | idempotencyKey | Malipo, provider, status |
+| paymentAttempt | `paymentAttempts` | - | Kila jaribio la malipo |
+| escrowHold | `escrowHolds` | orderId, paymentId | Hold, releasedToBuyer, status |
+| escrowTransaction | `escrowTransactions` | requestId | Release/refund events |
+| commissionTransaction | `commissionTransactions` | - | Commission (default 0) |
+| refund | `refunds` | correlationId | Refund amount/status |
+| payoutTransaction | `payoutTransactions` | withdrawalId | Payout provider response |
+| receipt | `receipts` | - | Risiti |
+| wallet | `wallets` | sellerId | available/pending/frozen/total |
+| walletLedgerEntry | `walletTransactions` | idempotencyKey | Append-only ledger |
+| withdrawal | `withdrawals` | idempotencyKey | Lifecycle ya payout |
+| otpCredential | `otpCredentials` | orderId | OTP handover (hash) |
+| dispute | `disputes` | - | Dispute + resolution |
+| disputeEvidence | `disputeEvidence` | - | Picha/maelezo/evidence |
+| notification | `notifications` | - | In-app notifications |
+| auditLog | `auditLogs` | - | Audit trail |
+| webhookEvent | `webhookEvents` | dedupKey | Webhook dedupe/outbox |
+| address | `addresses` | - | Anwani za buyer |
+| userSetting | `userSettings` | - | Preferences |
+| device | `devices` | - | FCM tokens/devices |
+| referral | `referrals` | code | Referral + reward |
+| boost | `boosts` | - | Boost purchase/performance |
+| kycApplication | `kycApplications` | userId | KYC submission/status |
+| moderationReport | `moderationReports` | - | Reports/moderation |
+| adminSetting | `adminSettings` | key | Config (commission, ads, etc.) |
+| reconciliation | `reconciliations` | - | Reconciliation runs |
+| dataDeletionRequest | `dataDeletionRequests` | - | Deletion workflow |
+
+9.3 Client/legacy collections zinazotajwa kwenye `firestore.rules` na modules
+
+- `userPublic/{userId}` - public projection ya profile.
+- `cart/{itemId}`, `carts/{cartId}` + `items` - cart.
+- Social graph: `following`, `followers`, `followRequests`,
+  `followRequestsSent`, `blocked`.
+- `comments/{commentId}` + `replies/{replyId}`.
+- `delivery_otp/{otpDoc}`, `orderTimeline/{docId}`.
+- `transactions/{txId}` (legacy), `revenue_transactions`,
+  `admin_withdrawals`, `payouts`, `platform_earnings`, `admob_earnings`.
+- Chat: `conversations/{convId}/messages`, `chats/{chatId}/messages`,
+  `chat_rooms/{roomId}/messages`.
+- `groups/{groupId}/messages`, `statuses/{statusId}`.
+- `flash_sales/{saleId}`, `BuyerRequests/{requestId}`.
+- `notifications`, `notification_preferences`.
+- `reviews`, `ad_views`, `product_analytics`, `views`, `daily_stats`,
+  `boost_analytics/impressions`, `search_index_products`,
+  `search_index_users`, `search_index_categories`, `search_analytics`,
+  `search_trending`, `user_analytics`, `search_history`.
+- `user_sessions`, `session_revocations`, `otp_codes`, `sms_logs`,
+  `whatsapp_webhook_logs`, `consentRecords`.
+- `landing_waitlist`, `landing_feature_suggestions`, `landing_comments`,
+  `landing_comment_contacts`.
+- AI: `ai_conversations`, `ai_messages`, `ai_memory`, `user_ai_preferences`,
+  `ai_subscriptions`, `ai_entitlements`, `ai_usage`.
+- Ads: `banner_campaigns`, `banner_impressions`, `banner_clicks`.
+- Company: `company_memberships`, `company_legal_entities`,
+  `company_audit_events`, `company_settings`.
+- `app_settings`, `admin_notifications`, `seller_trust`, `price_drops`,
+  `admin_exports`, `reports`, `fraud_alerts`, `system_errors`, `audit_log`.
+
+9.4 Firestore rules (mambo muhimu)
+
+- `isSignedIn()`, `isOwner(userId)`, `isAdmin()` (users/{uid}.isAdmin == true),
+  `notSuspended()`.
+- Field-level write protection: client haiwezi kuandika `walletBalance`,
+  `sellerBalance`, `pendingEscrow`, `totalSales`, `grossSalesVolume`,
+  `totalWithdrawn`, `isAdmin`, `isSuspended`, `kyc`, `trust`,
+  `sellerKycApproved`, `adsExempt`, `isBlueTick`, `blueTick`, `isBoosted`,
+  `boostedUntil`, `boostTier`, `sessionRevokedAt`, `createdAt`, `lastSaleAt`,
+  `lastLoginAt`, `fcmToken` (isipokuwa kufuta token).
+- Create protection: fields nyeti haziwezi kuwekwa kwenye create; `isAdmin`
+  lazima false; `sellerBalance` lazima 0.
+- Default deny kwa `/{document=**}`.
+- Rules zinaruhusu baadhi ya collections (chat, comments, reviews, buyer
+  requests, notifications, flash sales) kwa owner/participants tu.
+- Admin SDK ina-bypass rules; hivyo backend ndiyo trust boundary.
+
+9.5 Indexes
+
+`firestore.indexes.json` ina indexes 81 + fieldOverrides 4. Mifano:
+- `categories`: `isActive ASC, sortOrder ASC`.
+- `products`: `status ASC, createdAt DESC`.
+- `conversations`: `participants CONTAINS, lastMessageTime DESC`.
+- `transactions`: `buyerId/sellerId ASC, createdAt DESC`.
+Indexes nyingine zinahusu orders (status/buyer/seller), notifications
+(userId/read/createdAt), reviews (productId/rating), withdrawals
+(sellerId/status), search na feed.
+
+9.6 Data lifecycle na retention
+
+- Account deletion: request -> admin review -> anonymize/hard-delete data
+  isiyo ya lazima; audit log inabaki.
+- KYC documents: bucket `soko-vibe-kyc`, hakuna public access; read-url
+  ya muda mfupi tu; deletion request inafuata policy.
+- Orders/payments/ledger: huhifadhiwa kwa mujibu wa mahitaji ya kifedha na
+  audit; hakuna hard delete ya ledger.
+- Chat/messages: soft delete/visibility; moderation evidence inaweza
+  kuhifadhiwa kwa dispute.
+- AI chat: user anaweza kufuta conversations/memory; enterprise retention
+  inapaswa kuwekwa kwenye policy.
+
+================================================================================
+10. MONEY MODEL (ORDER, ESCROW, WALLET, COMMISSION, REFUNDS)
+================================================================================
+
+10.1 Kanuni za msingi
+
+- Currency ya msingi: TZS; integer only.
+- `totalAmount = productPrice + shippingFee` (kwa kiasi cha bidhaa moja kwa
+  mzunguko wa kawaida).
+- Commission ya jukwaa: **0 kwa default** (`computeSellerParity`), inaweza
+  kuwekwa kwa `PLATFORM_COMMISSION_PERCENT` au admin settings.
+- Seller entitlement = `totalAmount - platformCommission`.
+- Gateway fees (AzamPay) haziko kwenye ledger ya Soko Vibe; zinakatwa na
+  provider nje ya mfumo.
+- Hakuna payout bila ledger debit inayolingana; hakuna release bila hold.
+- Kila operation ya fedha ina idempotency key.
+
+10.2 Order creation na quote
+
+1. Buyer anaunda order kwa product + quantity + address.
+2. Order ianzishwa `DRAFT` au `PENDING_SHIPPING_FEE`.
+3. Seller anaweka shipping quote (`amount`, `estimatedDays`, `notes`).
+4. Quote inaingia `SHIPPING_FEE_SUBMITTED` au `SHIPPING_FEE_REVIEW`.
+5. Admin/buyer approval inaiweka `AWAITING_ESCROW_PAYMENT`.
+6. `totalAmount` inahesabiwa na kuwa locked kwenye order.
+
+10.3 Payment (AzamPay)
+
+- Buyer anachagua provider (`azampay`, `card`, `bank`); kwa sasa
+  `provider-factory` ina `azampay`/`mno_checkout`.
+- `POST /orders/:orderId/payments/initiate` inaunda payment record +
+  payment attempt + provider checkout.
+- Payment status: `pending` -> `processing` -> `paid`/`failed`/`expired`.
+- Webhook `POST /api/v1/payments/webhook/azampay`:
+  - IP allow-list (`AZAMPAY_ALLOWED_IPS`) + checksum/callback password.
+  - Dedupe kwa `dedupKey` kwenye `webhookEvents`.
+  - Ina-update payment, order (`ESCROW_HELD`/`IN_ESCROW`), escrow hold na
+    notification.
+- Webhook outbox (`webhook-outbox.js`) inahakikisha events zinatumwa kwa
+  reliability.
+
+10.4 Escrow
+
+- Escrow hold: `{ orderId, paymentId, amount, status: 'holding', ... }`.
+- `holding` inashikilia pesa hadi:
+  - Buyer anathibitisha delivery (OTP/QR) -> release eligible; au
+  - Auto-release baada ya `ESCROW_AUTO_RELEASE_DAYS` (default 14); au
+  - Dispute -> hold inabaki hadi resolution.
+- Auto-release hairuhusiwi kwa `DISPUTED`; dispute lazima isuluhishwe kwa
+  admin.
+- Release: escrow -> `released`, order -> `COMPLETED`/`WALLET_CREDITED`,
+  wallet ledger `SETTLEMENT_CREDITED`, seller available balance inaongezeka.
+- Refund: escrow -> refunded, order -> `REFUNDED`, ledger
+  `REFUND_PROCESSED`, buyer refund record.
+
+10.5 Wallet na ledger
+
+Collections: `wallets/{sellerId}` + `walletTransactions/{id}`.
+Fields za wallet: `availableBalance`, `pendingBalance`, `frozenBalance`,
+`totalEarned`, `totalWithdrawn`, `currency`, `status`.
+Ledger types:
+- `PAYMENT_RECEIVED` - malipo yamepokelewa (escrow).
+- `SHIPPING_FEE_RECEIVED` - shipping.
+- `COMMISSION_DEBITED` - commission (0 default).
+- `SETTLEMENT_CREDITED` - seller settlement.
+- `WITHDRAWAL_DEBITED` - reservation ya withdrawal.
+- `WITHDRAWAL_REFUNDED` - payout ilishindikana.
+- `REFUND_PROCESSED` - refund kwa buyer.
+- `LEGACY_BALANCE`, `ADJUSTMENT` - migration/manual.
+
+Kanuni:
+- Balance haipungui chini ya 0.
+- Ledger ni append-only; hakuna update/delete.
+- Kila entry ina `balanceAfter`, `referenceType`, `referenceId`,
+  `idempotencyKey`.
+
+10.6 Withdrawal lifecycle
+
+```
+requested -> reserved -> disbursing -> processing -> completed
+                                      \-> failed -> (reservation refunded)
+```
+
+- `requested`: ombi limeundwa; hakuna pesa iliyohamishwa.
+- `reserved`: balance imedebitwa na ledger imeandikwa kwa transaction moja.
+- `disbursing`: provider payout call inaweza kuwa inaendelea; retry lazima
+  iulize gateway kwanza (`_gatewayHasPayout`).
+- `processing`: provider imekubali; inasubiri confirmation pekee.
+- `completed`: provider imethibitisha; terminal.
+- `failed`: terminal; reservation inarudishwa kwa ledger
+  `WITHDRAWAL_REFUNDED`.
+- Defaults: `WITHDRAWAL_MIN=0`, `WITHDRAWAL_MAX=5,000,000`,
+  `DAILY_WITHDRAWAL_LIMIT=5,000,000`.
+- Admin anaweza process/confirm/retry; jobs zinashughulikia stuck withdrawals.
+
+10.7 Refunds
+
+- Refund inaweza kuwa full au partial; inahusiana na order/payment/dispute.
+- Status: `pending` -> `processing` -> `completed`/`failed`.
+- Refund inaathiri escrow na wallet kwa ledger entry; buyer notification
+  inatumwa.
+- `refundUnstuck` job inashughulikia refunds zilizokwama.
+
+10.8 Disputes
+
+- Dispute inafunguliwa na buyer (au seller kwa upande mwingine) ikiwa na
+  reason, evidence na amount.
+- Order inakuwa `DISPUTED`; escrow hold inabaki.
+- Admin anaweza:
+  - `refund_to_buyer` - refund na order `REFUNDED`.
+  - `release_to_seller` - release na order `COMPLETED`.
+  - partial/other - kwa manual adjustment.
+- SLA: `FINANCE_DISPUTE_SLA_HOURS` (default 72); job inaescalate.
+- Dispute evidence iko kwenye `disputeEvidence` na inaweza kuwa na picha,
+  maelezo na tracking.
+
+10.9 Reconciliation na commission
+
+- Reconciliation inalinganisha payments, escrow, wallet na provider records;
+  inaunda `reconciliations` report.
+- Commission default 0; kama imewekwa, inakatwa kwenye settlement na
+  kuandikwa `commissionTransactions`.
+- Admin settings/config zinaweza kubadilisha commission; mabadiliko
+  yanahitaji audit.
+
+10.10 Money invariants (lazima zishike)
+
+1. Order total = product price + shipping fee (kwa order ya kawaida).
+2. Escrow hold amount = payment amount = order total iliyolipwa.
+3. Seller settlement = order total - commission (commission >= 0).
+4. Wallet available balance = sum(ledger entries) kwa wallet hiyo.
+5. Withdrawal haiwezi kuzidi available balance.
+6. Payout haiwezi kutoka bila `reserved` debit.
+7. Refund haiwezi kuzidi amount iliyolipwa.
+8. Dispute hold haiwezi auto-release.
+9. Kila transition ya order inapita state machine.
+10. Kila webhook ina dedupe key; kurudia hakuathiri ledger.
+
+================================================================================
+
+================================================================================
+11. END-TO-END FLOWS (KILA FLOW KWA HATUA)
+================================================================================
+
+11.1 Install, first launch na onboarding
+
+Hatua:
+1. Mtumiaji anafungua app. `main.dart` inaamsha Flutter bindings, Firebase,
+   App Check, local storage, providers na `SokoApp`.
+2. `AuthGate` inaangalia Firebase session na `AppState`. Kama hakuna
+   onboarding, inampeleka `/onboarding`; kama yupo, `/` home.
+3. Onboarding inaonyesha escrow, trust, usalama na jinsi ya kuuza. Mtumiaji
+   anaruka au anaendelea.
+4. `AccountSelectionScreen` inachagua Buyer/Seller/Both; uchaguzi unaathiri
+   menu, onboarding ya KYC na dashboard.
+5. Mtumiaji mpya anaenda register/login; existing anaenda home.
+6. App inaandaa cache, FCM token, language/currency, theme na deep-link
+   handler.
+
+Edge cases:
+- Internet haipo: onboarding inaendelea offline; login inahitaji mtandao.
+- App version ya zamani: `/api/v1/config/app-version` inaweza kulazimisha
+  update.
+- Onboarding imekamilika: `hasCompletedOnboarding=true`; `/onboarding`
+  inarudisha home.
+
+11.2 Usajili (registration)
+
+Njia:
+A. Email + password
+1. `RegisterScreen` inakusanya jina, email, phone, password, nchi, role na
+   ridhaa.
+2. Client inathibitisha password policy (`password-policy.js` server-side).
+3. `POST /api/v1/auth/check-email` na `/check-phone` kwa availability.
+4. Firebase Auth inaunda account; server `auth/controller.js` inaprovision
+   `users/{uid}` (role, status, createdAt, isAdmin false).
+5. Email verification inatumwa (`/verify-email`).
+6. `ProfileSetupScreen` inakusanya username, photo, location na bio.
+7. Referral code (kama ipo) inatumwa `/api/v1/referrals/apply`.
+8. Mtumiaji anaenda home au seller onboarding.
+
+B. Phone + OTP
+1. `POST /auth/send-otp` inatuma OTP (push -> WhatsApp -> SMS kama
+   imewekwa).
+2. `OtpVerificationScreen` inathibitisha `/auth/verify-otp`.
+3. Server inaunda/provision user na kumtengeneza profile.
+4. Profile setup na referral.
+
+C. Email OTP
+1. `POST /auth/send-email-otp`; 2. `verify-email-otp`; 3. profile setup.
+
+Edge cases:
+- Phone/email tayari zipo: 409; UI inaelekeza login/reset.
+- OTP imeisha muda (5 min): resend; attempts 5 kisha lockout.
+- Username imechukuliwa: 409; UI inapendekeza.
+- Password haitoshi: 400 na policy message.
+- Referral self-referral: 400 `SELF_REFERRAL_NOT_ALLOWED`.
+- Account iliyosimamishwa: `requireActive` inazuia.
+
+11.3 Kuingia (login) na MFA
+
+Njia:
+A. Email + password
+1. `LoginScreen` inawasilisha credentials kwa Firebase.
+2. Server inathibitisha ID token kwenye kila API call.
+3. Kama MFA imewekwa, `MfaChallengeScreen` inahitaji TOTP kabla ya
+   kuendelea.
+4. Baada ya login: profile bootstrap, FCM token, session, home.
+
+B. Phone OTP: send-otp -> verify-otp -> session.
+C. Email OTP: send-email-otp -> verify-email-otp -> session.
+D. OTP sign-in: `otp-sign-in`.
+
+MFA:
+- Enrollment: `/mfa-enrollment` -> QR/manual secret -> code -> recovery codes.
+- Challenge: `/mfa-challenge` -> TOTP -> session.
+- Admin/staff login: `POST /api/v1/admin/staff/login` + TOTP.
+- Disable: admin compat `/api/admin/mfa/disable` (admin only).
+
+Edge cases:
+- Credentials mbaya: 401; login limiter (5/15 min).
+- Account suspended: 403 `ACCOUNT_SUSPENDED`.
+- Session revoked: `sessionRevokedAt` inalinganishwa; logout-all invalidates.
+- Risk engine inaweza kuhitaji verification ya ziada.
+
+11.4 Password reset
+
+1. `ForgotPasswordScreen`: email link au phone OTP.
+2. Email: Firebase reset link; app inashughulikia link kwa deep link.
+3. Phone: `POST /api/v1/auth/reset-password-by-phone` baada ya OTP.
+4. Mtumiaji anaweka password mpya; sessions zote za zamani zinaweza
+   kurevoked.
+5. Login mpya.
+
+Edge cases:
+- Phone/email haipo: response ya generic (hakuna user enumeration).
+- OTP attempts zimezidi: 429/lockout.
+- Password mpya ni sawa na ya zamani: policy inakataa.
+
+11.5 App lock, session na logout-all
+
+- App lock: PIN/biometric; `LockScreen` inaonekana baada ya idle/background.
+- Session: Firebase token + server user status + `sessionRevokedAt`.
+- `POST /api/v1/auth/logout-all` inarevoke sessions zote; device tokens
+  zinaondolewa.
+- Logout ya kawaida inafuta local cache/tokens na kurudi login.
+- Admin anaweza kusimamisha/kufungua account; `requireActive` inazuia API.
+
+11.6 Profile setup na username
+
+1. `ProfileSetupScreen`/`EditProfileScreen`.
+2. Username unique (`/users/check-username`), lowercase, length rules.
+3. Photo inapakiwa R2 kupitia presigned URL; server inahifadhi key/URL.
+4. Public projection `userPublic/{uid}` inaandikwa kwa profile ya umma.
+5. Privacy settings zinaamua nini kinaonekana.
+
+11.7 Browse, feed, search na discovery
+
+Home:
+1. `HomeScreen` inaomba `/api/v1/feed` + `/api/v1/products` + banners +
+   categories.
+2. Feed ranking inachanganya trending, following, nearby, boosted na new;
+   boosted products zinaonyeshwa kwa muda wa boost.
+3. Cache: edge cache 60s kwa search global, 90s autocomplete, 300s trending,
+   600s most-rated; header `x-edge-cache`.
+
+Search:
+1. `SearchScreen` inaonyesha history, trending, suggestions.
+2. `GET /api/v1/search/products?q=&filters=&limit=&cursor=`.
+3. Filters: category, price, location, rating, condition, seller.
+4. Pagination kwa cursor; empty state inapendekeza categories/trending.
+5. Search analytics zinaandikwa (`search_analytics`).
+
+Discovery:
+- `DiscoveryScreen` inaunganisha categories, sellers, buyer requests,
+  flash sales na suggested accounts.
+
+Edge cases:
+- Hakuna results: fallback kwenda category/trending.
+- Offline: cache ya mwisho + banner ya offline.
+- Product imefutwa/unpublished: 404/410 kwenye detail; feed inaificha.
+
+11.8 Seller onboarding, KYC na Blue Tick
+
+1. Mtumiaji anachagua "Become a seller".
+2. `POST /api/v1/sellers/request`; seller state machine inaweka `pending`.
+3. `POST /api/v1/sellers/profile` inaunda store (jina, slug, location,
+   category, payout phone).
+4. `KycScreen` inakusanya:
+   - Aina ya ID (NIDA/passport/license), namba, jina,
+   - picha mbele/nyuma/selfie,
+   - business documents (kama business),
+   - makubaliano.
+5. `POST /api/v1/kyc/submit`; docs zinapakiwa R2 bucket `soko-vibe-kyc`
+   (hakuna public access).
+6. Fee ya KYC: 15,000 TZS; `POST /api/v1/kyc/fee/initiate` ->
+   AzamPay; `GET /fee/status`.
+7. Admin `AdminKycScreen` inakagua; documents kupitia presigned GET
+   (`/api/v1/admin/kyc/:userId/:documentId/read-url`).
+8. Approve -> `sellerKycApproved=true`, trust badge; reject -> reason na
+   resubmission.
+9. Blue Tick: admin `PUT /api/v1/admin/sellers/:userId/blue-tick`; trust
+   fields zinasasishwa; ads exemption inaweza kuwekwa.
+10. Trust passport inaonyesha score, reviews, delivery reliability na
+    disputes.
+
+Edge cases:
+- Document expired/blurry: reject na reason.
+- Duplicate ID: dedupe check (`__dupcheck.js`).
+- Fee imelipwa lakini KYC haijakamilika: status inabaki pending; support.
+- KYC approved kisha policy violation: revoke; trust inashuka.
+
+11.9 Kuweka bidhaa (listing/publish)
+
+1. `AddProductScreen` inakusanya title, category, description, price, stock,
+   condition, location, shipping options, variants.
+2. Media: client inaomba `POST /api/v1/media/upload-url`; inapakia moja kwa
+   moja R2; server inahifadhi key/URL na thumbnail job.
+3. `POST /api/v1/products` inaunda product `draft`/`pending`.
+4. Moderation: text na media zinakaguliwa; `PUT /:id/moderate` kwa admin.
+5. `POST /:id/publish` inaweka `active`; product inaonekana kwenye feed/search.
+6. Seller anaweza `unpublish`, `delete` (soft), au `boost`.
+
+Edge cases:
+- Banned words: moderation inakataa.
+- Bei si sahihi/stock 0: validation.
+- Media kubwa: presigned upload inakataa size; compression client-side.
+- Product imekataliwa: seller anaweza kurekebisha na resubmit.
+
+11.10 Chat, social, follow, groups na status
+
+Chat:
+1. Buyer anaanzisha chat kutoka product/seller profile.
+2. Conversation inaundwa (`conversations` au `chats`) na participants.
+3. Messages: text, picha, sauti, product/order share; read receipts.
+4. Push notification inatumwa kwa recipient; in-app badge inasasishwa.
+5. Block/report inapatikana; moderation inaweza kuchukua hatua.
+
+Social:
+- Follow/unfollow; private account ina follow requests (accept/reject/
+  cancel).
+- Followers/following lists; suggested accounts.
+- Groups: create group, add members, admin roles, group chat.
+- Status: `statuses` (24h), views na replies.
+- Contact discovery: opt-in, match contacts, privacy.
+
+Edge cases:
+- Spam/abuse: rate limits + report.
+- Message kwa blocked user: 403.
+- Group member removal: admin only.
+- Offline: messages queued na kutumwa baadaye.
+
+11.11 Checkout, shipping quote na malipo
+
+1. Buyer anaongeza bidhaa au "Buy now"; `CheckoutScreen` inaonyesha order
+   summary.
+2. Anwani: `addresses`; buyer anachagua/kuongeza.
+3. Order inaundwa `POST /api/v1/orders` (productId, quantity, addressId).
+4. Seller anaweka shipping quote `POST /orders/:id/shipping-quote`
+   (amount, estimatedDays, notes).
+5. Buyer/admin anaapprove `POST /orders/:id/shipping-quote/approve`;
+   `totalAmount = productPrice + shippingFee`.
+6. Buyer anachagua malipo: AzamPay (M-Pesa/Tigo/Airtel/Halopesa/card/bank).
+7. `POST /orders/:id/payments/initiate` inaunda payment + attempt na
+   inatuma USSD push/checkout URL.
+8. Buyer anathibitisha kwenye simu; UI inaonyesha "processing" na poll
+   ya status.
+9. Webhook inathibitisha malipo; order inakuwa `PAID`/`ESCROW_HELD`.
+10. Buyer na seller wanapata notification; seller anaona "ready to dispatch".
+
+Edge cases:
+- Malipo yamekataliwa: order inarudi `AWAITING_ESCROW_PAYMENT`/`FAILED`;
+  buyer anaweza kujaribu tena.
+- Timeout: payment inaisha (`expireStalePayments`) na order inaweza
+  kughairiwa.
+- Quote imebadilika: buyer anahitaji approval mpya.
+- Shipping fee 0: seller anachukua gharama (inaruhusiwa).
+- Double click: idempotency inazuia order/payment mara mbili.
+
+11.12 AzamPay webhook na escrow hold
+
+1. AzamPay inatuma `POST /api/v1/payments/webhook/azampay`.
+2. Server inakagua:
+   - IP iko kwenye `AZAMPAY_ALLOWED_IPS` (kama imewekwa),
+   - callback password/checksum (`AZAMPAY_CALLBACK_PASSWORD`,
+     `AZAMPAY_CHECKSUM_KEY`),
+   - JSON shape na reference.
+3. `webhookEvents` dedupe kwa `dedupKey`; duplicate inarudisha 200 bila
+   kuathiri ledger.
+4. Payment inasasishwa (`paid`/`failed`), payment attempt, order status.
+5. Escrow hold inaundwa/updated: `status='holding'`, amount, paymentId,
+   `autoReleaseAt` (siku 14 default).
+6. Ledger entries: `PAYMENT_RECEIVED`, `SHIPPING_FEE_RECEIVED` (kama
+   applicable); commission 0.
+7. Notification kwa buyer/seller; receipt inaundwa.
+8. Outbox inahakikisha events za ndani zinatumwa kwa reliability.
+
+Edge cases:
+- Webhook imechelewa baada ya order kughairiwa: refund/manual review.
+- Webhook duplicate: dedupe.
+- Amount mismatch: order inawekwa review; hakuna release.
+- Provider down: retry/outbox; finance job inarekebisha.
+
+11.13 Dispatch, delivery na OTP/QR handover
+
+1. Seller anaona order `ESCROW_HELD`/`SELLER_ACCEPTED`.
+2. `SellerDispatchScreen`: courier name + tracking number ->
+   `POST /orders/:id/dispatch`.
+3. Order inakuwa `DISPATCHED`/`IN_TRANSIT`; buyer notification.
+4. Delivery: courier/buyer inaweza kuweka `OUT_FOR_DELIVERY`, `ARRIVED`,
+   `DELIVERED`.
+5. Handover:
+   - `POST /api/v1/handover/:orderId/otp/issue` inatengeneza OTP (hash,
+     TTL, attempts) na kumtumia buyer.
+   - Buyer anampa courier/seller OTP; `POST /:orderId/otp/verify`.
+   - Au QR: `POST /:orderId/qr/verify`.
+6. Baada ya verification: `DELIVERY_CONFIRMED`; escrow inakuwa tayari
+   release; inspection period inaweza kuanza.
+7. Buyer `POST /orders/:id/complete` au auto-release.
+
+Edge cases:
+- OTP imeisha/attempts zimezidi: issue mpya kwa rate limit.
+- OTP imeshirikiwa vibaya: seller/courier anaweza kuripoti; dispute.
+- Delivery imeshindikana: `DELIVERY_ATTEMPTED`; reschedule au refund.
+- Buyer hayupo: courier anaripoti; order inabaki hold.
+
+11.14 Auto-release na settlement
+
+1. Finance job `finance.inspectionAutoRelease` kila saa inatafuta orders
+   zilizo `DELIVERED`/`INSPECTION_PERIOD` na `autoReleaseAt <= now`.
+2. Dispute ikiwa `DISPUTED`, hairuhusiwi auto-release.
+3. Release:
+   - escrow hold -> `released`,
+   - order -> `COMPLETED`/`WALLET_CREDITED`,
+   - wallet ledger `SETTLEMENT_CREDITED`,
+   - seller available balance += total - commission,
+   - buyer/seller notifications,
+   - receipt/audit.
+4. Idempotency: release key inazuia mara mbili.
+5. Settlement inaonekana kwenye seller earnings/ledger.
+
+Edge cases:
+- Seller hajafanya dispatch: hakuna auto-release.
+- Buyer hajathibitisha: auto-release baada ya siku 14 (default).
+- Dispute baada ya release: admin manual resolution/refund.
+
+11.15 Wallet na withdrawal
+
+1. Seller anaona `wallet` (available/pending/frozen) kwenye
+   `SellerEarningsScreen`.
+2. `POST /api/v1/wallet/withdrawals` na amount + payout phone.
+3. Server:
+   - `requested` -> unda withdrawal,
+   - `reserved` -> debit available + ledger `WITHDRAWAL_DEBITED`
+     (transaction moja),
+   - `disbursing` -> provider payout call,
+   - `processing` -> provider accepted,
+   - `completed` -> confirmed; au `failed` -> refund reservation.
+4. Admin anaweza process/confirm/retry; job inashughulikia stuck.
+5. Seller anaona status na receipt.
+
+Edge cases:
+- Amount < min / > max / > balance: 400/409.
+- Wallet frozen: 409 `WALLET_FROZEN`.
+- Provider timeout: `disbursing` inabaki; job inauliza gateway kwanza.
+- Duplicate request: idempotency.
+- Payout phone si sahihi: validation; failed -> refund.
+
+11.16 Refund
+
+1. Buyer anaomba refund (order detail/dispute).
+2. `POST /api/v1/refunds` inaunda refund `pending` na correlationId.
+3. Admin ana-review; `PUT /api/v1/refunds/:refundId/process`.
+4. Refund inatekelezwa kwa provider (AzamPay) au manual; status
+   `processing` -> `completed`/`failed`.
+5. Escrow: hold inarelease kwa buyer; order `REFUNDED`; ledger
+   `REFUND_PROCESSED`.
+6. Buyer notification + receipt.
+
+Edge cases:
+- Order tayari completed: refund inaweza kuhitaji manual.
+- Partial refund: amount < total; ledger inaheshimu.
+- Refund imekwama: `refundUnstuck` job.
+- Refund baada ya withdrawal: balance inaweza kuwa negative; admin
+  adjustment.
+
+11.17 Dispute
+
+1. Buyer/seller ana fungua dispute `POST /api/v1/disputes` au
+   `/orders/:id/dispute`.
+2. Order -> `DISPUTED`; escrow hold inabaki.
+3. Evidence: `POST /disputes/:id/evidence` (picha, maelezo, tracking).
+4. Admin anaona queue; `PUT /disputes/:id/resolve`:
+   - `refund_to_buyer`, `release_to_seller`, au partial.
+5. Resolution inaathiri escrow/wallet/order; notifications.
+6. SLA: 72h default; `escalateDisputes` job.
+
+Edge cases:
+- Dispute baada ya auto-release: admin manual.
+- Evidence kubwa: upload limits.
+- Seller haijibu: admin anaweza kutoa default kwa buyer.
+- Repeated disputes: trust score inashuka.
+
+11.18 Cancel na expire
+
+Cancel:
+1. Buyer/seller/admin ana-cancel kwa conditions (order haijadispatch).
+2. Order -> `CANCELLED`; escrow -> refund buyer kama imelipwa.
+3. Notifications na ledger.
+
+Expire:
+1. `finance.paymentExpire` inatafuta payments `pending` zaidi ya
+   `FINANCE_PAYMENT_EXPIRE_MS` (default 24h).
+2. Payment -> `expired`; order -> `EXPIRED`/`CANCELLED`.
+3. Stock inareleased; buyer notification.
+
+Edge cases:
+- Cancel baada ya dispatch: hairuhusiwi; dispute/refund.
+- Expire wakati webhook inakuja: dedupe/status guard.
+- Order iliyolipwa: cancel inahitaji refund.
+
+11.19 Reviews, comments na ratings
+
+Reviews:
+1. Buyer anaweza review baada ya order `COMPLETED`.
+2. `POST /api/v1/reviews` (rating 1-5, text, photos).
+3. Review inaonekana kwenye product/seller; seller anaweza reply.
+4. Helpful votes; rating summary ina-update.
+5. Moderation inaweza kuficha review isiyofaa.
+
+Comments:
+1. User ana-comment kwenye product; replies kwa comment.
+2. Moderation text; delete kwa owner/admin.
+3. Counts zina-update kwenye product.
+
+Edge cases:
+- Review duplicate: 409.
+- Order haijakamilika: 403.
+- Review yenye matusi: moderation.
+- Seller reply: one per review.
+
+11.20 Boost, ads, flash sale na banners
+
+Boost:
+1. Seller anachagua tier: Bronze 1,500 TZS/3 days, Silver 3,000/7 days,
+   Gold 10,000/30 days.
+2. Checkout: `POST /api/boost-product` (legacy) au boost flow; payment
+   kwa AzamPay/mpesa USSD.
+3. Boost inaweka `isBoosted`, `boostedUntil`, `boostTier`; product
+   inapata ranking boost.
+4. Analytics: impressions/clicks kwa `/boosts/:id/impressions|clicks`.
+
+Ads/Banners:
+- Admin anaweka ads config, banners na schedule.
+- Banner impressions/clicks zinahesabiwa.
+- Blue Tick sellers wanaweza kuwa ads-exempt.
+
+Flash sale:
+1. Seller anaunda flash sale (muda, discount, products).
+2. `POST /api/flash-sale/create`; scan/notify.
+3. Countdown na stock; expired sales zinadeactivate.
+
+Edge cases:
+- Boost payment imeshindikana: hakuna boost.
+- Boost imeisha: product inarudi ranking ya kawaida.
+- Flash sale imeisha: bei inarudi normal.
+- Banner imeisha: haionekani.
+
+11.21 Subscriptions, trials, entitlements na referrals
+
+Plans:
+- Buyer/Normal: 0 TZS, AI actions 5/day.
+- Seller Basic: 0 TZS, AI 5/day.
+- Seller Plus: 14,900 TZS/month, AI 50/day.
+- Seller Pro: 29,900 TZS/month, AI 200/day.
+- Business: 79,900 TZS/month, AI 500/day.
+
+Flow:
+1. `GET /subscriptions/plans`.
+2. `POST /subscriptions/trial` (mara moja kwa account).
+3. Malipo -> subscription `active`; entitlement inaundwa.
+4. `GET /subscriptions/entitlements`, `/ai-quota`.
+5. Renewal/cancel/expire; `past_due`, `cancel_pending`, `expired`.
+
+Referrals:
+1. `GET /referrals/code` - code ya mtumiaji.
+2. Mtu mpya anaapply code wakati wa register.
+3. Referral `pending`; baada ya qualifying action (order/KYC), admin/
+   system inacomplete.
+4. Reward ni platform credit (voucher/boost), si cash ya wallet.
+
+Edge cases:
+- Trial imetumika: 409.
+- Subscription imeisha: features zinashuka kwa free plan.
+- Referral self: 400; duplicate: 409.
+- Plan change: proration/manual (haijatekelezwa kikamilifu).
+
+11.22 Buyer requests
+
+1. Buyer anaunda request: bidhaa, budget, location, deadline, description.
+2. `POST` buyer request (Firestore `BuyerRequests`).
+3. Sellers wanaona requests kwenye discovery; wanaweza kuwasilisha offer
+   (chat/quote).
+4. Buyer anachagua offer; order inaundwa kwa mazungumzo.
+5. Request inafungwa/expire.
+
+Edge cases:
+- Request spam: rate limit/moderation.
+- Budget 0: validation.
+- Request imeisha: haionekani.
+
+11.23 Notifications na daily engagement
+
+Channels:
+- In-app (`notifications`), push (OneSignal), email (SMTP), SMS, WhatsApp.
+- Preferences kwa type/channel (`notification_preferences`).
+
+Flow:
+1. Event (order, payment, chat, review, KYC, dispute) inatrigger
+   `notification-orchestrator`.
+2. Orchestrator inaamua recipients, channel, template na dedupe.
+3. Queue `notifications` inatuma; failures zinarithiwa.
+4. In-app notification inaundwa; unread count ina-update.
+5. Deep link inafungua screen husika.
+
+Daily engagement:
+- `POST /api/v1/cron/daily-engagement` inatuma campaigns (reminders,
+  deals, abandoned cart) kwa segments.
+- Unsubscribe link `/api/v1/unsubscribe`.
+
+Edge cases:
+- User amezima channel: respect preferences.
+- Push token invalid: remove device.
+- Duplicate event: dedupe key.
+
+11.24 AI assistant, persistent chat, voice na agent
+
+AI assistant:
+1. `AiAssistantScreen` inatuma message `/api/ai/chat` au persistent
+   `/api/ai/chats/:id/messages`.
+2. Server AI gateway inajaribu providers kwa `AI_PROVIDER_ORDER`
+   (default `groq`, `gemini`, `cloudflare`) kwa failover 429/5xx.
+3. Tools: search, product info, order status; tool loop inaweza kuita
+   backend.
+4. Response inarudi streaming au JSON; voice inaweza kutumika.
+5. Memory/preferences zinahifadhiwa kwa user.
+
+Persistent chat:
+- Conversations, messages, memory, preferences; delete/futa zote.
+- Quota kwa plan (`aiActionsPerDay`).
+
+Voice:
+- `POST /api/ai/transcribe` (STT) na `POST /messages/:id/voice` (TTS).
+- Voice files zinahifadhiwa/hutumwa kwa URL.
+
+Agent:
+1. Agent anaona tools na permissions.
+2. Anapendekeza action; user anaapprove/deny.
+3. `POST /actions/:id/execute` inatekeleza; audit trail.
+4. Permissions grant/revoke.
+
+Edge cases:
+- Provider wote wameshindikana: 503.
+- Quota imeisha: 429/402-like.
+- Action hatari: approval ya lazima.
+- Prompt injection: tools zina limits; audit.
+
+11.25 Admin panel, Company OS na staff console
+
+Admin panel (browser `/admin`):
+1. Admin anaingia kwa secret + TOTP au staff login.
+2. Dashboard: KPIs, orders, users, revenue, pending KYC, disputes.
+3. Users: status, roles, detail.
+4. Products: moderation, delete/restore.
+5. Orders: view, transition, refund/dispute.
+6. Withdrawals: process/confirm/retry.
+7. KYC: review documents kwa presigned URL.
+8. Reports/fraud/audit.
+9. Settings: commission, ads, app version, broadcast.
+
+Company OS (Flutter `/company`):
+- Console ina HR, finance, projects, calendar; inaita `/api/v1/company/*`.
+- Backend haijamountiwa -> 404 (gap).
+
+Staff console:
+- `/staff` web surface; staff accounts na MFA; role-based access.
+
+Edge cases:
+- Admin secret si sahihi: 401.
+- TOTP imeisha: 401; retry.
+- Staff account imesimamishwa: 403.
+- Company routes: 404 hadi mount.
+
+11.26 Landing, waitlist na contact
+
+Landing:
+1. Mtumiaji anafungua `https://www.sokovibe.co.tz`.
+2. Static landing inaonyesha value prop, features, pricing, FAQ, contact.
+3. Language switch (sw/en); links za app/legal.
+4. Waitlist: `POST /api/v1/launch/subscribe`; stats/export admin.
+5. Contact: `POST /api/v1/contact` yenye Turnstile; email/notification kwa
+   admin.
+6. Unsubscribe: `/api/v1/unsubscribe`.
+
+Edge cases:
+- Turnstile imeshindikana: 400.
+- Email duplicate: 409/idempotent.
+- Spam: rate limit.
+
+11.27 Data export, deletion na consent
+
+Export:
+1. User anaomba `POST /api/v1/users/export`.
+2. Server inakusanya profile, orders, reviews, wallet (kama seller),
+   settings; inarudisha archive/URL ya muda mfupi.
+3. Audit log inaandikwa.
+
+Deletion:
+1. `POST /api/v1/users/request-deletion` au data-deletion route.
+2. Request inaingia `dataDeletionRequests`; admin ana-review.
+3. Data isiyo ya lazima inafutwa/anonymized; financial/audit records
+   zinabaki kwa mujibu wa sheria.
+4. User notification na confirmation.
+
+Consent:
+- `consentRecords` inahifadhi consent za terms/privacy/marketing.
+- Privacy settings zinaweza kubadilishwa; marketing unsubscribe.
+
+11.28 Sharing, deep links na OG previews
+
+1. User anashare product/seller/order kwa link.
+2. Link inaingia `https://www.sokovibe.co.tz/product/:slug` (au
+   `/seller/:username`).
+3. Server inarudisha HTML yenye OG tags (title, image, price, description)
+   kwa bots; kwa apps inafungua deep link.
+4. App Links/Universal Links: `/.well-known/assetlinks.json`,
+   `apple-app-site-association`.
+5. Kama app haipo, fallback page inaelekeza store (stores hazijawekwa
+   bado; env `ANDROID_STORE_URL`/`IOS_STORE_URL`).
+6. Order/OTP links zinafungua screen husika.
+
+Edge cases:
+- Product imefutwa: OG page ya fallback/404.
+- Bot/crawler: HTML yenye meta; app haifungui.
+- Link imeisha: order/OTP error page.
+
+================================================================================
+
+================================================================================
+12. CLOUDFLARE, R2 NA INFRASTRUCTURE
+================================================================================
+
+12.1 Topology
+
+```
+Flutter app (Android/iOS/Web/Desktop)
+   |
+   | HTTPS + Firebase ID token
+   v
+Cloudflare Edge Worker "soko-api-edge"   (api.sokovibe.co.tz)
+   |  cache hot reads, block scanners, body cap, headers
+   v
+Render Web Service "soko-langu-api"      (Express, Firestore facade)
+   |            |               |
+   |            |               +--> Cloudflare R2 (media/KYC/backups)
+   |            +------------------> Redis (rate limits, OTP, queues, cache)
+   +-------------------------------> Firebase Firestore + Auth
+   |
+Render Worker "soko-langu-worker" (finance/media queues)
+   |
+Cloudflare Worker "soko-ai-edge" (Workers AI, server-to-server)
+   |
+Cloudflare Worker "soko-media" (media.sokovibe.co.tz -> R2 buckets)
+```
+
+Sehemu nyingine:
+- Firebase Hosting: site `sokonimoko-8c171-a8d14` (landing/assets).
+- Static admin panel: `/admin` kwenye Express + `admin.sokovibe.co.tz`.
+- Landing: `server/landing` (inazalishwa kutoka `web_landing`).
+- Firestore rules/indexes zinasambazwa kwa Firebase CLI.
+
+12.2 Edge cache worker (`cf-worker/`)
+
+Worker: `soko-api-edge`; route `api.sokovibe.co.tz/*`; origin
+`https://soko-langu-server.onrender.com` (inaweza kubadilishwa kwa
+`ORIGIN_URL`).
+
+Routes zinazocache:
+| Route | TTL | Key |
+|---|---|---|
+| `GET /api/trust/passport/:sellerId` | 300s | path |
+| `GET /api/transaction-status/:orderId` | 15s | path + token |
+| `POST /api/search/global-search` | 60s | path + body |
+| `POST /api/search/autocomplete` | 90s | path + body |
+| `POST /api/search/trending` | 300s | path + body |
+| `POST /api/search/most-rated` | 600s | path + body |
+
+Tabia:
+- Stale-while-revalidate: entry iliyoisha inatumwa instant na refresh
+  inaendelea background.
+- Header `x-edge-cache`: `MISS`, `HIT`, `STALE`, `MISS-ORIGIN-ERROR`,
+  `MISS-NOKEY`; pia `x-soko-edge: 1`.
+- Cache key ni GET request yenye URL-encoded path (Cache API haikubali POST
+  key); body inahashwa.
+- Non-200 haicache (haiti poison 429/500).
+- Mutations, admin, payments, escrow, auth hazicache kamwe.
+
+Edge protections:
+- Scanner/probe blocking: `/.env`, `/.git/*`, `/wp-*`, `*.php`,
+  `/phpmyadmin`, `/server-status`, `/actuator`, `/.aws` -> 404.
+- Body cap: non-GET/HEAD > 1MB -> 413.
+- Origin timeout: 25s (origin 20s).
+- Security headers: HSTS, nosniff, referrer-policy, permissions-policy;
+  huondoa `x-powered-by`/`server`.
+- Optional KV rate brake: `RATE_LIMIT_KV`, 120 req/min/IP kwa uncached
+  traffic (eventually consistent; origin limiter ndiyo source of truth).
+- `EDGE_SECRET`: worker inatuma `x-soko-edge`; origin inatumia
+  `cf-connecting-ip` kwa rate limit only kama secret inalingana.
+
+12.3 Origin (Render)
+
+`server/render.yaml`:
+- `soko-langu-api`: web, rootDir `server`, `npm ci`, start
+  `node --optimize-for-size --expose-gc src/index.js`, health `/health`,
+  scaling min 1 max 6, memory/CPU targets, disk `/tmp` 1GB.
+- `soko-langu-worker`: worker, `npm run worker`, `FINANCE_WORKER_IN_PROCESS=false`.
+- Env: `NODE_ENV=production`, `PORT=10000`, `SHED_LOAD=true`,
+  `UV_THREADPOOL_SIZE=10`, `NODE_OPTIONS=--max-old-space-size=1024`.
+- `server/Dockerfile`: `node:20-slim`, `npm ci --omit=dev --no-optional`,
+  entrypoint `node src/index.js`.
+- `docker-compose.yml` bado ina postgres kwa legacy dev; runtime haitumii.
+
+Uwazi: render.yaml bado inataja ClickPesa kwenye comments; code ya sasa ni
+AzamPay. Hii ni doc drift, si runtime.
+
+12.4 AI edge (`cf-worker-ai/`)
+
+- Worker: `soko-ai-edge`, `compatibility_date 2024-09-01`, binding `[ai]`.
+- Models: `AI_MODEL=@cf/openai/gpt-oss-120b`,
+  `AI_MODEL_LITE=@cf/meta/llama-3.2-3b-instruct`,
+  `AI_MODEL_WHISPER=@cf/openai/whisper-large-v3-turbo`;
+  `AI_MODEL_MAP` ya client-id -> model.
+- Haina route ya public; Node server inaita kwa secret `AI_EDGE_KEY`
+  (server-side `CF_AI_KEY`). Hii inazuia billable endpoint kufikiwa na
+  internet.
+- Inatumika kama provider wa mwisho kwenye failover ya AI.
+
+12.5 Media edge na R2 (`cf-worker-media/`)
+
+- Worker: `soko-media`, route `media.sokovibe.co.tz/*`.
+- Buckets:
+  - `soko-vibe-images` (IMAGES)
+  - `soko-vibe-videos` (VIDEOS)
+  - `soko-vibe-thumbnails` (THUMBNAILS)
+  - `soko-vibe-backups` (BACKUPS)
+  - `soko-vibe-artwork` (ARTWORK) - category artwork pack, public
+  - `soko-vibe-kyc` - **haijabound** kwa worker hii; hakuna public access.
+- Path segment ya kwanza inachagua bucket (`images/`, `videos/`,
+  `thumbnails/`, `backups/`, `artwork/`).
+- Uploads: presigned PUT kutoka API; client inapakia moja kwa moja R2.
+- KYC docs: presigned GET ya muda mfupi baada ya authorization; bucket
+  haiko kwenye media worker (deny ni structural).
+- Public origin: `https://media.sokovibe.co.tz`.
+
+12.6 Firebase
+
+- Project: `sokonimoko-8c171-a8d14`.
+- Firestore: rules + indexes (`firebase.json`).
+- Auth: email/password, phone, email OTP; App Check.
+- Hosting: site ya landing/assets.
+- Crashlytics + Performance kwenye app.
+- Emulators: Firestore 8080, Auth 9099, UI 4000.
+
+12.7 Redis
+
+Inatumika kwa:
+- Rate limiting (sliding/fixed windows).
+- OTP store (TTL 5 min, attempts, hashing).
+- Locks (`requireLock`/`releaseLock`) kwa withdrawal/payment.
+- BullMQ queues (media, notifications, finance).
+- API hit counters/activity.
+- Cache ya baadhi ya reads.
+
+Redis ikikosekana: rate limiting inashuka kwa memory fallback (best-effort),
+OTP inaweza kuwa degraded, queues hazifanyi kazi; health inaonyesha.
+
+12.8 Domains na DNS
+
+- `www.sokovibe.co.tz` - landing/API canonical kwa web.
+- `sokovibe.co.tz` - 301 www (au `SERVE_APEX=1`).
+- `api.sokovibe.co.tz` - Cloudflare Worker -> Render.
+- `admin.sokovibe.co.tz` - admin panel.
+- `media.sokovibe.co.tz` - media worker -> R2.
+- `soko-langu-server.onrender.com` - origin (haipaswi kutajwa hadharani).
+- SSL/TLS Full (strict), WAF managed rules, Bot Fight Mode, rate rules
+  kwa `/api/v1/auth/*` na `/api/v1/payments/*`.
+
+12.9 Deploy na environments
+
+Flutter:
+- `flutter build apk --release` / `appbundle` / `ipa` / `web`.
+- Firebase config: `flutterfire configure` au `google-services.json` /
+  `GoogleService-Info.plist`.
+- Version: `1.0.1+2`; update check kupitia `/api/v1/config/app-version`.
+
+Server:
+- Render auto-deploy kutoka repo (rootDir `server`), au Docker.
+- `npm ci`, start `src/index.js`; worker tofauti `src/workers/index.js`.
+- Migrations: Firestore indexes `firebase deploy --only firestore:indexes`;
+  rules `firebase deploy --only firestore:rules`.
+
+Edge:
+- `cd cf-worker && wrangler deploy`; secret `EDGE_SECRET`.
+- `cd cf-worker-ai && wrangler deploy`; secret `AI_EDGE_KEY`.
+- `cd cf-worker-media && wrangler deploy`; route media.
+
+Landing:
+- `web_landing` -> `server/landing` (static); `firebase deploy --only hosting`.
+- Assets zina cache immutable; HTML no-cache.
+
+12.10 Environments
+
+- Local: Node 18+, Redis optional, Firestore emulator au production
+  service account; Flutter `--dart-define` kwa API base.
+- Staging: inaweza kutumia Render preview + Firebase project tofauti.
+- Production: Render + Cloudflare + Firebase project halisi; secrets kwenye
+  dashboards, si repo.
+
+================================================================================
+13. SECURITY NA COMPLIANCE
+================================================================================
+
+13.1 Authentication na authorization
+
+- Firebase Auth ndiyo identity provider; server inathibitisha ID token kwa
+  kila request.
+- `users/{uid}` ina role/status; `requireActive` inazuia suspended.
+- Admin: `x-admin-secret` + `x-admin-totp`; admin ya KYC ina database role
+  check; staff login na MFA.
+- RBAC: buyer, seller, admin, super_admin, staff; company RBAC ipo kwenye
+  module (haijamountiwa).
+- Sessions: `sessionRevokedAt`, logout-all, device tokens.
+- MFA: TOTP enrollment/challenge/recovery codes; admin/staff.
+- App Check: Firebase App Check kwa endpoints za nyeti.
+
+13.2 Transport na headers
+
+- HTTPS everywhere; HSTS 1 year includeSubDomains.
+- CSP: default-src self; script/style/img/connect/font/frame allow-lists
+  kwa Firebase/Google/Tailwind/jsDelivr/unpkg/Turnstile.
+- `X-Frame-Options: DENY`, `nosniff`, `X-XSS-Protection`,
+  `Referrer-Policy`, `Permissions-Policy` (camera/mic/geo off).
+- CORS allow-list; credentials false.
+- `x-powered-by` imezimwa.
+- Edge inaondoa fingerprint headers.
+
+13.3 Input, validation na abuse prevention
+
+- Zod validation kwa body/query/params; 400 yenye details.
+- Body limit 1MB; URI limit 8KB; timeout 20s.
+- Rate limits per IP/user/route (Section 7.5).
+- Load shedder 503 kwa overload.
+- Scanner blocking edge.
+- Moderation: profanity filter, report/moderation queue, text check.
+- Turnstile kwa public forms.
+- File uploads: presigned, size/type checks, no executable content.
+
+13.4 Payment security
+
+- Amount haitoki kwa client; server inahesabu kutoka order/product.
+- AzamPay webhook: IP allow-list, callback password/checksum, dedupe.
+- Idempotency keys kwa payment, webhook, ledger, withdrawal.
+- Escrow hold/release state machine; hakuna release bila hold.
+- Withdrawal: atomic reserve + ledger; payout inaanza tu kutoka `reserved`;
+  `disbursing` retry inauliza gateway kwanza.
+- Reconciliation ya kila siku/saa.
+- Admin actions zina audit log.
+- Provider secrets haziko kwenye client.
+
+13.5 Wallet na fraud
+
+- Balance inahesabiwa kutoka ledger; client haiwezi kuandika balance.
+- `fraud_prevention_service.dart` (client) + server fraud checks.
+- Daily sale limit `MAX_DAILY_SALE_AMOUNT` (default 5,000,000 TZS).
+- Withdrawal limits: max 5,000,000; daily 5,000,000; min 0.
+- Account suspension/ban; admin review.
+- Duplicate KYC detection; device/session risk.
+
+13.6 Media na KYC privacy
+
+- KYC bucket haijabound kwa media worker; hakuna public URL.
+- Read-url ya muda mfupi tu; admin role/secret inahitajika.
+- Product media ni public; KYC/user documents ni private.
+- Signed URLs hazihifadhiwi kwenye logs.
+- PII helpers (`utils/pii.js`) kwa masking.
+
+13.7 Secrets na config
+
+- Secrets kwenye Render/Cloudflare/Firebase dashboards; `.env.production`
+  haipaswi kucommit.
+- `.env.example` ina majina ya variables.
+- `CREDENTIALS.txt` ipo kwenye repo root - **hatari**; inapaswa kuondolewa
+  na ku-rotate secrets (Section 16).
+- Production inakataa kuanza bila `APP_URL`,
+  `AZAMPAY_COLLECTION_WEBHOOK_URL`, `AZAMPAY_CALLBACK_PASSWORD`.
+
+13.8 Logging, audit na privacy
+
+- Structured JSON logs zenye requestId; hakuna secrets/body.
+- `auditLogs`/`audit_log` kwa admin na finance actions.
+- `consentRecords` kwa terms/privacy/marketing.
+- Data export/deletion workflows.
+- Password hashing: Firebase Auth; local PIN/biometric secure storage.
+- Client: root/jailbreak/emulator detection, app lock, secure storage.
+
+13.9 Compliance (Tanzania context)
+
+- Data protection: consent, purpose limitation, deletion/export.
+- KYC/AML: identity verification, record keeping, audit.
+- Consumer protection: escrow, refunds, disputes, terms/privacy.
+- Payment regulations: AzamPay licensed provider; platform haishikilii
+  funds directly.
+- Tax/receipts: receipts na audit records.
+
+================================================================================
+14. RELIABILITY, MONITORING NA OPERATIONS
+================================================================================
+
+14.1 Health na readiness
+
+- `GET /health` - detailed: Firestore, Redis, queues, uptime, version.
+- `GET /health/live` - liveness.
+- Render health check `/health`.
+- AI gateway status inalogiwa startup.
+
+14.2 Load shedding na timeouts
+
+- `loadShedder`: 503 + `Retry-After` pale event loop lags > 1500ms na heap
+  > 512MB (au `SHED_LOAD`).
+- Request timeout 20s -> 504 envelope.
+- Edge-to-origin timeout 25s.
+- Body/URI caps.
+- `UV_THREADPOOL_SIZE=10`; Node heap 1024MB.
+
+14.3 Circuit breakers na failover
+
+- `utils/circuit-breaker.js`: closed -> open -> half-open; threshold 5,
+  cooldown 30s, probe 10s.
+- AI gateway: provider failover Groq -> Gemini -> Cloudflare; cooldown kwa
+  429; `AI_PROVIDER_ORDER`.
+- SMS: Meseji -> Notify Africa.
+- OTP: push -> WhatsApp -> SMS (kama configured).
+- Payments: provider errors zina-refund/reconcile.
+
+14.4 Queues, retries na idempotency
+
+- BullMQ: media, notifications, finance.
+- Retries kwa jobs; idempotency keys; state guards.
+- Webhook outbox; dedupe.
+- Withdrawal retry inauliza gateway kwanza.
+- Refund/payment reconciliation.
+
+14.5 Monitoring na alerting
+
+- Logs: JSON, requestId, duration, code; error stream.
+- Crashlytics (client), Performance.
+- Admin metrics: `/api/v1/admin/metrics`, `/analytics/*`.
+- Health checks na Render alerts.
+- Cloudflare analytics (cache hit ratio, 5xx, WAF).
+- Redis/Firestore dashboards.
+- Business alerts: failed payments, stuck withdrawals, disputes SLA,
+  reconciliation mismatch.
+
+14.6 Backups na disaster recovery
+
+- R2 `soko-vibe-backups` kwa backups.
+- Firestore backups/export (Firebase).
+- Media originals kwenye R2; thumbnails zinaweza kuzalishwa upya.
+- Config/secrets kwenye dashboards; runbook ya restore.
+- RTO/RPO hazijafafanuliwa rasmi - gap.
+
+14.7 Testing
+
+- Unit/integration: `server/test/*.test.js` (85+ files) - auth, orders,
+  escrow, wallet, payments, KYC, AI, rules, state machines.
+- Firestore rules tests: `test/firestore-rules.test.js` (emulator).
+- E2E live: `test/e2e.live.test.js`.
+- k6: smoke, load, capacity, prod backend/frontend/origin.
+- Flutter: `test/`, `integration_test/`.
+- CI: hakuna pipeline iliyoainishwa kwenye repo (gap); tests zinaendeshwa
+  manually/`npm test`.
+
+14.8 Operations runbook (muhtasari)
+
+- Payment stuck: angalia `webhookEvents`, payment status, reconciliation;
+  retry webhook au manual confirm.
+- Withdrawal stuck: admin `/withdrawals/:id/status`, retry; job
+  `finance.withdrawalProcess`.
+- Escrow haijarelease: angalia `autoReleaseAt`, dispute, job logs.
+- Refund stuck: `refundUnstuck`, provider status.
+- Dispute SLA: admin queue, escalate.
+- Redis down: rate limits degraded, queues paused; restore Redis.
+- Firestore errors: check credentials/quota; health.
+- Edge cache stale: purge Cloudflare cache; `x-edge-cache`.
+
+================================================================================
+15. CODE INVENTORY (FAILI KWA FAILI)
+================================================================================
+
+15.1 Frontend (`soko_langu/lib/`, 375 Dart files)
+
+- `main.dart` - boot, Firebase, App Check, Crashlytics, providers, overlays,
+  deep links, notifications, app lock, keep-alive.
+- `firebase_options.dart` - Firebase config kwa platforms.
+- `app/` (4): `app.dart`, `router.dart`, `routes.dart`, `route_guards.dart`
+  (au equivalent).
+- `constants/` (1): constants za app.
+- `data/` (1): seed/demo data.
+- `design_system/` (4): `soko_vibe_ds.dart`, `showcase/ds_showcase_screen.dart`,
+  `theme/one_ui_theme.dart`, `tokens/one_ui_tokens.dart`.
+- `extensions/` (1): Dart extensions.
+- `models/` (31): `ai_chat_models`, `analytics_models`, `banner_model`,
+  `buyer_request_model`, `cached_chat_room(+.g)`, `cached_message`,
+  `cached_product`, `category_model`, `chat_room`, `comment_model`,
+  `consent_record`, `discovery_filters`, `flash_sale_model`, `message_model`,
+  `notification_item`, `order_model`, `order_statuses`,
+  `otp_verification_models`, `product_model`, `product_publish_stage`,
+  `product_search_result`, `report_model`, `review_model`, `saved_account`,
+  `seller_verification`, `social_models`, `transaction_model`,
+  `user_profile`, `wallet_model`, `withdrawal_model`.
+- `notifiers/` (1): app state notifier.
+- `providers/` (1): `product_feed_provider.dart`.
+- `repositories/` (2): product/user repositories.
+- `screens/` (87): Section 6.
+- `services/` (97): `account_manager`, `agent/agent_models`,
+  `agent/agent_service`, `ai/ai_service`, `ai/ai_tool`,
+  `ai_voice_player`, `analytics_service`, `api_config`, `app_lock_service`,
+  `app_update_service`, `auth_service`, `azampay_service`,
+  `balance_privacy_service`, `banner_service`, `boost_service`,
+  `buyer_request_service`, `call_service`, `category_artwork/*` (4),
+  `category_service`, `chat_service`, `chat_typing`, `cloudinary_service`,
+  `comment_service`, `consent_recording_service`, `contact_discovery_service`,
+  `deep_link_parser`, `deep_link_service`, `error_reporting_service`,
+  `exchange_rate_service`, `flash_sale_service`, `follow_service`,
+  `fraud_prevention_service`, `groq_service`, `kyc_api`, `kyc_service`,
+  `local_cache_service`, `local_notification_service`,
+  `localization_service`, `media_audio_handler`, `media_service`,
+  `media_utils`, `meseji_service`, `mfa_service`, `network_state_service`,
+  `notification_api`, `notification_lang`, `notification_service`,
+  `onboarding_service`, `order_api`, `otp_verification_controller`,
+  `payment_service`, `permission_service`, `persistent_ai_chat_service`,
+  `platform_config_service`, `product_api`, `product_search_service`,
+  `product_service`, `profanity_filter`, `profile_media_controller`,
+  `profile_media_session`, `profile_view_service`, `r2_media_service`,
+  `rating_service`, `receipt_pdf_service`, `receive_share_service`,
+  `recently_viewed_service`, `report_service`, `review_api`, `review_service`,
+  `search_api`, `search_history_service`, `search_intent`, `search_service`,
+  `secure_storage_service`, `security_service`, `seller_earnings_service`,
+  `seller_verification_service`, `server_keep_alive`, `share_service`,
+  `shortcut_service`, `social_suggestion_service`, `soko_cache_manager`,
+  `subscription_service`, `transfer/*` (3), `trust_api`, `user_service`,
+  `username_service`, `voice_search_service`, `wallet_api`,
+  `whatsapp_service`, `widget_service`, `wishlist_service`,
+  `youtube_utils`.
+- `theme/` (11): `app_colors`, `app_dimens`, `app_motion`, `app_themes`,
+  `app_typography`, `design_tokens`, `dynamic_scheme`, `neumorphic`,
+  `responsive_typography`, `surface_policy`, `theme_manager`.
+- `ui/` (11): `theme.dart`, `tokens.dart`, screens 8, `widgets/ui_button.dart`.
+- `utils/` (10): `api_envelope`, `category_icons`, `chat_utils`, `helpers`,
+  `image_compressor`, `network_error`, `phone_utils`, `rate_limiter`,
+  `responsive`, `validators`.
+- `widgets/` (111):
+  `account_switcher_sheet`, `age_gate_dialog`, `animated_gradient_line`,
+  `animations/*` (3), `app_lock_overlay`, `auth/*` (6), `auth_wall`,
+  `banner_rotator`, `banners/*` (3), `barcode_scanner_widget`,
+  `blue_tick_badge`, `bottom_nav_bar`, `call_seller_button`,
+  `comment_section`, `commerce/*` (3), `connectivity_wrapper`, `ds/*` (27),
+  `dynamic_banner`, `feed/feed_tabs`, `flash_sale_banner`, `glass`,
+  `glass_container`, `google_loading`, `input_field`, `inputs/*` (3),
+  `location_disclosure_dialog`, `maintenance_gate`, `marketplace/*` (6),
+  `notification_card`, `order_status_config`, `payment_banner`,
+  `payment_result_dialog`, `premium_background`, `premium_widgets`,
+  `product_cached_image`, `product_card`, `product_preview_sheet`,
+  `product_video_player`, `profile/*` (5), `profile_media_section`,
+  `profile_mini_player`, `raise_dispute_dialog`, `recently_viewed_row`,
+  `review_section`, `safe_dropdown`, `social/follow_button`,
+  `soko_app_bar`, `soko_dialog`, `soko_feedback`, `soko_vibe_loading`,
+  `soko_vibe_states`, `soko_vibe_watermark`, `soko_widgets`,
+  `staggered_fade_in`, `transaction_status_watcher`, `transfer/*` (2),
+  `trending_carousel`, `trust_passport_card`, `verified_badge`.
+
+15.2 Backend (`soko_langu/server/src/`, 221 files)
+
+- `index.js` - entrypoint; `app.js` - Express app.
+- `config/`: `index.js` (config/env), `database.js` (Firestore + store),
+  `firebase.js` (admin SDK), `redis.js` (client/locks/cache).
+- `middleware/`: `appCheck`, `auth`, `loadShedder`, `otpGuard`,
+  `rateLimiter`, `requestId`, `validation`.
+- `jobs/finance-jobs.js` - expire/auto-release/withdrawals/reconciliation/
+  disputes/refunds.
+- `workers/index.js` - BullMQ worker (media/notifications/finance).
+- `services/`: `account-store`, `activity`, `audit`, `auth-risk`,
+  `commerce-store`, `email-layout`, `email-templates`, `escrow-service`,
+  `finance-runner`, `firestore-store`, `mailer`, `notification-orchestrator`,
+  `notification-worker`, `otp-delivery`, `otp-store`, `password-policy`,
+  `payout-phone`, `profanity`, `push-service`, `queue`, `seed-categories`,
+  `session-revocation`, `sms-service`, `totp`, `whatsapp-service`.
+- `utils/`: `circuit-breaker`, `commission-parity`, `express-async`, `http`,
+  `money`, `payment-method`, `pii`, `public-form`, `turnstile`.
+- `seo/`: `meta`, `routes`, `sitemaps`.
+- `modules/` (40): kila folda ina routes/service/controller/store kama
+  inavyohitajika:
+  - `admin` (admin-service, insights, settings-service, kyc-documents-routes)
+  - `ads` (ads-config, blue-tick)
+  - `agent` (agent-actions, agent-audit, agent-permissions, agent-service,
+    agent-tools)
+  - `ai` (ai-gateway, ai-provider, cf-ai-provider, gemini-provider,
+    groq-provider, provider-stream, tavily, tool-loop, upstream,
+    chat/routes)
+  - `auth` (controller, mfa-recovery)
+  - `comments` (comment-store, controller)
+  - `company` (audit, calendar, finance, hr, membership, overview, projects,
+    rbac + routes; haijamountiwa)
+  - `config` (app-release)
+  - `contact`, `data-deletion`, `disputes` (auto-release-service,
+    dispute-service, evidence-service), `engagement` (daily-campaign),
+  - `escrow` (escrow-release), `feed` (feed-ranking, feed-service),
+    `handover` (handover-service, otp-generator), `health` (service),
+    `kyc` (kyc-service, __dupcheck), `launch`,
+  - `legacy-compat` (admin-compat, auth-helpers, cleanup, cod-compat,
+    compat, escrow-compat, feature-compat, fraud-checks, legacy-status,
+    moderation-compat, notify, orders-compat, presentation-mirror,
+    trust-compat), `legacy-shop`,
+  - `media` (cdn-service, kyc-documents, r2-client, upload-service),
+    `moderation` (moderation-service), `notifications`
+    (notification-service),
+  - `orders` (order-controller, order-service, order-state-machine),
+    `payments` (azampay-provider, clickpesa-provider,
+    legacy-deposit-confirm, legacy-transaction-confirm, payment-errors,
+    payment-service, payment-webhooks, provider-factory,
+    provider-interface, webhook-outbox),
+  - `products` (legacy-mapper, product-mirror, product-service,
+    product-store), `reconciliation` (reconciliation-service),
+    `referrals` (referral-service), `refunds` (refund-service),
+    `reviews` (review-service, review-store), `search` (search-ranking,
+    search-service), `seller-analytics` (controller),
+  - `sellers` (controller, seller-state-machine), `sharing`
+    (fallback-html, fallback-routes, og-generator), `shipping`
+    (shipping-quote-service, shipping-validation), `social`
+    (social-service), `subscriptions` (plans, subscription-service,
+    subscription-store),
+  - `trust` (buyer-reliability, quality-gates, seller-reliability,
+    trust-passport), `users` (account-state-machine, contact-discovery,
+    controller, settings-state-machine), `wallet` (ledger-service,
+    wallet-service), `whatsapp` (webhook-controller, webhook-store).
+- `admin/` - admin panel ya browser (`index.html`, `admin.js`, assets).
+- `landing/` - static landing, legal pages, `.well-known`, 404, i18n.
+- `test/` - 85+ test files (Section 14.7).
+- `render.yaml`, `Dockerfile`, `package.json` - deploy.
+
+15.3 Edge workers na landing
+
+- `cf-worker/`: `worker.js`, `wrangler.toml`, `README.md`.
+- `cf-worker-ai/`: `worker.js`, `wrangler.toml`.
+- `cf-worker-media/`: `worker.js`, `wrangler.toml`.
+- `web_landing/`: chanzo cha landing (HTML/CSS/JS/i18n/assets).
+- `hosting/`: Firebase Hosting assets.
+- `apps/admin-console/`: Next.js/OpenNext build artifacts pekee (`.next`,
+  `.open-next`, `node_modules`); **hakuna source** - haiwezi kudokumentiwa
+  kwa undani.
+- `k6/`: smoke/load/capacity/prod tests 9.
+- `tools/`, `doc/`, `docs/`: scripts na docs za mradi.
+
+15.4 Root-level artifacts
+
+- Flutter config: `pubspec.yaml`, `analysis_options.yaml`, `firebase.json`,
+  `.firebaserc`, `firestore.rules`, `firestore.indexes.json`.
+- Build/debug outputs: `build_*.log/txt`, `dart_analyze*.txt`,
+  `flutter_*.log` - artifacts, si source.
+- Docs za zamani: `README.md`, `APP_FLOWS_NA_MAPUNGUFU.txt`,
+  `ARCHITECTURE_SOKO_VIBE.txt`, `SYSTEM_FLOWS.txt`,
+  `FLOW_DOCUMENTATION.txt`, `CHECKOUT_PAYMENT_*.md`, `DEEP_LINKING.md`,
+  `DEVELOPER_DOCS.txt`, `SECURITY.md`, `TODO.md`, `UI_*.md`,
+  `SOKO_VIBE_UI_MODERNIZATION_HANDOVER_2026-11-05.md`,
+  `BANNER_*_2026-11-05.md`.
+- `CREDENTIALS.txt` - **hatari**: kinga/rotate (Section 16).
+- `build_release.bat`, `package.json`, `package-lock.json`.
+
+================================================================================
+
+================================================================================
+16. MAPUNGUFU, HATARI NA DOCS ZILIZOPITWA NA WAKATI
+================================================================================
+
+16.1 Mapungufu ya kiutendaji (code-level)
+
+| # | Ukweli | Athari | Pendekezo |
+|---|---|---|---|
+| 1 | `company` module haijamountiwa `app.js` | `/api/v1/company/*` inarudisha 404; Company Console ya Flutter haifanyi kazi | Mount `company/routes.js` na sub-routers, au zima screen |
+| 2 | `apps/admin-console` ina build artifacts pekee (`.next`, `.open-next`, `node_modules`), hakuna source | Haiwezi kuendelezwa wala kudokumentiwa kwa undani | Recover source au iondoe; admin panel ya Express ndiyo inayotumika |
+| 3 | `music` route ipo `routes.dart` lakini `router.dart` imecomment out; `MusicScreen` haipo | Route haifikiwi; dead constant | Ondoa constant au implement screen |
+| 4 | OTP default `OTP_CHANNEL_ORDER` = `push,whatsapp`; SMS haipo kwenye default | Mtumiaji asiye na WhatsApp/push hapati OTP kwa SMS | Weka `push,whatsapp,sms` kwenye production env |
+| 5 | `escrow-service.js` ina auto-release deadline ya saa 48; finance jobs/config zinatumia siku 14 | Tabia inatofautiana kati ya paths | Tumia `ESCROW_AUTO_RELEASE_DAYS` tu; ondoa 48h |
+| 6 | Subscription transitions zina `'trailing'` badala ya `'trialing'` | Trial transition inaweza kukataliwa | Rekebisha spelling na tests |
+| 7 | Order route validation inakubali `provider: azampay|card|bank`, lakini provider factory ina `azampay`/`mno_checkout` | `card`/`bank` zinaweza kushindikana | Weka enum sawa au implement providers |
+| 8 | Legacy ClickPesa code (`clickpesa-provider.js`, compat endpoints, `.env.production` keys) ipo | Confusion; config ya production inaweza kuwa na keys zisizotumika | Safisha au weka alias guard |
+| 9 | `kAdsTestMode = true` kwenye `api_config.dart` | Ads inaweza kuwa kwenye test mode production | Thibitisha na uweke false/flag |
+| 10 | Hakuna CI pipeline iliyoainishwa | Tests/rules hazilindwi kwenye PR | Ongeza GitHub Actions (analyze, test, rules) |
+| 11 | Hakuna RTO/RPO/backup restore drill iliyoandikwa | Risk ya data loss | Andika runbook na test restore |
+| 12 | `server/render.yaml` ina plan `starter`, comments za ClickPesa | Docs hazilingani na code | Sasisha docs/config |
+| 13 | Admin general router ina `authenticateAdmin` ya secret pekee; KYC router ina DB role gate | Udhaifu wa mfumo wa admin | Weka DB role/MFA kwa admin wote |
+| 14 | `firestore-store.js.bak`, `commerce-store.js.bak`, `hr.js.bak` | Code stale inaweza kuchezwa | Futa backups |
+| 15 | Root ina `build_*.log/txt`, `dart_analyze*.txt`, `flutter_*.log` | Noise; inaweza kuwa na taarifa nyeti | Safisha repo |
+| 16 | `CREDENTIALS.txt` ipo kwenye disk (haija-tracked) | Risk ya secrets | Futa, rotate secrets, weka `.gitignore` |
+
+16.2 Docs zilizopitwa na wakati
+
+- `README.md` inasema ClickPesa, phone OTP pekee, Groq pekee, Render-only.
+  Ukweli: AzamPay, email/phone/OTP, AI failover (Groq/Gemini/Cloudflare),
+  Cloudflare edge.
+- `ARCHITECTURE_SOKO_VIBE.txt` inasema ClickPesa na ina baadhi ya details za
+  zamani.
+- `docs/PAYMENT_ESCROW_ARCHITECTURE.md` ina sehemu ya Postgres/Prisma ya
+  kihistoria; runtime ni Firestore.
+- `CHECKOUT_PAYMENT_*.md` zinaweza kuwa za awamu za nyuma.
+- `render.yaml` comments za ClickPesa/`X_ADMIN_SECRET`.
+- `firestore-store.js.bak` na `.bak` nyingine.
+- `APP_FLOWS_NA_MAPUNGUFU.txt`, `SYSTEM_FLOWS.txt`, `FLOW_DOCUMENTATION.txt`
+  ni partial; waraka huu ndio reference ya sasa.
+
+16.3 Hatari za usalama
+
+- Secrets zinaweza kuwa kwenye `.env.production` ya local; hakikisha
+  haija-commit (ilikuwa haija-tracked kwenye commit hii) na rotate.
+- `CREDENTIALS.txt` kwenye root - futa/rotate.
+- Admin secret pekee kwa baadhi ya routes - ongeza MFA/role.
+- Webhook IP allow-list ni optional; kama `AZAMPAY_ALLOWED_IPS` haijawekwa,
+  checksum/callback password ndiyo kinga.
+- Legacy endpoints zina surface kubwa; review na ufungwe kadri app za zamani
+  zinavyoachwa.
+- Logs zinaweza kuwa na PII kwenye message; masking inahitaji review.
+
+16.4 Mapungufu ya product/UX
+
+- Company OS haifanyi kazi (backend).
+- Admin console ya Next.js haipo source.
+- Music/YouTube tabs zinaweza kuwa disabled.
+- Store links (`ANDROID_STORE_URL`, `IOS_STORE_URL`) hazijawekwa; fallback
+  page haielekezi store.
+- Subscription plan change/proration haijafafanuliwa.
+- Multi-currency ni ya display; malipo ni TZS.
+- Hakuna public API versioning policy zaidi ya `/api/v1` na legacy.
+
+16.5 Mapungufu ya data
+
+- Collections za legacy (`transactions`, `admin_withdrawals`, `payouts`)
+  zinaishi pamoja na mpya (`orders`, `payments`, `withdrawals`).
+- Baadhi ya models zina `.g.dart` (build_runner) - generated code
+  inahitaji regeneration.
+- Firestore indexes 81; queries mpya zinaweza kuhitaji index.
+- Hakuna data migration script rasmi kwa legacy -> mpya iliyoainishwa.
+
+================================================================================
+17. ENVIRONMENT VARIABLES (MAJINA PEKEE)
+================================================================================
+
+Kumbuka: thamani hazijachapishwa. Orodha hii inajumuisha majina
+kutoka `.env.example`, `server/.env.example`, na `process.env.*` kwenye code.
+`.env.production` ya local bado ina majina ya ClickPesa na `DATABASE_URL`;
+hakikisha production ina AzamPay vars kabla ya deploy.
+
+17.1 Core
+
+`NODE_ENV`, `PORT`, `APP_URL`, `FRONTEND_URL`, `ADMIN_URL`, `ALLOWED_ORIGINS`,
+`SERVE_APEX`, `SHED_LOAD`, `SHED_RETRY_AFTER`, `EVENT_LOOP_LAG_MS`,
+`HEAP_CRITICAL_MB`, `UV_THREADPOOL_SIZE`, `NODE_OPTIONS`.
+
+17.2 Firebase
+
+`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`,
+`FIREBASE_SERVICE_ACCOUNT_JSON`.
+
+17.3 Redis na queues
+
+`REDIS_URL`, `FINANCE_WORKER_IN_PROCESS`, `NOTIFICATION_WORKER_IN_PROCESS`,
+`FINANCE_PAYMENT_EXPIRE_MS`, `FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN`,
+`FINANCE_WITHDRAWAL_STUCK_HOURS`, `FINANCE_RECONCILIATION_WINDOW_HOURS`,
+`FINANCE_DISPUTE_SLA_HOURS`.
+
+17.4 Cloudflare/R2
+
+`R2_ACCOUNT_ID`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+`R2_BUCKET_IMAGES`, `R2_BUCKET_VIDEOS`, `R2_BUCKET_THUMBNAILS`,
+`R2_BUCKET_BACKUPS`, `R2_BUCKET_KYC`, `R2_PUBLIC_URL`,
+`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CF_AI_URL`, `CF_AI_KEY`,
+`EDGE_SECRET`.
+
+17.5 Payments (AzamPay)
+
+`AZAMPAY_AUTH_BASE`, `AZAMPAY_API_BASE`, `AZAMPAY_APP_NAME`,
+`AZAMPAY_CLIENT_ID`, `AZAMPAY_CLIENT_SECRET`, `AZAMPAY_CALLBACK_PASSWORD`,
+`AZAMPAY_CHECKSUM_KEY`, `AZAMPAY_WEBHOOK_SECRET`, `AZAMPAY_DEFAULT_PROVIDER`,
+`AZAMPAY_ALLOWED_IPS`, `AZAMPAY_COLLECTION_WEBHOOK_URL`.
+
+Legacy (zisizotumika kwenye code mpya): `CLICKPESA_API_URL`,
+`CLICKPESA_API_KEY`, `CLICKPESA_API_SECRET`, `CLICKPESA_CLIENT_ID`,
+`CLICKPESA_WEBHOOK_SECRET`, `CLICKPESA_CHECKSUM_KEY`,
+`CLICKPESA_ALLOWED_IPS`.
+
+17.6 Business/finance
+
+`PLATFORM_COMMISSION_PERCENT`, `ESCROW_AUTO_RELEASE_DAYS`,
+`MAX_DAILY_SALE_AMOUNT`, `WITHDRAWAL_MIN`, `WITHDRAWAL_MAX`,
+`DAILY_WITHDRAWAL_LIMIT`.
+
+17.7 Security
+
+`ADMIN_SECRET`, `WEBHOOK_SECRET`, `ENCRYPTION_KEY`, `SUPER_ADMIN_EMAILS`,
+`CRON_SECRET`, `CONTACT_DISCOVERY_HMAC_SECRET`, `UNSUBSCRIBE_SECRET`,
+`OTP_REQUIRE_APP_CHECK`, `OTP_CHANNEL_ORDER`, `OTP_COOLDOWN_MS`,
+`OTP_WINDOW_MS`, `OTP_MAX_PER_IP`, `OTP_MAX_PER_KEY`, `OTP_VERIFY_MAX_PER_KEY`,
+`OTP_MEMORY_MAX`, `AUTH_CHECK_MAX_PER_TARGET`, `AUTH_PROBE_THRESHOLD`,
+`AUTH_PROBE_WINDOW_SEC`, `AUTH_RISK_MEMORY_MAX`, `HANDOVER_OTP_TTL_MS`,
+`PASSWORD_MIN_LENGTH`, `PASSWORD_REQUIRE_DIGIT`, `PASSWORD_REQUIRE_LETTER`.
+
+17.8 Rate limiting
+
+`RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`.
+
+17.9 SMS/WhatsApp/push/email
+
+`MESEJI_API_KEY`, `MESEJI_SENDER_ID`, `MESEJI_BASE_URL`,
+`NOTIFY_AFRICA_API_KEY`, `NOTIFY_AFRICA_SMS_API_KEY`,
+`NOTIFY_AFRICA_SENDER_ID`, `NOTIFY_AFRICA_SMS_BASE_URL`,
+`SMS_PROVIDER_ORDER`, `SMS_MAX_CONCURRENT`, `WHATSAPP_BUSINESS_TOKEN`,
+`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_GRAPH_BASE_URL`, `WHATSAPP_TEMPLATE_NAME`,
+`WHATSAPP_LANGUAGE`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
+`ZERNIO_API_KEY`, `ONE_SIGNAL_APP_ID`, `ONE_SIGNAL_REST_API_KEY`,
+`ONESIGNAL_REST_API_KEY`, `ONE_SIGNAL_BASE_URL`, `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `EMAIL_FROM`,
+`EMAIL_FROM_NAME`, `RESEND_API_KEY`, `SUPPORT_EMAIL_TO`, `WEBSITE_CONTACT_TO`.
+
+17.10 AI/voice
+
+`GROQ_API_KEY`, `GROQ_ADMIN_MODEL`, `GEMINI_API_KEY`, `GEMINI_BASE_URL`,
+`GEMINI_MODEL`, `GEMINI_MODEL_LITE`, `GEMINI_MODEL_VISION`,
+`GEMINI_MIN_TOKENS_FOR_THINKING`, `AI_PROVIDER_ORDER`,
+`AI_PROVIDER_TIMEOUT_MS`, `AI_BREAKER_COOLDOWN_MS`, `AI_TOOLS_ENABLED`,
+`TAVILY_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`,
+`ELEVENLABS_MODEL`, `ELEVENLABS_STABILITY`, `ELEVENLABS_SIMILARITY_BOOST`,
+`ELEVENLABS_STYLE`.
+
+17.11 Bot protection na public forms
+
+`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET`, `TURNSTILE_HOSTNAMES`.
+
+17.12 Deep links na stores
+
+`ANDROID_STORE_URL`, `IOS_STORE_URL`, `WEB_PRODUCT_URL`.
+
+17.13 SEO/analytics
+
+`INDEXNOW_KEY`, `DAILY_ENGAGEMENT_SCHEDULER`.
+
+17.14 Legacy/Cloudinary
+
+`CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_DESTROY_URL`,
+`DATABASE_URL` (legacy), `PUBLIC_SERVER_URL`, `MONGIKE_API_KEY`,
+`RENDER_API_KEY`.
+
+17.15 Naming rules
+
+- Secrets haziingii kwenye Flutter (`--dart-define` kwa public config pekee).
+- `NEXT_PUBLIC_*`/`PUBLIC_*` ni public; usiweke secret.
+- Production inakataa kuanza bila `APP_URL`,
+  `AZAMPAY_COLLECTION_WEBHOOK_URL`, `AZAMPAY_CALLBACK_PASSWORD`.
+- Tumia secret manager ya Render/Cloudflare/Firebase.
+
+================================================================================
+18. GLOSSARY
+================================================================================
+
+- **Escrow** - pesa ya mnunuzi inashikiliwa na mfumo hadi delivery
+  ithibitishwe; inalinda pande zote.
+- **Hold** - escrow record inayoshikilia kiasi (`status=holding`).
+- **Release** - kutoa escrow kwa seller baada ya delivery/auto-release.
+- **Settlement** - kuweka pesa kwenye wallet ya seller.
+- **Auto-release** - release ya escrow baada ya siku 14 (default) bila
+  dispute.
+- **Dispute** - mgogoro rasmi unaozuia release hadi admin aamue.
+- **Refund** - kurudisha pesa kwa buyer.
+- **Chargeback** - malipo yanayorudishwa na provider/bank (haijatekelezwa
+  kikamilifu).
+- **KYC** - Know Your Customer; uthibitisho wa utambulisho.
+- **Blue Tick** - badge ya seller aliyethibitishwa.
+- **Trust passport** - muhtasari wa trust score/reliability wa seller.
+- **Commission** - fee ya jukwaa; default 0.
+- **Wallet** - balance ya seller ndani ya mfumo.
+- **Ledger** - kumbukumbu ya kila movement ya pesa.
+- **Withdrawal** - kutoa pesa kutoka wallet kwenda mobile money/bank.
+- **Payout** - malipo ya withdrawal kupitia provider.
+- **Idempotency** - operesheni ile ile kurudiwa haiathiri mara mbili.
+- **Webhook** - callback ya provider kwa mfumo.
+- **Dedupe** - kuzuia webhook/event kushughulikiwa mara mbili.
+- **Reconciliation** - kulinganisha records za mfumo na provider.
+- **OTP** - namba ya siri ya mara moja.
+- **TOTP** - OTP ya muda (MFA app).
+- **MFA** - uthibitisho wa hatua mbili.
+- **Session revocation** - kufuta sessions zote.
+- **App Check** - uthibitisho wa app halisi kwa Firebase.
+- **Store Facade** - layer inayoficha Firestore nyuma ya API ya models.
+- **Edge cache** - cache ya Cloudflare karibu na mtumiaji.
+- **R2** - object storage ya Cloudflare.
+- **Presigned URL** - URL ya muda ya upload/download.
+- **Feed ranking** - mpangilio wa bidhaa kwenye home.
+- **Boost** - matangazo ya bidhaa kwa muda.
+- **Flash sale** - bei ya muda mfupi.
+- **Buyer request** - ombi la bidhaa kutoka kwa mnunuzi.
+- **Referral** - mwaliko wa mtumiaji mpya.
+- **Trial** - kipindi cha bure cha subscription.
+- **Entitlement** - haki/features za plan.
+- **SLA** - muda wa kuhudumia (mfano disputes 72h).
+- **Load shedding** - kukataa requests kwa 503 wakati overload.
+- **Circuit breaker** - kuzuia provider mbovu kwa muda.
+- **Idempotency key** - key ya kuzuia duplicate.
+- **BigInt** - integer kubwa kwa pesa.
+- **TZS** - Tanzania Shilling.
+- **MNO** - Mobile Network Operator (M-Pesa, Tigo, Airtel, Halopesa).
+
+================================================================================
+19. APPENDICES (QUICK REFERENCE)
+================================================================================
+
+19.1 Appendix A - Canonical statuses
+
+Order (`ORDER_STATES`, uppercase; client lowercase):
+`DRAFT`, `PENDING_SHIPPING_FEE`, `SHIPPING_FEE_SUBMITTED`,
+`SHIPPING_FEE_REVIEW`, `AWAITING_ESCROW_PAYMENT`, `PENDING_PAYMENT`,
+`PAYMENT_PENDING`, `PAYMENT_PROCESSING`, `PAID`, `FAILED`, `PAYMENT_FAILED`,
+`ESCROW_HELD`, `IN_ESCROW`, `SELLER_ACCEPTED`, `DISPATCH_READY`,
+`READY_TO_DISPATCH`, `DISPATCHED`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`,
+`DELIVERY_ATTEMPTED`, `ARRIVED`, `DELIVERED`, `INSPECTION_PERIOD`,
+`OTP_PENDING`, `DELIVERY_CONFIRMED`, `COMPLETED`, `WALLET_CREDITED`,
+`CANCELLED`, `REFUND_PENDING`, `REFUNDED`, `DISPUTED`, `EXPIRED`.
+
+Payment: `pending`, `processing`, `paid`, `failed`, `expired`.
+Withdrawal: `requested`, `reserved`, `disbursing`, `processing`,
+`completed`, `failed`.
+Refund: `pending`, `processing`, `completed`, `failed`.
+Dispute: `open`, `under_review`, `resolved`, `rejected`, `escalated`.
+KYC: `not_started`, `pending`, `submitted`, `under_review`, `approved`,
+`rejected`, `expired`.
+Seller: `pending`, `active`, `suspended`, `banned`.
+Subscription: `inactive`, `trialing`, `pending_payment`, `active`,
+`past_due`, `cancel_pending`, `expired`, `suspended`, `payment_failed`.
+Escrow hold: `holding`, `released`, `refunded`, `cancelled`.
+
+19.2 Appendix B - Route constants (93)
+
+Public/auth: `/`, `/login`, `/register`, `/forgot-password`,
+`/verify-email`, `/otp-verification`, `/mfa-enrollment`, `/mfa-challenge`,
+`/account-selection`, `/onboarding`, `/contact-discovery`, `/tutorials`.
+Home/commerce: `/v2`, `/search`, `/search-v2`, `/category`,
+`/category-products`, `/product`, `/product-v2`, `/product-reviews`,
+`/discovery`, `/flash-sale`, `/checkout`, `/checkout-v2`, `/add-product`,
+`/wishlist`, `/my-ads`, `/buyer-requests`, `/post-buyer-request`.
+Orders: `/my-purchases`, `/order-detail`, `/order-flow`, `/receipt`,
+`/seller-orders`, `/seller-dispatch`, `/seller-quote`, `/orders-v2`,
+`/order`, `/otp`.
+Chat/social: `/chats`, `/chat`, `/chat-v2`, `/create-group`, `/group-chat`,
+`/followers`, `/following`, `/follow-requests`, `/suggested-accounts`,
+`/blocked-accounts`, `/user-search`.
+Profile/settings: `/profile`, `/profile-v2`, `/edit-profile`,
+`/public-profile`, `/settings`, `/help`, `/about`, `/artwork-pack`,
+`/notification-preferences`, `/notifications`, `/subscription`,
+`/verification-center`, `/kyc`, `/report`, `/orders-v2`.
+Seller: `/seller`, `/seller-v2`, `/seller-earnings`, `/seller-analytics`,
+`/boost-product`, `/create-flash-sale`, `/flash-sale`.
+Admin: `/admin`, `/admin/kyc`, `/admin/broadcast`, `/admin/reports`,
+`/admin/user`, `/admin/privacy`, `/staff`, `/company`.
+AI: `/ai-assistant`, `/ai-settings`, `/agent`.
+Legal: `/privacy-policy`, `/terms-of-service`.
+V2: `/v2`, `/search-v2`, `/checkout-v2`, `/chat-v2`, `/product-v2`,
+`/orders-v2`, `/profile-v2`, `/seller-v2`.
+One UI: `/oneui/home`, `/oneui/shell`, `/oneui/register`, `/oneui/login`.
+Aliases: `/profile` (userProfileAlias), `/order`, `/otp`, `/admin`
+(adminConsole/adminConsoleWeb), `/staff` (staffDashboardWeb),
+`/company` (companyOs/companyOsWeb).
+
+19.3 Appendix C - Key files
+
+Frontend:
+- `lib/main.dart` - boot.
+- `lib/app/router.dart`, `routes.dart` - navigation/guards.
+- `lib/services/api_config.dart` - base URL + feature flags.
+- `lib/services/auth_service.dart`, `payment_service.dart`,
+  `order_api.dart`, `wallet_api.dart`, `chat_service.dart`,
+  `notification_service.dart`, `persistent_ai_chat_service.dart`.
+- `lib/models/order_statuses.dart` - client status vocabulary.
+- `lib/theme/*` - design tokens.
+- `lib/widgets/ds/*` - design system components.
+
+Backend:
+- `server/src/app.js` - mounts/middleware.
+- `server/src/config/index.js` - env/config.
+- `server/src/services/firestore-store.js` - collections/relations.
+- `server/src/services/commerce-store.js` - ledger types.
+- `server/src/modules/orders/order-state-machine.js` - states.
+- `server/src/modules/wallet/wallet-service.js` - withdrawal lifecycle.
+- `server/src/modules/payments/azampay-provider.js` - AzamPay.
+- `server/src/jobs/finance-jobs.js` - finance jobs.
+- `server/src/services/queue.js` - repeatable jobs.
+- `firestore.rules`, `firestore.indexes.json`.
+
+Edge/infra:
+- `cf-worker/worker.js`, `cf-worker-ai/worker.js`,
+  `cf-worker-media/worker.js`.
+- `server/render.yaml`, `server/Dockerfile`.
+- `firebase.json`, `.firebaserc`.
+
+19.4 Appendix D - Commands
+
+Flutter:
+```
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release
+flutter build appbundle --release
+flutter build web --release
+```
+Server:
+```
+cd server
+npm ci
+npm test
+npm run test:rules
+npm run test:e2e
+npm start
+npm run worker
+```
+Firebase:
+```
+firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes
+firebase deploy --only hosting
+```
+Cloudflare:
+```
+cd cf-worker && wrangler deploy
+cd cf-worker-ai && wrangler deploy
+cd cf-worker-media && wrangler deploy
+```
+k6:
+```
+k6 run k6/smoke-test.js -e BASE_URL=http://localhost:3000
+k6 run k6/prod-backend.js -e BASE_URL=https://api.sokovibe.co.tz
+```
+
+19.5 Appendix E - Launch checklist
+
+- [ ] Environment variables zote za production (AzamPay, Firebase, R2,
+      Redis, AI, WhatsApp/SMS, Turnstile) zimewekwa.
+- [ ] `APP_URL`, `AZAMPAY_COLLECTION_WEBHOOK_URL`,
+      `AZAMPAY_CALLBACK_PASSWORD` zipo.
+- [ ] Firestore rules/indexes zime-deploy.
+- [ ] Cloudflare edge/secret/DNS zimewekwa; `x-edge-cache` HIT.
+- [ ] R2 buckets na media domain zinafanya kazi; KYC bucket private.
+- [ ] Admin panel ina secret/MFA; staff accounts.
+- [ ] Payment webhook inathibitishwa end-to-end (test + production).
+- [ ] Escrow auto-release, wallet, withdrawal, refund, dispute zimejaribiwa.
+- [ ] Notifications (push/email/SMS/WhatsApp) zinafanya kazi.
+- [ ] Landing/legal/waitlist/contact zinafanya kazi.
+- [ ] Monitoring/alerts/backups zimewekwa.
+- [ ] `CREDENTIALS.txt` imefutwa; secrets zime-rotate.
+- [ ] Docs zimesasishwa (README, architecture, render.yaml).
+
+19.6 Appendix F - Doc provenance na mipaka
+
+- Chanzo: code kwenye `feat/website-v2`, commit `f1f0b0a3`.
+- Namba za faili/mistari zinaweza kubadilika; takwimu ni za commit hii.
+- Sehemu za UI zinaelezea screens/widgets kwa mujibu wa code; baadhi ya
+  screens zinaweza kuwa na variants za V2.
+- Sehemu za backend zinaelezea routes zilizosajiliwa; `company` module
+  imeorodheshwa kama haijamountiwa.
+- Secrets hazijachapishwa; majina pekee.
+- Docs za zamani zimetajwa kama historical; waraka huu ndio reference ya
+  sasa.
+
+================================================================================
+MWISHO WA WARAKA
+================================================================================

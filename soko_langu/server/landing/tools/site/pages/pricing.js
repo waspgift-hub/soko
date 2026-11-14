@@ -91,8 +91,8 @@ const PRICING_FAQ = [
     en: { q: 'Are these prices final?', a: 'The prices shown reflect the current system configuration. They may change before launch, and the price you see in the app at sign-up will be the price that applies.' },
   },
   {
-    sw: { q: 'Je, mnunuzi analipa kamisheni?', a: 'Kwa sasa hakuna kamisheni ya jukwaa iliyowekwa kwenye mfumo. Watoa huduma wa mobile money wanaweza kutoza ada zao za miamala.' },
-    en: { q: 'Do buyers pay a platform commission?', a: 'No platform commission is currently configured in the system. Mobile money providers may charge their own transaction fees.' },
+    sw: { q: 'Je, mnunuzi analipa kamisheni?', a: 'Ndiyo. Soko Vibe inatoza kamisheni ya jukwaa inayolipwa na mnunuzi juu ya bei ya bidhaa (kwa sasa asilimia 3.5); muuzaji hupokea bei kamili ya bidhaa pamoja na usafirishaji. Kiwango kilicho hai kinaonyeshwa kabla ya malipo. Watoa huduma wa mobile money wanaweza kutoza ada zao za miamala.' },
+    en: { q: 'Do buyers pay a platform commission?', a: 'Yes. Soko Vibe charges a buyer-pays-top platform commission on the item price (currently 3.5%); the seller still receives the full item price plus shipping. The live rate is shown before payment. Mobile money providers may charge their own transaction fees.' },
   },
   {
     sw: { q: 'Je, nikilipa Seller Plus naanza kupata mauzo?', a: 'Hapana. Mpango wa kulipia unatoa zana na uwezo zaidi; hauhakikishi mauzo, mapato au mwonekano.' },
@@ -189,8 +189,8 @@ function pricingPage() {
   <div class="sv-container sv-split">
     <div class="sv-split__copy">
       ${t('p', 'Ada na kamisheni', 'Fees and commission', { class: 'sv-eyebrow' })}
-      ${t('h2', 'Hakuna kamisheni ya jukwaa iliyowekwa kwa sasa.', 'No platform commission is configured today.', { class: 'sv-h2' })}
-      ${t('p', 'Usanidi wa sasa wa mfumo hauweki kamisheni ya jukwaa. Watoa huduma wa mobile money wanaweza kutoza ada zao za miamala, na ada hizo hazidhibitiwi na Soko Vibe. Kama kamisheni itawekwa baadaye, itaonyeshwa wazi kabla ya malipo kukamilika.', 'The current system configuration does not set a platform commission. Mobile money providers may charge their own transaction fees, and those fees are not controlled by Soko Vibe. If a commission is introduced later, it will be shown clearly before a payment is completed.')}
+      ${t('h2', 'Kwa sasa kamisheni ya jukwaa ni asilimia 3.5 ya bei ya bidhaa.', 'The platform commission is currently 3.5% of the item price.', { class: 'sv-h2' })}
+      ${t('p', 'Mnunuzi hulipa kamisheni hii juu ya bei ya bidhaa, na muuzaji hupokea bei kamili ya bidhaa pamoja na usafirishaji. Kiwango kilicho hai kinaonyeshwa kabla ya malipo. Watoa huduma wa mobile money wanaweza kutoza ada zao za miamala, na ada hizo hazidhibitiwi na Soko Vibe.', 'The buyer pays this commission on top of the item price, and the seller still receives the full item price plus shipping. The live rate is shown before payment. Mobile money providers may charge their own transaction fees, and those fees are not controlled by Soko Vibe.')}
       <div class="sv-actions">
         <a class="sv-btn sv-btn--ghost" href="/faq" data-en="Read pricing questions">Soma maswali ya bei</a>
         <a class="sv-btn sv-btn--ghost" href="/contact" data-en="Ask about pricing">Uliza kuhusu bei</a>

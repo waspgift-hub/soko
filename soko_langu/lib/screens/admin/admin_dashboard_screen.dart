@@ -17,7 +17,6 @@ import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
 import 'admin_transactions_tab.dart';
-import 'admin_clickpesa_screen.dart';
 import 'admin_kyc_document_view_screen.dart';
 import 'admin_banner_management_screen.dart';
 import '../../widgets/product_cached_image.dart';
@@ -2242,7 +2241,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
   }
 
   Widget _buildClickPesaTab() {
-    return const AdminClickPesaScreen(embedded: true);
+    return const Center(child: Text('ClickPesa admin (not available)'));
   }
 
   Widget _buildChatsTab() {

@@ -7,7 +7,7 @@ import 'api_config.dart';
 /// Client for the legacy `/api/boost-product` purchase flow.
 ///
 /// The server owns boost activation: it creates a `transactions` doc of type
-/// `boost`, fires a ClickPesa USSD push (or returns a BillPay control number),
+/// `boost`, fires an AzamPay MNO checkout (or returns a BillPay control number),
 /// and the collection webhook flips the product doc to `isBoosted` once the
 /// payment clears. The client only starts the payment and renders the result.
 class BoostService {

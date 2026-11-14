@@ -174,7 +174,9 @@ class UserService {
       _profileCache[uid] = api;
       return api;
     }
-    final doc = await _db.collection('users').doc(uid).get();
+    final isSelf = uid == _auth.currentUser?.uid;
+    final collection = isSelf ? 'users' : 'userPublic';
+    final doc = await _db.collection(collection).doc(uid).get();
     if (!doc.exists) return null;
     final fbProfile = UserProfile.fromMap(uid, doc.data()!);
     _profileCache[uid] = fbProfile;

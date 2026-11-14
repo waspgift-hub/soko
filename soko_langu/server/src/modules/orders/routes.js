@@ -58,7 +58,7 @@ router.post(
   requireActive,
   validate({
     body: z.object({
-      provider: z.enum(['clickpesa', 'card', 'bank']),
+      provider: z.enum(['azampay', 'mno_checkout']),
       amount: z.number().int().positive(),
       phoneNumber: z.string().regex(/^\+?[0-9]{9,15}$/),
     }),
@@ -75,6 +75,9 @@ router.post(
     body: z.object({
       courierName: z.string().min(1).max(120),
       trackingNumber: z.string().min(1).max(120),
+      // Optional binding of the parcel to a courier account; once set, only
+      // that user may attest delivery.
+      courierId: z.string().min(1).max(128).optional(),
     }),
   }),
   orderController.markDispatched

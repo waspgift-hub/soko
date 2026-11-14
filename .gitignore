@@ -26,3 +26,13 @@ analyze*.txt
 *.firebase.cache
 
 _attic/
+
+# Build outputssoko_langu/apps/admin-console/.next/
+soko_langu/apps/admin-console/.open-next/
+# Admin console (Next/OpenNext/Wrangler local artifacts)
+soko_langu/apps/admin-console/.next/
+soko_langu/apps/admin-console/.open-next/
+soko_langu/apps/admin-console/.wrangler/
+soko_langu/apps/admin-console/node_modules/
+soko_langu/apps/admin-console/.env.local
+soko_langu/apps/admin-console/.env*.local

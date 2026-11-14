@@ -483,7 +483,13 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/products/$(request.resource.data.productId))
         && request.resource.data.get('rating', 5) is number
         && request.resource.data.get('rating', 5) >= 1
-        && request.resource.data.get('rating', 5) <= 5;
+        && request.resource.data.get('rating', 5) <= 5
+        // The verified-purchase badge is an attestation only the server can
+        // make. A client that writes `true` is claiming an order match it was
+        // never asked to prove, so the create is denied rather than downgraded
+        // — silently flipping the flag would hide the attempt. The API path
+        // (admin SDK) bypasses rules and sets it from the settled order.
+        && request.resource.data.get('isVerifiedPurchase', false) == false;
       allow update: if isSignedIn() && notSuspended()
         && (
           // any signed-in user can like/unlike any review (unlimited)
@@ -995,7 +1001,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ─── SMOKE: deny-all fallback for any undocumented collection ──
+    // ─── BANNER CAMPAIGNS (admin-managed marketing banners) ─────
+  match /banner_campaigns/{campaignId} {
+    // Public read so marketing banners can render for all visitors.
+    allow read: if true;
+    allow create, update, delete: if isAdmin();
+  }
+
+  match /banner_impressions/{eventId} {
+    allow create: if isSignedIn()
+      && request.resource.data.userId == request.auth.uid;
+    allow read: if isAdmin()
+      || (isSignedIn() && resource.data.userId == request.auth.uid);
+    allow update, delete: if isAdmin();
+  }
+
+  match /banner_clicks/{eventId} {
+    allow create: if isSignedIn()
+      && request.resource.data.userId == request.auth.uid;
+    allow read: if isAdmin()
+      || (isSignedIn() && resource.data.userId == request.auth.uid);
+    allow update, delete: if isAdmin();
+  }
+
+  // ─── SMOKE: deny-all fallback for any undocumented collection ──
     // COMPANY OS (server-written only)
     // All access goes through the authenticated /api/v1/company backend using
     // the Admin SDK, which bypasses these rules. Client SDK access is denied.

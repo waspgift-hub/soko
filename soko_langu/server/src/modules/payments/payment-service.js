@@ -5,6 +5,7 @@ const { PaymentError } = require('./payment-errors');
 const config = require('../../config');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { sameAmount } = require('../../utils/money');
+const { calcCommission } = require('../../utils/commission-parity');
 const outbox = require('./webhook-outbox');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { sendOneSignalNotification } = require('../legacy-compat/notify');
@@ -21,14 +22,24 @@ const { confirmLegacyTransaction } = require('./legacy-transaction-confirm');
  *  4. Status priority check before any state change
  */
 
+// Methods the provider factory actually implements. ClickPesa was removed;
+// card and bank collection are not implemented by AzamPayProvider, so accepting
+// them at the route only produced a 500 after the buyer had chosen a method.
+const SUPPORTED_PAYMENT_PROVIDERS = new Set(['azampay', 'mno_checkout']);
+
 // Create a payment record and initiate the provider collection.
 async function initiatePayment({
   orderId,
   buyerId,
-  provider: providerName = 'clickpesa',
+  provider: providerName = 'azampay',
   amount,
   phoneNumber,
 }) {
+  if (!SUPPORTED_PAYMENT_PROVIDERS.has(providerName)) {
+    // Typed 400 rather than letting getProvider() throw an unhandled 500: the
+    // request is invalid, not the server.
+    throw httpError(400, 'UNSUPPORTED_PAYMENT_PROVIDER');
+  }
   const store = getStore();
   const lock = await requireLock(`payment:${orderId}`, 60);
 
@@ -53,7 +64,7 @@ async function initiatePayment({
         amount,
         orderReference: order.orderNumber,
         phoneNumber,
-        callbackUrl: config.clickpesa.collectionWebhookUrl,
+        callbackUrl: config.azampay.collectionWebhookUrl,
       });
 
       const payment = await tx.payment.create({
@@ -370,12 +381,6 @@ async function markPaymentFailed(orderReference, { reason = null, providerPaymen
     await syncLegacyOrderStatus(result.order);
   }
   return result;
-}
-
-// Commission calculation (platform fee on product price).
-function calcCommission(productPrice) {
-  const percent = config.business.platformCommissionPercent;
-  return Math.round(Number(productPrice) * percent);
 }
 
 // Escrow-funded notice to the seller (in-app row + push). Best-effort: a

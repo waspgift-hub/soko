@@ -22,12 +22,11 @@ const { requireUser, requireAdmin, isOwnerOrAdmin } = require('./auth-helpers');
 const { sendOneSignalNotification, notifyAdmins } = require('./notify');
 const { verifyAdminSecret } = require('../../../middlewares/security');
 const {
-  clickpesaCollect,
-  clickpesaPaymentStatus,
-  clickpesaCreateBillPayOrder,
+  azampayCollect,
+  azampayPaymentStatus,
+  azampayCreateBillPayOrder,
   calcGatewayFee,
-  ALL_PAYMENT_METHODS,
-} = require('../../../clickpesa');
+} = require('../../../azampay');
 const { localizeNotif, localizeDefaultReason, smsSafeForGateway } = require('../../../notif_lang');
 const { parseFlashSaleEndTime, isFlashSaleStillActive } = require('../../../money');
 const cache = require('../../../cache');
@@ -278,70 +277,45 @@ async function sendOneSignalBulk(db, userIds, title, body, data = {}) {
 
 // ─── Cron helpers (ported from server/index.js) ────────────────────────
 async function releaseExpiredEscrows(db) {
-  if (!db) return;
+  const summary = { released: 0, blocked: 0, skipped: 0, errored: 0, processed: 0 };
+  if (!db) return summary;
   try {
     const now = admin.firestore.Timestamp.now();
     const expired = await db.collection('transactions')
       .where('status', 'in', ['escrow_hold', 'dispatched'])
       .where('escrowExpiresAt', '<=', now)
-      .where('escrowReleased', '!=', true)
       .limit(20)
       .get();
 
+    // Ledger-backed release only. This cron predates the canonical escrow
+    // service and used to increment `sellerBalance` directly, which could pay
+    // out a disputed hold and left no immutable ledger row. Delegating keeps
+    // the endpoint working while routing every payout through `autoRelease()`:
+    // holding-only, dispute-aware, idempotent.
+    const { autoRelease } = require('../disputes/auto-release-service');
+
     for (const doc of expired.docs) {
-      const tx = doc.data();
-      const sellerReceives = tx.sellerReceives || 0;
-      const sellerId = tx.sellerId;
-
-      await doc.ref.update({
-        status: 'delivered',
-        escrowReleased: true,
-        escrowReleasedAt: commerceStore.serverTimestamp(),
-        escrowAutoReleased: true,
-      });
-
-      if (sellerId && sellerReceives > 0) {
-        const autoSeller = await commerceStore.getDocument("users", sellerId);
-        const autoPending = autoSeller ? (autoSeller.pendingEscrow || 0) : 0;
-        const actualPending = Math.min(sellerReceives, autoPending);
-        await commerceStore.updateDocument("users", sellerId, {
-          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
-        });
-
-        await commerceStore.addDocument("notifications", {
-          userId: sellerId,
-          title: 'Escrow Imefunguliwa Kiotomatiki',
-          body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
-          isRead: false,
-          createdAt: commerceStore.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(sellerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_auto_release', transactionId: doc.id });
-        } catch (_) {}
-      }
-
-      if (tx.buyerId) {
-        await commerceStore.addDocument("notifications", {
-          userId: tx.buyerId,
-          title: 'Escrow Imefunguliwa Kiotomatiki',
-          body: `Muda wa escrow ya ${tx.productName || 'Bidhaa'} umeisha. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda.`,
-          isRead: false,
-          createdAt: commerceStore.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(tx.buyerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`, { type: 'escrow_auto_release', transactionId: doc.id });
-        } catch (_) {}
+      const tx = doc.data() || {};
+      const orderId = tx.orderId || doc.id;
+      summary.processed += 1;
+      try {
+        const result = await autoRelease({ orderId, triggeredBy: 'cron.release-escrows' });
+        if (result && result.status === 'AUTO_RELEASED') summary.released += 1;
+        else if (result && result.status === 'BLOCKED') summary.blocked += 1;
+        else summary.skipped += 1;
+      } catch (e) {
+        summary.errored += 1;
+        console.error('[CRON] autoRelease', orderId, e.message);
       }
     }
   } catch (e) {
     console.error('Auto-release escrow error:', e);
   }
+  return summary;
 }
 
-// Maps raw ClickPesa status rows (GET /payments/{orderReference}) to
-// 'success' | 'failed' | '' (still pending/unknown).
-function clickPesaStatusFrom(resp, orderId) {
+// Maps raw AzamPay status rows to 'success' | 'failed' | '' (still pending/unknown).
+function azamPayStatusFrom(resp, orderId) {
   let rows = [];
   if (resp && Array.isArray(resp.data)) rows = resp.data;
   else if (Array.isArray(resp)) rows = resp;
@@ -354,7 +328,7 @@ function clickPesaStatusFrom(resp, orderId) {
 }
 
 // Extracts the human-readable failure reason from GET /payments/{orderReference}.
-function clickPesaFailureReasonFrom(resp, orderId) {
+function azamPayFailureReasonFrom(resp, orderId) {
   let rows = [];
   if (resp && Array.isArray(resp.data)) rows = resp.data;
   else if (Array.isArray(resp)) rows = resp;
@@ -415,24 +389,24 @@ async function failStalePendingBoosts(db) {
       if (createdAt.getTime() > cutoff.getTime()) continue;
       if (tx.status !== 'pending') continue;
 
-      // Ask ClickPesa for the real outcome before deciding to time out.
-      let cpStatus = '';
-      let cpFailureReason = '';
+      // Ask AzamPay for the real outcome before deciding to time out.
+      let azStatus = '';
+      let azFailureReason = '';
       try {
-        const resp = await clickpesaPaymentStatus(doc.id);
-        cpStatus = clickPesaStatusFrom(resp, doc.id);
-        cpFailureReason = clickPesaFailureReasonFrom(resp, doc.id);
+        const resp = await azampayPaymentStatus(doc.id);
+        azStatus = azamPayStatusFrom(resp, doc.id);
+        azFailureReason = azamPayFailureReasonFrom(resp, doc.id);
       } catch (_) {
         // Status API unreachable — fall through and let the poller keep trying.
       }
 
-      if (cpStatus === 'success') {
+      if (azStatus === 'success') {
         // Payment actually completed — apply it instead of failing.
         await boostPaymentSuccess(db, doc.id);
         continue;
       }
-      if (cpStatus === 'failed') {
-        const reason = cpFailureReason || 'Malipo ya ussd yameshindikana';
+      if (azStatus === 'failed') {
+        const reason = azFailureReason || 'Malipo ya ussd yameshindikana';
         await doc.ref.update({
           status: 'failed',
           failureReason: reason,
@@ -980,7 +954,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       const order_id = `boost${Date.now()}`;
 
       if (isBillPay) {
-        const billResult = await clickpesaCreateBillPayOrder({
+        const billResult = await azampayCreateBillPayOrder({
           billAmount: totalToCollect,
           billDescription: `Soko Vibe boost: ${tier} - ${productName || 'Product'}`,
           billPaymentMode: 'EXACT',
@@ -1045,15 +1019,15 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
         }
 
         // Central webhook config: never derive the callback from the request host.
-        clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
+        azampayCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: config.azampay.collectionWebhookUrl })
           .then((result) => {
             const ref = result?.id || result?.orderReference || '';
-            if (!ref) { console.error(`[USSD] Boost ClickPesa no ref for ${order_id}`); return; }
+            if (!ref) { console.error(`[USSD] Boost AzamPay no ref for ${order_id}`); return; }
             return commerceStore.updateDocument("transactions", order_id, { clickpesaReference: ref, ussdSent: true });
           })
           .then(() => console.log(`[USSD] Boost push sent for ${order_id}`))
           .catch((err) => {
-            console.error(`[USSD] Boost ClickPesa error:`, err?.response?.data || err.message);
+            console.error(`[USSD] Boost AzamPay error:`, err?.response?.data || err.message);
             const reason = err?.response?.data?.message || err?.message || 'USSD push haikufika';
             commerceStore.getDocument("transactions", order_id).then(tx => {
               if (!tx) return;
@@ -1068,12 +1042,12 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
 
         res.json({
           order_id, amount: tierConfig.price, gatewayFee, totalAmount: totalToCollect,
-          message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()}). Ada ya ClickPesa inaongezwa kwenye malipo yako. Tuma PIN yako kwenye simu.`,
+          message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()}). Ada ya AzamPay inaongezwa kwenye malipo yako. Tuma PIN yako kwenye simu.`,
         });
       }
     } catch (e) {
       console.error('/api/boost-product error:', e?.message || e);
-      const msg = e?.message?.includes('ClickPesa') ? e.message : 'Internal server error';
+      const msg = e?.message?.includes('AzamPay') ? e.message : 'Internal server error';
       res.status(500).json({ error: msg });
     }
   });
@@ -1815,9 +1789,9 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       if (!verifyAdminSecret(secret)) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-      await releaseExpiredEscrows(db);
+      const summary = await releaseExpiredEscrows(db);
       await failStalePendingBoosts(db);
-      res.json({ success: true, message: 'Escrow release triggered' });
+      res.json({ success: true, message: 'Escrow release triggered', data: summary });
     } catch (e) {
       console.error('Cron release-escrows error:', e);
       res.status(500).json({ error: 'Internal server error' });
@@ -2211,7 +2185,7 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           createdAt: commerceStore.serverTimestamp(),
         });
 
-        const billResult = await clickpesaCreateBillPayOrder({
+        const billResult = await azampayCreateBillPayOrder({
           billAmount: totalCharge,
           billDescription: `Soko Vibe wallet deposit: TZS ${Math.round(amount)}`,
           billPaymentMode: 'EXACT',
@@ -2261,20 +2235,20 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
           processingFee,
           totalCharge,
           status: 'pending',
-          paymentMethod: 'ClickPesa',
+          paymentMethod: 'AzamPay',
           createdAt: commerceStore.serverTimestamp(),
         });
 
-        // Fire ClickPesa async — return immediately
-        clickpesaCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.clickpesa.collectionWebhookUrl })
+        // Fire AzamPay async — return immediately
+        azampayCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: config.azampay.collectionWebhookUrl })
           .then((result) => {
             const ref = result?.id || '';
-            if (!ref) { console.error(`[USSD] Deposit ClickPesa no ref for ${depositRef}`); return; }
+            if (!ref) { console.error(`[USSD] Deposit AzamPay no ref for ${depositRef}`); return; }
             return db.collection('deposits').doc(depositRef).update({ clickpesaReference: ref, ussdSent: true });
           })
           .then(() => console.log(`[USSD] Deposit push sent for ${depositRef}`))
           .catch((err) => {
-            console.error(`[USSD] Deposit ClickPesa error:`, err?.response?.data || err.message);
+            console.error(`[USSD] Deposit AzamPay error:`, err?.response?.data || err.message);
             db.collection('deposits').doc(depositRef).update({ ussdFailed: true }).catch(() => {});
           });
 

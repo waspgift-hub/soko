@@ -449,6 +449,10 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         context.tr('accounts'),
         () => AccountSwitcherSheet.show(context),
       ),
+      _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async {
+        await context.push(AppRoutes.editProfile);
+        _refreshProfile();
+      }),
       _ActionItem(
         Icons.favorite_rounded,
         context.tr('wishlist'),
@@ -497,14 +501,14 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         crossAxisCount: 3,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 1.0,
+        childAspectRatio: 0.9,
       ),
       itemCount: actions.length,
       itemBuilder: (context, i) {
         final item = actions[i];
         return GlassCard(
           onTap: item.onTap,
-          padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
+          padding: const EdgeInsets.symmetric(vertical: AppInsets.sm, horizontal: AppInsets.sm),
           borderColor: cs.primary.withValues(alpha: 0.35),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

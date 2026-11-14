@@ -7,7 +7,7 @@ const { getFirebaseFirestore } = require('../../config/firebase');
 const commerceStore = require('../../services/commerce-store');
 const config = require('../../config');
 const { sendOneSignalNotification, notifyAdmins } = require('../legacy-compat/notify');
-const { clickpesaCollect, clickpesaCreateBillPayOrder, calcGatewayFee } = require('../../../clickpesa');
+const { azampayCollect, azampayPaymentStatus, azampayPayout, azampayCreateBillPayOrder, calcGatewayFee } = require('../../../clickpesa');
 // Contact (phone/email) verification OTPs reuse the same store the auth login
 // flow uses, so a seller never has two unrelated OTP systems. SMS goes through
 // the real sms-service (Meseji → Notify Africa); email through the SMTP mailer.
@@ -18,7 +18,7 @@ const { sendMail } = require('../../services/mailer');
 const crypto = require('crypto');
 
 // One-time seller verification fee (TSh). The fee is paid BEFORE submission via
-// ClickPesa (kyc_fee transaction); resubmissions after rejection never re-charge.
+// AzamPay (kyc_fee transaction); resubmissions after rejection never re-charge.
 const KYC_FEE_AMOUNT = 15000;
 
 function httpError(status, code, message) {
@@ -166,14 +166,9 @@ async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push' }) {
     throw httpError(400, 'INVALID_PHONE', 'Namba ya simu batili. Tumia namba ya Tanzania, mfano 0712 345 678');
   }
 
-  // ClickPesa requires an alphanumeric orderReference; the UID fragment keeps
-  // the id traceable to the seller without leaking the full Firebase UID.
   const suffix = userId.replace(/[^A-Za-z0-9]/g, '').substring(0, 4) || 'x';
   const orderId = `kyc${Date.now().toString(36)}${suffix}`;
   const isBillPay = paymentMethod === 'billpay';
-  // BillPay's 1% fee is deducted from the collected amount, so it is added on
-  // top to keep the platform's full TSh 15,000. USSD push fees are charged to
-  // the customer by ClickPesa on top, never pre-added (double-charge guard).
   const gatewayFee = isBillPay ? calcGatewayFee('billpay', KYC_FEE_AMOUNT) : 0;
   const totalAmount = KYC_FEE_AMOUNT + gatewayFee;
 
@@ -192,7 +187,7 @@ async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push' }) {
   };
 
   if (isBillPay) {
-    const billResult = await clickpesaCreateBillPayOrder({
+    const billResult = await azampayCreateBillPayOrder({
       billAmount: totalAmount,
       billDescription: 'KYC verification fee',
       billPaymentMode: 'EXACT',
@@ -216,12 +211,10 @@ async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push' }) {
   }
 
   if (store) {
-    await store.collection('transactions').doc(orderId).set({ ...txBase, paymentMethod: 'ClickPesa' }).catch(() => {});
+    await store.collection('transactions').doc(orderId).set({ ...txBase, paymentMethod: 'AzamPay' }).catch(() => {});
   }
-  // Fire the push async — the caller gets an instant response and the webhook
-  // flips the transaction to 'completed' (applyClickPesaPayment, kyc_fee branch).
-  const callbackUrl = config.clickpesa.collectionWebhookUrl;
-  clickpesaCollect({ amount: totalAmount, orderReference: orderId, phoneNumber: normalizedPhone, callbackUrl })
+  const callbackUrl = config.azampay.collectionWebhookUrl;
+  azampayCollect({ amount: totalAmount, orderReference: orderId, phoneNumber: normalizedPhone, callbackUrl })
     .then((result) => {
       const ref = result?.id || result?.orderReference || '';
       if (ref && store) {
@@ -229,9 +222,9 @@ async function initiateKycFee({ userId, phone, paymentMethod = 'ussd_push' }) {
       }
     })
     .catch((err) => {
-      console.error(`[KYC fee] ClickPesa USSD error for ${orderId}:`, err?.response?.data || err.message);
+      console.error(`[KYC fee] AzamPay USSD error for ${orderId}:`, err?.response?.data || err.message);
       if (store) {
-        store.collection('transactions').doc(orderId).update({ ussdFailed: true, ussdError: err?.message || 'ClickPesa error' }).catch(() => {});
+        store.collection('transactions').doc(orderId).update({ ussdFailed: true, ussdError: err?.message || 'AzamPay error' }).catch(() => {});
       }
     });
   return { orderId, amount: KYC_FEE_AMOUNT, totalAmount, gatewayFee: 0, method: 'ussd_push' };
@@ -503,12 +496,11 @@ async function sendContactOtp({ userId, channel, value }) {
   await saveOtp(key, createOtpHash(otp), CONTACT_OTP_TTL_SECONDS);
   const subject = 'Soko Vibe — Uthibitisho wa anwani';
   const html = `
-    <html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto">
       <h2 style="color:#40916C">Soko Vibe</h2>
       <p>Namba yako ya uthibitisho:</p>
       <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p>
       <p>Inaisha kwa dakika 5. Usiishirikishe na mtu yeyote.</p>
-    </body></html>`;
+    `;
   const sent = await sendMail(email, subject, html);
   // sendMail now treats a 200 with permanent_bounces/suppressed_recipients as a
   // failure, so a bounced or suppressed address lands here rather than being

@@ -1,5 +1,5 @@
 const express = require('express');
-const { getPayoutFee, clickpesaBalance } = require('../clickpesa');
+const { getPayoutFee, azampayBalance } = require('../azampay');
 const payoutHelpers = require('../helpers/payouts');
 
 module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwnerOrAdmin, sendOneSignalNotification, webhookIpWhitelist, verifyWebhook }) {
@@ -200,11 +200,11 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
     }
   });
 
-  router.get('/clickpesa/balance', async (req, res) => {
+  router.get('/azampay/balance', async (req, res) => {
     try {
       const auth = await requireAdmin(req, res);
       if (!auth.ok) return;
-      const balance = await clickpesaBalance();
+      const balance = await azampayBalance();
       res.json({ success: true, balance });
     } catch (e) {
       res.status(500).json({ error: 'Internal server error' });
@@ -228,7 +228,25 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
     }
   });
 
-  router.post('/clickpesa/payout-webhook', webhookIpWhitelist, verifyWebhook, async (req, res) => {
+  router.post('/azampay/payout-preview', async (req, res) => {
+    try {
+      const { amount, phone } = req.body;
+      if (!amount || !phone) return res.status(400).json({ error: 'Missing amount or phone' });
+      const payoutFee = getPayoutFee(Math.round(amount));
+      const preview = {
+        amount: Math.round(amount),
+        fee: payoutFee,
+        netAmount: Math.round(amount) - payoutFee,
+        recipientPhone: phone,
+        provider: 'azampay',
+      };
+      res.json({ success: true, preview });
+    } catch (e) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/azampay/payout-webhook', webhookIpWhitelist, verifyWebhook, async (req, res) => {
     try {
       let payload = req.body;
       if (payload.data && typeof payload.data === 'object') {
@@ -249,7 +267,7 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
 
       const payoutDoc = await commerceStore.getDocument('payouts', payoutRef);
       if (!payoutDoc) {
-        console.warn(`ClickPesa payout webhook: payout ${payoutRef} not found`);
+        console.warn(`AzamPay payout webhook: payout ${payoutRef} not found`);
         return res.status(200).json({ received: false });
       }
 
@@ -258,15 +276,15 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
         return res.status(200).json({ received: true });
       }
 
-      const clickpesaTxId = payload.id || payload.transactionId || '';
+      const azampayTxId = payload.id || payload.transactionId || '';
 
       if (eventStatus === 'SUCCESS') {
-        await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: clickpesaTxId });
+        await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: azampayTxId });
 
         try {
           await commerceStore.updateDocument('transactions', payoutRef, {
             status: 'completed',
-            clickpesaReference: clickpesaTxId,
+            clickpesaReference: azampayTxId,
             completedAt: commerceStore.serverTimestamp(),
           });
         } catch (_) {}
@@ -287,14 +305,14 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
       } else if (eventStatus === 'FAILED') {
         await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.FAILED, {
           failureReason: payload.message || payload.error || 'payout failed',
-          clickpesaReference: clickpesaTxId,
+          clickpesaReference: azampayTxId,
         });
 
         try {
           await commerceStore.updateDocument('transactions', payoutRef, {
             status: 'failed',
             failureReason: payload.message || payload.error || 'payout failed',
-            clickpesaReference: clickpesaTxId,
+            clickpesaReference: azampayTxId,
             completedAt: commerceStore.serverTimestamp(),
           });
         } catch (_) {}
@@ -309,7 +327,7 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
                 sellerBalance: commerceStore.increment(payout.amount),
               });
             });
-            console.log(`ClickPesa payout reversed: ${payoutRef} — TZS ${payout.amount} returned to ${payout.userId}`);
+            console.log(`AzamPay payout reversed: ${payoutRef} — TZS ${payout.amount} returned to ${payout.userId}`);
           } catch (reverseErr) {
             console.error(`CRITICAL: Failed to reverse payout ${payoutRef} for user ${payout.userId}:`, reverseErr);
           }
@@ -336,7 +354,7 @@ module.exports = function ({ commerceStore, db, requireUser, requireAdmin, isOwn
 
       res.status(200).json({ received: true });
     } catch (e) {
-      console.error('ClickPesa payout webhook error:', e);
+      console.error('AzamPay payout webhook error:', e);
       res.status(200).json({ received: false });
     }
   });

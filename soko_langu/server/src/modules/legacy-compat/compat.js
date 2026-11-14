@@ -9,7 +9,7 @@ const { getRedis } = require('../../config/redis');
 const { requireUser, requireAdmin, isOwnerOrAdmin, checkSuspended } = require('./auth-helpers');
 const { sendOneSignalNotification, notifyAdmins } = require('./notify');
 
-const { clickpesaPayout, getPayoutFee, createPayloadChecksum } = require('../../../clickpesa');
+const { azampayPayout, getPayoutFee, createPayloadChecksum } = require('../../../azampay');
 const payoutHelpers = require('../../../helpers/payouts');
 const cache = require('../../../cache');
 
@@ -20,14 +20,14 @@ try {
   ipRangeCheck = null;
 }
 
-// IP Whitelist is OPTIONAL defense-in-depth. ClickPesa's PRIMARY webhook
+// IP Whitelist is OPTIONAL defense-in-depth. AzamPay's PRIMARY webhook
 // verification mechanism is HMAC/checksum (see verifyWebhook) — not IP
-// whitelist. A missing CLICKPESA_ALLOWED_IPS skips this layer and relies
-// on HMAC instead. Set CLICKPESA_ALLOWED_IPS to a comma-separated list
+// whitelist. A missing AZAMPAY_ALLOWED_IPS skips this layer and relies
+// on HMAC instead. Set AZAMPAY_ALLOWED_IPS to a comma-separated list
 // (IPs or CIDR blocks) to add IP-level gating.
 
 function webhookIpWhitelist(req, res, next) {
-  const allowedRaw = process.env.CLICKPESA_ALLOWED_IPS;
+  const allowedRaw = process.env.AZAMPAY_ALLOWED_IPS;
   if (!allowedRaw) {
     // No whitelist configured — skip IP gating. HMAC verification
     // (applied downstream by verifyWebhook) is the primary gate.
@@ -46,9 +46,9 @@ function webhookIpWhitelist(req, res, next) {
 }
 
 function verifyWebhook(req, res, next) {
-  const secret = process.env.CLICKPESA_CHECKSUM_KEY;
+  const secret = process.env.AZAMPAY_CHECKSUM_KEY;
   if (!secret) {
-    console.error('[WEBHOOK] CLICKPESA_CHECKSUM_KEY not set — rejecting webhook for security');
+    console.error('[WEBHOOK] AZAMPAY_CHECKSUM_KEY not set — rejecting webhook for security');
     return res.status(503).json({ error: 'Webhook verification not configured' });
   }
   const body = req.body || {};
@@ -91,7 +91,7 @@ function setupCompat(app) {
     cache,
     requireUser,
     sendOneSignalNotification,
-    clickpesaPayout,
+    clickpesaPayout: azampayPayout,
     getPayoutFee,
     generatePayoutReference,
     PAYOUT_STATUSES,
@@ -122,6 +122,8 @@ function setupCompat(app) {
   // eslint-disable-next-line global-require
   const escrowRouter = require('./escrow-compat');
   // eslint-disable-next-line global-require
+  const codRouter = require('./cod-compat');
+  // eslint-disable-next-line global-require
   const ordersCompatRouter = require('./orders-compat');
   // eslint-disable-next-line global-require
   const trustCompatRouter = require('./trust-compat');
@@ -132,7 +134,7 @@ function setupCompat(app) {
   // eslint-disable-next-line global-require
   const featureCompatRouter = require('./feature-compat')({ admin, db });
 
-  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter, ordersCompatRouter, trustCompatRouter, moderationCompatRouter, adminCompatRouter: adminCompat, adminCompatPublic: adminCompat.publicRouter, featureCompatRouter };
+  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter, codRouter, ordersCompatRouter, trustCompatRouter, moderationCompatRouter, adminCompatRouter: adminCompat, adminCompatPublic: adminCompat.publicRouter, featureCompatRouter };
 }
 
 module.exports = { setupCompat, webhookIpWhitelist, verifyWebhook };

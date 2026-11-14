@@ -33,10 +33,11 @@ class AuthScene extends StatelessWidget {
     final isDark = cs.brightness == Brightness.dark;
 
     final canvas = isDark
-        ? const [Color(0xFF0B0B0B), Color(0xFF11150F)]
+        ? [Theme.of(context).scaffoldBackgroundColor, Theme.of(context).scaffoldBackgroundColor]
         : const [Color(0xFFF4FBF6), Color(0xFFFFFFFF)];
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       // Soft brand-tinted canvas keeps the page cohesive while the card stays
       // neutral, so inputs keep full contrast in both themes.
       body: DecoratedBox(

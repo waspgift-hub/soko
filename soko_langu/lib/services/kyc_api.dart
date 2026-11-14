@@ -224,7 +224,7 @@ class KycApiClient {
     return data is Map<String, dynamic> ? data : {'paid': false};
   }
 
-  /// Starts a ClickPesa collection for the one-time verification fee.
+  /// Starts an AzamPay collection for the one-time verification fee.
   ///
   /// `paymentMethod` is 'ussd_push' or 'billpay'. Success flattens the
   /// server data under `{success: true, ...}` — `billPayNumber` for billpay,

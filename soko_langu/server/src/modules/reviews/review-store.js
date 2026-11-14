@@ -6,6 +6,25 @@
 // (productId,createdAt) exist in firestore.indexes.json.
 const crypto = require('crypto');
 const { getFirebaseFirestore } = require('../../config/firebase');
+const { getStore } = require('../../config/database');
+const { ORDER_STATES, canonicalStatusOf } = require('../orders/order-state-machine');
+
+// Order states in which the buyer demonstrably received the goods. A review is
+// only trustworthy when the server can tie it to one of these orders; the
+// client's own claim is never enough. `DELIVERED` counts because a courier or
+// admin attested the handover, and that is the exact moment the app prompts the
+// buyer to rate. The later settlement states stay eligible forever.
+const SETTLED_ORDER_STATUSES = new Set([
+  ORDER_STATES.DELIVERED,
+  ORDER_STATES.DELIVERY_CONFIRMED,
+  ORDER_STATES.COMPLETED,
+  ORDER_STATES.WALLET_CREDITED,
+]);
+
+// The public-profile "rate this seller" button has no product behind it, so it
+// posts a synthetic id (`seller_<uid>`). It stays a separate, always-unverified
+// trust signal instead of silently borrowing product-review rules.
+const SELLER_TRUST_PREFIX = 'seller_';
 
 function httpError(status, code, message) {
   const e = new Error(message);
@@ -43,10 +62,47 @@ function toPublic(doc) {
     helpfulCount: doc.helpfulCount || 0,
     likedBy: doc.likedBy || [],
     isVerifiedPurchase: Boolean(doc.isVerifiedPurchase),
+    orderId: doc.orderId || null,
     sellerReply: doc.sellerReply,
     sellerReplyAt: iso(doc.sellerReplyAt),
     createdAt: iso(doc.createdAt),
   };
+}
+
+function isSellerTrustProductId(productId) {
+  return typeof productId === 'string'
+    && productId.startsWith(SELLER_TRUST_PREFIX)
+    && productId.length > SELLER_TRUST_PREFIX.length;
+}
+
+function sellerIdFromTrustProduct(productId) {
+  return productId.slice(SELLER_TRUST_PREFIX.length);
+}
+
+function orderContainsProduct(order, productId) {
+  const snap = order && order.productSnapshot;
+  if (snap && String(snap.productId || '') === String(productId)) return true;
+  // Older rows (and a few legacy writers) keep the product id at the top level.
+  return String((order && order.productId) || '') === String(productId);
+}
+
+/**
+ * Find the caller's own settled order that contains `productId`.
+ *
+ * This is the server-side proof behind the verified-purchase badge. `buyerId`
+ * is an equality filter (indexed by default) and the status/product checks run
+ * in memory so every legacy status spelling goes through the same
+ * canonicalization as the rest of the order pipeline.
+ */
+async function findSettledPurchase({ userId, productId }) {
+  if (!userId || !productId) return null;
+  const store = getStore();
+  const orders = await store.order.findMany({ where: { buyerId: userId } });
+  for (const order of orders) {
+    if (!SETTLED_ORDER_STATUSES.has(canonicalStatusOf(order.status))) continue;
+    if (orderContainsProduct(order, productId)) return order;
+  }
+  return null;
 }
 
 // Paginated list, newest first. Firestore has no offset, so the page is read
@@ -82,36 +138,72 @@ async function getMyReview({ userId, productId }) {
   return toPublic({ ...snap.docs[0].data(), id: snap.docs[0].id });
 }
 
-// Upsert a review. After the write the product doc's rating/reviewCount are
-// recomputed so the Firestore catalog stays the source the app sorts by.
+// Upsert a review. The verified-purchase badge and the seller the review is
+// attributed to are derived from a settled order on the server; the caller can
+// never award itself a badge or point a review at another seller. After the
+// write the product doc's rating/reviewCount are recomputed so the Firestore
+// catalog stays the source the app sorts by.
 async function upsertReview({ userId, productId, sellerId, rating, comment, userName, userImage }) {
   const db = requireStore();
-
-  if (sellerId && sellerId === userId) {
-    throw httpError(400, 'SELF_REVIEW', 'Sellers cannot rate their own products');
-  }
 
   const ratingInt = Math.round(rating);
   if (!Number.isFinite(ratingInt) || ratingInt < 1 || ratingInt > 5) {
     throw httpError(400, 'INVALID_RATING', 'rating must be a number between 1 and 5');
   }
 
+  let resolvedSellerId;
+  let orderId = null;
+  let isVerifiedPurchase = false;
+
+  if (isSellerTrustProductId(productId)) {
+    resolvedSellerId = sellerIdFromTrustProduct(productId);
+    if (resolvedSellerId === userId) {
+      throw httpError(400, 'SELF_REVIEW', 'Sellers cannot rate themselves');
+    }
+  } else {
+    const purchase = await findSettledPurchase({ userId, productId });
+    if (!purchase) {
+      throw httpError(403, 'PURCHASE_REQUIRED', 'Only buyers with a completed order can review this product');
+    }
+    // The order is the source of truth for who sold the item; the request body
+    // is ignored so a forged `sellerId` cannot move ratings between sellers.
+    resolvedSellerId = purchase.sellerId || sellerId || '';
+    if (resolvedSellerId && resolvedSellerId === userId) {
+      throw httpError(400, 'SELF_REVIEW', 'Sellers cannot rate their own products');
+    }
+    orderId = purchase.id || null;
+    isVerifiedPurchase = true;
+  }
+
   const data = {
     productId,
-    sellerId: String(sellerId || ''),
+    sellerId: String(resolvedSellerId || ''),
     userId,
     userName: String(userName || 'Anonymous').slice(0, 100),
     userImage: userImage || null,
     rating: ratingInt,
     comment: comment != null ? String(comment).slice(0, 5000) : null,
+    orderId,
+    isVerifiedPurchase,
   };
 
   const existing = await getMyReview({ userId, productId });
+  const now = iso(new Date());
   let id;
   if (existing) {
     id = existing.id;
+    // An edit may add verification but must never remove it or forget which
+    // order proved the purchase.
+    const keepVerified = existing.isVerifiedPurchase && !isVerifiedPurchase;
     await db.collection('reviews').doc(id).set(
-      { ...data, images: existing.images || [], updatedAt: iso(new Date()) },
+      {
+        ...data,
+        ...(keepVerified
+          ? { isVerifiedPurchase: true, orderId: existing.orderId || orderId }
+          : {}),
+        images: existing.images || [],
+        updatedAt: now,
+      },
       { merge: true }
     );
   } else {
@@ -121,19 +213,20 @@ async function upsertReview({ userId, productId, sellerId, rating, comment, user
       images: [],
       helpfulCount: 0,
       likedBy: [],
-      isVerifiedPurchase: false,
       sellerReply: null,
       sellerReplyAt: null,
-      createdAt: iso(new Date()),
-      updatedAt: iso(new Date()),
+      createdAt: now,
+      updatedAt: now,
     });
   }
 
-  recomputeProductRating(productId).catch(() => {});
-  const created = existing
-    ? { ...existing, ...data }
-    : { ...data, images: [], helpfulCount: 0, likedBy: [], isVerifiedPurchase: false, sellerReply: null, sellerReplyAt: null };
-  return { id, ...created, createdAt: existing ? existing.createdAt : iso(new Date()) };
+  // Synthetic seller-trust ids are not real products; recomputing them would
+  // create a junk `products/{seller_uid}` document.
+  if (!isSellerTrustProductId(productId)) {
+    recomputeProductRating(productId).catch(() => {});
+  }
+  const saved = await db.collection('reviews').doc(id).get();
+  return toPublic({ ...saved.data(), id });
 }
 
 // Toggle the caller into/out of the helpful likedBy list on a review.
@@ -226,4 +319,8 @@ module.exports = {
   replyToReview,
   sellerRatingSummary,
   toPublic,
+  // Exported so the verified-purchase rule is covered directly by tests.
+  SETTLED_ORDER_STATUSES,
+  findSettledPurchase,
+  isSellerTrustProductId,
 };

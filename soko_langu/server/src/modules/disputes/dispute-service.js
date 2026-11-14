@@ -24,7 +24,7 @@ const SELLER_REASONS = ['BUYER_FRAUD'];
  * File a dispute on an order.
  * Moves order to DISPUTED and freezes the escrow hold.
  */
-async function fileDispute({ orderId, filedBy, reason, description, role }) {
+async function fileDispute({ orderId, filedBy, reason, description }) {
   const store = getStore();
   const lock = await requireLock(`dispute:${orderId}`, 60);
 
@@ -40,11 +40,18 @@ async function fileDispute({ orderId, filedBy, reason, description, role }) {
       const isSeller = Boolean(sellerProfile && order.sellerId === sellerProfile.id);
       if (!isBuyer && !isSeller) throw httpError(403, 'FORBIDDEN');
 
+      // Role comes from the order, never from the caller and never from "does
+      // this user happen to have a seller profile" — a buyer who also sells was
+      // classified as the seller, which unlocked the seller-only reason list
+      // (BUYER_FRAUD) on their own purchase. There is deliberately no caller
+      // override: an admin resolves disputes, they do not file them.
+      const effectiveRole = isBuyer ? 'buyer' : 'seller';
+
       // Validate reason belongs to the filer's allowed list
-      const allowed = role === 'seller' ? SELLER_REASONS : BUYER_REASONS;
+      const allowed = effectiveRole === 'seller' ? SELLER_REASONS : BUYER_REASONS;
       if (!DISPUTE_REASONS.includes(reason)) throw httpError(400, 'INVALID_REASON');
-      if (role !== 'admin' && !allowed.includes(reason)) {
-        throw httpError(400, `REASON_NOT_ALLOWED_FOR_ROLE:${role}`);
+      if (!allowed.includes(reason)) {
+        throw httpError(400, `REASON_NOT_ALLOWED_FOR_ROLE:${effectiveRole}`);
       }
 
       // Dispute window: only disputable states
@@ -54,7 +61,7 @@ async function fileDispute({ orderId, filedBy, reason, description, role }) {
 
       const machine = new OrderStateMachine(order.status);
       machine.transition(ORDER_STATES.DISPUTED, {
-        actor: role || (isBuyer ? 'buyer' : 'seller'),
+        actor: effectiveRole,
         actorId: filedBy,
         reason: `Dispute filed: ${reason}`,
       });

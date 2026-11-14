@@ -348,12 +348,16 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               children: [
                 Icon(Icons.check_circle, color: cs.primary, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  context.tr('net_earnings_formula'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.63),
-                    fontWeight: FontWeight.w500,
+                Expanded(
+                  child: Text(
+                    context.tr('net_earnings_formula'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurface.withValues(alpha: 0.63),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],

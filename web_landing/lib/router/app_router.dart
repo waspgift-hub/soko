@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../pages/about_page.dart';
 import '../pages/buyers_page.dart';
 import '../pages/contact_page.dart';
@@ -94,7 +94,7 @@ class _ExternalLegalPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Opening legal pageΓÇª',
+                'Opening legal page…',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),

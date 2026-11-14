@@ -24,6 +24,19 @@ async function getUserRole(userId) {
   }
 }
 
+async function isKycApproved(userId) {
+  const db = getFirebaseFirestore();
+  if (!db) return false;
+  try {
+    const snap = await db.collection('users').doc(String(userId)).get();
+    if (!snap.exists) return false;
+    const kyc = snap.data().kyc;
+    return !!(kyc && kyc.status === 'approved' && kyc.approved === true);
+  } catch {
+    return false;
+  }
+}
+
 const USABLE_STATUSES = new Set([SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.TRIALING]);
 
 async function resolveEntitlements(userId) {
@@ -88,6 +101,11 @@ async function startTrial({ userId, planId }) {
   if (!plan || plan.priceTzs === 0) {
     throw Object.assign(new Error('INVALID_TRIAL_PLAN'), { status: 400, code: 'INVALID_TRIAL_PLAN' });
   }
+  // KYC must be approved before any paid subscription trial/activation.
+  const approved = await isKycApproved(userId);
+  if (!approved) {
+    throw Object.assign(new Error('KYC_NOT_APPROVED'), { status: 403, code: 'KYC_NOT_APPROVED' });
+  }
   const existing = await getSubscription({ userId });
   if (existing && existing.status !== SUBSCRIPTION_STATUS.INACTIVE) {
     throw Object.assign(new Error('TRIAL_ALREADY_USED'), { status: 409, code: 'TRIAL_ALREADY_USED' });
@@ -103,4 +121,4 @@ async function startTrial({ userId, planId }) {
   return sub;
 }
 
-module.exports = { resolveEntitlements, checkAiQuota, startTrial, getUserRole };
+module.exports = { resolveEntitlements, checkAiQuota, startTrial, getUserRole, isKycApproved };

@@ -1,4 +1,5 @@
 const { getFirebaseFirestore } = require('../config/firebase');
+const config = require('../config');
 const { OrderStateMachine, ORDER_STATES, canonicalStatusOf } = require('../modules/orders/order-state-machine');
 const commerceStore = require('./commerce-store');
 const { sendOneSignalNotification } = require('../modules/legacy-compat/notify');
@@ -9,6 +10,16 @@ const shippingValidation = require('../modules/shipping/shipping-validation');
  * Escrow Service
  * Orchestrates the movement of funds and order state during the fulfillment phase.
  */
+
+// Single policy source. The finance sweep (`finance.inspectionAutoRelease`)
+// releases after the same number of days, so a deadline written here can never
+// disagree with the job that acts on it. Was hardcoded to 48h, which was a
+// leftover v2 experiment and contradicted the approved 14-day policy.
+function autoReleaseDeadlineFromNow() {
+  const days = Number(config.finance && config.finance.autoReleaseDays);
+  const safeDays = Number.isFinite(days) && days > 0 ? days : 14;
+  return new Date(Date.now() + safeDays * 24 * 60 * 60 * 1000);
+}
 
 async function setShippingQuote({ orderId, shippingCost, uid, db }) {
   const store = db || getFirebaseFirestore();
@@ -73,7 +84,7 @@ async function updateLogisticsStatus({ orderId, status, uid, note, db }) {
         ...update,
         dispatchedAt: timestamp,
         flowStage: 'in_transit',
-        autoReleaseDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        autoReleaseDeadline: autoReleaseDeadlineFromNow(),
         dispatchProof: { note: note || '', dispatchedAt: timestamp },
       };
       break;
@@ -108,6 +119,91 @@ async function updateLogisticsStatus({ orderId, status, uid, note, db }) {
   }
 
   await txDoc.ref.update(update);
+  return { success: true, status: targetStatus };
+}
+
+// States a client may never write. They are set by the payment webhook, the
+// settlement job, or an admin refund action, never by an order participant.
+// Without this gate the legacy `/orders/:id/transition` route let a buyer mark
+// their own order PAID or REFUNDED because the participants check alone only
+// proved *ownership*, not *authority*.
+const CLIENT_FORBIDDEN_STATUSES = new Set([
+  ORDER_STATES.PAID,
+  ORDER_STATES.FAILED,
+  ORDER_STATES.PAYMENT_FAILED,
+  ORDER_STATES.ESCROW_HELD,
+  ORDER_STATES.IN_ESCROW,
+  ORDER_STATES.COMPLETED,
+  ORDER_STATES.WALLET_CREDITED,
+  ORDER_STATES.REFUND_PENDING,
+  ORDER_STATES.REFUNDED,
+]);
+
+// Legacy order transition used by the web-shop client (orders-compat). New
+// clients use the purpose-built order/payment/handover services; this entry
+// point remains reachable, so it must enforce participants + state machine
+// itself. It is intentionally NOT exported as a general admin tool.
+async function transitionOrder({ orderId, newStatus, uid, note, db }) {
+  const store = db || getFirebaseFirestore();
+  const orderRef = store.collection('orders').doc(orderId);
+  const doc = await orderRef.get();
+  if (!doc.exists) throw new Error('ORDER_NOT_FOUND');
+
+  const order = doc.data() || {};
+  const buyerId = order.buyerId || order.userId;
+  const sellerId = order.sellerId;
+  if (!buyerId && !sellerId) throw new Error('FORBIDDEN');
+
+  const isBuyer = !!buyerId && String(uid) === String(buyerId);
+  const isSeller = !!sellerId && String(uid) === String(sellerId);
+  if (!isBuyer && !isSeller) throw new Error('FORBIDDEN');
+
+  const targetStatus = canonicalStatusOf(newStatus);
+  if (CLIENT_FORBIDDEN_STATUSES.has(targetStatus)) {
+    throw new Error('CLIENT_CANNOT_SET_FINANCIAL_STATE');
+  }
+
+  // Delivery is the event that stamps `deliveredAt`, and the auto-release sweep
+  // uses that timestamp to decide when escrow may be paid out. Letting the
+  // seller self-declare it through this legacy route would start the payout
+  // clock on a parcel that never left the shop, so the seller is refused and
+  // every caller must show dispatch evidence first. The buyer may still confirm
+  // receipt here; couriers use the v1 endpoint.
+  if (targetStatus === ORDER_STATES.DELIVERED) {
+    if (isSeller && !isBuyer) throw new Error('SELLER_CANNOT_MARK_DELIVERED');
+    if (!order.dispatchedAt && !order.trackingNumber && !order.courierName) {
+      throw new Error('DELIVERY_REQUIRES_DISPATCH');
+    }
+  }
+
+  const machine = new OrderStateMachine(order.status);
+  if (!machine.canTransition(targetStatus)) {
+    throw new Error(`Invalid order transition: ${machine.state} -> ${targetStatus}`);
+  }
+
+  const timestamp = new Date();
+  const update = { status: targetStatus, statusChangedBy: uid, updatedAt: timestamp };
+  if (targetStatus === ORDER_STATES.DISPUTED) {
+    update.disputeInfo = {
+      reason: note || 'Sijapata mzigo',
+      evidenceUrls: [],
+      raisedAt: timestamp,
+      resolved: false,
+      raisedBy: uid,
+    };
+  }
+  await orderRef.update(update);
+
+  // Keep the transactions mirror in sync when it exists; the order document is
+  // authoritative and a missing mirror must never fail the transition.
+  try {
+    const txRef = store.collection('transactions').doc(orderId);
+    const txDoc = await txRef.get();
+    if (txDoc.exists) await txRef.update({ status: targetStatus, updatedAt: timestamp });
+  } catch (e) {
+    console.error('[ESCROW] transition mirror sync failed:', e.message);
+  }
+
   return { success: true, status: targetStatus };
 }
 
@@ -152,7 +248,7 @@ async function dispatchOrder({ orderId, sellerId, courierDetails, db }) {
     flowStage: 'in_transit',
     dispatchProof,
     dispatchedAt: new Date(),
-    autoReleaseDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+    autoReleaseDeadline: autoReleaseDeadlineFromNow(),
   });
 
   return { success: true };
@@ -166,6 +262,15 @@ async function releaseEscrow({ orderId, sellerId, idempotencyKey, db }) {
   const tx = txDoc.data();
   const amount = tx.amount || 0;
   const commission = tx.commission || 0;
+
+  // Only the seller the funds belong to may release them. The route already
+  // authenticates the caller, but the service is also reachable from dispute
+  // resolution and legacy adapters, so ownership is enforced here instead of
+  // trusting every caller to have done it. Missing sellerId is tolerated for
+  // pre-V3 rows that predate the field.
+  if (tx.sellerId && String(tx.sellerId) !== String(sellerId)) {
+    throw new Error('FORBIDDEN_SELLER');
+  }
 
   // Use CommerceStore for the atomic balance transfer
   const result = await commerceStore.settleEscrowToSeller({
@@ -321,6 +426,7 @@ async function listTransactionsBySeller(sellerId, limit = 300, db) {
 module.exports = {
   setShippingQuote,
   updateLogisticsStatus,
+  transitionOrder,
   confirmDelivery,
   dispatchOrder,
   releaseEscrow,

@@ -172,7 +172,7 @@ async function sendEmailOtp(req, res) {
       expiresInMinutes: OTP_TTL_SECONDS / 60,
       recipientEmail: cleanEmail,
     });
-    const sent = await sendMail(cleanEmail, subject, html);
+    const sent = await sendMail(cleanEmail, subject, html, null, { action: otpEmail.action, context: otpEmail.context });
     authAudit(req, sent ? 'otp_requested' : 'otp_request_failed', { entityId: `email:${maskEmail(cleanEmail)}` });
     if (!sent) {
       // The code never arrived (every channel failed, or the address bounced /
@@ -690,12 +690,12 @@ async function resetPasswordByPhone(req, res) {
         const mailbox = record.email && !record.email.startsWith('phone_') ? record.email : null;
         if (mailbox) {
           const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
-          const { subject, html } = buildPasswordChangedEmail({
+          const { subject, html, action, context } = buildPasswordChangedEmail({
             lang,
             when: new Date().toISOString(),
           });
           const { enqueueNotification } = require('../../services/notification-worker');
-          await enqueueNotification('email', { to: mailbox, subject, html }, {
+          await enqueueNotification('email', { to: mailbox, subject, html, action, context: { ...context, recipientEmail: mailbox } }, {
             idempotencyKey: `pwd-changed:${uid}:${Date.now()}`,
           });
         }

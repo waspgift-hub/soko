@@ -187,7 +187,7 @@ async function expireStalePayments({ now = new Date() } = {}) {
         if (payment) {
           let providerStatus = null;
           try {
-            const provider = getProvider(payment.provider);
+            const provider = getProvider(payment.provider || 'azampay');
             providerStatus = (await provider.queryCollectionStatus(fresh.orderNumber)).status;
           } catch (e) {
             console.warn('[FINANCE] provider re-verify failed', fresh.orderNumber, e.message);
@@ -296,6 +296,11 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
         // Surfaced separately so a disputed backlog is visible instead of
         // being indistinguishable from a completed release.
         summary.blocked += 1;
+      } else if (result && result.status === 'BLOCKED') {
+        // A delivery/fraud safeguard failed. Counted apart from `skipped` so a
+        // blocked backlog is visible in the sweep summary.
+        summary.blocked += 1;
+        console.warn('[FINANCE] autoRelease blocked', order.id, result.missingSafeguards);
       } else {
         summary.skipped += 1;
       }
@@ -379,7 +384,7 @@ async function runReconciliationSweep({ now = new Date() } = {}) {
   const start = new Date(now.getTime() - config.finance.reconciliationWindowMs);
   try {
     const row = await runReconciliation({
-      provider: 'clickpesa',
+      provider: 'azampay',
       periodStart: start.toISOString(),
       periodEnd: now.toISOString(),
       skipWhenQuiet: true,

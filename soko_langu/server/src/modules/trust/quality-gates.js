@@ -1,7 +1,9 @@
 const { getStore } = require('../../config/database');
 
 const GATE_THRESHOLDS = {
-  highRiskSellerScore: 30,      // reliabilityScore below this => high risk (0-1 scale)
+  // `reliabilityScore` is persisted as a 0..1 decimal (seller-reliability.js
+  // stores `rounded / 100`), so the floor is a fraction, not a 0-100 score.
+  highRiskSellerScore: 0.3,     // reliabilityScore below this => high risk (0-1 scale)
   maxNewSellerProducts: 5,      // unverified sellers limited product count
   listingPhotoMin: 2,           // high-value listings require N photos
   highValueLimit: 500000,       // TZS above which stricter gates apply

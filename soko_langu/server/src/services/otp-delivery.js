@@ -1,19 +1,25 @@
 // OTP delivery chain for phone numbers.
 //
-// Channel order is env-driven (OTP_CHANNEL_ORDER, default "push,sms") so a
-// deployment can prioritise cheap channels without code changes:
+// Channel order is env-driven (OTP_CHANNEL_ORDER, default "push,whatsapp,sms")
+// so a deployment can prioritise cheap channels without code changes:
 //   1. push — OneSignal to the Firebase UID (only when the request is
 //             authenticated; pre-auth send-otp has no uid to target)
-//   2. sms  — Meseji → Notify Africa fallback (always available)
+//   2. whatsapp — WhatsApp Cloud API (replaces SMS when configured)
+//   3. sms  — Meseji → Notify Africa fallback (always available)
+//
+// SMS is the final fallback in the default order because push needs an
+// authenticated device and WhatsApp needs a WhatsApp-capable number. Without
+// SMS, a user with neither received no code at all.
 //
 // The OTP ends up delivered exactly once per request: if a higher channel
 // accepts it, lower channels are not attempted.
 const pushService = require('./push-service');
 const { sendSms } = require('./sms-service');
+const { sendWhatsApp } = require('./whatsapp-service');
 
 function channelsFromEnv() {
   const raw = process.env.OTP_CHANNEL_ORDER;
-  if (!raw) return ['push', 'sms'];
+  if (!raw) return ['push', 'whatsapp', 'sms'];
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
@@ -29,8 +35,8 @@ async function deliverPhoneOtp({ phone, message, code, userId, langCode = 'sw' }
       if (!userId) continue;
       attempts.push('push');
       // The push is a "code is ready" ping ONLY: the secret itself travels by
-      // SMS, never inside a third-party push payload (retention + on-device
-      // notification logs would both keep a copy of the credential).
+      // WhatsApp/SMS, never inside a third-party push payload (retention +
+      // on-device notification logs would both keep a copy of the credential).
       const result = await pushService.sendPush(
         userId,
         langCode === 'en' ? 'Your Soko Vibe code' : 'Msimbo wako wa Soko Vibe',
@@ -39,6 +45,11 @@ async function deliverPhoneOtp({ phone, message, code, userId, langCode = 'sw' }
       );
       if (result.success) return { delivered: true, channel: 'push', attempts };
       if (result.error === 'CONFIG_MISSING') continue;
+    } else if (channel === 'whatsapp') {
+      attempts.push('whatsapp');
+      if (await sendWhatsApp(phone, message)) {
+        return { delivered: true, channel: 'whatsapp', attempts };
+      }
     } else if (channel === 'sms') {
       attempts.push('sms');
       if (await sendSms(phone, message)) {

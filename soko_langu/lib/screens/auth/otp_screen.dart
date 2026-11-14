@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../extensions/context_tr.dart';
 import '../../models/otp_verification_models.dart';
-import '../../services/otp_verification_controller.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../screens/auth/otp_verification_screen.dart';
 

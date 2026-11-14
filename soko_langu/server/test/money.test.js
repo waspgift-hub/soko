@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { isFlashSaleStillActive, resolveEffectivePrice } = require('../money');
-const { calcGatewayFee } = require('../clickpesa');
+const { calcGatewayFee } = require('../azampay');
 
 // ---------------------------------------------------------------------------
 // Flash sale price resolution

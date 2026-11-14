@@ -71,45 +71,16 @@ ${rows.map((r, i) => `        <tr>
     ? `<p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#6b7280">${esc(footnote)}</p>`
     : '';
 
-  return `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>${esc(title)}</title>
-</head>
-<body style="margin:0;padding:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${esc(preheader)}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f8">
-    <tr>
-      <td align="center" style="padding:32px 16px">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
-          <tr>
-            <td style="padding:0 4px 16px;font-size:18px;font-weight:700;color:${BRAND};letter-spacing:-0.2px">Soko Vibe</td>
-          </tr>
-          <tr>
-            <td style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:32px 28px">
+  // Body-only content: the outer master layout (mailer.wrapEmailHtml) provides
+  // the green header banner, logo and footer. Returning a full document here
+  // would double-wrap the email.
+  return `
       <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:600;color:#111827">${esc(title)}</h1>
       ${paragraphsHtml}
       ${rowsHtml}
       ${ctaHtml}
       ${footnoteHtml}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 4px 0;font-size:12px;line-height:1.6;color:#6b7280">
-              <p style="margin:0 0 6px">${esc(t.reason)}</p>
-              <p style="margin:0 0 6px"><a href="${esc(absoluteUrl(settingsPath))}" style="color:#6b7280;text-decoration:underline">${esc(t.manage)}</a></p>
-              <p style="margin:0">&copy; ${year} Soko Vibe. ${esc(t.rights)}</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+    `;
 }
 
 module.exports = { renderEmail, esc };

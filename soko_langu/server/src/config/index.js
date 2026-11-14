@@ -43,11 +43,14 @@ const config = {
     allowedIps: process.env.AZAMPAY_ALLOWED_IPS?.split(',').map(s => s.trim()) || [],
     // The ONE AzamPay collection callback URL. Every payment-initiation path
     // must use this value — providers must never receive a guessed/derived URL.
-    // Kept separate from APP_URL: the webhook host is not the canonical app URL.
+    // Derived from APP_URL when the dedicated variable is unset, because the
+    // live Render service has APP_URL but not AZAMPAY_COLLECTION_WEBHOOK_URL.
     collectionWebhookUrl: process.env.AZAMPAY_COLLECTION_WEBHOOK_URL ||
-      (process.env.NODE_ENV === 'production'
-        ? (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/v1/payments/webhook/azampay` : '')
-        : 'http://localhost:3000/api/v1/payments/webhook/azampay'),
+      (process.env.APP_URL
+        ? `${process.env.APP_URL.replace(/\/$/, '')}/api/v1/payments/webhook/azampay`
+        : (process.env.NODE_ENV === 'production'
+          ? ''
+          : 'http://localhost:3000/api/v1/payments/webhook/azampay')),
   },
   
   // SMS
@@ -69,7 +72,7 @@ const config = {
   },
 
   // WhatsApp Business Cloud API (OTP template delivery). Missing token/phone
-  // number id is a valid no-op — the delivery chain then falls back to SMS.
+  // number id is a valid no-op â€” the delivery chain then falls back to SMS.
   // verifyToken/appSecret back the inbound webhook: verifyToken is the value
   // pasted into the Meta dashboard, appSecret validates X-Hub-Signature-256.
   whatsapp: {
@@ -124,9 +127,19 @@ const config = {
   
   // Business
   business: {
-    // Product-owner rule: Soko Vibe charges NO platform fee; only ClickPesa's
-    // own charges apply (collected/deducted by ClickPesa outside our ledger).
-    platformCommissionPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT) || 0,
+    // Platform commission as a fraction of the product price. The approved
+    // business default is 3.5% (0.035). An explicit PLATFORM_COMMISSION_PERCENT
+    // of 0 is honoured so the owner can still run a zero-fee promotion; the
+    // admin panel setting (`paymentsAndCurrency.platformCommissionPct`) takes
+    // precedence over this env default when a settings document exists.
+    // Shipping fees are not part of the commission base.
+    platformCommissionPercent: (() => {
+      const raw = process.env.PLATFORM_COMMISSION_PERCENT;
+      if (raw === undefined || raw === '') return 0.035;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) return 0.035;
+      return n > 1 ? n / 100 : n;
+    })(),
     escrowAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
     maxDailySaleAmount: parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000,
   },

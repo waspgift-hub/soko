@@ -29,39 +29,6 @@ try {
 
 const shippingValidation = require('../shipping/shipping-validation');
 const MAX_DAILY_SALE_AMOUNT = config.business.maxDailySaleAmount;
-const { getSettings, commissionPercent } = require('../admin/settings-service');
-
-const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
-
-/**
- * Platform commission as a fraction of the product price (0.035 = 3.5%).
- *
- * Precedence:
- *  1. `paymentsAndCurrency.platformCommissionPct` from admin settings — what the
- *     owner sets in the admin panel, so a rate change takes effect on the next
- *     order instead of the next deploy. Without this the panel field was inert:
- *     it saved to Firestore but no payment path ever read it.
- *  2. `PLATFORM_COMMISSION_PERCENT` env var.
- *  3. 0 — Soko Vibe charges no platform fee by default.
- *
- * Resolved per request rather than captured at module load so a panel change
- * applies immediately. settings-service caches for 300s, which bounds the
- * Firestore read cost to one query per five minutes.
- */
-async function commissionRate() {
-  try {
-    const s = await getSettings();
-    const v = commissionPercent(s);
-    if (v > 0) return v;
-    // A stored 0 is a legitimate "free" setting, so only fall through when the
-    // document is missing the field entirely.
-    if (s?.paymentsAndCurrency?.platformCommissionPct !== undefined) return 0;
-  } catch (_) {
-    // Firestore unavailable: fall through to the env/default chain.
-  }
-  const env = Number(PLATFORM_COMMISSION_PERCENT);
-  return Number.isFinite(env) && env >= 0 ? env : 0;
-}
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -72,8 +39,9 @@ function sanitize(str) {
   return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
 }
 
-// v2 auto-release window: 48h after dispatch (matches /cron/auto-release).
-const AUTO_RELEASE_MS = 48 * 60 * 60 * 1000;
+// Auto-release is owned by `finance.inspectionAutoRelease` and the canonical
+// `autoRelease()` service (ESCROW_AUTO_RELEASE_DAYS, default 14). Do not add a
+// second window here: the old 48h constant contradicted the approved policy.
 // Historical spellings of "funds held" produced by the engine over time.
 const ESCROW_STATES = ['pending', 'quoted', 'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
 const DISPATCH_STATES = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];

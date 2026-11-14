@@ -13,9 +13,15 @@ async function handleNotificationJob(job) {
   const data = (job && job.data) || {};
   if (job.name === 'email') {
     const { sendMail } = require('./mailer');
-    const ok = await sendMail(data.to, data.subject, data.html);
+    const ok = await sendMail(data.to, data.subject, data.html, null, { action: data.action || 'generic', context: data.context || {} });
     if (!ok) throw new Error('NOTIFICATION_EMAIL_FAILED');
     return { channel: 'email' };
+  }
+  if (job.name === 'whatsapp') {
+    const { sendWhatsApp } = require('./whatsapp-service');
+    const ok = await sendWhatsApp(data.to, data.message);
+    if (!ok) throw new Error('NOTIFICATION_WHATSAPP_FAILED');
+    return { channel: 'whatsapp' };
   }
   if (job.name === 'sms') {
     const { sendSms } = require('./sms-service');
