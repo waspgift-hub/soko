@@ -25,6 +25,7 @@ const paymentService = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
+const { evaluateOrderRisk, raiseFraudAlerts } = require('../trust/order-risk');
 const { resolveEffectivePrice } = require('../../../money');
 const { normalizePaymentMethod, assertCanonicalPaymentMethod } = require('../../utils/payment-method');
 const { LEGACY_STATUS } = require('../legacy-compat/legacy-status');
@@ -225,14 +226,23 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
 
   const { commission, totalAmount } = computeSellerParity(BigInt(productPrice), 0n);
 
+  // Same creation-time gate as the app checkout: a fake self-purchase must not
+  // become an order, and velocity is recorded for the admin fraud panel.
+  const now = new Date();
+  const risk = await evaluateOrderRisk(store, { buyerId: req.user.id, sellerId, now });
+  if (risk.blocked) throw httpError(403, 'SELF_DEALING_BLOCKED');
+
+  const orderNumber = generateOrderNumber();
   const order = await store.order.create({
     data: {
-      orderNumber: generateOrderNumber(),
+      orderNumber,
       buyerId: req.user.id,
       sellerId,
       // Born needing a shipping quote: the seller sets cost, the NORMAL quote
       // auto-approves, then and only then can the buyer fund the escrow.
       status: ORDER_STATES.PENDING_SHIPPING_FEE,
+      riskSignals: risk.signals,
+      riskScore: risk.score,
       productSnapshot: {
         productId: body.productId || null,
         name: body.productName || 'Mall',
@@ -257,9 +267,21 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
       totalAmount,
       currency: 'TZS',
       shippingMethod: body.deliveryType || 'local',
-      placedAt: new Date(),
+      placedAt: now,
     },
   });
+
+  if (risk.signals.length) {
+    await raiseFraudAlerts(store, {
+      ...risk,
+      buyerId: req.user.id,
+      sellerId,
+      productId: body.productId || null,
+      orderId: order.id,
+      orderNumber,
+      now,
+    });
+  }
 
   // App-parity mirror: legacy Flutter screens read Firestore orders/transactions.
   if (body.buyerPhone || body.sellerId) {

@@ -7,6 +7,7 @@ const { refundOnCancel, isRefundableEscrowState } = require('../refunds/refund-s
 const { submitQuote, approveQuote } = require('../shipping/shipping-quote-service');
 const { fileDispute } = require('../disputes/dispute-service');
 const { evaluateAutoRelease } = require('../disputes/auto-release-service');
+const { evaluateOrderRisk, raiseFraudAlerts } = require('../trust/order-risk');
 const {
   releaseEscrowAndSettle,
   RELEASE_REASON,
@@ -83,12 +84,20 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     const lineTotal = product.price * BigInt(quantity);
     const { commission, totalAmount } = computeSellerParity(lineTotal, 0n);
 
+    // Self-dealing and trading velocity are checked before the order exists, so
+    // a fake purchase never reaches escrow, reviews or settlement.
+    const now = new Date();
+    const risk = await evaluateOrderRisk(tx, { buyerId, sellerId: product.sellerId, now });
+    if (risk.blocked) throw httpError(403, 'SELF_DEALING_BLOCKED');
+
     const order = await tx.order.create({
       data: {
         orderNumber: generateOrderNumber(),
         buyerId,
         sellerId: product.sellerId,
         status: ORDER_STATES.PENDING_SHIPPING_FEE,
+        riskSignals: risk.signals,
+        riskScore: risk.score,
         productSnapshot: {
           productId: product.id,
           title: product.title,
@@ -113,7 +122,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
         totalAmount,
         currency: product.currency,
         paidAt: null,
-        placedAt: new Date(),
+        placedAt: now,
       },
     });
 
@@ -141,6 +150,20 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
       oldState: null,
       newState: { status: ORDER_STATES.PENDING_SHIPPING_FEE },
     });
+
+    // Alerts are best-effort and live in the same commit as the order so the
+    // admin panel cannot see the order without the reason it was flagged.
+    if (risk.signals.length) {
+      await raiseFraudAlerts(tx, {
+        ...risk,
+        buyerId,
+        sellerId: product.sellerId,
+        productId: product.id,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        now,
+      });
+    }
 
     return tx.order.findUnique({ where: { id: order.id } });
   });
