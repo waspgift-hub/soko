@@ -81,3 +81,41 @@ test('follower counts are server-owned', { skip }, async () => {
   const db = env.authenticatedContext('u1').firestore();
   await assertFails(db.collection('userPublic').doc('u1').update({ followerCount: 99 }));
 });
+
+// A verified-purchase badge is only meaningful if the server proved the order,
+// so a client that asserts it is either forged or misreading its own data. Both
+// cases must be denied, while an ordinary review must still land.
+test('a client cannot self-declare a verified purchase', { skip }, async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await c.firestore().collection('products').doc('p1').set({ sellerId: 'seller-1' });
+  });
+  const db = env.authenticatedContext('buyer-1').firestore();
+  await assertFails(
+    db.collection('reviews').add({
+      productId: 'p1',
+      sellerId: 'seller-1',
+      userId: 'buyer-1',
+      rating: 5,
+      comment: 'Nzuri sana',
+      isVerifiedPurchase: true,
+    }),
+  );
+});
+
+test('an unverified review is still accepted', { skip }, async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await c.firestore().collection('products').doc('p2').set({ sellerId: 'seller-2' });
+  });
+  const db = env.authenticatedContext('buyer-2').firestore();
+  const base = {
+    productId: 'p2',
+    sellerId: 'seller-2',
+    userId: 'buyer-2',
+    rating: 4,
+    comment: 'Sawa',
+  };
+  await assertSucceeds(db.collection('reviews').add(base));
+  await assertSucceeds(
+    db.collection('reviews').add({ ...base, isVerifiedPurchase: false }),
+  );
+});

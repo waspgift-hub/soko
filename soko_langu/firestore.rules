@@ -483,7 +483,13 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/products/$(request.resource.data.productId))
         && request.resource.data.get('rating', 5) is number
         && request.resource.data.get('rating', 5) >= 1
-        && request.resource.data.get('rating', 5) <= 5;
+        && request.resource.data.get('rating', 5) <= 5
+        // The verified-purchase badge is an attestation only the server can
+        // make. A client that writes `true` is claiming an order match it was
+        // never asked to prove, so the create is denied rather than downgraded
+        // — silently flipping the flag would hide the attempt. The API path
+        // (admin SDK) bypasses rules and sets it from the settled order.
+        && request.resource.data.get('isVerifiedPurchase', false) == false;
       allow update: if isSignedIn() && notSuspended()
         && (
           // any signed-in user can like/unlike any review (unlimited)
