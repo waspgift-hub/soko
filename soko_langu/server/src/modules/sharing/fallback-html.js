@@ -57,6 +57,10 @@ ${og}
 .badge{display:inline-flex;align-items:center;gap:6px;background:rgba(124,77,255,.15);color:#b9a6ff;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600}
 .notice{background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.2);color:#ffd54f;padding:12px;border-radius:12px;font-size:13px;margin-top:12px}
 .footer{text-align:center;padding:20px;color:#8a87a8;font-size:12px}
+.store-cta{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+.store-cta:empty{display:none}
+.store-btn{flex:1;min-width:140px;padding:12px 16px;border-radius:14px;font-weight:700;text-align:center;text-decoration:none;font-size:13px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff}
+.store-btn:hover{background:rgba(255,255,255,.14)}
 </style>
 <script>
 function openApp(url){
@@ -66,6 +70,22 @@ function openApp(url){
     // If still here, show store CTA (browser didn't leave)
   }, 1500);
 }
+// Resolve store download links from the public release payload (if published).
+(function () {
+  try {
+    fetch('/api/v1/admin/config/app-version').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !j.data || !j.data.published) return;
+      var d = j.data.androidDownloadUrl, i = j.data.iosDownloadUrl;
+      var cta = document.querySelectorAll('.store-cta');
+      cta.forEach(function (el) {
+        var html = '';
+        if (d) html += '<a class="store-btn" href="' + d.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">Pata kwenye Google Play</a>';
+        if (i) html += '<a class="store-btn" href="' + i.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">Pata kwenye App Store</a>';
+        if (html) el.innerHTML = html;
+      });
+    }).catch(function () {});
+  } catch (_) {}
+})();
 </script>
 </head>
 <body>
@@ -113,6 +133,7 @@ async function productFallbackHtml(product) {
           <a class="btn btn-primary" href="${escapeHtml(deepLink)}" onclick="openApp('${escapeHtml(deepLink)}'); return false;">Fungua kwenye Soko Vibe</a>
           <a class="btn btn-outline" href="/support">Jinsi ya kupata app</a>
         </div>
+        <div class="store-cta"></div>
         <div class="notice">Huu ni ukurasa wa wavuti wa bidhaa. Google Play na App Store bado hazijachapisha app — angalia /support kwa jinsi ya kupata toleo rasmi la majaribio.</div>
       </div>
     </div>
@@ -145,6 +166,7 @@ async function sellerFallbackHtml(seller) {
           <a class="btn btn-primary" href="${escapeHtml(canonical)}">Fungua kwenye Soko Vibe</a>
           <a class="btn btn-outline" href="/support">Jinsi ya kupata app</a>
         </div>
+        <div class="store-cta" style="justify-content:center"></div>
       </div>
     </div>
   `;
