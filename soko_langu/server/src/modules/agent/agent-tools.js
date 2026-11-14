@@ -317,9 +317,19 @@ async function prepareWithdrawalAgent(args, ctx) {
   const amount = Number(args.amount);
   if (!Number.isFinite(amount) || amount <= 0) return { error: 'A valid positive amount is required.' };
   const phoneNumber = args.phoneNumber || null;
+  // Identity is the withdrawal gate; surface it while preparing instead of
+  // letting the seller approve an action that the service will refuse.
+  const walletService = require('../wallet/wallet-service');
+  try {
+    await walletService.assertWithdrawalKyc(ctx.sellerProfileId);
+  } catch (e) {
+    if (e && e.message === 'KYC_REQUIRED') {
+      return { error: 'KYC required. Complete identity verification before withdrawing.' };
+    }
+    throw e;
+  }
   // Validation happens in requestWithdrawal (balance, limits, daily cap). We only
   // prepare here; the actual funds move only after explicit approval.
-  const walletService = require('../wallet/wallet-service');
   const wallet = await walletService.getWallet(ctx.sellerProfileId);
   const available = Number(wallet.availableBalance || 0);
   if (amount > available) {
