@@ -24,7 +24,7 @@ const { optionalAuth } = require('../../middleware/auth');
 const paymentService = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
-const { computeSellerParity } = require('../../utils/commission-parity');
+const { computeSellerParity, resolvePlatformRate } = require('../../utils/commission-parity');
 const { evaluateOrderRisk, raiseFraudAlerts } = require('../trust/order-risk');
 const { resolveEffectivePrice } = require('../../../money');
 const { normalizePaymentMethod, assertCanonicalPaymentMethod } = require('../../utils/payment-method');
@@ -224,7 +224,11 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
   const sellerId = await ensureSellerProfile(body.sellerId, body.sellerName, body.sellerPhone);
   if (!sellerId) throw httpError(404, 'SELLER_NOT_FOUND');
 
-  const { commission, totalAmount } = computeSellerParity(BigInt(productPrice), 0n);
+  const { commission, totalAmount } = computeSellerParity(
+    BigInt(productPrice),
+    0n,
+    await resolvePlatformRate(),
+  );
 
   // Same creation-time gate as the app checkout: a fake self-purchase must not
   // become an order, and velocity is recorded for the admin fraud panel.

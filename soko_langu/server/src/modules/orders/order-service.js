@@ -1,7 +1,7 @@
 const { getStore } = require('../../config/database');
 const { requireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
-const { computeSellerParity } = require('../../utils/commission-parity');
+const { computeSellerParity, resolvePlatformRate } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { refundOnCancel, isRefundableEscrowState } = require('../refunds/refund-service');
 const { submitQuote, approveQuote } = require('../shipping/shipping-quote-service');
@@ -64,6 +64,9 @@ async function audit(tx, data) {
  */
 async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
   const store = getStore();
+  // The admin panel's saved rate wins over the env default; resolved outside the
+  // transaction so the Firestore read never widens the write commit.
+  const commissionRate = await resolvePlatformRate();
 
   return store.$transaction(async (tx) => {
     const product = await tx.product.findUnique({ where: { id: productId } });
@@ -82,7 +85,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     // on shipping, and is added on top of what the buyer pays. Storing the unit
     // price here made a multi-item order under-charge and under-commission.
     const lineTotal = product.price * BigInt(quantity);
-    const { commission, totalAmount } = computeSellerParity(lineTotal, 0n);
+    const { commission, totalAmount } = computeSellerParity(lineTotal, 0n, commissionRate);
 
     // Self-dealing and trading velocity are checked before the order exists, so
     // a fake purchase never reaches escrow, reviews or settlement.

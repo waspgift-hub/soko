@@ -19,6 +19,43 @@ function platformRate() {
   return normalizeRate(config.business.platformCommissionPercent);
 }
 
+// The admin panel field is the owner's live control. Cache the resolved value
+// briefly so a checkout does not pay a Firestore read every time, while a panel
+// change still applies within a minute instead of needing a deploy.
+const RATE_CACHE_TTL_MS = 60 * 1000;
+let rateCache = { at: 0, rate: null };
+
+/**
+ * Effective commission rate, in precedence order:
+ *   1. `paymentsAndCurrency.platformCommissionPct` from the admin settings
+ *      document, when the owner has actually saved one.
+ *   2. `PLATFORM_COMMISSION_PERCENT` env var (default 3.5%).
+ *   3. 0, only when neither source yields a usable value.
+ *
+ * A stored 0 is honoured (a real zero-fee promotion); a missing document or a
+ * failed Firestore read falls through to the env default so an outage cannot
+ * silently change what buyers are charged.
+ */
+async function resolvePlatformRate() {
+  if (rateCache.rate != null && Date.now() - rateCache.at < RATE_CACHE_TTL_MS) {
+    return rateCache.rate;
+  }
+  let rate = null;
+  try {
+    // Required lazily: settings-service reaches commerce-store, and loading that
+    // graph at module-init would make every pure money helper depend on Firebase.
+    const { getStoredSettings, commissionPercent } = require('../modules/admin/settings-service');
+    const stored = await getStoredSettings();
+    const pct = stored?.paymentsAndCurrency?.platformCommissionPct;
+    if (pct !== undefined) rate = commissionPercent(stored);
+  } catch (_) {
+    // Firestore unavailable: fall through to the env/default chain.
+  }
+  if (rate == null) rate = platformRate();
+  rateCache = { at: Date.now(), rate };
+  return rate;
+}
+
 function calcCommission(productPrice, rate = platformRate()) {
   return Math.round(Number(productPrice) * normalizeRate(rate));
 }
@@ -35,4 +72,4 @@ function computeSellerParity(productPrice, shippingFee = 0n, rate = platformRate
   };
 }
 
-module.exports = { calcCommission, computeSellerParity };
+module.exports = { calcCommission, computeSellerParity, platformRate, resolvePlatformRate };

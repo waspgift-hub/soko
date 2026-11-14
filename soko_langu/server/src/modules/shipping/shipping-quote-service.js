@@ -2,12 +2,15 @@ const { getStore } = require('../../config/database');
 const { requireLock, releaseLock } = require('../../config/redis');
 const { validateShippingQuote } = require('./shipping-validation');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
-const { computeSellerParity } = require('../../utils/commission-parity');
+const { computeSellerParity, resolvePlatformRate } = require('../../utils/commission-parity');
 
 // Seller submits a shipping quote for an order.
 // Runs platform validation to decide NORMAL / REVIEW_REQUIRED / BLOCKED.
 async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, shippingAddress, sellerRegion }) {
   const store = getStore();
+  // Resolve before taking the lock so the settings read never extends the
+  // critical section; the rate cache makes this a no-op most calls.
+  const commissionRate = await resolvePlatformRate();
   const lock = await requireLock(`shipping:${orderId}`, 60);
 
   try {
@@ -75,7 +78,7 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
       // item + shipping. Computed before the update so the NORMAL auto-approval
       // path locks exactly the same totals as a manual approval.
       const totals = autoApproved
-        ? computeSellerParity(order.productPrice, BigInt(Math.round(amount)))
+        ? computeSellerParity(order.productPrice, BigInt(Math.round(amount)), commissionRate)
         : null;
 
       // Lock the server-computed totals the moment a NORMAL quote lands so the
@@ -120,6 +123,7 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
 // actor defaults to 'admin' for the admin route; the buyer route overrides it.
 async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
   const store = getStore();
+  const commissionRate = await resolvePlatformRate();
   const lock = await requireLock(`shipping:${orderId}`, 60);
 
   try {
@@ -141,6 +145,7 @@ async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
       const { commission: platformCommission, totalAmount } = computeSellerParity(
         order.productPrice,
         order.shippingFee,
+        commissionRate,
       );
 
       const updatedOrder = await tx.order.update({

@@ -16,6 +16,7 @@ const { publicPayload, normalizeRelease } = require('../config/app-release');
 const { buildFacts, maybePolish } = require('./insights');
 const cache = require('../../../cache');
 const productStore = require('../products/product-store');
+const { resolvePlatformRate } = require('../../utils/commission-parity');
 const crypto = require('crypto');
 
 // A write to a product invalidates its detail entry by id and slug plus every
@@ -52,10 +53,12 @@ router.get('/config/app-version', async (req, res) => {
 
 router.get('/config/commission', async (req, res) => {
   try {
-    const s = (await settingsService.getSettings()) || {};
+    // Same resolver the money paths use, so the rate the app shows is exactly
+    // the rate checkout will charge (panel value first, env fallback).
+    const platformCommissionPct = await resolvePlatformRate();
     res.json({
       success: true,
-      data: { platformCommissionPct: settingsService.commissionPercent(s) },
+      data: { platformCommissionPct },
     });
   } catch (e) {
     // Must not block the client. It falls back to charging 0, which is the same

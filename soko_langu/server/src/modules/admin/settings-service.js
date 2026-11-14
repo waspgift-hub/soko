@@ -180,6 +180,14 @@ async function getSettings(forceReload = false) {
   return fromFs || (MEMORY = cloneDefaults());
 }
 
+// The stored document only, without the defaults fallback. Money paths use this
+// to tell "the owner configured a rate" apart from "Firestore is unavailable",
+// so an unset panel field keeps deferring to the env default instead of
+// silently overwriting it with the built-in 3.5%.
+async function getStoredSettings() {
+  return getFromFirestore();
+}
+
 // Masked read for the panel renderer (secrets never leave the server).
 function getSettingsForRender(settings) { return maskAll(settings || cloneDefaults()); }
 async function getSettingsMasked() { return getSettingsForRender(await getSettings()); }
@@ -224,6 +232,7 @@ function commissionPercent(settings) {
 
 module.exports = {
   getSettings,
+  getStoredSettings,
   saveSettings,
   getSettingsMasked,
   commissionPercent,
