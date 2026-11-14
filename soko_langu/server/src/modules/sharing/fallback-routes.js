@@ -155,6 +155,14 @@ router.get('/category/:name', (req, res) => {
   );
 });
 
+// Aliases: the mobile app and older shares use shorter spellings; fold them onto
+// the canonical fallback routes so every deep link resolves to a real page.
+router.get('/u/:username', (req, res) => res.redirect(302, `/profile/${encodeURIComponent(req.params.username)}`));
+router.get('/store/:username', (req, res) => res.redirect(302, `/seller/${encodeURIComponent(req.params.username)}`));
+router.get('/shop/:username', (req, res) => res.redirect(302, `/seller/${encodeURIComponent(req.params.username)}`));
+router.get('/c/:name', (req, res) => res.redirect(302, `/category/${encodeURIComponent(req.params.name)}`));
+router.get(['/orders/:id', '/receipt/:id'], (req, res) => res.redirect(302, `/order/${encodeURIComponent(req.params.id)}`));
+
 // Search fallback
 router.get('/search', (req, res) => {
   const q = (req.query.q || req.query.search || '').toString().slice(0, 80);
