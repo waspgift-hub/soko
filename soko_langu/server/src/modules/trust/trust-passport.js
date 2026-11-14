@@ -31,7 +31,7 @@ async function getTrustPassport({ sellerId }) {
     store.order.count({ where: { sellerId, status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
     store.order.count({ where: { sellerId, dispatchedAt: { not: null } } }),
     store.dispute.count({ where: { order: { sellerId }, status: 'open' } }),
-    store.order.count({ where: { sellerId, status: 'completed' } }), // placeholder for reviews
+    store.order.count({ where: { sellerId, status: 'completed' } }), // completed orders (proxy for reviews; no reviews table join here)
   ]);
 
   const fulfillmentRate = totalOrders > 0 ? completedOrders / totalOrders : 0;
