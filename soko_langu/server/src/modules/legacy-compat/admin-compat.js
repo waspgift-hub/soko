@@ -4,7 +4,7 @@
 // browser admin panel keeps working with zero client changes. Admin gating
 // mirrors the old semantics: x-admin-secret OR Firebase admin (isAdmin flag).
 const express = require('express');
-const { requireAdmin } = require('./auth-helpers');
+const { requireAdmin, requireUser } = require('./auth-helpers');
 const { sendOneSignalNotification } = require('./notify');
 const OrderService = require('../orders/order-service');
 
@@ -1173,6 +1173,60 @@ publicRouter.get('/fraud/alerts', async (req, res) => {
     alerts = alerts.slice(0, limit);
     res.json({ alerts });
   } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Client-raised fraud alerts (e.g. duplicate listing). Authenticated users may
+// report; the server admin SDK owns the collection and applies a 1h dedupe
+// window per seller+type so a single report cannot spam the panel.
+publicRouter.post('/fraud/alerts', async (req, res) => {
+  try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
+    const body = req.body || {};
+    const sellerId = String(body.sellerId || '').trim();
+    const type = String(body.type || '').trim();
+    const severity = String(body.severity || 'medium').trim();
+    const description = String(body.description || '').trim();
+    const sellerName = String(body.sellerName || '').trim();
+    const productId = body.productId ? String(body.productId).trim() : null;
+    if (!sellerId || !type || !description) {
+      return res.status(400).json({ error: 'sellerId, type and description are required' });
+    }
+    if (!['low', 'medium', 'high', 'critical'].includes(severity)) {
+      return res.status(400).json({ error: 'invalid severity' });
+    }
+    // 1h dedupe window per seller+type
+    let recent = [];
+    try {
+      recent = await commerceStore.listDocuments('fraud_alerts', {
+        where: [{ field: 'sellerId', op: '==', value: sellerId }],
+        orderBy: 'createdAt',
+        direction: 'desc',
+        limit: 20,
+      });
+    } catch (_) { recent = []; }
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const dup = recent.find((a) => a.type === type && new Date(a.createdAt || 0).getTime() > oneHourAgo);
+    if (dup) {
+      return res.status(200).json({ success: true, deduped: true, id: dup.id });
+    }
+    const id = await commerceStore.addDocument('fraud_alerts', {
+      sellerId,
+      sellerName: sellerName || null,
+      type,
+      severity,
+      description,
+      productId: productId || null,
+      reportedBy: auth.uid,
+      resolved: false,
+      createdAt: new Date(),
+      detectedAt: new Date(),
+    });
+    res.status(201).json({ success: true, id });
+  } catch (e) {
+    console.error('[fraud-alerts] create failed:', e?.message || e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
