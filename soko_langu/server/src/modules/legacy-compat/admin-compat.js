@@ -17,8 +17,8 @@ const {
   clickpesaQueryPayouts,
 } = require('../../../clickpesa');
 
-// Product-owner rule: Soko Vibe has no platform fee (ClickPesa's own charges
-// apply provider-side); kept config-driven so env can still steer it.
+// Platform commission (Terms 8.2: 3.5% buyer-pays-top). Config-driven so env can
+// still steer it without a deploy.
 const config = require('../../config');
 const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
 const AD_REVENUE_PER_VIEW = 15;            // TZS per ad view (estimate only)

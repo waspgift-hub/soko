@@ -5,6 +5,7 @@ const { PaymentError } = require('./payment-errors');
 const config = require('../../config');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { sameAmount } = require('../../utils/money');
+const { calcCommission } = require('../../utils/commission-parity');
 const outbox = require('./webhook-outbox');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 const { sendOneSignalNotification } = require('../legacy-compat/notify');
@@ -380,12 +381,6 @@ async function markPaymentFailed(orderReference, { reason = null, providerPaymen
     await syncLegacyOrderStatus(result.order);
   }
   return result;
-}
-
-// Commission calculation (platform fee on product price).
-function calcCommission(productPrice) {
-  const percent = config.business.platformCommissionPercent;
-  return Math.round(Number(productPrice) * percent);
 }
 
 // Escrow-funded notice to the seller (in-app row + push). Best-effort: a

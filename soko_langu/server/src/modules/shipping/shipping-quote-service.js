@@ -2,6 +2,7 @@ const { getStore } = require('../../config/database');
 const { requireLock, releaseLock } = require('../../config/redis');
 const { validateShippingQuote } = require('./shipping-validation');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
+const { computeSellerParity } = require('../../utils/commission-parity');
 
 // Seller submits a shipping quote for an order.
 // Runs platform validation to decide NORMAL / REVIEW_REQUIRED / BLOCKED.
@@ -70,8 +71,16 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         },
       });
 
+      // Buyer pays item + shipping + commission; the seller's entitlement stays
+      // item + shipping. Computed before the update so the NORMAL auto-approval
+      // path locks exactly the same totals as a manual approval.
+      const totals = autoApproved
+        ? computeSellerParity(order.productPrice, BigInt(Math.round(amount)))
+        : null;
+
       // Lock the server-computed totals the moment a NORMAL quote lands so the
-      // payment step charges price + shipping exactly (never client-inflated).
+      // payment step charges price + shipping + commission exactly (never
+      // client-inflated).
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: {
@@ -85,8 +94,8 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
           },
           ...(autoApproved
             ? {
-                platformCommission: calcCommission(order.productPrice),
-                totalAmount: BigInt(order.productPrice) + BigInt(Math.round(amount)),
+                platformCommission: totals.commission,
+                totalAmount: totals.totalAmount,
               }
             : {}),
           statusChangedBy: sellerId,
@@ -129,14 +138,17 @@ async function approveQuote({ orderId, approvedBy, actor = 'admin' }) {
         reason: 'Quote approved',
       });
 
-      const platformCommission = calcCommission(order.productPrice);
+      const { commission: platformCommission, totalAmount } = computeSellerParity(
+        order.productPrice,
+        order.shippingFee,
+      );
 
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: {
           status: ORDER_STATES.AWAITING_ESCROW_PAYMENT,
           platformCommission,
-          totalAmount: order.productPrice + order.shippingFee,
+          totalAmount,
           statusChangedBy: approvedBy,
         },
       });
@@ -191,11 +203,6 @@ async function blockQuote({ orderId, blockedBy, reason }) {
   } finally {
     if (lock.acquired) await releaseLock(`shipping:${orderId}`, lock.token);
   }
-}
-
-function calcCommission(productPrice) {
-  const percent = require('../../config').business.platformCommissionPercent;
-  return Math.round(Number(productPrice) * percent);
 }
 
 function httpError(status, message) {

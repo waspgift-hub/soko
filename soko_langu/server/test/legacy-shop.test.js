@@ -7,7 +7,8 @@ test('buildLegacyMirror produces the legacy Flutter document shape', () => {
     id: 'or-123',
     status: 'awaiting_escrow_payment',
     productPrice: 50000n,
-    totalAmount: 50000n, // seller nets price + shipping in full; 0 platform/ClickPesa fees
+    platformCommission: 1750n, // 3.5% buyer-pays-top commission
+    totalAmount: 51750n,
     shippingFee: 0n,
   };
   const body = {
@@ -35,10 +36,10 @@ test('buildLegacyMirror produces the legacy Flutter document shape', () => {
   assert.strictEqual(m.productPrice, 50000);
   assert.strictEqual(m.quantity, 2);
   assert.strictEqual(m.shippingCost, 0);
-  // Soko Vibe has no fee; the mirror shows zero platform/ClickPesa lines
-  assert.strictEqual(m.platformFee, 0);
+  // Buyer pays the 3.5% commission on top; ClickPesa's own fee is theirs.
+  assert.strictEqual(m.platformFee, 1750);
   assert.strictEqual(m.clickpesaFee, 0);
-  assert.strictEqual(m.totalAmount, 50000);
+  assert.strictEqual(m.totalAmount, 51750);
   assert.strictEqual(m.buyerId, 'guest:255700000000');
   assert.strictEqual(m.sourceV2, true);
   assert.strictEqual(m.deliveryType, 'delivery');
@@ -46,12 +47,20 @@ test('buildLegacyMirror produces the legacy Flutter document shape', () => {
 
 test('mirror fee math matches the parity commission invariant', () => {
   for (const price of [1500, 10000, 50000, 250000]) {
-    const order = { id: `o-${price}`, status: 'in_escrow', productPrice: BigInt(price), totalAmount: 0n, shippingFee: 0n };
+    const fee = Math.round(price * 0.035);
+    const order = {
+      id: `o-${price}`,
+      status: 'in_escrow',
+      productPrice: BigInt(price),
+      platformCommission: BigInt(fee),
+      totalAmount: BigInt(price + fee),
+      shippingFee: 0n,
+    };
     const body = { productPrice: price };
     const m = buildLegacyMirror(order, body);
-    // totalAmount Number(BigInt) is parsed from order; mirror embeds legacized
-    // presentation fields only, so conservation is checked via fee composition:
-    assert.strictEqual(m.platformFee + m.clickpesaFee, 0);
+    assert.strictEqual(m.platformFee, fee);
+    assert.strictEqual(m.clickpesaFee, 0);
+    assert.strictEqual(m.totalAmount, m.productPrice + m.platformFee);
   }
 });
 

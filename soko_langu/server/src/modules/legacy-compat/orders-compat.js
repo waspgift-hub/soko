@@ -41,8 +41,8 @@ const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
  *     owner sets in the admin panel, so a rate change takes effect on the next
  *     order instead of the next deploy. Without this the panel field was inert:
  *     it saved to Firestore but no payment path ever read it.
- *  2. `PLATFORM_COMMISSION_PERCENT` env var.
- *  3. 0 — Soko Vibe charges no platform fee by default.
+ *  2. `PLATFORM_COMMISSION_PERCENT` env var (config default is 3.5%).
+ *  3. 0 — only when neither source yields a usable value.
  *
  * Resolved per request rather than captured at module load so a panel change
  * applies immediately. settings-service caches for 300s, which bounds the

@@ -39,10 +39,10 @@ function httpError(status, message) {
 // `transactions` collections use these exact field names in the Flutter app.
 function buildLegacyMirror(order, body) {
   const productPrice = Number(order.productPrice);
-  // Soko Vibe charges no fees; ClickPesa's own charges are deducted by
-  // ClickPesa outside this ledger, so the mirror shows zero platform/ClickPesa
-  // lines and the full amount flowing to the seller.
-  const platformFee = 0;
+  // Buyer pays the 3.5% commission on top (Terms 8.2); the mirror must show the
+  // same fee the escrow actually charged, otherwise the invoice screen invents
+  // a different total from the server's.
+  const platformFee = Number(order.platformCommission ?? 0);
   const clickpesaFee = 0;
   const paymentMethod = normalizePaymentMethod(body.preferredPaymentMethod || body.paymentMethod || 'escrow') || 'escrow';
   return {

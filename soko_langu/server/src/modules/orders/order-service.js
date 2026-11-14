@@ -76,7 +76,11 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
     const address = await tx.address.findUnique({ where: { id: addressId } });
     if (!address || address.userId !== buyerId) throw httpError(400, 'INVALID_ADDRESS');
 
-    const { commission, totalAmount } = computeSellerParity(product.price, 0n);
+    // Commission is charged on the line subtotal (unit price × quantity), never
+    // on shipping, and is added on top of what the buyer pays. Storing the unit
+    // price here made a multi-item order under-charge and under-commission.
+    const lineTotal = product.price * BigInt(quantity);
+    const { commission, totalAmount } = computeSellerParity(lineTotal, 0n);
 
     const order = await tx.order.create({
       data: {
@@ -102,7 +106,7 @@ async function createOrder({ buyerId, productId, quantity = 1, addressId }) {
           country: address.country || 'TZ',
         },
         shippingQuoteSnapshot: { amount: 0, source: 'v1_create_order' },
-        productPrice: product.price,
+        productPrice: lineTotal,
         shippingFee: 0n,
         platformCommission: commission,
         totalAmount,
