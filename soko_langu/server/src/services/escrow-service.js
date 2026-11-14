@@ -163,6 +163,19 @@ async function transitionOrder({ orderId, newStatus, uid, note, db }) {
     throw new Error('CLIENT_CANNOT_SET_FINANCIAL_STATE');
   }
 
+  // Delivery is the event that stamps `deliveredAt`, and the auto-release sweep
+  // uses that timestamp to decide when escrow may be paid out. Letting the
+  // seller self-declare it through this legacy route would start the payout
+  // clock on a parcel that never left the shop, so the seller is refused and
+  // every caller must show dispatch evidence first. The buyer may still confirm
+  // receipt here; couriers use the v1 endpoint.
+  if (targetStatus === ORDER_STATES.DELIVERED) {
+    if (isSeller && !isBuyer) throw new Error('SELLER_CANNOT_MARK_DELIVERED');
+    if (!order.dispatchedAt && !order.trackingNumber && !order.courierName) {
+      throw new Error('DELIVERY_REQUIRES_DISPATCH');
+    }
+  }
+
   const machine = new OrderStateMachine(order.status);
   if (!machine.canTransition(targetStatus)) {
     throw new Error(`Invalid order transition: ${machine.state} -> ${targetStatus}`);

@@ -26,7 +26,6 @@ router.post(
       filedBy: req.user.id,
       reason: req.body.reason,
       description: req.body.description,
-      role: req.body.role,
     });
     res.status(201).json({ success: true, data: dispute });
   }

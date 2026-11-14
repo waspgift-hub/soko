@@ -75,6 +75,9 @@ router.post(
     body: z.object({
       courierName: z.string().min(1).max(120),
       trackingNumber: z.string().min(1).max(120),
+      // Optional binding of the parcel to a courier account; once set, only
+      // that user may attest delivery.
+      courierId: z.string().min(1).max(128).optional(),
     }),
   }),
   orderController.markDispatched

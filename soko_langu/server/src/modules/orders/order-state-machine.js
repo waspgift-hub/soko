@@ -289,7 +289,10 @@ const TRANSITION_ACTORS = {
   [ORDER_STATES.OUT_FOR_DELIVERY]: ['system', 'courier'],
   [ORDER_STATES.DELIVERY_ATTEMPTED]: ['system', 'courier'],
   [ORDER_STATES.ARRIVED]: ['system', 'courier'],
-  [ORDER_STATES.DELIVERED]: ['system', 'courier', 'seller', 'admin'],
+  // No `seller`: DELIVERED stamps the auto-release clock, so a seller must never
+  // be able to start the payout timer for a parcel they have not handed over.
+  // Delivery is attested by the courier (chain of custody) or an admin.
+  [ORDER_STATES.DELIVERED]: ['system', 'courier', 'admin'],
   [ORDER_STATES.INSPECTION_PERIOD]: ['system', 'courier'],
   [ORDER_STATES.OTP_PENDING]: ['system', 'courier', 'buyer', 'seller', 'admin'],
   [ORDER_STATES.DELIVERY_CONFIRMED]: ['buyer', 'system'],

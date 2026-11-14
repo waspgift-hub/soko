@@ -296,6 +296,11 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
         // Surfaced separately so a disputed backlog is visible instead of
         // being indistinguishable from a completed release.
         summary.blocked += 1;
+      } else if (result && result.status === 'BLOCKED') {
+        // A delivery/fraud safeguard failed. Counted apart from `skipped` so a
+        // blocked backlog is visible in the sweep summary.
+        summary.blocked += 1;
+        console.warn('[FINANCE] autoRelease blocked', order.id, result.missingSafeguards);
       } else {
         summary.skipped += 1;
       }

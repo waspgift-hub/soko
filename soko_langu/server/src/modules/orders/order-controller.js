@@ -1,5 +1,6 @@
 const { getStore } = require('../../config/database');
 const orderService = require('./order-service');
+const { assertCanMarkDelivered } = require('./delivery-authorization');
 const paymentService = require('../payments/payment-service');
 const handoverService = require('../handover/handover-service');
 
@@ -169,13 +170,14 @@ const orderController = {
     const store = getStore();
     const profile = await resolveSellerProfile(store, req.user.id);
     const sellerId = profile.id;
-    const { courierName, trackingNumber } = req.body;
+    const { courierName, trackingNumber, courierId } = req.body;
 
     const order = await orderService.markDispatched({
       orderId,
       sellerId,
       courierName,
       trackingNumber,
+      courierId,
     });
 
     res.json({ success: true, data: order });
@@ -192,20 +194,14 @@ const orderController = {
       return res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
     }
 
-    // Order.sellerId is a SellerProfile id — resolve the acting user's profile
-    // and compare, exactly like the dispatch handler does.
-    const profile = await store.sellerProfile.findUnique({ where: { userId: actorId } });
-    const isSeller = Boolean(profile && order.sellerId === profile.id);
-    const isAdmin = req.user.role === 'super_admin' || req.user.role === 'admin';
-    const isCourier = req.user.role === 'courier';
-
-    if (!isSeller && !isAdmin && !isCourier) {
-      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
-    }
+    // Delivery stamps the auto-release clock, so the seller may never attest it
+    // and a courier may only close out a parcel assigned to them.
+    const actor = assertCanMarkDelivered(order, { userId: actorId, role: req.user.role });
 
     const updatedOrder = await orderService.markDelivered({
       orderId,
       actorId,
+      actor,
     });
 
     res.json({ success: true, data: updatedOrder });

@@ -11,6 +11,83 @@ const REQUIRED_SAFEGUARDS = [
   'NO_CRITICAL_FRAUD_SIGNAL',
 ];
 
+// Roles whose delivery attestation is independent of the seller. A `seller`
+// stamp is deliberately absent: it proves only that the seller pressed a
+// button, not that the parcel moved.
+const TRUSTED_DELIVERY_ATTESTORS = new Set(['courier', 'admin', 'system']);
+
+// Moderation states that still represent an unresolved abuse claim.
+const OPEN_REPORT_STATUSES = ['pending', 'open', 'reviewing'];
+
+// `reliabilityScore` is persisted as a 0..1 decimal (seller-reliability.js), so
+// the risk floor is on the same scale. Exactly 0 means "no completed history
+// yet", not "proven bad", so only a positive-but-low score counts as a signal.
+const HIGH_RISK_RELIABILITY = 0.3;
+
+/**
+ * Delivery evidence strong enough to settle without the buyer's OTP.
+ *
+ * A courier (or admin/system) attestation is the chain-of-custody proof in an
+ * offline-first market; a recorded POD artifact or a verified handover
+ * credential is stronger still. Anything else — including a legacy row that
+ * only carries `deliveredAt` — fails closed.
+ */
+function hasVerifiedDelivery(order) {
+  if (order.deliveredAt && TRUSTED_DELIVERY_ATTESTORS.has(order.deliveredByRole)) return true;
+  if (order.otpVerifiedAt || order.handoverVerifiedAt) return true;
+  if (order.podPhotoKey || order.podSignatureKey) return true;
+  return Boolean(order.deliveryProof && Object.keys(order.deliveryProof).length > 0);
+}
+
+/**
+ * Real fraud signals, replacing the previous placeholder hook.
+ *
+ * Every query is inside the caller's transaction so a signal cannot be read
+ * from one snapshot and the money released from another.
+ */
+async function evaluateFraudSignals(tx, order) {
+  const signals = [];
+
+  const sellerProfile = order.sellerId
+    ? await tx.sellerProfile.findUnique({ where: { id: order.sellerId } })
+    : null;
+  const sellerUserId = sellerProfile ? (sellerProfile.userId || sellerProfile.id) : null;
+
+  // Self-dealing: buyer and seller are the same account.
+  if (sellerUserId && String(sellerUserId) === String(order.buyerId)) {
+    signals.push('SELF_DEALING');
+  }
+
+  const reliabilityScore = Number(sellerProfile && sellerProfile.reliabilityScore);
+  if (Number.isFinite(reliabilityScore) && reliabilityScore > 0 && reliabilityScore < HIGH_RISK_RELIABILITY) {
+    signals.push('SELLER_HIGH_RISK');
+  }
+
+  if (sellerUserId) {
+    const sellerUser = await tx.user.findUnique({ where: { id: sellerUserId } });
+
+    // A restricted account must not receive an automatic payout.
+    if (sellerUser && ['suspended', 'deleted'].includes(sellerUser.accountStatus)) {
+      signals.push('SELLER_ACCOUNT_RESTRICTED');
+    }
+
+    // An unresolved abuse report against the seller blocks the timer; an admin
+    // resolves the report (or pays out explicitly) instead.
+    const openReport = sellerUser && sellerUser.firebaseUid
+      ? await tx.moderationReport.findFirst({
+          where: {
+            targetType: 'user',
+            targetId: sellerUser.firebaseUid,
+            status: { in: OPEN_REPORT_STATUSES },
+          },
+        })
+      : null;
+    if (openReport) signals.push('SELLER_OPEN_MODERATION_REPORT');
+  }
+
+  return signals;
+}
+
 /**
  * Evaluate whether an order qualifies for auto-release after the inspection window.
  * Every safeguard must pass. Returns { canRelease, missingSafeguards }.
@@ -20,7 +97,7 @@ async function evaluateAutoRelease(tx, orderId) {
     where: { id: orderId },
     include: { dispute: true, escrowHold: true },
   });
-  if (!order) return { canRelease: false, missingSafeguards: ['ORDER_NOT_FOUND'] };
+  if (!order) return { canRelease: false, missingSafeguards: ['ORDER_NOT_FOUND'], fraudSignals: [] };
 
   const missing = [];
 
@@ -28,8 +105,9 @@ async function evaluateAutoRelease(tx, orderId) {
   const hasActiveDispute = (order.dispute || []).some((d) => d.status === 'open');
   if (hasActiveDispute) missing.push('NO_ACTIVE_DISPUTE');
 
-  // 2. Verified delivery
-  if (!order.deliveredAt) missing.push('VERIFIED_DELIVERY');
+  // 2. Verified delivery (independent attestation, POD, or a verified handover
+  //    credential — see hasVerifiedDelivery)
+  if (!hasVerifiedDelivery(order)) missing.push('VERIFIED_DELIVERY');
 
   // 3. Correct recipient/address (best-effort: snapshot presence)
   if (!order.shippingAddressSnapshot) missing.push('CORRECT_RECIPIENT_ADDRESS');
@@ -37,10 +115,11 @@ async function evaluateAutoRelease(tx, orderId) {
   // 4. Seller dispatch evidence (courier/tracking present)
   if (!order.trackingNumber && !order.courierName) missing.push('SELLER_DISPATCH_EVIDENCE');
 
-  // 5. No critical fraud signal (placeholder hooks)
-  // Integration point: query seller risk / moderation flags.
+  // 5. No critical fraud signal
+  const fraudSignals = await evaluateFraudSignals(tx, order);
+  if (fraudSignals.length > 0) missing.push('NO_CRITICAL_FRAUD_SIGNAL');
 
-  return { canRelease: missing.length === 0, missingSafeguards: missing };
+  return { canRelease: missing.length === 0, missingSafeguards: missing, fraudSignals };
 }
 
 /**
@@ -63,9 +142,9 @@ async function autoRelease({ orderId, triggeredBy = 'system' }) {
         return { status: 'SKIPPED', reason: `STATE:${order.status}` };
       }
 
-      const { canRelease, missingSafeguards } = await evaluateAutoRelease(tx, orderId);
+      const { canRelease, missingSafeguards, fraudSignals } = await evaluateAutoRelease(tx, orderId);
       if (!canRelease) {
-        return { status: 'BLOCKED', missingSafeguards };
+        return { status: 'BLOCKED', missingSafeguards, fraudSignals: fraudSignals || [] };
       }
 
       // Everything checks out: authorize settlement (DELIVERY_CONFIRMED),
@@ -128,6 +207,8 @@ function httpError(status, message) {
 
 module.exports = {
   REQUIRED_SAFEGUARDS,
+  hasVerifiedDelivery,
+  evaluateFraudSignals,
   evaluateAutoRelease,
   autoRelease,
 };

@@ -6,6 +6,7 @@ const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror'
 const { refundOnCancel, isRefundableEscrowState } = require('../refunds/refund-service');
 const { submitQuote, approveQuote } = require('../shipping/shipping-quote-service');
 const { fileDispute } = require('../disputes/dispute-service');
+const { evaluateAutoRelease } = require('../disputes/auto-release-service');
 const {
   releaseEscrowAndSettle,
   RELEASE_REASON,
@@ -177,7 +178,7 @@ async function submitShippingQuote({ orderId, sellerId, amount, estimatedDays, n
  * self-delivery stays at DISPATCHED; the logistics chain only advances when
  * the courier flow (or markDelivered) moves it.
  */
-async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
+async function markDispatched({ orderId, sellerId, courierName, trackingNumber, courierId }) {
   const store = getStore();
   const lock = await requireLock(`dispatch:${orderId}`, 60);
 
@@ -219,6 +220,9 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
         data: {
           status: ORDER_STATES.DISPATCHED,
           courierName: courierName || null,
+          // Binding courier identity: once present, only this user may attest
+          // delivery, which is what makes the courier an accountable party.
+          courierId: courierId || order.courierId || null,
           trackingNumber: trackingNumber || null,
           dispatchedAt: new Date(),
           statusChangedBy: sellerId,
@@ -246,10 +250,17 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
 }
 
 /**
- * Seller/courier/admin marks the order delivered (IN_TRANSIT -> DELIVERED).
- * Delivery is what arms the buyer's OTP/QR handover, so escrow stays held.
+ * Courier/admin attests delivery (IN_TRANSIT -> DELIVERED).
+ *
+ * `actor` is the state-machine actor ('courier' | 'admin'); the seller is
+ * rejected outright because this transition arms the auto-release clock.
+ * `deliveredBy`/`deliveredByRole` are the delivery evidence the auto-release
+ * safeguards read back.
  */
-async function markDelivered({ orderId, actorId }) {
+async function markDelivered({ orderId, actorId, actor = 'courier' }) {
+  if (actor !== 'courier' && actor !== 'admin') {
+    throw httpError(403, 'SELLER_CANNOT_MARK_DELIVERED');
+  }
   const store = getStore();
   const lock = await requireLock(`deliver:${orderId}`, 60);
 
@@ -270,10 +281,13 @@ async function markDelivered({ orderId, actorId }) {
       const machine = new OrderStateMachine(order.status);
       const visited = new Set([order.status]);
       for (const next of [ORDER_STATES.IN_TRANSIT, ORDER_STATES.DELIVERED]) {
-        if (!visited.has(next) && machine.canTransition(next)) {
-          machine.transition(next, { actor: 'seller', actorId, reason: 'Seller delivered' });
-          visited.add(next);
-        }
+        if (visited.has(next) || !machine.canTransition(next)) continue;
+        // Intermediate logistics hops are the machine normalizing the route, so
+        // they are attributed to `system`; only the delivery attestation itself
+        // carries the courier/admin identity.
+        const stepActor = next === ORDER_STATES.DELIVERED ? actor : 'system';
+        machine.transition(next, { actor: stepActor, actorId, reason: `${actor} delivered` });
+        visited.add(next);
       }
       if (!visited.has(ORDER_STATES.DELIVERED)) {
         throw httpError(409, `INVALID_DELIVERY_STATE:${order.status}`);
@@ -281,7 +295,13 @@ async function markDelivered({ orderId, actorId }) {
 
       const updated = await tx.order.update({
         where: { id: orderId },
-        data: { status: ORDER_STATES.DELIVERED, deliveredAt: new Date(), statusChangedBy: actorId },
+        data: {
+          status: ORDER_STATES.DELIVERED,
+          deliveredAt: new Date(),
+          deliveredBy: actorId,
+          deliveredByRole: actor,
+          statusChangedBy: actorId,
+        },
       });
 
       await audit(tx, {
@@ -323,6 +343,21 @@ async function completeOrder({ orderId, actorId = 'system', method = 'OTP_VERIFY
       }
       if (![ORDER_STATES.DELIVERY_CONFIRMED, ORDER_STATES.DELIVERED, ORDER_STATES.INSPECTION_PERIOD].includes(current.status)) {
         throw httpError(409, `INVALID_ORDER_STATE:${current.status}`);
+      }
+
+      // The timer may only settle an order whose delivery evidence passes every
+      // safeguard. DELIVERY_CONFIRMED is already authorized (the buyer's OTP/QR
+      // or an admin ruling), so the check applies to the timer-driven states.
+      if (method === 'AUTO_RELEASE' && current.status !== ORDER_STATES.DELIVERY_CONFIRMED) {
+        const { canRelease, missingSafeguards, fraudSignals } = await evaluateAutoRelease(tx, orderId);
+        if (!canRelease) {
+          return {
+            status: 'BLOCKED',
+            order: current,
+            missingSafeguards,
+            fraudSignals: fraudSignals || [],
+          };
+        }
       }
 
       const started = new OrderStateMachine(current.status);
@@ -434,15 +469,14 @@ async function cancelOrder({ orderId, actorId, reason }) {
 }
 
 /**
- * File a dispute (buyer or seller). Seller comparison resolves the acting
- * user to their SellerProfile because Order.sellerId is a profile id.
+ * File a dispute (buyer or seller). The role is derived from the order itself by
+ * `fileDispute` — never from "does this user happen to have a seller profile",
+ * which mislabelled any buyer who also sells and handed them the seller-only
+ * reason list.
  */
 async function disputeOrder({ orderId, filedBy, reason, description }) {
   const store = getStore();
-  const profile = await store.sellerProfile.findUnique({ where: { userId: filedBy } });
-  const role = profile ? 'seller' : 'buyer';
-
-  const dispute = await fileDispute({ orderId, filedBy, reason, description, role });
+  const dispute = await fileDispute({ orderId, filedBy, reason, description });
 
   const order = await store.order.findUnique({ where: { id: orderId } });
   if (order) await syncLegacyOrderStatus(order);
