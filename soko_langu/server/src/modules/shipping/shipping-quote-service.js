@@ -29,7 +29,14 @@ async function submitQuote({ orderId, sellerId, amount, estimatedDays, notes, sh
         amount,
         shippingAddress: addr,
         sellerRegion: region,
-        sellerRiskScore: Number(order.seller?.reliabilityScore || 0) * 100,
+        // reliabilityScore is stored 0..1 (higher = more reliable); the shipping
+        // validator expects a 0..100 RISK score, so invert. A score of 0 means
+        // "no history", not "maximum risk", so it must stay 0 rather than 100.
+        sellerRiskScore: (() => {
+          const rel = Number(order.seller?.reliabilityScore || 0);
+          if (!Number.isFinite(rel) || rel <= 0) return 0;
+          return Math.round((1 - Math.min(rel, 1)) * 100);
+        })(),
       });
 
       const quoteStatus = validation.verdict === 'BLOCKED' ? 'blocked'

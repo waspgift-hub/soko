@@ -139,9 +139,10 @@ class ReviewService {
         );
       }
 
-      // Verified purchase = buyer has a delivered/completed order for this product.
-      final isVerified = await _isVerifiedPurchase(productId, user.uid);
-
+      // Verified-purchase status is attested server-side only (see review-store.js
+      // and firestore.rules): a client cannot prove an order match, so this path
+      // always writes false. When kUseReviewsApi is on, reviews go through the
+      // API and the server sets the flag from the settled order.
       await _db.collection("reviews").add({
         'productId': productId,
         'sellerId': sellerId,
@@ -154,7 +155,7 @@ class ReviewService {
         'images': images,
         'helpfulCount': 0,
         'likedBy': [],
-        'isVerifiedPurchase': isVerified,
+        'isVerifiedPurchase': false,
       });
 
       // Update product rating via server admin SDK (client rules forbid product updates)
@@ -184,22 +185,6 @@ class ReviewService {
           userMessage: translateError(e),
           originalError: e,
         );
-    }
-  }
-
-  /// Whether this buyer has a delivered/completed order for the product.
-  Future<bool> _isVerifiedPurchase(String productId, String userId) async {
-    try {
-      final snap = await _db
-          .collection('orders')
-          .where('buyerId', isEqualTo: userId)
-          .where('productId', isEqualTo: productId)
-          .where('status', whereIn: ['delivered', 'completed'])
-          .limit(1)
-          .get();
-      return snap.docs.isNotEmpty;
-    } catch (e) {
-      return false;
     }
   }
 
