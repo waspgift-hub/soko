@@ -140,6 +140,9 @@ router.get(
     // separate; single-flight prevents a herd from re-running the same query.
     const key = `catalog:list:v2:${JSON.stringify(req.query)}`;
     const data = await cache.getOrCompute(key, () => service.listProducts(req.query), 30 * 1000);
+    // Let the Cloudflare edge cache the catalog page so a viral spike does not
+    // hit the origin/Firestore for every visitor. Browsers revalidate quickly.
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
     res.json({ success: true, data });
   }
 );
@@ -188,6 +191,7 @@ router.get('/:idOrSlug', async (req, res) => {
       () => service.getProduct(req.params.idOrSlug),
       30 * 1000
     );
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
     res.json({ success: true, data });
   } catch (e) {
     serviceError(res, e);
