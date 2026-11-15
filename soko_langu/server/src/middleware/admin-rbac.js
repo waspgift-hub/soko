@@ -12,25 +12,20 @@
 
 const ROLE_PERMISSIONS = {
   super_admin: ['*'],
+  owner: ['*'],
   admin: ['*'],
-  finance_admin: [
-    'finance:read',
-    'finance:write',
-    'reports:read',
-    'users:read',
-    'orders:read',
-  ],
-  // Staff role id used by the admin panel's staff editor.
-  finance: [
-    'finance:read',
-    'finance:write',
-    'reports:read',
-    'users:read',
-    'orders:read',
-  ],
+  operations_admin: ['users:*', 'orders:*', 'products:*', 'disputes:*', 'kyc:*', 'audit:read'],
+  finance_admin: ['finance:*', 'withdrawals:*', 'revenue:*', 'reconciliation:*', 'users:read', 'orders:read', 'audit:read'],
+  finance: ['finance:read', 'finance:write', 'withdrawals:*', 'revenue:read', 'reconciliation:read', 'users:read', 'orders:read'],
+  support_admin: ['users:read', 'users:write', 'orders:read', 'notifications:write', 'broadcasts:send', 'landing:*', 'audit:read'],
+  support: ['users:read', 'orders:read', 'notifications:write', 'broadcasts:send', 'landing:write'],
+  moderation_admin: ['catalog:read', 'catalog:write', 'reviews:read', 'reviews:write', 'disputes:*', 'refunds:*', 'products:moderate', 'kyc:*', 'users:read', 'orders:read', 'audit:read'],
+  moderator: ['catalog:read', 'catalog:write', 'reviews:read', 'reviews:write', 'disputes:*', 'refunds:*', 'products:moderate', 'kyc:read', 'kyc:write', 'users:read', 'orders:read'],
   kyc_reviewer: ['kyc:read', 'kyc:write', 'users:read'],
-  moderator: ['catalog:read', 'catalog:write', 'reviews:read', 'reviews:write', 'orders:read'],
-  support: ['users:read', 'orders:read', 'notifications:write'],
+  security_admin: ['users:*', 'audit:*', 'settings:write'],
+  technical_ops: ['settings:write', 'audit:read'],
+  analyst: ['users:read', 'orders:read', 'finance:read', 'revenue:read', 'audit:read'],
+  analyst_readonly: ['users:read', 'orders:read', 'finance:read', 'revenue:read'],
 };
 
 function roleOf(req) {

@@ -30,7 +30,9 @@ function fmtTime(v) {
   if (!v) return '—';
   const d = new Date(v);
   if (isNaN(d)) return esc(String(v));
-  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // Kiswahili is the default so month abbreviations read correctly; the toggle
+  // switches back to en-GB and the loader re-renders the timestamps.
+  return d.toLocaleString(LANG === 'en' ? 'en-GB' : 'sw-TZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 // Inasa Firestore Timestamp ({seconds,...}), ISO string, na Date bila kuteleza.
 function tsToISO(v) {
@@ -60,6 +62,76 @@ function avatarOf(u) {
     ? '<img class="thumb" src="' + esc(src) + '" alt="' + esc(name) + '" loading="lazy">'
     : '<div class="thumb" style="display:grid;place-items:center;background:var(--okbg);color:var(--sv-accent-strong);font-weight:700;font-size:14px">' + esc(name.charAt(0).toUpperCase()) + '</div>';
 }
+// Status chips are shown in Kiswahili; the raw enum stays on the element so
+// filters, copy-to-clipboard and tests still see the value the API uses.
+const STATUS_SW = {
+  "buyer": "mnunuzi", 
+  "seller": "muuzaji", 
+  "admin": "msimamizi", 
+  "super_admin": "msimamizi mkuu", 
+  "active": "hai", 
+  "inactive": "haifanyi kazi", 
+  "pending": "inasubiri", 
+  "restricted": "imezuiwa", 
+  "suspended": "imesimamishwa", 
+  "deletion_pending": "inasubiri kufutwa", 
+  "deleted": "imefutwa", 
+  "draft": "rasimu", 
+  "published": "imechapishwa", 
+  "rejected": "imekataliwa", 
+  "open": "wazi", 
+  "under_review": "inakaguliwa", 
+  "resolved": "imetatuliwa", 
+  "processing": "inafanyiwa kazi", 
+  "completed": "imekamilika", 
+  "failed": "imeshindikana", 
+  "cancelled": "imeghairiwa", 
+  "reviewed": "imekaguliwa", 
+  "actioned": "hatua imechukuliwa", 
+  "dismissed": "imepuuzwa", 
+  "verified": "imethibitishwa", 
+  "unverified": "haijathibitishwa", 
+  "awaiting_escrow_payment": "inasubiri malipo ya escrow", 
+  "in_escrow": "iko escrow", 
+  "ready_to_dispatch": "tayari kutumwa", 
+  "dispatched": "imetumwa", 
+  "delivered": "imewasilishwa",
+  "shipped": "imesafirishwa",
+  "held": "imeshikiliwa",
+  "captured": "imekamatwa",
+  "released": "imeachiliwa",
+  "settled": "imelipwa",
+  "blocked": "imefungwa",
+  "reported": "imeripotiwa", 
+  "inspection_period": "kipindi cha ukaguzi", 
+  "otp_pending": "inasubiri OTP", 
+  "wallet_credited": "pochi limewekwa", 
+  "payout_pending": "malipo yanasubiri", 
+  "payout_complete": "malipo yamekamilika", 
+  "disputed": "ina mgogoro", 
+  "refund_pending": "marejesho yanasubiri", 
+  "refunded": "imerejeshwa", 
+  "expired": "imeisha muda", 
+  "payment_pending": "malipo yanasubiri", 
+  "pending_payment": "malipo yanasubiri", 
+  "submitted": "imewasilishwa", 
+  "requested": "imeombwa", 
+  "eligibility_check": "ukaguzi wa sifa", 
+  "shipping_fee_review": "ukaguzi wa ada ya usafirishaji", 
+  "review_required": "ukaguzi unahitajika", 
+  "in_transit": "njiani", 
+  "out_for_delivery": "iko njiani kwa mteja", 
+  "done": "imekamilika", 
+  "success": "imefanikiwa", 
+  "approved": "imeidhinishwa", 
+  "processed": "imeshughulikiwa", 
+  "completedorder": "agizo limekamilika", 
+  "canceled": "imeghairiwa", 
+  "not_seller": "si muuzaji", 
+  "profile_required": "wasifu unahitajika", 
+  "active_draft": "rasimu hai"
+};
+function statusLabel(s) { return STATUS_SW[String(s || '').toLowerCase()] || String(s || ''); }
 function badge(status) {
   const s = String(status || '?').toLowerCase();
   const map = {
@@ -75,24 +147,50 @@ function badge(status) {
     draft: 'mut', blockchain_: 'mut', not_seller: 'mut', profile_required: 'warn', active_draft: 'mut',
   };
   const cls = map[s] || 'mut';
-  return '<span class="bdg ' + (s.indexOf('_') > -1 && !map[s] ? 'info' : cls) + '"><span class="dot"></span>' + esc(status) + '</span>';
+  return '<span class="bdg ' + (s.indexOf('_') > -1 && !map[s] ? 'info' : cls) + '" data-status="' + esc(status) + '" title="' + esc(status) + '"><span class="dot"></span>' + esc(statusLabel(status)) + '</span>';
 }
-const STAFF_ROLES = [
+// Mirrors the server's STAFF_ROLES so the panel still offers roles before the
+// first /staff response arrives; that response replaces this list with the
+// authoritative one (see loadStaff).
+let STAFF_ROLES = [
   { id: 'super_admin', label: 'Super Admin' },
+  { id: 'owner', label: 'Owner' },
   { id: 'admin', label: 'Admin' },
-  { id: 'moderator', label: 'Moderator' },
-  { id: 'support', label: 'Support' },
+  { id: 'operations_admin', label: 'Operations Admin' },
+  { id: 'finance_admin', label: 'Finance Admin' },
   { id: 'finance', label: 'Finance' },
+  { id: 'support_admin', label: 'Support Admin' },
+  { id: 'support', label: 'Support' },
+  { id: 'moderation_admin', label: 'Moderation Admin' },
+  { id: 'moderator', label: 'Moderator' },
+  { id: 'kyc_reviewer', label: 'KYC Reviewer' },
+  { id: 'security_admin', label: 'Security Admin' },
+  { id: 'technical_ops', label: 'Technical Ops' },
+  { id: 'analyst', label: 'Analyst' },
+  { id: 'analyst_readonly', label: 'Analyst (read-only)' },
 ];
+// Kiswahili titles for the roles the server ships. Unknown ids fall back to the
+// server label, so adding a role on the backend never leaves a blank chip.
+const ROLE_SW = {
+  super_admin: 'Msimamizi Mkuu', owner: 'Mmiliki', admin: 'Msimamizi',
+  operations_admin: 'Msimamizi wa Uendeshaji', finance_admin: 'Msimamizi wa Fedha',
+  finance: 'Fedha', support_admin: 'Msimamizi wa Msaada', support: 'Msaada',
+  moderation_admin: 'Msimamizi wa Maudhui', moderator: 'Msimamizi wa Maudhui',
+  kyc_reviewer: 'Mkaguzi wa KYC', security_admin: 'Msimamizi wa Usalama',
+  technical_ops: 'Uendeshaji wa Kiufundi', analyst: 'Mchambuzi',
+  analyst_readonly: 'Mchambuzi (kiona)',
+};
 function roleLabel(role) {
+  const sw = ROLE_SW[role];
+  if (sw) return sw;
   const r = STAFF_ROLES.find((x) => x.id === role);
   return r ? r.label : role;
 }
 function fsFlagBadge(v) {
-  if (v === null || v === undefined) return '<span class="dim">—</span>';
+  if (v === null || v === undefined) return '<span class="dim">-</span>';
   return v
-    ? '<span class="bdg bad"><span class="dot"></span>suspended</span>'
-    : '<span class="bdg ok"><span class="dot"></span>active</span>';
+    ? '<span class="bdg bad"><span class="dot"></span>' + esc(statusLabel('suspended')) + '</span>'
+    : '<span class="bdg ok"><span class="dot"></span>' + esc(statusLabel('active')) + '</span>';
 }
 let toastT; function toast(msg, ok) {
   const el = $('toast');
@@ -116,12 +214,13 @@ try { LANG = localStorage.getItem(LANG_KEY) || 'sw'; } catch (_) {}
 const NAV_SW = {
   'nav-dashboard': 'Dashibodi', 'grp-manage': 'Usimamizi', 'nav-users': 'Watumiaji', 'nav-sellers': 'Wauzaji',
   'nav-products': 'Bidhaa', 'nav-orders': 'Maagizo', 'grp-protect': 'Ulinzi na Mahusiano',
-  'nav-disputes': 'Migogoro', 'nav-refunds': 'Marejesho', 'nav-reports': 'Ripoti & Ulinzi',
-  'nav-kyc': 'Wathibitisho (KYC)', 'grp-sales': 'Mauzo', 'nav-promos': 'Boost & Flash Sales',
-  'grp-finance': 'Fedha', 'nav-revenue': 'Mapato ya Jukwaa', 'nav-finance': 'Fedha & Ledger',
-  'nav-referrals': 'Rufaa', 'grp-comm': 'Mawasiliano', 'nav-broadcasts': 'Matangazo ya Broad',
-  'nav-audit': 'Ukaguzi (Audit)', 'nav-staff': 'Wafanyakazi', 'nav-settings': 'Mipangilio', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
-  'nav-landing': 'Landing / Orodha',
+  'nav-disputes': 'Migogoro', 'nav-refunds': 'Marejesho', 'nav-reports': 'Ripoti na Ulinzi',
+  'nav-kyc': 'Uthibitisho (KYC)', 'grp-sales': 'Mauzo', 'nav-promos': 'Ofa na Punguzo',
+  'grp-finance': 'Fedha', 'nav-revenue': 'Mapato ya Jukwaa', 'nav-finance': 'Fedha na Daftari',
+  'nav-referrals': 'Rufaa', 'grp-comm': 'Mawasiliano', 'nav-broadcasts': 'Matangazo kwa Wote',
+  'nav-audit': 'Ukaguzi', 'nav-staff': 'Wafanyakazi', 'nav-settings': 'Mipangilio', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
+  'nav-landing': 'Orodha ya Kuingia', 'nav-insights': 'Uchambuzi wa AI', 'nav-releases': 'Matoleo',
+  'grp-general': 'Mipangilio ya Jumla',
 };
 const NAV_EN = {
   'nav-dashboard': 'Dashboard', 'grp-manage': 'Management', 'nav-users': 'Users', 'nav-sellers': 'Sellers',
@@ -131,7 +230,8 @@ const NAV_EN = {
   'grp-finance': 'Finance', 'nav-revenue': 'Platform Revenue', 'nav-finance': 'Finance & Ledger',
   'nav-referrals': 'Referrals', 'grp-comm': 'Communication', 'nav-broadcasts': 'Broadcasts',
   'nav-audit': 'Audit', 'nav-staff': 'Staff', 'nav-settings': 'Settings', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
-  'nav-landing': 'Landing / Waitlist',
+  'nav-landing': 'Landing / Waitlist', 'nav-insights': 'AI Insights', 'nav-releases': 'App Releases',
+  'grp-general': 'General settings',
 };
 const TITLES_EN = {
   dashboard: 'Dashboard', users: 'Users', sellers: 'Sellers', products: 'Products', orders: 'Orders',
@@ -150,6 +250,7 @@ const SW2EN = {
   // Dashboard
   'Inapakia dashibodi…': 'Loading dashboard…',
   'Hali ya soko kwa mtazamo mmoja': 'Market at a glance',
+  'Muhtasari wa hali ya jukwaa — data halisi kutoka kwenye mfumo': 'Platform overview — live data from the system',
   'Wapya leo: ': 'New today: ', 'Kamili: ': 'Completed: ',
   'Watumiaji': 'Users', 'Maagizo': 'Orders', 'Mapato ya Tume': 'Commission Revenue',
   'Escrow Inashikiliwa': 'Escrow Held', 'Bidhaa': 'Products',
@@ -161,28 +262,32 @@ const SW2EN = {
   'Maagizo ya hivi punde': 'Recent orders', 'Agizo': 'Order', 'Mnunuzi': 'Buyer', 'Jumla': 'Total',
   'Hakuna maagizo bado': 'No orders yet',
   'Kazi zinazosubiri': 'Pending tasks', 'bonyeza kwenda': 'click to open',
-  'Withdrawals zinazosubiri': 'Pending withdrawals', 'Migogoro wazi': 'Open disputes',
+  'Utoaji unaosubiri': 'Pending withdrawals', 'Migogoro wazi': 'Open disputes',
   'Wauzaji wanaosubiri uthibitisho': 'Sellers awaiting verification',
   'Marejesho yanayosubiri': 'Pending refunds',
   'Mtandaoni sasa hivi': 'Online right now', 'Dakika 1': '1 min', 'Dakika 5': '5 min',
   'Dakika 15': '15 min', 'Saa 1': '1 hour', 'Siku 1': '1 day',
+  // Dashboard secondary metric strip
+  'Wanunuzi': 'Buyers', 'Malipo': 'Payments', 'Ripoti': 'Reports', 'Tahadhari': 'Alerts',
+  'verified ': 'verified ', 'success / failed': 'success / failed',
+  'akaunti za buyer': 'buyer accounts', 'bidhaa zilizoripotiwa': 'reported products',
+  'mfumo / fraud': 'system / fraud',
   // Common UI
-  'Inapakia…': 'Loading…', 'Inapakia': 'Loading', 'Hakuna watumiaji': 'No users',
-  'Hakuna bidhaa': 'No products', 'Hakuna wauzaji': 'No sellers', 'Hakuna maagizo': 'No orders',
+  'Inapakia…': 'Loading…', 'Inapakia': 'Loading', 'Hakuna watumiaji': 'No users',  'Hakuna bidhaa': 'No products', 'Hakuna wauzaji': 'No sellers', 'Hakuna maagizo': 'No orders',
   'Hakuna rekodi': 'No records', 'ANGALIA': 'VIEW',
-  'Angalia': 'View', 'Chuja': 'Filter', 'Futa': 'Cancel', 'Hifadhi': 'Save', 'Tuma': 'Send',
+  'Angalia': 'View', 'Chuja': 'Filter', 'Hifadhi': 'Save', 'Tuma': 'Send',
   'Tuma arifa': 'Send notification', 'Thibitisha': 'Verify', 'Kataa': 'Reject',
   'Sitisha': 'Suspend', 'Chapisha': 'Publish', 'Amilisha': 'Activate', 'Ondoa': 'Remove',
   'Onyesha upya': 'Refresh', 'Sasisha': 'Refresh',
   'Hali ya bidhaa': 'Product status', 'Hali ya mtumiaji': 'User status', 'Hali ya akaunti': 'Account status',
-  'Hali mpya': 'New status', 'Hali: yote': 'Status: all', 'Sababu (hiari)': 'Reason (optional)',
+  'Hali mpya': 'New status', 'Hali: zote': 'Status: all', 'Sababu (hiari)': 'Reason (optional)',
   'Sababu': 'Reason', 'Hali imebadilishwa': 'Status updated', 'Imebadilishwa': 'Updated',
   'Vitendo': 'Actions', 'Firestore': 'Firestore', 'Hali': 'Status', 'Makosa': 'Errors',
   // Users
   'Tafuta: email, namba, jina, username…': 'Search: email, phone, name, username…',
   'Jukumu: yote': 'Role: all', 'Jukumu': 'Role', 'Anajiunga': 'Joined', 'Mtumiaji': 'User',
   'Simu': 'Phone', 'Email imethibitishwa': 'Email verified', 'Simu imethibitishwa': 'Phone verified',
-  'Aliungana': 'Joined', 'Duka': 'Shop', 'Anwani': 'Addresses', 'Vifaa': 'Devices',
+  'Aliungana': 'Joined', 'Duka': 'Shop', 'Vifaa': 'Devices',
   'Maagizo (mnunuzi)': 'Orders (buyer)', 'Maagizo (muuzaji)': 'Orders (seller)',
   'Firebase UID': 'Firebase UID', 'hakuna': 'none', 'Ndiyo': 'Yes', 'La': 'No',
   'Badilisha hali ya akaunti. Chaguo <b>active</b> pia litaondoa alama isSuspended kwenye Firestore.':
@@ -196,18 +301,18 @@ const SW2EN = {
   'Bidhaa haikuonekana': 'Product not found',
   // Sellers
   'Wauzaji': 'Sellers', 'Tafuta duka / anwani…': 'Search shop / address…',
-  'Uthibitisho: yote': 'Verification: all', 'Uthibitisho': 'Verification',
+  'Uthibitisho: wote': 'Verification: all', 'Uthibitisho': 'Verification',
   'Mmiliki': 'Owner', 'Rrating': 'Rating', 'Mauzo / Mapato': 'Sales / Revenue',
   'Salio': 'Balance', 'Mauzo': 'Sales', 'Muuzaji hakupatikana kwenye ukurasa wa kwanza': 'Seller not found on first page',
   'Uthibitisha uamuzi huu? Unatengenezwa kwenye rekodi ya ukaguzi.': 'Confirm this decision? It is written to the audit log.',
-  'Rudi pending': 'Back to pending', 'Tafuta wauzaji…': 'Search sellers…',
+  'Rudi kwenye kusubiri': 'Back to pending', 'Tafuta wauzaji…': 'Search sellers…',
   // Products
   'Tafuta bidhaa…': 'Search products…', 'Kategoria': 'Category', 'Dawa': 'Created',
   'stock': 'stock', 'Chagua hali mpya ya uchapishaji': 'Choose a new publish status',
   'Kwa nini hali hii?': 'Why this status?',
   // Orders
   'Namba ya agizo / simu / email / duka…': 'Order number / phone / email / shop…',
-  'Hali: Yote': 'Status: all', 'Thibisha': 'Verify',
+  'Hali: Zote': 'Status: all', 'Thibisha': 'Verify',
   // Drawers / details
   'Inafifia': 'Fading', 'Imeondolewa': 'Removed', 'Imeandaliwa': 'Prepared',
   // Pager
@@ -225,7 +330,7 @@ const SW2EN = {
   'Muda na Eneo': 'Time & Region', 'Mawasiliano ya Msingi': 'Basic Contact',
   'Watumiaji na Ufikiaji': 'Users & Access', 'Usajili': 'Registration', 'Roles & Permissions': 'Roles & Permissions',
   'Usalama wa Watumiaji': 'User Security', 'Malipo na Sarafu': 'Payments & Currency',
-  'Sarafu': 'Currency', 'Kodi': 'Tax', 'Njia za Malipo': 'Payment Gateways',
+  'Sarafu': 'Currency', 'Kodi': 'Tax', 'Njia za Malipo': 'Payment Gateways', 'Njia': 'Method',
   'Barua pepe na Taarifa': 'Email & Notifications', 'SMTP': 'SMTP', 'SMS Gateway': 'SMS Gateway',
   'Violezo': 'Templates', 'Viunganishi na API Keys': 'Integrations & API Keys',
   'Analytics': 'Analytics', 'Kuingia kwa Mitandao': 'Social Login', 'Hifadhi ya Wingu': 'Cloud Storage',
@@ -236,7 +341,7 @@ const SW2EN = {
   'Mipangilio imehifadhiwa': 'Settings saved', 'Imeshindwa kuhifadhi mipangilio': 'Failed to save settings',
   'Futa cache': 'Clear cache', 'Imefutwa': 'Cleared',
   // Landing / Orodha
-  'Waliopokea taarifa': 'Waitlist subscribers', 'Maoni ya vipengele': 'Feature suggestions',
+  'Waliopokea taarifa': 'Recipients', 'Maoni ya vipengele': 'Feature suggestions',
   'Maoni ya jamii': 'Community comments',
   'Tuma barua pepe kwa waliopokea taarifa':
     'Email the waitlist subscribers',
@@ -292,6 +397,425 @@ const SW2EN = {
   'Hakuna rekodi ya KYC kwa mtumiaji huyu': 'No KYC record for this user',
   'Wafanyakazi': 'Staff',
   'Hakiki': 'Documents', 'Kubali': 'Approve', 'Kataa': 'Reject',
+
+  // -------------------------------------------------------------------------
+  // Localization audit batch: fragments that the longest-match translator
+  // could not cover. Grouped by module; full sentences come before the short
+  // label entries so the longest-match pass wins.
+  // -------------------------------------------------------------------------
+  // Dashboard / overview
+  'Muhtasari wa biashara': 'Business summary',
+  'Kutoka dashibodi na metrics halisi. AI haibuni namba.': 'From the dashboard and live metrics. AI never invents numbers.',
+  'Hakuna data kwa kipindi hiki': 'No data for this period',
+  'Hakuna muhtasari.': 'No summary.',
+  'Wastani / siku': 'Average / day',
+  'Tayari inapakia…': 'Already loading…',
+  'Imeshindwa kupakua': 'Failed to download',
+  'Kulingana na muda wa mwisho kuingia (rolling windows)': 'Based on last sign-in time (rolling windows)',
+  'kila mtumiaji anafanya requests ngapi': 'how many requests each user makes',
+  'miamala yote': 'all transactions',
+  'Siku 30': '30 days', 'Siku 7': '7 days',
+  'Hai wiki (7d)': 'Active week (7d)', 'Hai mwezi (30d)': 'Active month (30d)',
+  'Hai mwaka (365d)': 'Active year (365d)',
+  'flash sales sasa': 'flash sales now', 'inafanyika sasa': 'happening now',
+  'sasa hivi': 'right now', 'zamani/fungwa': 'old/closed',
+  'Ndani': 'Internal', 'Hesabu': 'Count',
+  'Mwezi': 'Month', 'Mwaka': 'Year', 'Siku': 'Days',
+  'Biashara': 'Business', 'Usafiri': 'Transport',
+  'Mapato Mengine': 'Other revenue', 'Mapato ya Jukwaa': 'Platform revenue',
+  'Mapato ya Boost': 'Boost revenue', 'Mapato ya AdMob': 'AdMob revenue',
+  'Tume ya jukwaa': 'Platform commission', 'Tume ya jukwaa (%)': 'Platform commission (%)',
+  'Ada za Boost': 'Boost fees', 'Ada za KYC': 'KYC fees',
+  'Rufaa': 'Referral', 'Kamilisha rufaa': 'Complete referral',
+  'Rufaa imekamilishwa': 'Referral completed',
+  'Toa zawadi kwa mwanzilishi': 'Give a reward to the referrer',
+  'Aina ya zawadi': 'Reward type', 'Kitendo cha kuhitimu': 'Qualifying action',
+  'Hakuna rufaa': 'No referrals',
+  'Matangazo yametumwa': 'Broadcasts sent', 'Matangazo ya Broad': 'Broad announcements',
+  'Matoleo ya programu': 'App releases',
+  'Toleo la chini linalotumika': 'Minimum supported version',
+  'Build ya chini': 'Minimum build',
+  'Siku kabla ya auto-release': 'Days before auto-release',
+  'Muda wa session (dak)': 'Session timeout (min)',
+  'Ruhusu wauzaji kujisajili': 'Allow sellers to register',
+  'Lazimisha uthibitisho wa email': 'Force email verification',
+  'Lazimisha uthibitisho wa simu': 'Force phone verification',
+  'Takwimu za Matumizi': 'Usage statistics',
+  'Ulinzi na Mahusiano': 'Trust & Relationships',
+  'Kichwa cha arifa': 'Notification title', 'Arifa imetumwa': 'Notification sent',
+  'Andika subject': 'Enter subject', 'Andika kichwa': 'Enter title',
+  'Tafuta action / entity…': 'Search action / entity…',
+  'Tafuta email au jina…': 'Search email or name…',
+  'Tafuta bidhaa.': 'Search products.',
+  'Hakuna ukaguzi': 'No audits', 'Hakuna ledgers': 'No ledgers',
+  'Hakuna historia bado': 'No history yet',
+  'Historia (manunuzi)': 'History (purchases)',
+  'Historia ya manunuzi ya Boost': 'Boost purchase history',
+  'Boosts zinazoendesha sasa': 'Boosts running now',
+  'Hakuna boosts zinazoendesha': 'No boosts running',
+  'Hakuna flash sales': 'No flash sales',
+  'Hakuna ripoti': 'No reports', 'Hakuna migogoro': 'No disputes',
+  'Hakuna marejesho': 'No refunds', 'Hakuna mapato bado': 'No revenue yet',
+  'Hakuna barua zilizotumwa': 'No emails sent',
+  'barua pepe zilizokusanywa': 'emails collected',
+  'comments za wageni': 'guest comments',
+  'Video ya duka': 'Shop video', 'Picha ya kitambulisho': 'ID photo',
+  'Aina ya Kitambulisho': 'ID type', 'KYC ya muuzaji': 'Seller KYC',
+  'Hakuna wasilisho la KYC': 'No KYC submissions',
+  'Onyesha bidhaa zilizofutwa': 'Show deleted products',
+  'Bei (Asili → Sale)': 'Price (Original → Sale)',
+  // Orders / escrow
+  'Hatua za agizo': 'Order steps',
+  'Inasubiri malipo': 'Awaiting payment', 'Inasafirishwa sasa': 'Shipping now',
+  'Pesa ziko escrow': 'Funds in escrow', 'Pesa zimerejeshwa': 'Funds refunded',
+  'Kiasi kwenye escrow': 'Amount in escrow',
+  'Kiasi kinachosubiriwa': 'Pending amount',
+  'Fungua': 'Release', 'Fungua Amana': 'Release Escrow',
+  'Fungua escrow ya agizo': 'Release the order escrow',
+  'Fungua → Muuzaji': 'Release → Seller', 'Toa kwa Muuzaji': 'Release to Seller',
+  'Hii hutoa escrow na kuwasilisha kwa mnunuzi. Hakika?': 'This releases escrow and delivers to the buyer. Are you sure?',
+  'na kuweka pesa kwa salio la muuzaji?': "and credit the seller's balance?",
+  'na kutoa pesa zote kwa muuzaji?': 'and release all funds to the seller?',
+  'na amruhusu kuuza bidhaa?': 'and allow them to sell products?',
+  'anatakiwa kuandaa na kutuma bidhaa sasa.': 'should now prepare and ship the goods.',
+  'atume bidhaa.': 'should ship the goods.',
+  'hajalipa bado.': 'has not paid yet.',
+  'Pesa zinatarajiwa kurudishwa kwa mnunuzi.': 'Funds are expected to be returned to the buyer.',
+  'Kamilisha mgogoro wa': 'Complete the dispute for',
+  // Finance / withdrawals
+  'Utoaji wa Admin': 'Admin Withdrawals',
+  'Hakuna utoaji wa admin': 'No admin withdrawals',
+  'Hakuna utoaji fedha': 'No withdrawals',
+  'baada ya utoaji fedha': 'after withdrawals',
+  'Toa Mapato ya Jukwaa': 'Withdraw platform revenue',
+  'Toa Mapato (Withdraw) AzamPay': 'Withdraw Revenue AzamPay',
+  'Namba yako (AzamPay)': 'Your number (AzamPay)',
+  'Namba ya kupokea (AzamPay)': 'Receiving number (AzamPay)',
+  'Fedha zitatumwa kwa namba yako kupitia AzamPay payout.': 'Funds will be sent to your number via AzamPay payout.',
+  'kwa namba ya mnunuzi kupitia AzamPay?': "to the buyer's number via AzamPay?",
+  'Jaribu tena payout iliyoshindikana?': 'Retry the failed payout?',
+  'Upatanisho (malipo)': 'Reconciliation (payments)',
+  'Daftari la Mapato (tume/boost)': 'Revenue ledger (commission/boost)',
+  'Linganisha malipo na provider kwa kipindi.': 'Reconcile payments with the provider per period.',
+  'Rekodi imeanzishwa': 'Record created',
+  'Tengeneza Rekodi': 'Create Record', 'Tengeneza Rekodi Mpya': 'Create New Record',
+  'Kwa upande wa provider': 'Provider side',
+  'Hamisha kwa namba…': 'Transfer to number…',
+  // Auth screen (index.html static markup)
+  'Ingia kama msimamizi wa Soko Vibe': 'Sign in as a Soko Vibe administrator',
+  'Google inaruhusu tu': 'Google allows only',
+  'Tumia ADMIN_SECRET (hiari)': 'Use ADMIN_SECRET (optional)',
+  'Ingia kwa ADMIN_SECRET': 'Sign in with ADMIN_SECRET',
+  'Njia ya awali. Siri huhifadhiwa kwenye kifaa hiki tu.': 'Legacy method. The secret is stored on this device only.',
+  'Matoleo': 'Releases', 'Ondoka': 'Sign out', 'Menyu': 'Menu',
+  'Badilisha rangi': 'Toggle theme',
+  'Inapakia dashibodi ya usimamizi…': 'Loading the admin dashboard…',
+  // Users / staff / security
+  'Ongeza Mfanyakazi': 'Add Staff', 'Ongeza Mfanyakazi Mpya': 'Add New Staff',
+  'Hakuna wafanyakazi': 'No staff',
+  'akaunti hii ya mfanyakazi?': 'this staff account?',
+  'Badilisha hali ya akaunti. Chaguo': 'Change account status. Choosing',
+  'pia litaondoa alama isSuspended kwenye Firestore.': 'also clears the isSuspended flag on Firestore.',
+  'Akaunti hii hairuhusiwi. Tumia': 'This account is not allowed. Use',
+  'Akaunti hairuhusiwi. Tumia tu': 'Account not allowed. Use only',
+  'Akaunti imeamilishwa': 'Account activated',
+  'Google sign-in haikukamilika. Jaribu tena.': 'Google sign-in did not complete. Try again.',
+  'Una uhakika unataka kuzima MFA?': 'Are you sure you want to disable MFA?',
+  'Bonyeza "Anza Enrollment" kuanza.': 'Click "Start Enrollment" to begin.',
+  'Scan QR hii kwenye app ya authenticator au andika secret manually.': 'Scan this QR in your authenticator app or enter the secret manually.',
+  'Ingiza code ya 6 tarakimu kutoka kwenye app ya authenticator.': 'Enter the 6-digit code from your authenticator app.',
+  'Code ya kuzima (TOTP)': 'Disable code (TOTP)',
+  'Code ya kuthibitisha': 'Verification code',
+  'Viungo hivi vina muda wa dakika 5 kisha zinaisha kwa wenyewe. Huhifadhiwi.': 'These links expire after 5 minutes on their own. They are not stored.',
+  'Nenosiri (min 8 herufi)': 'Password (min 8 characters)',
+  'Nenosiri lazima iwe herufi 8 zaidi': 'Password must be at least 8 characters',
+  'Nenosiri itahifadhiwa kama hash — usitengenezze akaunti yaliyopatikana tayari.': 'The password is stored as a hash — do not create an account that already exists.',
+  'Udanganyifu wa mnunuzi': 'Buyer fraud',
+  'Mawasiliano ya mnunuzi': 'Buyer contact',
+  'Ujumbe huu utapelekwa kwa watumiaji wote waliosajiliwa kwa push (OneSignal) na ndani ya app. Tumia kwa matangazo ya dharura au tangazo.': 'This message goes to every user registered for push (OneSignal) and in-app. Use it for urgent announcements or broadcasts.',
+  'Beem / Twilio — tumia apiKey/secret hapa': 'Beem / Twilio — use apiKey/secret here',
+  'Tumia sehemu zote': 'Use all fields',
+  'Hakuna hatua ya fedha au usalama iliyopendekezwa kutoka vipimo.': 'No financial or security action was suggested by the checks.',
+  // Products / sales
+  'Imechapishwa kwa wateja (thibitisha kwanza)': 'Published to customers (verify first)',
+  '"? Itarudi kama draft — utahitaji kuChapisha.': '"? It will return as a draft — you will need to Publish.',
+  'URL za duka zimeachwa tupu hadi listing rasmi ipatikane.': 'Store URLs are left empty until an official listing is available.',
+  'K.m. Tamasha la Soko Vibe': 'e.g. Soko Vibe Festival',
+  'FULL_TO_SELLER (muuzaji anapata zote)': 'FULL_TO_SELLER (seller gets everything)',
+  'FULL_REFUND (mnunuzi anapata zote)': 'FULL_REFUND (buyer gets everything)',
+  // Forms / shared labels
+  'Kiasi cha mnunuzi (TSh)': 'Buyer amount (TSh)',
+  'Kiasi cha muuzaji (TSh)': 'Seller amount (TSh)',
+  'Kiasi (TZS)': 'Amount (TZS)', 'Kiasi (TSh)': 'Amount (TSh)',
+  'Andika namba.': 'Enter a number.', 'Andika namba ya kupokea.': 'Enter the receiving number.',
+  'Andika kiasi halali.': 'Enter a valid amount.',
+  'Aina: yote': 'Type: all',
+  'Barua Pepe': 'Email',
+  'Usafirishaji': 'Shipping', 'jina@sokovibe.co.tz': 'name@sokovibe.co.tz',
+  '· tuma': '· send', 'kwa "': 'for "', 'bidhaa "': 'product "',
+  'Imetumwa kwa': 'Sent to',
+  'Imekamilika': 'Completed', 'Kamilisha': 'Complete', 'Jaribu tena': 'Try again',
+  'Ongeza': 'Add', 'Funga': 'Close', 'Hakuna': 'None',
+  'Kiasi': 'Amount', 'Bei': 'Price', 'Pesa': 'Funds',
+  'Muuzaji': 'Seller', 'muuzaji': 'seller', 'mnunuzi': 'buyer',
+  'mpya': 'new', 'SASA': 'NOW',
+
+  // -------------------------------------------------------------------------
+  // Localization audit, wave 2: full-coverage pass. These are the remaining
+  // fragments where a short dictionary key matched only part of the sentence,
+  // leaving mixed Swahili/English output in English mode.
+  // -------------------------------------------------------------------------
+  'Refund na hamisho hutumia AzamPay payout kwenye namba halisi. Thibitisha id ya amana kabla ya kutuma.': 'Refunds and transfers use AzamPay payout to the real number. Confirm the deposit id before sending.',
+  'Bado hakuna data ya requests — inakusanywa kuanzia sasa, itaonekana baada ya muda mfupi.': 'No request data yet — collection starts now and will appear shortly.',
+  'Bado hakuna data — inakusanywa kuanzia sasa.': 'No data yet — collection starts now.',
+  'Agizo la Firestore (legacy) — huduma za v2 (escrow, malipo) zinaweza kuwa hazijasawazishwa hapa.': 'Firestore order (legacy) — v2 services (escrow, payments) may not be reconciled here.',
+  'Mnunuzi amepokea. Inasubiri uthibitisho wa kupokea ili pesa iachiwe.': 'Buyer has received it. Awaiting delivery confirmation before funds are released.',
+  'Thibitisha payout imekamilika (inahitajika kama provider hairudishi callback)?': 'Confirm the payout is complete (required if the provider does not return a callback)?',
+  '? Bidhaa zake zitaondolewa kibali cha kuuza.': '? Their products will lose selling permission.',
+  'Bidhaa iko njiani kuelekea kwa mnunuzi.': 'The product is on its way to the buyer.',
+  'Tuma matangazo kwa watumiaji wote': 'Send broadcasts to all users',
+  'Watumiaji hai kila siku (siku 14)': 'Daily active users (14 days)',
+  'Hifadhi metadata tu. Hii haichapishi Google Play wala App Store.': 'Saves metadata only. It does not publish to Google Play or the App Store.',
+  'Malipo yamepokelewa na yanashikiliwa. Hatua inayofuata:': 'Payment received and held. Next step:',
+  'Agizo limefungwa salama. Tume ya jukwaa imerekodiwa.': 'Order closed safely. Platform commission recorded.',
+  'Maagizo (Firestore) — app ndiyo yanayoandika hapa': 'Orders (Firestore) — the app writes these here',
+  'Agizo limesimama kwenye utatuzi.': 'Order is paused for resolution.',
+  'Agizo limefungwa kwa marejesho.': 'Order closed with a refund.',
+  'Mtumiaji hakupatikana kwenye Firestore': 'User not found in Firestore',
+  'Watumiaji wanaofanya requests nyingi': 'Users making many requests',
+  'Ondoa isSuspended kwenye akaunti ya': 'Remove isSuspended from the account of',
+  'Imewasili — inasubiri ukamilishaji': 'Arrived — awaiting completion',
+  'Waliopokea taarifa (barua pepe)': 'Recipients (email)',
+  'kikamilifu? Hatuwezi kurudisha.': 'permanently? We cannot undo this.',
+  'Rejesho linasubiri kutekelezwa': 'Refund awaiting execution',
+  'Kikao kimeisha. Ingia tena.': 'Session expired. Sign in again.',
+  'Tengeneza marejesho kwenda': 'Create refund to',
+  'K.m. Soko Vibe ipo tayari!': 'e.g. Soko Vibe is live!',
+  '· maandishi yalipolishiwa': '· text polished',
+  'Imekwisha ama kuharibika': 'Expired or damaged',
+  'Ingia tena kwa Google.': 'Sign in again with Google.',
+  '****** ikiwa imewekwa': '****** if set',
+  'Bidhaa yenye makosa': 'Wrong item',
+  'Bidhaa ghushi': 'Counterfeit product',
+  'Agizo lipo lakini': 'The order exists but',
+  'tume zilizolipwa': 'commissions paid',
+  'wapya leo': 'new today',
+  'Firebase haijapakia. Onyesha upya ukurasa.': 'Firebase did not load. Refresh the page.',
+  'Amana (Escrow) — Vitendo vya Admin': 'Escrow — Admin Actions',
+  'Tuma payout ya TSh kwenda AzamPay?': 'Send payout of TSh to AzamPay?',
+  'Hakuna maagizo kwenye Firestore.': 'No orders in Firestore.',
+  'Bidhaa / maagizo / utoaji fedha': 'Products / orders / withdrawals',
+  'Bidhaa / usafiri': 'Products / transport',
+  'Sababu / Maelezo (kwa mnunuzi)': 'Reason / details (to the buyer)',
+  'Google sign-in imeshindikana': 'Google sign-in failed',
+  'Tuma refund KAMILI ya agizo': 'Send a FULL refund for order',
+  'Marejesho yanatengenezwa': 'Refunds being created',
+  'Ruhusu suspended kuingia': 'Allow suspended users to sign in',
+  'Ruhusu usajili': 'Allow registration',
+  'rekodi': 'records', 'ukurasa': 'page',
+  'Hatua zinazopendekezwa': 'Suggested actions',
+  'Inapatikana kuondolewa': 'Available for withdrawal',
+  'Imeshindikana kuingia:': 'Sign-in failed:',
+  'Mgogoro umesuluhishwa': 'Dispute resolved',
+  'Mfanyakazi ameongezwa': 'Staff added',
+  'Mgogoro haukuonekana': 'Dispute not found',
+  'Uamuzi umetengenezwa': 'Decision created',
+  'Barua pepe zimetumwa': 'Emails sent',
+  'Boosts zinazoendesha': 'Boosts running',
+  'Hali ya uchapishaji': 'Publishing status',
+  'Tayari kusafirishwa': 'Ready to ship',
+  'Agizo halikuonekana': 'Order not found',
+  'Rejesha kwa Mnunuzi': 'Return to Buyer',
+  'Maelezo (si lazima)': 'Details (optional)',
+  'Escrow inashikiliwa': 'Escrow held',
+  'Mfanyakazi amefutwa': 'Staff removed',
+  'Inapakia muhtasari…': 'Loading summary…',
+  'Inapakia takwimu…': 'Loading statistics…',
+  'Inapakia matoleo…': 'Loading releases…',
+  'Tume iliyopatikana': 'Commission earned',
+  'Mgogoro unaendelea': 'Dispute in progress',
+  'Amana imefunguliwa': 'Escrow released',
+  'Suluhisha mgogoro': 'Resolve dispute',
+  'Maelezo ya uamuzi': 'Decision details',
+  'Sababu ya hamisho': 'Transfer reason',
+  'Transfer imetumwa': 'Transfer sent',
+  'Withdraw imetumwa': 'Withdrawal sent',
+  'Agizo limefungwa': 'Order closed',
+  'Agizo limewekwa': 'Order placed',
+  'Maelezo ya toleo': 'Release notes',
+  'Rrating ya duka': 'Store rating',
+  'Ndiyo, amilisha': 'Yes, activate',
+  'Ndiyo, zima': 'Yes, disable',
+  'Hali ya mgogoro': 'Dispute status',
+  'Hali ya mwisho:': 'Final status:',
+  'Maagizo (fedha)': 'Orders (funds)',
+  'Futa mfanyakazi': 'Delete staff',
+  'Futa akaunti ya': 'Delete the account of',
+  'KYC imekataliwa': 'KYC rejected',
+  'KYC imekubaliwa': 'KYC approved',
+  'KYC imefutwa': 'KYC revoked',
+  'jumla ya mauzo': 'total sales',
+  'Jina la jukwaa': 'Platform name',
+  'Cache imefutwa': 'Cache cleared',
+  'Salio la duka': 'Store balance',
+  'Salio baada': 'Balance after',
+  'Ujumbe mfupi…': 'Short message…',
+  'Watumiaji hai': 'Active users',
+  'Hai leo (24h)': 'Active today (24h)',
+  'MFA imewashwa': 'MFA enabled',
+  'MFA imezimwa': 'MFA disabled',
+  'Ubora haufai': 'Quality issue',
+  'Ona ushahidi': 'View evidence',
+  '· haikufaulu': '· failed', '· wastani': '· average', '· hadi': '· up to',
+  'Ingia mwisho': 'Last sign-in', 'Imesajiliwa': 'Registered', 'Zima': 'Deactivate',
+  'Zima mfanyakazi': 'Deactivate staff', 'Zima akaunti hii ya mfanyakazi?': 'Deactivate this staff account?',
+  'Amilisha mfanyakazi': 'Activate staff', 'Amilisha akaunti hii ya mfanyakazi?': 'Activate this staff account?',
+  'Ruhusa': 'Permissions', 'vuote': 'all', 'Futa Kikamilifu': 'Delete permanently',
+  // Staff role titles.
+  'Msimamizi Mkuu': 'Super Admin', 'Mmiliki': 'Owner', 'Msimamizi': 'Admin',
+  'Msimamizi wa Uendeshaji': 'Operations Admin', 'Msimamizi wa Fedha': 'Finance Admin',
+  'Fedha': 'Finance', 'Msimamizi wa Msaada': 'Support Admin', 'Msaada': 'Support',
+  'Msimamizi wa Maudhui': 'Moderation Admin', 'Mkaguzi wa KYC': 'KYC Reviewer',
+  'Msimamizi wa Usalama': 'Security Admin', 'Uendeshaji wa Kiufundi': 'Technical Ops',
+  'Mchambuzi': 'Analyst', 'Mchambuzi (kiona)': 'Analyst (read-only)',
+  'Toleo jipya': 'New version',
+  'Gateway kuu': 'Main gateway',
+  'Wapya leo:': 'New today:',
+  'Mauzo duka': 'Store sales',
+  'AI kitengo': 'AI category',
+  // Partial-match leftovers: short keys matched only "Jumla"/"Tume"/"Hakiki",
+  // leaving the Swahili particle behind.
+  'Jina la Kamili': 'Full name',
+  '% ya jumla': '% of total',
+  'Tume ya Mauzo': 'Sales commission',
+  'Jumla ya Mapato': 'Total revenue',
+  'Hakiki za KYC': 'KYC documents',
+  'Kubali KYC ya': 'Approve the KYC for',
+  '· template tu': '· template only',
+  'Washa compression': 'Enable compression',
+  // Second pass: labels that were written half in English, and the strings the
+  // dashboard's metric strip now renders in Kiswahili.
+  'Ripoti na Ulinzi': 'Reports & Safety',
+  'Uthibitisho (KYC)': 'Verifications (KYC)',
+  'Ofa na Punguzo': 'Boost & Flash Sales',
+  'Fedha na Daftari': 'Finance & Ledger',
+  'Matangazo kwa Wote': 'Broadcasts',
+  'Orodha ya Kuingia': 'Landing / Waitlist',
+  'Uchambuzi wa AI': 'AI Insights',
+  'Daftari': 'Ledger',
+  'Upatanisho': 'Reconciliation',
+  'Utoaji fedha': 'Withdrawals',
+  'zinazosubiri / zinafanyiwa kazi': 'pending / processing',
+  'zilizothibitishwa ': 'verified ',
+  'akaunti za wanunuzi': 'buyer accounts',
+  'zilizofanikiwa / zilizoshindikana': 'succeeded / failed',
+  'mfumo / udanganyifu': 'system / fraud',
+  'escrow hai': 'active escrow',
+  // Settings labels localized so the source reads Kiswahili first.  // Settings labels localized so the source reads Kiswahili first.
+  'Kaulimbiu': 'Tagline',
+  'URL ya nembo': 'Logo URL',
+  'Eneo la saa': 'Timezone',
+  'Muundo wa tarehe': 'Date format',
+  'Muundo wa saa': 'Time format',
+  'Barua pepe ya msimamizi': 'Admin email',
+  'Barua pepe ya msaada': 'Support email',
+  'Simu ya msaada': 'Support phone',
+  'Jukumu la msingi': 'Default role',
+  'Majukumu na Ruhusa': 'Roles & Permissions',
+  'Majukumu: mnunuzi / muuzaji / admin (ndani ya app)': 'Roles: buyer / seller / admin (in-app)',
+  'Lazimisha uthibitisho wa barua pepe': 'Require email verification',
+  'Muda wa kikao (dak)': 'Session timeout (min)',
+  'Siku kabla ya kuachiliwa kiotomatiki': 'Days before auto-release',
+  'Njia kuu ya malipo': 'Primary gateway',
+  'Mwenyeji (host)': 'Host',
+  'Bandari (port)': 'Port',
+  'Mtumiaji wa SMTP': 'SMTP user',
+  'Nenosiri la SMTP': 'SMTP password',
+  'Barua pepe ya mtumaji': 'From email',
+  'Jina la mtumaji': 'From name',
+  'Mtoa huduma': 'Provider',
+  'Sahihi ya mnunuzi': 'Buyer signature',
+  'Sahihi ya muuzaji': 'Seller signature',
+  'Washa hali ya matengenezo': 'Enable maintenance mode',
+  'Ruhusu akaunti zilizosimamishwa kuingia': 'Allow suspended accounts to sign in',
+  'Orodha nyeupe / nyeusi ya IP': 'IP whitelist / blacklist',
+  'Ruhusa (tenganisha kwa koma)': 'Allow list (comma separated)',
+  'Marufuku (tenganisha kwa koma)': 'Block list (comma separated)',
+  'kila siku': 'daily',
+  'kila wiki': 'weekly',
+  'imezimwa': 'off',
+  'Kiwango cha juu cha upakiaji (MB)': 'Max upload (MB)',
+  'Kiwango cha juu cha picha (MB)': 'Max image (MB)',
+  'Washa ukandamizaji': 'Enable compression',
+  'Kikomo cha maombi kwa dakika': 'API rate limit /min',
+  'Safisha cache': 'Clear cache',
+  'Cache imesafishwa': 'Cache cleared',
+  'Washa 2FA': 'Enable 2FA',
+  'Washa escrow': 'Enable escrow',
+  'Washa cache': 'Enable cache',
+  'Ratiba': 'Schedule',
+  'Sarafu ya msingi': 'Base currency',
+  // Status/role chips rendered by badge() and the filter selects.
+  'mnunuzi': 'buyer',
+  'muuzaji': 'seller',
+  'msimamizi': 'admin',
+  'msimamizi mkuu': 'super admin',
+  'hai': 'active',
+  'haifanyi kazi': 'inactive',
+  'inasubiri': 'pending',
+  'imezuiwa': 'restricted',
+  'imesimamishwa': 'suspended',
+  'inasubiri kufutwa': 'pending deletion',
+  'imefutwa': 'deleted',
+  'rasimu': 'draft',
+  'imechapishwa': 'published',
+  'imekataliwa': 'rejected',
+  'wazi': 'open',
+  'inakaguliwa': 'under review',
+  'imetatuliwa': 'resolved',
+  'inafanyiwa kazi': 'processing',
+  'imekamilika': 'completed',
+  'imeshindikana': 'failed',
+  'imeghairiwa': 'cancelled',
+  'imekaguliwa': 'reviewed',
+  'hatua imechukuliwa': 'actioned',
+  'imepuuzwa': 'dismissed',
+  'imethibitishwa': 'verified',
+  'haijathibitishwa': 'unverified',
+  'inasubiri malipo ya escrow': 'awaiting escrow payment',
+  'iko escrow': 'in escrow',
+  'tayari kutumwa': 'ready to dispatch',
+  'imetumwa': 'dispatched',
+  'imewasilishwa': 'delivered',
+  'imesafirishwa': 'shipped',
+  'imeshikiliwa': 'held',
+  'imekamatwa': 'captured',
+  'imeachiliwa': 'released',
+  'imelipwa': 'settled',
+  'imefungwa': 'blocked',
+  'imeripotiwa': 'reported',
+  'kipindi cha ukaguzi': 'inspection period',
+  'inasubiri OTP': 'awaiting OTP',
+  'pochi limewekwa': 'wallet credited',
+  'malipo yanasubiri': 'pending payout',
+  'malipo yamekamilika': 'payout complete',
+  'ina mgogoro': 'disputed',
+  'marejesho yanasubiri': 'refund pending',
+  'imerejeshwa': 'refunded',
+  'imeisha muda': 'expired',
+  'imeombwa': 'requested',
+  'ukaguzi wa sifa': 'eligibility check',
+  'ukaguzi wa ada ya usafirishaji': 'shipping fee review',
+  'ukaguzi unahitajika': 'review required',
+  'njiani': 'in transit',
+  'iko njiani kwa mteja': 'out for delivery',
+  'imefanikiwa': 'success',
+  'imeidhinishwa': 'approved',
+  'imeshughulikiwa': 'processed',
+  'agizo limekamilika': 'order completed',
+  'si muuzaji': 'not a seller',
+  'wasifu unahitajika': 'profile required',
+  'rasimu hai': 'active draft',
 };
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 const SW2EN_PAIRS = Object.entries(SW2EN).sort((a, b) => b[0].length - a[0].length);
@@ -307,14 +831,33 @@ function applyLang(root) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let n;
   const skipSel = 'script,style,textarea,select,option,input';
+  // Collect first, mutate after: rewriting an element's textContent detaches the
+  // text node the walker is standing on, and TreeWalker then stops early.
+  const jobs = [];
   while ((n = walker.nextNode())) {
     const p = n.parentNode;
     if (!p || (p.nodeType === 1 && p.matches && p.matches(skipSel))) continue;
-    if (p && p.dataset && p.dataset.i18n) continue;
+    if (p && p.dataset && p.dataset.i18n) {
+      // Sections rendered after boot carry data-i18n labels of their own; the
+      // toggle only rewrites the static shell, so apply the map here as well.
+      const mapped = NAV_EN[p.dataset.i18n];
+      if (mapped) jobs.push([p, null, mapped]);
+      continue;
+    }
     const v = n.nodeValue;
-    if (v) { const t = trText(v); if (t !== v) n.nodeValue = t; }
+    if (!v) continue;
+    const t = trText(v);
+    if (t !== v) jobs.push([null, n, t]);
+  }
+  for (const [el, node, text] of jobs) {
+    if (el) el.textContent = text;
+    else node.nodeValue = text;
   }
   if (root.querySelectorAll) {
+    root.querySelectorAll('option[value]').forEach((el) => {
+      const t = trText(el.textContent);
+      if (t !== el.textContent) el.textContent = t;
+    });
     root.querySelectorAll('input[placeholder],textarea[placeholder]').forEach((el) => {
       const pl = el.getAttribute('placeholder') || '';
       const t = trText(pl);
@@ -482,7 +1025,7 @@ function confirmModal(title, msg, btnLabel, danger) {
       '<h3>' + esc(title) + '</h3>' +
       '<p class="msub">' + esc(msg) + '</p>' +
       '<div class="mfooter">' +
-      '<button class="btn" id="cfNo">Futa</button>' +
+      '<button class="btn" id="cfNo">Ghairi</button>' +
       '<button class="btn ' + (danger ? 'danger' : 'accent') + '" id="cfYes">' + esc(btnLabel || 'Ndiyo') + '</button>' +
       '</div>'
     );
@@ -509,15 +1052,15 @@ function runQuiet(fn) {
 // ---------------------------------------------------------------------------
 const TITLES = {
   dashboard: 'Dashibodi', users: 'Watumiaji', sellers: 'Wauzaji', products: 'Bidhaa',
-  orders: 'Maagizo', disputes: 'Migogoro', refunds: 'Marejesho', reports: 'Ripoti & Ulinzi',
-  kyc: 'Wathibitisho (KYC)',
+  orders: 'Maagizo', disputes: 'Migogoro', refunds: 'Marejesho', reports: 'Ripoti na Ulinzi',
+  kyc: 'Uthibitisho (KYC)',
   staff: 'Wafanyakazi',
-  promos: 'Boost & Flash Sales',
+  promos: 'Ofa na Punguzo',
   revenue: 'Mapato ya Jukwaa',
-  finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
+  finance: 'Fedha na Daftari', referrals: 'Rufaa', broadcasts: 'Matangazo kwa Wote', audit: 'Ukaguzi',
   stats: 'Takwimu za Matumizi', settings: 'Mipangilio',
-  landing: 'Landing / Waitlist',
-  insights: 'AI BI',
+  landing: 'Orodha ya Kuingia',
+  insights: 'Uchambuzi wa AI',
   releases: 'Matoleo',
 };
 const Pg = {};
@@ -555,6 +1098,9 @@ function bindSection(sec) {
     });
   });
   icons();
+  // Loaders replace their section markup after the language toggle ran, so the
+  // English pass has to happen again here or the new table stays Kiswahili.
+  if (LANG === 'en') applyLang(el);
 }
 
 // ---------------------------------------------------------------------------
@@ -652,22 +1198,31 @@ async function loadDashboard() {
     const fsOrders = (await getJSON('/api/admin/orders').catch(() => ({ orders: [] }))).orders || [];
     const recents = mergeRecent(orders, fsOrders);
     const queue = [
-      { sec: 'finance', ic: 'banknote', lab: 'Withdrawals zinazosubiri', n: Number(m.withdrawalsPending || 0) },
+      { sec: 'finance', ic: 'banknote', lab: 'Utoaji unaosubiri', n: Number(m.withdrawalsPending || 0) },
       { sec: 'disputes', ic: 'scale', lab: 'Migogoro wazi', n: Number(m.disputesOpen || k.activeDisputes || 0) },
       { sec: 'sellers', ic: 'store', lab: 'Wauzaji wanaosubiri uthibitisho', n: queueTotal(pendSellers) },
       { sec: 'refunds', ic: 'rotate-ccw', lab: 'Marejesho yanayosubiri', n: queueTotal(pendRefunds) },
     ];
 
     el.innerHTML =
-      '<div class="ov-head"><div><h2>Maelezo ya jumla</h2><p class="dim">Hali ya soko kwa mtazamo mmoja</p></div>' +
+      '<div class="ov-head"><div><h2>Dashibodi</h2><p class="dim">Muhtasari wa hali ya jukwaa — data halisi kutoka kwenye mfumo</p></div>' +
       '<button class="btn sm" data-ov="refresh"><i data-lucide="refresh-cw"></i>Sasisha</button></div>' +
       '<div class="grid kpis">' +
       kpi('Watumiaji', fmtNum(k.users), 'Wapya leo: ' + fmtNum(k.newUsersToday), 'users', trendChip(last.users, prev.users)) +
       kpi('Maagizo', fmtNum(k.orders), 'Kamili: ' + fmtNum(k.completedOrders), 'shopping-cart') +
       kpi('GMV', fmtTZS(gmv), 'thamani ya bidhaa zilizouzwa', 'coins', trendChip(last.money, prev.money)) +
       kpi('Mapato ya Tume', fmtTZS(k.commissionRevenue), 'tume iliyokusanywa', 'trending-up') +
-      kpi('Escrow Inashikiliwa', fmtTZS(k.escrowHeld), fmtNum((m.escrowHolding || {}).count || 0) + ' holdi', 'lock') +
+      kpi('Escrow Inashikiliwa', fmtTZS(k.escrowHeld), fmtNum((m.escrowHolding || {}).count || 0) + ' escrow hai', 'lock') +
       kpi('Bidhaa', fmtNum(k.products), 'jumla dukani', 'package') +
+      '</div>' +
+
+      '<div class="metricstrip">' +
+      metricPill('Wauzaji', fmtNum(k.sellers), 'zilizothibitishwa ' + fmtNum(k.verifiedSellers), 'store') +
+      metricPill('Wanunuzi', fmtNum(k.buyers), 'akaunti za wanunuzi', 'users') +
+      metricPill('Malipo', fmtNum(k.successfulPayments) + ' / ' + fmtNum(k.failedPayments), 'zilizofanikiwa / zilizoshindikana', 'credit-card') +
+      metricPill('Utoaji fedha', fmtNum(k.pendingWithdrawals), fmtTZS(k.pendingWithdrawalAmount), 'banknote') +
+      metricPill('Ripoti', fmtNum(k.reportedProducts), 'bidhaa zilizoripotiwa', 'flag') +
+      metricPill('Tahadhari', fmtNum(k.systemAlerts), 'mfumo / udanganyifu', 'shield-alert') +
       '</div>' +
 
       '<div class="grid cols2" style="margin-top:18px">' +
@@ -711,7 +1266,7 @@ async function loadDashboard() {
         data: {
           labels: series.map((s) => String(s.date || '').slice(5)),
           datasets: [
-            { label: 'Money', data: series.map((s) => s.money), borderColor: '#008069', backgroundColor: '#008069.12)', fill: true, tension: .3, pointRadius: 0 },
+            { label: 'Money', data: series.map((s) => s.money), borderColor: '#008069', backgroundColor: 'rgba(0,128,105,.12)', fill: true, tension: .3, pointRadius: 0 },
             { label: 'Commission', data: series.map((s) => s.commission), borderColor: '#b7791f', backgroundColor: 'transparent', borderDash: [4, 3], tension: .3, pointRadius: 0 },
             { label: 'Users', data: series.map((s) => s.users), borderColor: '#2563eb', backgroundColor: 'transparent', tension: .3, pointRadius: 0, yAxisID: 'y1' },
           ],
@@ -742,6 +1297,16 @@ async function loadDashboard() {
 function kpi(lab, val, sub, ic, trend) {
   return '<div class="kpi"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div><div class="sub">' + esc(sub) + (trend ? ' ' + trend : '') + '</div><div class="ic"><i data-lucide="' + esc(ic) + '"></i></div></div>';
 }
+// Compact secondary metrics row under the main KPI cards. Same esc/fmt rules
+// as kpi() so no unescaped value can reach innerHTML.
+function metricPill(lab, val, sub, ic) {
+  return '<div class="metricpill">' +
+    '<div class="mp-ic"><i data-lucide="' + esc(ic) + '"></i></div>' +
+    '<div class="mp-body"><div class="mp-val">' + val + '</div>' +
+    '<div class="mp-lab">' + esc(lab) + '</div>' +
+    (sub ? '<div class="mp-sub">' + esc(sub) + '</div>' : '') +
+    '</div></div>';
+}
 function onlChip(lab, v) {
   return '<span class="bdg ' + (Number(v) > 0 ? 'ok' : 'mut') + '">' + esc(lab) + ': <b style="margin-left:4px">' + fmtNum(v) + '</b></span>';
 }
@@ -753,8 +1318,8 @@ function cardQuick(t, body) { return '<div class="card"><div class="cardhead"><h
 function usersToolbar() {
   return '<div class="toolbar">' +
     '<input class="field q" id="uQ" placeholder="Tafuta: email, namba, jina, username…">' +
-    '<select class="select-xs" id="uRole"><option value="">Jukumu: yote</option><option>buyer</option><option>seller</option><option>admin</option><option>super_admin</option></select>' +
-    '<select class="select-xs" id="uStatus"><option value="">Hali: yote</option><option>active</option><option>pending</option><option>restricted</option><option>suspended</option><option>deletion_pending</option><option>deleted</option></select>' +
+    '<select class="select-xs" id="uRole"><option value="">Jukumu: yote</option><option value="buyer">mnunuzi</option><option value="seller">muuzaji</option><option value="admin">msimamizi</option><option value="super_admin">msimamizi mkuu</option></select>' +
+    '<select class="select-xs" id="uStatus"><option value="">Hali: zote</option><option value="active">hai</option><option value="pending">inasubiri</option><option value="restricted">imezuiwa</option><option value="suspended">imesimamishwa</option><option value="deletion_pending">inasubiri kufutwa</option><option value="deleted">imefutwa</option></select>' +
     '<button class="btn" id="uGo">Chuja</button><div class="spacer"></div><button class="btn sm" data-fn="nope" data-act="none" onclick="return false" hidden></button>' +
     '</div>';
 }
@@ -806,9 +1371,9 @@ async function loadUsers() {
 async function changeUserStatus(id, name) {
   openModal(
     '<h3>Hali ya mtumiaji: ' + esc(name) + '</h3><p class="msub">Badilisha hali ya akaunti. Chaguo <b>active</b> pia litaondoa alama isSuspended kwenye Firestore.</p>' +
-    '<label>Hali mpya</label><select class="field" id="usSel"><option value="active">active</option><option value="pending">pending</option><option value="suspended">suspended</option><option value="deleted">deleted</option></select>' +
+    '<label>Hali mpya</label><select class="field" id="usSel"><option value="active">hai</option><option value="pending">inasubiri</option><option value="suspended">imesimamishwa</option><option value="deleted">imefutwa</option></select>' +
     '<label>Sababu (hiari)</label><input class="field" id="usReason" placeholder="Sababu fupi kwa ukaguzi">' +
-    '<div class="mfooter"><button class="btn" id="usNo">Futa</button><button class="btn accent" id="usYes">Hifadhi</button></div>'
+    '<div class="mfooter"><button class="btn" id="usNo">Ghairi</button><button class="btn accent" id="usYes">Hifadhi</button></div>'
   );
   $('usNo').onclick = closeModal;
   $('usYes').onclick = () => run(async () => {
@@ -889,7 +1454,7 @@ async function sendUserNotif(uid, name) {
     '<label>Kichwa</label><input class="field" id="snTitle" placeholder="Kichwa cha arifa">' +
     '<label>Maandishi</label><textarea class="field" id="snBody" placeholder="Ujumbe…"></textarea>' +
     '<label>Aina</label><select class="field" id="snType"><option value="system">system</option><option value="order">order</option><option value="message">message</option><option value="promo">promo</option></select>' +
-    '<div class="mfooter"><button class="btn" id="snNo">Futa</button><button class="btn accent" id="snYes">Tuma</button></div>'
+    '<div class="mfooter"><button class="btn" id="snNo">Ghairi</button><button class="btn accent" id="snYes">Tuma</button></div>'
   );
   $('snNo').onclick = closeModal;
   $('snYes').onclick = () => run(async () => {
@@ -1036,7 +1601,7 @@ async function fpToggleActive(id, name) {
 function sellersToolbar() {
   return '<div class="toolbar">' +
     '<input class="field q" id="svQ" placeholder="Tafuta duka / anwani…">' +
-    '<select class="select-xs" id="svV"><option value="">Uthibitisho: yote</option><option value="pending">pending</option><option value="verified">verified</option><option value="unverified">unverified</option><option value="rejected">rejected</option></select>' +
+    '<select class="select-xs" id="svV"><option value="">Uthibitisho: wote</option><option value="pending">inasubiri</option><option value="verified">imethibitishwa</option><option value="unverified">haijathibitishwa</option><option value="rejected">imekataliwa</option></select>' +
     '<button class="btn" id="svGo">Chuja</button>' +
     '</div>';
 }
@@ -1076,7 +1641,7 @@ async function loadSellers() {
   bindSection('sellers'); touch();
 }
 async function sellerVerify(id, name, action) {
-  const labels = { verify: 'Thibitisha', reject: 'Kataa', pending: 'Rudi pending' };
+  const labels = { verify: 'Thibitisha', reject: 'Kataa', pending: 'Rudi kwenye kusubiri' };
   const ok = await confirmModal(labels[action] + ': ' + name, 'Uthibitisha uamuzi huu? Unatengenezwa kwenye rekodi ya ukaguzi.', labels[action], action === 'reject');
   if (!ok) return;
   run(async () => {
@@ -1108,7 +1673,7 @@ async function viewSellerDetail(id) {
       '<dt>AI kitengo</dt><dd>' + Number(s.avgShippingResponseHours || 0).toFixed(1) + 'h</dd>' +
       '<dt>Salio</dt><dd>' + fmtTZS(w.availableBalance) + ' <span class="dim">+pending ' + fmtTZS(w.pendingBalance) + '</span></dd>' +
       '<dt>Imetolewa</dt><dd>' + fmtTZS(w.totalWithdrawn) + '</dd>' +
-      '<dt>Bidhaa / maagizo / withdrawals</dt><dd>' + fmtNum(s._count && s._count.products) + ' / ' + fmtNum(s._count && s._count.orders) + ' / ' + fmtNum(s._count && s._count.withdrawals) + '</dd>' +
+      '<dt>Bidhaa / maagizo / utoaji fedha</dt><dd>' + fmtNum(s._count && s._count.products) + ' / ' + fmtNum(s._count && s._count.orders) + ' / ' + fmtNum(s._count && s._count.withdrawals) + '</dd>' +
       '</dl>' +
       '<div class="drawer-actions">' +
       '<button class="btn sm accent" data-fn="sellerVerify" data-args=\'' + JSON.stringify({ id: s.id, name: s.storeName || s.id }).replace(/'/g, '&#39;') + '\'>Thibitisha</button>' +
@@ -1126,7 +1691,7 @@ function productsToolbar() {
   const showDel = pgState('products', 'del') === '1';
   return '<div class="toolbar">' +
     '<input class="field q" id="pQ" placeholder="Tafuta bidhaa.">' +
-    '<select class="select-xs" id="pStatus"><option value="">Hali: yote</option><option>draft</option><option>published</option><option>suspended</option><option>rejected</option><option>deleted</option></select>' +
+    '<select class="select-xs" id="pStatus"><option value="">Hali: zote</option><option value="draft">rasimu</option><option value="published">imechapishwa</option><option value="suspended">imesimamishwa</option><option value="rejected">imekataliwa</option><option value="deleted">imefutwa</option></select>' +
     '<label class="chk" title="Onyesha bidhaa zilizofutwa"><input type="checkbox" id="pDel"' + (showDel ? ' checked' : '') + '> Onyesha zilizofutwa</label>' +
     '<button class="btn" id="pGo">Chuja</button>' +
     '</div>';
@@ -1187,7 +1752,7 @@ async function productModerate(id, title) {
     ['published', 'suspended', 'rejected', 'draft'].map((s) => '<button class="radio-chip" data-v="' + s + '">' + s + '</button>').join('') +
     '</div>' +
     '<label>Sababu (hiari)</label><input class="field" id="pMoReason" placeholder="Kwa nini hali hii?">' +
-    '<div class="mfooter"><button class="btn" id="pMoNo">Futa</button><button class="btn accent" id="pMoYes">Hifadhi</button></div>'
+    '<div class="mfooter"><button class="btn" id="pMoNo">Ghairi</button><button class="btn accent" id="pMoYes">Hifadhi</button></div>'
   );
   let pick = 'published';
   $('pMoRow').querySelectorAll('.radio-chip').forEach((c) => c.addEventListener('click', () => {
@@ -1278,8 +1843,8 @@ async function productRestore(id, title) {
 function ordersToolbar() {
   return '<div class="toolbar">' +
     '<input class="field q" id="oQ" placeholder="Namba ya agizo / simu / email / duka…">' +
-    '<select class="select-xs" id="oStatus"><option value="">Hali: yote</option>' +
-    '<option>draft</option><option>awaiting_escrow_payment</option><option>in_escrow</option><option>ready_to_dispatch</option><option>dispatched</option><option>delivered</option><option>inspection_period</option><option>otp_pending</option><option>completed</option><option>wallet_credited</option><option>payout_pending</option><option>payout_complete</option><option>disputed</option><option>refund_pending</option><option>refunded</option><option>cancelled</option><option>expired</option><option>failed</option></select>' +
+    '<select class="select-xs" id="oStatus"><option value="">Hali: zote</option>' +
+    '<option value="draft">rasimu</option><option value="awaiting_escrow_payment">inasubiri malipo ya escrow</option><option value="in_escrow">iko escrow</option><option value="ready_to_dispatch">tayari kutumwa</option><option value="dispatched">imetumwa</option><option value="delivered">imewasilishwa</option><option value="inspection_period">kipindi cha ukaguzi</option><option value="otp_pending">inasubiri OTP</option><option value="completed">imekamilika</option><option value="wallet_credited">pochi limewekwa</option><option value="payout_pending">malipo yanasubiri</option><option value="payout_complete">malipo yamekamilika</option><option value="disputed">ina mgogoro</option><option value="refund_pending">marejesho yanasubiri</option><option value="refunded">imerejeshwa</option><option value="cancelled">imeghairiwa</option><option value="expired">imeisha muda</option><option value="failed">imeshindikana</option></select>' +
     '<button class="btn" id="oGo">Chuja</button>' +
     '</div>';
 }
@@ -1541,7 +2106,7 @@ async function escrowTransferAction(args) {
     '<label class="lab">Namba ya kupokea (AzamPay)</label><input id="trPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
     '<label class="lab">Maelezo (si lazima)</label><input id="trNote" class="field" type="text" placeholder="Sababu ya hamisho">' +
     '<div class="err" id="trErr"></div>' +
-    '<div class="mfooter"><button class="btn" id="trNo">Futa</button><button class="btn danger" id="trYes">Tuma Transfer</button></div>'
+    '<div class="mfooter"><button class="btn" id="trNo">Ghairi</button><button class="btn danger" id="trYes">Tuma Transfer</button></div>'
   );
   $('trNo').onclick = closeModal;
   $('trYes').onclick = () => {
@@ -1563,7 +2128,7 @@ async function escrowTransferAction(args) {
 // Migogoro
 // ---------------------------------------------------------------------------
 function disputesToolbar() {
-  return '<div class="toolbar"><select class="select-xs" id="dStatus"><option value="">Hali: yote</option><option value="open">open</option><option value="under_review">under_review</option><option value="resolved">resolved</option></select>' +
+  return '<div class="toolbar"><select class="select-xs" id="dStatus"><option value="">Hali: zote</option><option value="open">wazi</option><option value="under_review">inakaguliwa</option><option value="resolved">imetatuliwa</option></select>' +
     '<button class="btn" id="dGo">Chuja</button></div>';
 }
 function disputeReason(r) {
@@ -1638,7 +2203,7 @@ async function disputeResolve(id, num, total) {
     '<label>Kiasi cha mnunuzi (TSh)</label><input class="field" id="drBuyer" type="number" min="0" value="0">' +
     '<label>Kiasi cha muuzaji (TSh)</label><input class="field" id="drSeller" type="number" min="0" value="0">' +
     '</div>' +
-    '<div class="mfooter"><button class="btn" id="drNo">Futa</button><button class="btn accent" id="drYes">Tengeneza Uamuzi</button></div>'
+    '<div class="mfooter"><button class="btn" id="drNo">Ghairi</button><button class="btn accent" id="drYes">Tengeneza Uamuzi</button></div>'
   );
   let pick = 'FULL_REFUND';
   $('drRow').querySelectorAll('.radio-chip').forEach((c) => c.addEventListener('click', () => {
@@ -1658,7 +2223,7 @@ async function disputeResolve(id, num, total) {
 // Marejesho
 // ---------------------------------------------------------------------------
 function refundsToolbar() {
-  return '<div class="toolbar"><select class="select-xs" id="rStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="processing">processing</option><option value="completed">completed</option><option value="failed">failed</option></select>' +
+  return '<div class="toolbar"><select class="select-xs" id="rStatus"><option value="">Hali: zote</option><option value="pending">inasubiri</option><option value="processing">inafanyiwa kazi</option><option value="completed">imekamilika</option><option value="failed">imeshindikana</option></select>' +
     '<button class="btn" id="rGo">Chuja</button></div>';
 }
 async function loadRefunds() {
@@ -1704,7 +2269,7 @@ async function refundProcess(id, num) {
 // Ripoti & Ulinzi (moderation)
 // ---------------------------------------------------------------------------
 function reportsToolbar() {
-  return '<div class="toolbar"><select class="select-xs" id="rpStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="reviewed">reviewed</option><option value="actioned">actioned</option><option value="dismissed">dismissed</option></select>' +
+  return '<div class="toolbar"><select class="select-xs" id="rpStatus"><option value="">Hali: zote</option><option value="pending">inasubiri</option><option value="reviewed">imekaguliwa</option><option value="actioned">hatua imechukuliwa</option><option value="dismissed">imepuuzwa</option></select>' +
     '<select class="select-xs" id="rpType"><option value="">Aina: yote</option><option value="product">product</option><option value="user">user</option></select>' +
     '<button class="btn" id="rpGo">Chuja</button></div>';
 }
@@ -1751,7 +2316,7 @@ async function reportReview(id, status) {
 // Fedha: KPI + Ledger + Withdrawals + Rekodi
 // ---------------------------------------------------------------------------
 function financeTabs(active) {
-  const tabs = { main: 'Fedha', ledger: 'Ledger', withdrawals: 'Withdrawals', recon: 'Rekodi (Reconciliation)' };
+  const tabs = { main: 'Muhtasari', ledger: 'Daftari', withdrawals: 'Utoaji fedha', recon: 'Upatanisho' };
   return '<div class="toolbar" style="margin-bottom:14px">' + Object.keys(tabs).map((k) =>
     '<button class="radio-chip ' + (active === k ? 'on' : '') + '" data-ftab="' + k + '">' + tabs[k] + '</button>').join('') + '</div>';
 }
@@ -1778,7 +2343,7 @@ async function loadFinanceMain() {
       kpi('Mapato ya Tume', fmtTZS(k.commissionRevenue), 'jumla', 'trending-up') +
       kpi('Escrow inashikiliwa', fmtTZS(k.escrowHeld), fmtNum((m.escrowHolding || {}).count || 0) + ' includes', 'lock') +
       kpi('GMV', fmtTZS(m.gmv), 'jumla ya mauzo', 'coins') +
-      kpi('Withdrawals zinazosubiri', fmtNum(m.withdrawalsPending || 0), 'pending + processing', 'banknote') +
+      kpi('Utoaji unaosubiri', fmtNum(m.withdrawalsPending || 0), 'zinazosubiri / zinafanyiwa kazi', 'banknote') +
       '</div>' +
       '<div class="grid cols2" style="margin-top:18px">' +
       '<div class="card"><div class="cardhead"><h3>Maagizo (fedha)</h3></div>' +
@@ -1790,7 +2355,7 @@ async function loadFinanceMain() {
       (m.paymentsByStatus || []).map((g) => '<tr><td>' + badge(g.status) + '</td><td>' + fmtNum(g.count) + '</td><td class="num">' + fmtTZS(g.totalAmount) + '</td></tr>').join('') +
       '</tbody></table></div></div>';
   } catch (e) { body.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>'; }
-  touch(); icons();
+  bindSection('finance'); touch();
 }
 async function loadLedger() {
   const body = secEl('finance').querySelector('.finBody');
@@ -1815,7 +2380,7 @@ async function loadLedger() {
 }
 function withdrawalsToolbar() {
   return '<div class="toolbar">' +
-    '<select class="select-xs" id="wStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="processing">processing</option><option value="completed">completed</option><option value="failed">failed</option><option value="cancelled">cancelled</option></select>' +
+    '<select class="select-xs" id="wStatus"><option value="">Hali: zote</option><option value="pending">inasubiri</option><option value="processing">inafanyiwa kazi</option><option value="completed">imekamilika</option><option value="failed">imeshindikana</option><option value="cancelled">imeghairiwa</option></select>' +
     '<button class="btn" id="wGo">Chuja</button></div>';
 }
 async function loadWithdrawals() {
@@ -1843,7 +2408,7 @@ async function loadWithdrawals() {
         ((w.status === 'failed') ? '<button class="btn sm" data-fn="withdrawalRetry" data-args=\'' + args + '\'>Jaribu tena</button>' : '') +
         (w.status === 'processing' ? '<button class="btn sm accent" data-fn="withdrawalConfirm" data-args=\'' + args + '\'>Thibitisha</button>' : '') +
         '</td></tr>';
-    }).join('') : '<tr><td colspan="6" class="empty">Hakuna withdrawals</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">Hakuna utoaji fedha</td></tr>';
     $('wPag').innerHTML = pagerHTML('finance', j.data.pagination);
   } catch (e) { $('wRows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>'; }
   bindSection('finance'); touch();
@@ -1871,7 +2436,7 @@ function fnReconList(runs) {
 }
 async function loadRecon() {
   const body = secEl('finance').querySelector('.finBody');
-  body.innerHTML = '<div class="card"><div class="cardhead"><h3>Rekodi (Reconciliation)</h3><div class="spacer"></div>' +
+  body.innerHTML = '<div class="card"><div class="cardhead"><h3>Upatanisho (malipo)</h3><div class="spacer"></div>' +
     '<button class="btn sm accent" id="rcRun">Tengeneza Rekodi Mpya</button></div>' +
     '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Provider</th><th>Ndani</th><th>Kwa upande wa provider</th><th>Tofauti</th><th>Hali</th></tr></thead>' +
     '<tbody id="rcRows"><tr><td colspan="6" class="empty">Inapakia…</td></tr></tbody></table></div><div id="rcPag"></div></div>';
@@ -1890,7 +2455,7 @@ async function reconciliationRun() {
     '<label>Provider</label><select class="field" id="rcProvider"><option value="azampay">azampay</option></select>' +
     '<div class="formgrid"><div><label>Kuanzia</label><input class="field" id="rcStart" type="datetime-local"></div>' +
     '<div><label>Hadi</label><input class="field" id="rcEnd" type="datetime-local"></div></div>' +
-    '<div class="mfooter"><button class="btn" id="rcNo">Futa</button><button class="btn accent" id="rcYes">Run</button></div>'
+    '<div class="mfooter"><button class="btn" id="rcNo">Ghairi</button><button class="btn accent" id="rcYes">Run</button></div>'
   );
   $('rcNo').onclick = closeModal;
   $('rcYes').onclick = () => run(async () => {
@@ -1905,7 +2470,7 @@ async function reconciliationRun() {
 // Rufaa
 // ---------------------------------------------------------------------------
 function referralsToolbar() {
-  return '<div class="toolbar"><select class="select-xs" id="rfStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="completed">completed</option></select>' +
+  return '<div class="toolbar"><select class="select-xs" id="rfStatus"><option value="">Hali: zote</option><option value="pending">inasubiri</option><option value="completed">imekamilika</option></select>' +
     '<button class="btn" id="rfGo">Chuja</button></div>';
 }
 async function loadReferrals() {
@@ -1944,7 +2509,7 @@ async function referralComplete(id) {
     '<label>Aina ya zawadi</label><select class="field" id="rCType"><option value="voucher">voucher</option><option value="boost_credit">boost_credit</option><option value="visibility_credit">visibility_credit</option></select>' +
     '<label>Kiasi (TSh)</label><input class="field" id="rCAmt" type="number" min="0" value="0">' +
     '<label>Kitendo cha kuhitimu</label><input class="field" id="rCAct" placeholder="k.m. first_order">' +
-    '<div class="mfooter"><button class="btn" id="rcN">Futa</button><button class="btn accent" id="rcY">Toa</button></div>'
+    '<div class="mfooter"><button class="btn" id="rcN">Ghairi</button><button class="btn accent" id="rcY">Toa</button></div>'
   );
   $('rcN').onclick = closeModal;
   $('rcY').onclick = () => run(async () => {
@@ -1978,6 +2543,7 @@ async function loadBroadcasts() {
     $('bcOut').innerHTML = '<div class="bdg ok" style="margin-top:6px">Imetumwa kwa <b>&nbsp;' + fmtNum((j && j.totalUsers) || 0) + '&nbsp;</b> watumiaji · push ' + fmtNum((j && j.pushNotifications) || 0) + ' · in-app ' + fmtNum((j && j.inAppNotifications) || 0) + '</div>';
     toast('Matangazo yametumwa', true);
   });
+  bindSection('broadcasts');
   touch();
 }
 
@@ -2101,10 +2667,14 @@ async function loadAudit() {
 // Wafanyakazi (Staff) — usimamizi wa akaunti za admin na upangaji wa kazi
 // ---------------------------------------------------------------------------
 function staffToolbar() {
+  // Role list comes from STAFF_ROLES so the filter can never drift from the
+  // roles the create form and the backend accept.
   return '<div class="toolbar">' +
     '<input class="field q" id="sfQ" placeholder="Tafuta email au jina…">' +
-    '<select class="select-xs" id="sfRole"><option value="">Jukumu: yote</option><option>super_admin</option><option>admin</option><option>moderator</option><option>support</option><option>finance</option></select>' +
-    '<select class="select-xs" id="sfActive"><option value="">Hali: yote</option><option value="true">active</option><option value="false">inactive</option></select>' +
+    '<select class="select-xs" id="sfRole"><option value="">Jukumu: yote</option>' +
+    STAFF_ROLES.map((r) => '<option value="' + esc(r.id) + '">' + esc(roleLabel(r.id)) + '</option>').join('') +
+    '</select>' +
+    '<select class="select-xs" id="sfActive"><option value="">Hali: zote</option><option value="true">hai</option><option value="false">haifanyi kazi</option></select>' +
     '<button class="btn" id="sfGo">Chuja</button>' +
     '<button class="btn accent" id="sfNew" style="margin-left:8px">Ongeza Mfanyakazi</button>' +
     '</div>';
@@ -2116,13 +2686,21 @@ async function loadStaff() {
   const role = pgState('staff', 'role') || '';
   const active = pgState('staff', 'active') || '';
   el.innerHTML = staffToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
-    '<th>Jina</th><th>Barua Pepe</th><th>Jukumu</th><th>Upangaji</th><th>Imeshajiwa</th><th>Ingia mwisho</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<th>Jina</th><th>Barua Pepe</th><th>Jukumu</th><th>Ruhusa</th><th>Hali</th><th>Imesajiliwa</th><th>Ingia mwisho</th><th style="text-align:right">Vitendo</th></tr></thead>' +
     '<tbody id="sfRows"><tr><td colspan="8" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
     '<div id="sfPag"></div></div>';
+  // The toolbar is rebuilt on every load, so restore the active filters;
+  // otherwise the table stays filtered while the controls look reset.
+  $('sfQ').value = q;
+  $('sfRole').value = role;
+  $('sfActive').value = active;
   const qs = new URLSearchParams({ page, limit: 50 });
   if (q) qs.set('q', q); if (role) qs.set('role', role); if (active) qs.set('active', active);
   try {
     const j = await getJSON('/api/v1/admin/staff?' + qs.toString());
+    // The server owns the role catalog; adopt it so the filter/editor can never
+    // offer a role the API would reject.
+    if (Array.isArray(j.data && j.data.roles) && j.data.roles.length) STAFF_ROLES = j.data.roles;
     const d = (j.data && j.data.staff) || [];
     $('sfRows').innerHTML = d.length ? d.map((s) => {
       const args = JSON.stringify({ id: s.id, email: s.email, active: s.active }).replace(/'/g, '&#39;');
@@ -2130,12 +2708,13 @@ async function loadStaff() {
       return '<tr>' +
         '<td>' + esc(s.name || '—') + '</td>' +
         '<td class="mono">' + esc(s.email) + '</td>' +
-        '<td>' + badge(s.role) + '</td>' +
+        '<td><span class="bdg info"><span class="dot"></span>' + esc(roleLabel(s.role)) + '</span></td>' +
         '<td class="dim" style="max-width:170px">' + esc(perm) + '</td>' +
-        '<td>' + (s.active ? '<span class="bdg ok"><span class="dot"></span>active</span>' : '<span class="bdg bad"><span class="dot"></span>inactive</span>') + '</td>' +
+        '<td>' + (s.active ? '<span class="bdg ok"><span class="dot"></span>' + esc(statusLabel('active')) + '</span>' : '<span class="bdg bad"><span class="dot"></span>' + esc(statusLabel('inactive')) + '</span>') + '</td>' +
         '<td class="dim">' + fmtTime(s.createdAt) + '</td>' +
+        '<td class="dim">' + (s.lastLoginAt ? fmtTime(s.lastLoginAt) : '—') + '</td>' +
         '<td class="rowactions">' +
-        '<button class="btn sm ' + (s.active ? 'danger' : 'accent') + '" data-fn="staffToggle" data-args=\'' + args + '\'>' + (s.active ? 'Futa' : 'Amilisha') + '</button> ' +
+        '<button class="btn sm ' + (s.active ? 'danger' : 'accent') + '" data-fn="staffToggle" data-args=\'' + args + '\'>' + (s.active ? 'Zima' : 'Amilisha') + '</button> ' +
         '<button class="btn sm danger" data-fn="staffDelete" data-args=\'' + args + '\'>Futa Kikamilifu</button>' +
         '</td></tr>';
     }).join('') : '<tr><td colspan="8" class="empty">Hakuna wafanyakazi</td></tr>';
@@ -2146,7 +2725,7 @@ async function loadStaff() {
   $('sfGo').onclick = () => {
     setPg('staff', 'q', $('sfQ').value.trim());
     setPg('staff', 'role', $('sfRole').value);
-    setPg('staff', 'active', $('sfActiveSel') ? $('sfActiveSel').value : '');
+    setPg('staff', 'active', $('sfActive').value);
     setPg('staff', 'page', 1);
     loadStaff();
   };
@@ -2158,10 +2737,10 @@ async function staffCreateModal() {
     '<label>Barua Pepe</label><input class="field" id="scEmail" type="email" placeholder="jina@sokovibe.co.tz">' +
     '<label>Nenosiri (min 8 herufi)</label><input class="field" id="scPass" type="password" placeholder="••••••••">' +
     '<label>Jukumu</label><select class="field" id="scRole">' +
-    STAFF_ROLES.map((r) => '<option value="' + r.id + '">' + r.label + '</option>').join('') +
+    STAFF_ROLES.map((r) => '<option value="' + r.id + '">' + esc(roleLabel(r.id)) + '</option>').join('') +
     '</select>' +
     '<div class="warnbox">Nenosiri itahifadhiwa kama hash — usitengenezze akaunti yaliyopatikana tayari.</div>' +
-    '<div class="mfooter"><button class="btn" id="scNo">Futa</button><button class="btn accent" id="scYes">Ongeza</button></div>'
+    '<div class="mfooter"><button class="btn" id="scNo">Ghairi</button><button class="btn accent" id="scYes">Ongeza</button></div>'
   );
   $('scNo').onclick = closeModal;
   $('scYes').onclick = () => {
@@ -2178,7 +2757,7 @@ async function staffCreateModal() {
   };
 }
 async function staffToggle(id, active) {
-  const lab = active ? 'Amilisha' : 'Futa';
+  const lab = active ? 'Amilisha' : 'Zima';
   if (!(await confirmModal(lab + ' mfanyakazi', lab + ' akaunti hii ya mfanyakazi?', lab, !active))) return;
   run(async () => {
     await putJSON('/api/v1/admin/staff/' + encodeURIComponent(id), { active: !active });
@@ -2363,7 +2942,7 @@ async function loadReleases() {
   } catch (e) {
     el.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>';
   }
-  touch(); icons();
+  bindSection('releases'); touch();
 }
 
 // ---------------------------------------------------------------------------
@@ -2456,15 +3035,15 @@ async function loadRevenue() {
       kpi('Mapato Mengine', fmtTZS(fin.totalOtherRevenue || 0), 'other service', 'layers') +
       kpi('Mapato ya AdMob', fmtTZS(fin.actualAdRevenue || 0), 'actual ad revenue', 'megaphone') +
       kpi('Jumla ya Mapato', fmtTZS(fin.totalAdminBalance || 0), 'all revenue', 'coins') +
-      kpi('Inapatikana kuondolewa', fmtTZS(fin.availableBalance || 0), 'baada ya withdrawals', 'banknote') +
+      kpi('Inapatikana kuondolewa', fmtTZS(fin.availableBalance || 0), 'baada ya utoaji fedha', 'banknote') +
       '</div>' +
       '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) AzamPay</button><button class="btn sm" onclick="mfaManage()">MFA (TOTP)</button></div>' +
       '<div class="grid cols2" style="margin-top:6px">' +
-      '<div class="card"><div class="cardhead"><h3>Ledger ya Mapato (commission/boost)</h3></div>' +
+      '<div class="card"><div class="cardhead"><h3>Daftari la Mapato (tume/boost)</h3></div>' +
       '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Mtumiaji</th><th>Aina</th><th>Kiasi</th><th>Tume</th></tr></thead><tbody>' +
       revRows(led.entries || []) +
       '</tbody></table></div></div>' +
-      '<div class="card"><div class="cardhead"><h3>Withdrawals za Admin</h3></div>' +
+      '<div class="card"><div class="cardhead"><h3>Utoaji wa Admin</h3></div>' +
       '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Kiasi</th><th>Fee</th><th>Net</th><th>Simu</th><th>Hali</th></tr></thead><tbody>' +
       wdRows((wd.withdrawals || [])) +
       '</tbody></table></div></div>' +
@@ -2481,7 +3060,7 @@ function revRows(entries) {
     '<td class="num">' + fmtTZS(x.commission) + '</td></tr>').join('');
 }
 function wdRows(rows) {
-  if (!rows.length) return '<tr><td colspan="6" class="empty">Hakuna withdrawals za admin</td></tr>';
+  if (!rows.length) return '<tr><td colspan="6" class="empty">Hakuna utoaji wa admin</td></tr>';
   return rows.map((x) => '<tr><td class="dim">' + fmtTime(x.createdAt) + '</td>' +
     '<td class="num">' + fmtTZS(x.amount) + '</td><td class="num">' + fmtTZS(x.fee) + '</td>' +
     '<td class="num">' + fmtTZS(x.netAmount) + '</td><td class="mono">' + esc(x.phone || '') + '</td>' +
@@ -2494,7 +3073,7 @@ async function revenueWithdraw() {
     '<label class="lab">Kiasi (TZS)</label><input id="rwAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 100000">' +
     '<label class="lab">Namba yako (AzamPay)</label><input id="rwPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
     '<div class="err" id="rwErr"></div>' +
-    '<div class="mfooter"><button class="btn" id="rwNo">Futa</button><button class="btn accent" id="rwYes">Tuma Withdraw</button></div>'
+    '<div class="mfooter"><button class="btn" id="rwNo">Ghairi</button><button class="btn accent" id="rwYes">Tuma Withdraw</button></div>'
   );
   $('rwNo').onclick = closeModal;
   $('rwYes').onclick = () => {
@@ -2794,46 +3373,46 @@ async function loadSettings() {
       '<div class="settings-grid">' +
       '<div class="settings-group"><h4>Jina na Nembo</h4>' +
       '<label class="lab">Jina la jukwaa</label><input id="st-general-platformName" class="field" value="' + esc(g.platformName || '') + '">' +
-      '<label class="lab">Tagline</label><input id="st-general-tagline" class="field" value="' + esc(g.tagline || '') + '">' +
-      '<label class="lab">Logo URL</label><input id="st-general-logoUrl" class="field" value="' + esc(g.logoUrl || '') + '" placeholder="https://">' +
+      '<label class="lab">Kaulimbiu</label><input id="st-general-tagline" class="field" value="' + esc(g.tagline || '') + '">' +
+      '<label class="lab">URL ya nembo</label><input id="st-general-logoUrl" class="field" value="' + esc(g.logoUrl || '') + '" placeholder="https://">' +
       '</div>' +
       '<div class="settings-group"><h4>Muda na Eneo</h4>' +
-      '<label class="lab">Timezone</label><input id="st-general-timezone" class="field" value="' + esc(g.timezone || '') + '">' +
+      '<label class="lab">Eneo la saa</label><input id="st-general-timezone" class="field" value="' + esc(g.timezone || '') + '">' +
       '<label class="lab">Lugha</label><select id="st-general-language" class="field"><option value="sw"' + sel(g.language, 'sw') + '>sw</option><option value="en"' + sel(g.language, 'en') + '>en</option></select>' +
-      '<label class="lab">Date format</label><select id="st-general-dateFormat" class="field"><option value="short"' + sel(g.dateFormat, 'short') + '>short</option><option value="long"' + sel(g.dateFormat, 'long') + '>long</option></select>' +
-      '<label class="lab">Time format</label><select id="st-general-timeFormat" class="field"><option value="24h"' + sel(g.timeFormat, '24h') + '>24h</option><option value="12h"' + sel(g.timeFormat, '12h') + '>12h</option></select>' +
+      '<label class="lab">Muundo wa tarehe</label><select id="st-general-dateFormat" class="field"><option value="short"' + sel(g.dateFormat, 'short') + '>short</option><option value="long"' + sel(g.dateFormat, 'long') + '>long</option></select>' +
+      '<label class="lab">Muundo wa saa</label><select id="st-general-timeFormat" class="field"><option value="24h"' + sel(g.timeFormat, '24h') + '>24h</option><option value="12h"' + sel(g.timeFormat, '12h') + '>12h</option></select>' +
       '</div>' +
       '<div class="settings-group"><h4>Mawasiliano ya Msingi</h4>' +
-      '<label class="lab">Admin email</label><input id="st-general-adminEmail" class="field" value="' + esc(g.adminEmail || '') + '">' +
-      '<label class="lab">Support email</label><input id="st-general-supportEmail" class="field" value="' + esc(g.supportEmail || '') + '">' +
-      '<label class="lab">Support phone</label><input id="st-general-supportPhone" class="field" value="' + esc(g.supportPhone || '') + '">' +
+      '<label class="lab">Barua pepe ya msimamizi</label><input id="st-general-adminEmail" class="field" value="' + esc(g.adminEmail || '') + '">' +
+      '<label class="lab">Barua pepe ya msaada</label><input id="st-general-supportEmail" class="field" value="' + esc(g.supportEmail || '') + '">' +
+      '<label class="lab">Simu ya msaada</label><input id="st-general-supportPhone" class="field" value="' + esc(g.supportPhone || '') + '">' +
       '</div></div></div>' +
       // 2 Watumiaji na Ufikiaji
       '<div class="card"><h3>Watumiaji na Ufikiaji</h3><div class="settings-grid">' +
       '<div class="settings-group"><h4>Usajili</h4>' +
       '<label class="lab chk"><input type="checkbox" id="st-ra-allowRegistration" ' + chk(ra.allowRegistration) + '> Ruhusu usajili</label>' +
       '<label class="lab chk"><input type="checkbox" id="st-ra-allowSellerSignup" ' + chk(ra.allowSellerSignup) + '> Ruhusu wauzaji kujisajili</label>' +
-      '<label class="lab">Default role</label><select id="st-ra-defaultUserRole" class="field"><option value="buyer"' + sel(ra.defaultUserRole, 'buyer') + '>buyer</option><option value="seller"' + sel(ra.defaultUserRole, 'seller') + '>seller</option></select>' +
+      '<label class="lab">Jukumu la msingi</label><select id="st-ra-defaultUserRole" class="field"><option value="buyer"' + sel(ra.defaultUserRole, 'buyer') + '>mnunuzi</option><option value="seller"' + sel(ra.defaultUserRole, 'seller') + '>muuzaji</option></select>' +
       '</div>' +
-      '<div class="settings-group"><h4>Roles & Permissions</h4><p class="dim">Roles: buyer / seller / admin (in-app)</p>' +
-      '<label class="lab chk"><input type="checkbox" id="st-ra-requireEmailVerification" ' + chk(ra.requireEmailVerification) + '> Lazimisha uthibitisho wa email</label>' +
+      '<div class="settings-group"><h4>Majukumu na Ruhusa</h4><p class="dim">Majukumu: mnunuzi / muuzaji / admin (ndani ya app)</p>' +
+      '<label class="lab chk"><input type="checkbox" id="st-ra-requireEmailVerification" ' + chk(ra.requireEmailVerification) + '> Lazimisha uthibitisho wa barua pepe</label>' +
       '<label class="lab chk"><input type="checkbox" id="st-ra-requirePhoneVerification" ' + chk(ra.requirePhoneVerification) + '> Lazimisha uthibitisho wa simu</label>' +
       '</div>' +
       '<div class="settings-group"><h4>Usalama wa Watumiaji</h4>' +
       '<label class="lab chk"><input type="checkbox" id="st-ra-enable2FA" ' + chk(ra.enable2FA) + '> Washa 2FA</label>' +
-      '<label class="lab">Muda wa session (dak)</label><input id="st-ra-sessionTimeoutMinutes" class="field" type="number" value="' + esc(ra.sessionTimeoutMinutes || 60) + '">' +
+      '<label class="lab">Muda wa kikao (dak)</label><input id="st-ra-sessionTimeoutMinutes" class="field" type="number" value="' + esc(ra.sessionTimeoutMinutes || 60) + '">' +
       '</div></div></div>' +
       // 3 Malipo na Sarafu
       '<div class="card"><h3>Malipo na Sarafu</h3><div class="settings-grid">' +
       '<div class="settings-group"><h4>Sarafu</h4>' +
-      '<label class="lab">Sarafu</label><select id="st-pc-currency" class="field"><option value="TZS"' + sel(pc.currency, 'TZS') + '>TZS</option><option value="USD"' + sel(pc.currency, 'USD') + '>USD</option></select>' +
+      '<label class="lab">Sarafu ya msingi</label><select id="st-pc-currency" class="field"><option value="TZS"' + sel(pc.currency, 'TZS') + '>TZS</option><option value="USD"' + sel(pc.currency, 'USD') + '>USD</option></select>' +
       '<label class="lab">Kodi (%)</label><input id="st-pc-taxRatePct" class="field" type="number" step="0.01" value="' + esc(pc.taxRatePct ?? 0) + '">' +
       '<label class="lab">Tume ya jukwaa (%)</label><input id="st-pc-platformCommissionPct" class="field" type="number" step="0.01" value="' + esc(pc.platformCommissionPct ?? 0) + '">' +
       '</div>' +
       '<div class="settings-group"><h4>Escrow</h4>' +
       '<label class="lab chk"><input type="checkbox" id="st-pc-enableEscrow" ' + chk(pc.enableEscrow) + '> Washa escrow</label>' +
-      '<label class="lab">Siku kabla ya auto-release</label><input id="st-pc-escrowReleaseDays" class="field" type="number" value="' + esc(pc.escrowReleaseDays ?? 7) + '">' +
-      '<label class="lab">Gateway kuu</label><select id="st-pc-primaryGateway" class="field"><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
+      '<label class="lab">Siku kabla ya kuachiliwa kiotomatiki</label><input id="st-pc-escrowReleaseDays" class="field" type="number" value="' + esc(pc.escrowReleaseDays ?? 7) + '">' +
+      '<label class="lab">Njia kuu ya malipo</label><select id="st-pc-primaryGateway" class="field"><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
       '</div>' +
       '<div class="settings-group"><h4>Njia za Malipo</h4>' +
       '<label class="lab">AzamPay merchantId</label><input id="st-gw-azamPay-merchantId" class="field" value="' + esc((gw.azamPay || {}).merchantId || '') + '">' +
@@ -2846,20 +3425,20 @@ async function loadSettings() {
       // 4 Barua pepe na Taarifa
       '<div class="card"><h3>Barua pepe na Taarifa</h3><div class="settings-grid">' +
       '<div class="settings-group"><h4>SMTP</h4>' +
-      '<label class="lab">Host</label><input id="st-em-smtpHost" class="field" value="' + esc(em.smtpHost || '') + '">' +
-      '<label class="lab">Port</label><input id="st-em-smtpPort" class="field" type="number" value="' + esc(em.smtpPort || 587) + '">' +
+      '<label class="lab">Mwenyeji (host)</label><input id="st-em-smtpHost" class="field" value="' + esc(em.smtpHost || '') + '">' +
+      '<label class="lab">Bandari (port)</label><input id="st-em-smtpPort" class="field" type="number" value="' + esc(em.smtpPort || 587) + '">' +
       '<label class="lab chk"><input type="checkbox" id="st-em-smtpSecure" ' + chk(em.smtpSecure) + '> TLS/secure</label>' +
-      '<label class="lab">SMTP user</label><input id="st-em-smtpUser" class="field" value="' + esc(em.smtpUser || '') + '" placeholder="******">' +
-      '<label class="lab">SMTP pass</label><input id="st-em-smtpPass" class="field" type="password" value="' + esc(em.smtpPass || '') + '" placeholder="******">' +
-      '<label class="lab">From email</label><input id="st-em-fromEmail" class="field" value="' + esc(em.fromEmail || '') + '">' +
-      '<label class="lab">From name</label><input id="st-em-fromName" class="field" value="' + esc(em.fromName || '') + '">' +
+      '<label class="lab">Mtumiaji wa SMTP</label><input id="st-em-smtpUser" class="field" value="' + esc(em.smtpUser || '') + '" placeholder="******">' +
+      '<label class="lab">Nenosiri la SMTP</label><input id="st-em-smtpPass" class="field" type="password" value="' + esc(em.smtpPass || '') + '" placeholder="******">' +
+      '<label class="lab">Barua pepe ya mtumaji</label><input id="st-em-fromEmail" class="field" value="' + esc(em.fromEmail || '') + '">' +
+      '<label class="lab">Jina la mtumaji</label><input id="st-em-fromName" class="field" value="' + esc(em.fromName || '') + '">' +
       '</div>' +
       '<div class="settings-group"><h4>SMS Gateway</h4><p class="dim">Beem / Twilio — tumia apiKey/secret hapa</p>' +
-      '<label class="lab">Provider</label><select id="st-em-smsProvider" class="field"><option value="beem"' + sel((s.sms && s.sms.provider) || 'beem', 'beem') + '>Beem</option><option value="twilio"' + sel((s.sms && s.sms.provider) || '', 'twilio') + '>Twilio</option></select>' +
+      '<label class="lab">Mtoa huduma</label><select id="st-em-smsProvider" class="field"><option value="beem"' + sel((s.sms && s.sms.provider) || 'beem', 'beem') + '>Beem</option><option value="twilio"' + sel((s.sms && s.sms.provider) || '', 'twilio') + '>Twilio</option></select>' +
       '</div>' +
       '<div class="settings-group"><h4>Violezo</h4>' +
-      '<label class="lab">Buyer signature</label><textarea id="st-em-signatures-buyer" class="field" rows="2">' + esc((em.signatures || {}).buyer || '') + '</textarea>' +
-      '<label class="lab">Seller signature</label><textarea id="st-em-signatures-seller" class="field" rows="2">' + esc((em.signatures || {}).seller || '') + '</textarea>' +
+      '<label class="lab">Sahihi ya mnunuzi</label><textarea id="st-em-signatures-buyer" class="field" rows="2">' + esc((em.signatures || {}).buyer || '') + '</textarea>' +
+      '<label class="lab">Sahihi ya muuzaji</label><textarea id="st-em-signatures-seller" class="field" rows="2">' + esc((em.signatures || {}).seller || '') + '</textarea>' +
       '</div></div></div>' +
       // 5 Viunganishi
       '<div class="card"><h3>Viunganishi na API Keys</h3><div class="settings-grid">' +
@@ -2879,16 +3458,16 @@ async function loadSettings() {
       // 6 Usalama na Matengenezo
       '<div class="card"><h3>Usalama na Matengenezo</h3><div class="settings-grid">' +
       '<div class="settings-group"><h4>Hali ya Matengenezo</h4>' +
-      '<label class="lab chk"><input type="checkbox" id="st-sm-maintenanceMode" ' + chk(sm.maintenanceMode) + '> Washa maintenance mode</label>' +
+      '<label class="lab chk"><input type="checkbox" id="st-sm-maintenanceMode" ' + chk(sm.maintenanceMode) + '> Washa hali ya matengenezo</label>' +
       '<label class="lab">Sababu</label><textarea id="st-sm-maintenanceReason" class="field" rows="2">' + esc(sm.maintenanceReason || '') + '</textarea>' +
-      '<label class="lab chk"><input type="checkbox" id="st-sm-allowSuspendedLogin" ' + chk(sm.allowSuspendedLogin) + '> Ruhusu suspended kuingia</label>' +
+      '<label class="lab chk"><input type="checkbox" id="st-sm-allowSuspendedLogin" ' + chk(sm.allowSuspendedLogin) + '> Ruhusu akaunti zilizosimamishwa kuingia</label>' +
       '</div>' +
-      '<div class="settings-group"><h4>IP Whitelist / Blacklist</h4>' +
-      '<label class="lab">Whitelist (comma)</label><textarea id="st-sm-ipWhitelist" class="field" rows="2">' + esc(sm.ipWhitelist || '') + '</textarea>' +
-      '<label class="lab">Blacklist (comma)</label><textarea id="st-sm-ipBlacklist" class="field" rows="2">' + esc(sm.ipBlacklist || '') + '</textarea>' +
+      '<div class="settings-group"><h4>Orodha nyeupe / nyeusi ya IP</h4>' +
+      '<label class="lab">Ruhusa (tenganisha kwa koma)</label><textarea id="st-sm-ipWhitelist" class="field" rows="2">' + esc(sm.ipWhitelist || '') + '</textarea>' +
+      '<label class="lab">Marufuku (tenganisha kwa koma)</label><textarea id="st-sm-ipBlacklist" class="field" rows="2">' + esc(sm.ipBlacklist || '') + '</textarea>' +
       '</div>' +
       '<div class="settings-group"><h4>Nakala ya Akiba</h4>' +
-      '<label class="lab">Ratiba</label><select id="st-sm-backupSchedule" class="field"><option value="daily"' + sel(sm.backupSchedule, 'daily') + '>daily</option><option value="weekly"' + sel(sm.backupSchedule, 'weekly') + '>weekly</option><option value="off"' + sel(sm.backupSchedule, 'off') + '>off</option></select>' +
+      '<label class="lab">Ratiba</label><select id="st-sm-backupSchedule" class="field"><option value="daily"' + sel(sm.backupSchedule, 'daily') + '>kila siku</option><option value="weekly"' + sel(sm.backupSchedule, 'weekly') + '>kila wiki</option><option value="off"' + sel(sm.backupSchedule, 'off') + '>imezimwa</option></select>' +
       '</div></div></div>' +
       // 7 Utendaji
       '<div class="card"><h3>Utendaji na Uboreshaji</h3><div class="settings-grid">' +
@@ -2897,17 +3476,17 @@ async function loadSettings() {
       '<label class="lab">TTL (sec)</label><input id="st-pf-cacheTtlSeconds" class="field" type="number" value="' + esc(pf.cacheTtlSeconds ?? 300) + '">' +
       '</div>' +
       '<div class="settings-group"><h4>Upakiaji</h4>' +
-      '<label class="lab">Max upload MB</label><input id="st-pf-maxUploadMB" class="field" type="number" value="' + esc(pf.maxUploadMB ?? 5) + '">' +
-      '<label class="lab">Image max MB</label><input id="st-pf-imageMaxMB" class="field" type="number" value="' + esc(pf.imageMaxMB ?? 5) + '">' +
-      '<label class="lab chk"><input type="checkbox" id="st-pf-enableCompression" ' + chk(pf.enableCompression) + '> Washa compression</label>' +
-      '<label class="lab">API rate limit /min</label><input id="st-pf-apiRateLimitPerMin" class="field" type="number" value="' + esc(pf.apiRateLimitPerMin ?? 300) + '">' +
+      '<label class="lab">Kiwango cha juu cha upakiaji (MB)</label><input id="st-pf-maxUploadMB" class="field" type="number" value="' + esc(pf.maxUploadMB ?? 5) + '">' +
+      '<label class="lab">Kiwango cha juu cha picha (MB)</label><input id="st-pf-imageMaxMB" class="field" type="number" value="' + esc(pf.imageMaxMB ?? 5) + '">' +
+      '<label class="lab chk"><input type="checkbox" id="st-pf-enableCompression" ' + chk(pf.enableCompression) + '> Washa ukandamizaji</label>' +
+      '<label class="lab">Kikomo cha maombi kwa dakika</label><input id="st-pf-apiRateLimitPerMin" class="field" type="number" value="' + esc(pf.apiRateLimitPerMin ?? 300) + '">' +
       '</div></div></div>' +
-      '<div class="card" style="display:flex;gap:10px;align-items:center"><button class="btn accent" id="st-save">Hifadhi mipangilio</button><span class="dim" id="st-msg"></span><button class="btn" id="st-clearCache" style="margin-left:auto">Futa cache</button></div>' +
+      '<div class="card" style="display:flex;gap:10px;align-items:center"><button class="btn accent" id="st-save">Hifadhi mipangilio</button><span class="dim" id="st-msg"></span><button class="btn" id="st-clearCache" style="margin-left:auto">Safisha cache</button></div>' +
       '</div>';
     $('st-save').addEventListener('click', saveSettings);
     $('st-clearCache').addEventListener('click', async () => {
       $('st-msg').textContent = 'Inaendeshwa…';
-      try { await postJSON('/api/v1/admin/cache/clear', {}).catch(() => postJSON('/api/admin/cache/clear', {})); $('st-msg').textContent = 'Imefutwa'; toast('Cache imefutwa', true); } catch (e) { $('st-msg').textContent = esc(e.message); }
+      try { await postJSON('/api/v1/admin/cache/clear', {}).catch(() => postJSON('/api/admin/cache/clear', {})); $('st-msg').textContent = 'Imefutwa'; toast('Cache imesafishwa', true); } catch (e) { $('st-msg').textContent = esc(e.message); }
     });
     bindSection('settings'); touch(); icons();
     if (LANG === 'en') applyLang(el);
@@ -2980,7 +3559,7 @@ const LOADERS = {
   orders: loadOrders, disputes: loadDisputes, refunds: loadRefunds, reports: loadReports,
   kyc: loadKyc, promos: loadPromos, revenue: loadRevenue,
   finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
-  landing: loadLanding,
+  landing: loadLanding, staff: loadStaff,
   stats: loadStats, insights: loadInsights, releases: loadReleases, settings: loadSettings,
 };
 function bindToolbar(sec, qId, goId, qKey) {
@@ -3011,6 +3590,7 @@ function showSection(sec) {
   $('lastUpd').textContent = 'Inapakia…';
   LOADERS[sec] && LOADERS[sec]();
   $('sidebar').classList.remove('open');
+  $('sideBackdrop').hidden = true;
   window.scrollTo(0, 0);
 }
 $('nav').addEventListener('click', (e) => {
@@ -3022,7 +3602,21 @@ $('refreshBtn').addEventListener('click', () => {
   setPg(sec, 'page', 1);
   LOADERS[sec]();
 });
-$('menuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+$('menuBtn').addEventListener('click', () => {
+  const open = $('sidebar').classList.toggle('open');
+  // Keep the backdrop in sync so a tap outside the drawer closes it on phones.
+  $('sideBackdrop').hidden = !open;
+});
+$('sideBackdrop').addEventListener('click', () => {
+  $('sidebar').classList.remove('open');
+  $('sideBackdrop').hidden = true;
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('sidebar').classList.contains('open')) {
+    $('sidebar').classList.remove('open');
+    $('sideBackdrop').hidden = true;
+  }
+});
 $('themeBtn').addEventListener('click', () => {
   const on = document.documentElement.getAttribute('data-theme') !== 'dark';
   document.documentElement.setAttribute('data-theme', on ? 'dark' : 'light');
@@ -3139,7 +3733,7 @@ function promptTotpCode() {
       '<h3>MFA Code</h3>' +
       '<p class="msub">Ingiza code ya 6 tarakimu kutoka kwenye app ya authenticator.</p>' +
       '<label>Code (TOTP)</label><input class="field" id="totpLoginCode" placeholder="123456" maxlength="6">' +
-      '<div class="mfooter"><button class="btn" id="totpCancel">Futa</button><button class="btn accent" id="totpOk">Ingia</button></div>'
+      '<div class="mfooter"><button class="btn" id="totpCancel">Ghairi</button><button class="btn accent" id="totpOk">Ingia</button></div>'
     );
     $('totpCancel').onclick = () => { closeModal(); resolve(null); };
     $('totpOk').onclick = () => { const c = ($('totpLoginCode').value || '').trim(); closeModal(); resolve(c || null); };
@@ -3218,12 +3812,12 @@ async function mfaManage() {
     '<p class="msub">Hali: ' + (enabled ? 'IMAMILISHWA' : (pending ? 'ENROLLMENT INASUBIRI' : 'IMEZIMWA')) + '</p>' +
     (enabled
       ? '<label>Code ya kuzima (TOTP)</label><input class="field" id="mfaCode" placeholder="123456">' +
-        '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn danger" onclick="mfaDisable()">Zima MFA</button></div>'
+        '<div class="mfooter"><button class="btn" onclick="closeModal()">Ghairi</button><button class="btn danger" onclick="mfaDisable()">Zima MFA</button></div>'
       : (pending
         ? '<label>Code ya kuthibitisha</label><input class="field" id="mfaCode" placeholder="123456">' +
-          '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn accent" onclick="mfaVerify()">Thibitisha</button></div>'
+          '<div class="mfooter"><button class="btn" onclick="closeModal()">Ghairi</button><button class="btn accent" onclick="mfaVerify()">Thibitisha</button></div>'
         : '<p class="msub">Bonyeza "Anza Enrollment" kuanza.</p>' +
-          '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn accent" onclick="mfaEnroll()">Anza Enrollment</button></div>'))
+          '<div class="mfooter"><button class="btn" onclick="closeModal()">Ghairi</button><button class="btn accent" onclick="mfaEnroll()">Anza Enrollment</button></div>'))
   );
 }
 async function mfaEnroll() {
@@ -3235,7 +3829,7 @@ async function mfaEnroll() {
       '<div style="text-align:center;margin:12px 0"><code style="word-break:break-all">' + esc(r.secret) + '</code></div>' +
       '<p class="msub">otpauth URI: <code style="word-break:break-all;font-size:11px">' + esc(r.otpauthUri) + '</code></p>' +
       '<label>Code ya kuthibitisha</label><input class="field" id="mfaCode" placeholder="123456">' +
-      '<div class="mfooter"><button class="btn" onclick="closeModal()">Futa</button><button class="btn accent" onclick="mfaVerify()">Thibitisha</button></div>'
+      '<div class="mfooter"><button class="btn" onclick="closeModal()">Ghairi</button><button class="btn accent" onclick="mfaVerify()">Thibitisha</button></div>'
     );
   } catch (e) { toast(e.message, false); }
 }

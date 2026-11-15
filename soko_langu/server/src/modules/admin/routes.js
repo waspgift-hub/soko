@@ -466,6 +466,7 @@ router.get(
 // v2 profile (Postgres); the Firestore KYC mirror stays on legacy endpoints.
 router.put(
   '/sellers/:sellerId/verification',
+  requireAdminPermission('kyc:write'),
   validate({
     body: z.object({
       action: z.enum(['verify', 'reject', 'pending']),
@@ -576,6 +577,7 @@ router.get('/products/:id', async (req, res) => {
 // for why a hard delete would orphan orders and escrow rows.
 router.delete(
   '/products/:id',
+  requireAdminPermission('products:moderate'),
   validate({
     params: z.object({ id: z.string().min(1) }),
     body: z.object({ reason: z.string().max(500).optional() }),
@@ -601,7 +603,7 @@ router.delete(
   }
 );
 
-router.post('/products/:id/restore', async (req, res) => {
+router.post('/products/:id/restore', requireAdminPermission('products:moderate'), async (req, res) => {
   try {
     const product = await productStore.adminSetListingDeleted({
       productId: req.params.id,
@@ -873,6 +875,7 @@ router.get('/landing', async (req, res) => {
 router.post(
   '/landing/broadcast',
   requireActiveAdmin,
+  requireAdminPermission('landing:write'),
   validate({
     body: z.object({
       subject: z.string().min(3).max(150),
@@ -991,6 +994,7 @@ router.get(
 router.put(
   '/data-deletion-requests/:id/status',
   requireActiveAdmin,
+  requireAdminPermission('users:write'),
   validate({
     body: z.object({
       status: z.enum(['new', 'in_progress', 'resolved', 'rejected']),
@@ -1037,10 +1041,20 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const STAFF_ROLES = [
   { id: 'super_admin', label: 'Super Admin', perms: ['*'] },
-  { id: 'admin', label: 'Admin', perms: ['users:*', 'orders:*', 'products:*', 'refunds:*', 'disputes:*', 'kyc:*', 'finance:*', 'settings:*', 'staff:*', 'audit:*'] },
-  { id: 'moderator', label: 'Moderator', perms: ['disputes:*', 'refunds:*', 'products:moderate', 'kyc:*', 'users:read'] },
-  { id: 'support', label: 'Support', perms: ['users:read', 'orders:read', 'broadcasts:send', 'landing:*'] },
-  { id: 'finance', label: 'Finance', perms: ['withdrawals:*', 'finance:*', 'revenue:*', 'reconciliation:*', 'users:read'] },
+  { id: 'owner', label: 'Owner', perms: ['*'] },
+  { id: 'admin', label: 'Admin', perms: ['users:*', 'orders:*', 'products:*', 'refunds:*', 'disputes:*', 'kyc:*', 'finance:*', 'settings:*', 'staff:*', 'audit:*', 'broadcasts:*', 'landing:*', 'revenue:*', 'reconciliation:*', 'withdrawals:*'] },
+  { id: 'operations_admin', label: 'Operations Admin', perms: ['users:*', 'orders:*', 'products:*', 'disputes:*', 'kyc:*', 'audit:read'] },
+  { id: 'finance_admin', label: 'Finance Admin', perms: ['finance:*', 'withdrawals:*', 'revenue:*', 'reconciliation:*', 'users:read', 'audit:read'] },
+  { id: 'finance', label: 'Finance', perms: ['finance:read', 'finance:write', 'withdrawals:*', 'revenue:read', 'reconciliation:read', 'users:read'] },
+  { id: 'support_admin', label: 'Support Admin', perms: ['users:read', 'users:write', 'orders:read', 'broadcasts:send', 'landing:*', 'audit:read'] },
+  { id: 'support', label: 'Support', perms: ['users:read', 'orders:read', 'broadcasts:send', 'landing:write'] },
+  { id: 'moderation_admin', label: 'Moderation Admin', perms: ['disputes:*', 'refunds:*', 'products:moderate', 'kyc:*', 'users:read', 'audit:read'] },
+  { id: 'moderator', label: 'Moderator', perms: ['disputes:*', 'refunds:*', 'products:moderate', 'kyc:write', 'users:read'] },
+  { id: 'kyc_reviewer', label: 'KYC Reviewer', perms: ['kyc:read', 'kyc:write', 'users:read'] },
+  { id: 'security_admin', label: 'Security Admin', perms: ['users:*', 'audit:*', 'settings:write'] },
+  { id: 'technical_ops', label: 'Technical Ops', perms: ['settings:write', 'audit:read'] },
+  { id: 'analyst', label: 'Analyst', perms: ['users:read', 'orders:read', 'finance:read', 'revenue:read', 'audit:read'] },
+  { id: 'analyst_readonly', label: 'Analyst (read-only)', perms: ['users:read', 'orders:read', 'finance:read', 'revenue:read'] },
 ];
 
 function permsFor(role) {
@@ -1283,4 +1297,5 @@ router.post(
   }
 );
 
+router.STAFF_ROLES = STAFF_ROLES;
 module.exports = router;
