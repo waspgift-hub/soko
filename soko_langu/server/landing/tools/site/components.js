@@ -142,6 +142,8 @@ function pageMeta({
 <link rel="manifest" href="/manifest.json">
 <link rel="preload" href="/css/sv.css" as="style">
 <link rel="stylesheet" href="/css/sv.css">
+<!-- Google AdSense (auto ads) -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9510685366263226" crossorigin="anonymous"></script>
 ${ld}`;
 }
 
