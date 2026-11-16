@@ -886,13 +886,29 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             )
           : null,
       appBar: AppBar(
-        title: Text(
-          _isSelectionMode
-              ? '${_selectedIds.length} ${context.tr('selected')}'
-              : context.tr('my_purchases'),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _isSelectionMode
+                  ? '${_selectedIds.length} ${context.tr('selected')}'
+                  : context.tr('my_purchases'),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (!_isSelectionMode)
+              Text(
+                context.tr('my_purchases_subtitle', 'Fuatilia na simamia manunuzi yako'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
         ),
         centerTitle: true,
         titleSpacing: 0,
