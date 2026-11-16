@@ -101,14 +101,15 @@ function hero() {
 }
 
 function homePage() {
-  const title = 'Soko Vibe — Soko la Mtandaoni Tanzania | Tanzania Online Marketplace';
-  const description = 'Soko Vibe ni soko la mtandaoni la Tanzania linalojengwa kwa wanunuzi na wauzaji. Jiunge na orodha ya uzinduzi kupata taarifa za kwanza.';
+  const title = 'Soko Vibe | Tanzania Digital Marketplace';
+  const description = 'Soko Vibe is a Tanzanian digital marketplace founded by Gift Henry Wapalila in 2026. Discover the project connecting buyers and sellers across Tanzania. Currently under development.';
   const meta = pageMeta({
     title,
     description,
     path: '/',
     jsonLd: [
       seo.organization(),
+      seo.founder(),
       seo.website(),
       seo.webpage({ path: '/', title, description }),
     ],

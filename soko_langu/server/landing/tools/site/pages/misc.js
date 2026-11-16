@@ -154,16 +154,9 @@ function founderPage() {
     path: '/about/founder',
     jsonLd: [
       seo.organization(),
+      seo.founder(),
       seo.webpage({ path: '/about/founder', title, description }),
       seo.breadcrumbs([{ name: 'Mwanzo', path: '/' }, { name: 'Kuhusu', path: '/about' }, { name: 'Mwanzilishi', path: '/about/founder' }]),
-      {
-        '@context': 'https://schema.org',
-        '@type': 'Person',
-        '@id': `${SITE.host}/#founder`,
-        name: 'Gift Henry Wapalila',
-        jobTitle: 'Founder of Soko Vibe',
-        worksFor: { '@id': `${SITE.host}/#organization` },
-      },
     ],
   });
 

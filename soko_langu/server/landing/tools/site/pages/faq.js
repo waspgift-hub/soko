@@ -103,6 +103,8 @@ function faqPage() {
     description,
     path: '/faq',
     jsonLd: [
+      seo.organization(),
+      seo.founder(),
       seo.webpage({ path: '/faq', title, description }),
       seo.breadcrumbs([{ name: 'Mwanzo', path: '/' }, { name: 'Maswali', path: '/faq' }]),
       seo.faqPage(allItems),

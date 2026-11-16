@@ -11,7 +11,7 @@ function organization() {
     '@type': 'Organization',
     '@id': ORG_ID,
     name: SITE.name,
-    alternateName: 'Soko Vibe Tanzania',
+    alternateName: 'SokoVibe',
     url: `${SITE.host}/`,
     logo: {
       '@type': 'ImageObject',
@@ -19,7 +19,7 @@ function organization() {
       width: 512,
       height: 512,
     },
-    description: 'Soko Vibe is a Tanzania-based online marketplace connecting buyers and sellers across Tanzania.',
+    description: 'Soko Vibe is a Tanzanian digital marketplace project founded by Gift Henry Wapalila in 2026. It is being developed to connect buyers, sellers, products and services across Tanzania.',
     email: SITE.email,
     telephone: SITE.phone,
     address: {
@@ -28,6 +28,23 @@ function organization() {
       addressCountry: 'TZ',
     },
     areaServed: { '@type': 'Country', name: 'Tanzania' },
+    foundingDate: '2026',
+    founder: { '@id': `${SITE.host}/#founder` },
+  };
+}
+
+function founder() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    '@id': `${SITE.host}/#founder`,
+    name: 'Gift Henry Wapalila',
+    givenName: 'Gift',
+    familyName: 'Henry Wapalila',
+    jobTitle: 'Founder of Soko Vibe',
+    description: 'Gift Henry Wapalila is the founder of Soko Vibe, a Tanzanian digital marketplace project started in 2026.',
+    worksFor: { '@id': ORG_ID },
+    url: `${SITE.host}/about/founder`,
   };
 }
 
@@ -37,7 +54,9 @@ function website() {
     '@type': 'WebSite',
     '@id': SITE_ID,
     name: SITE.name,
+    alternateName: 'SokoVibe',
     url: `${SITE.host}/`,
+    description: 'Soko Vibe is a Tanzanian digital marketplace project founded by Gift Henry Wapalila in 2026. Currently under development.',
     inLanguage: 'sw-TZ',
     publisher: { '@id': ORG_ID },
   };
@@ -84,4 +103,4 @@ function faqPage(items) {
   };
 }
 
-module.exports = { organization, website, webpage, breadcrumbs, faqPage };
+module.exports = { organization, website, webpage, breadcrumbs, faqPage, founder };

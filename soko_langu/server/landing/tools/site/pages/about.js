@@ -36,6 +36,7 @@ function aboutPage() {
     path: '/about',
     jsonLd: [
       seo.organization(),
+      seo.founder(),
       seo.webpage({ path: '/about', title, description }),
       seo.breadcrumbs([{ name: 'Mwanzo', path: '/' }, { name: 'Kuhusu', path: '/about' }]),
     ],
