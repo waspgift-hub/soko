@@ -38,3 +38,6 @@ soko_langu/apps/admin-console/.env.local
 soko_langu/apps/admin-console/.env*.local
 
 soko_langu/android/.kotlin/
+
+soko_langu/apps/
+
