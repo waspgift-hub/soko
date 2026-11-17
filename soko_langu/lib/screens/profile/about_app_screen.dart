@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart' as url;
 import '../../extensions/context_tr.dart';
 import '../../services/app_update_service.dart';
@@ -40,11 +42,38 @@ const String youTubeChannelUrl =
 /// could point somewhere else one day. The channel name is the honest label.
 const String youTubeChannelLabel = 'Soko Vibe — YouTube';
 
+/// Google Play Store listing for the Soko Vibe Android app.
+///
+/// TODO(store): replace the package name with the real Play listing id once
+/// the app is published; until then the link opens the store search page.
+const String androidStoreUrl =
+    'https://play.google.com/store/apps/details?id=com.sokovibe.app';
+
+/// Apple App Store listing for the Soko Vibe iOS app.
+///
+/// TODO(store): replace the placeholder id with the real App Store id once
+/// the app is published.
+const String iosStoreUrl = 'https://apps.apple.com/app/id0000000000';
+
+/// Store listing for the platform the app is running on.
+String get currentStoreUrl => defaultTargetPlatform == TargetPlatform.iOS
+    ? iosStoreUrl
+    : androidStoreUrl;
+
 Future<void> _checkForUpdates(BuildContext context) async {
   final remote = await AppUpdateService.instance.fetch();
   if (!context.mounted) return;
   final published = remote?.published == true;
   final notes = (remote?.releaseNotes ?? '').trim();
+  // Prefer the server-provided download URL (Play/App Store redirect or direct
+  // APK), and fall back to the canonical store listing when none is set.
+  final downloadUrl = remote == null
+      ? null
+      : (defaultTargetPlatform == TargetPlatform.iOS
+          ? remote.iosDownloadUrl
+          : remote.androidDownloadUrl);
+  final effectiveUrl =
+      (downloadUrl != null && downloadUrl.isNotEmpty) ? downloadUrl : currentStoreUrl;
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -66,7 +95,7 @@ Future<void> _checkForUpdates(BuildContext context) async {
             onPressed: () {
               Navigator.pop(ctx);
               url.launchUrl(
-                Uri.parse('https://www.sokovibe.co.tz/support'),
+                Uri.parse(effectiveUrl),
                 mode: url.LaunchMode.externalApplication,
               );
             },
@@ -302,6 +331,44 @@ class AboutAppScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Rate App — opens the platform store listing so the user can leave
+              // a review. Falls back to the store listing URL when no id is set.
+              GestureDetector(
+                onTap: () async {
+                  final uri = Uri.parse(currentStoreUrl);
+                  if (await url.canLaunchUrl(uri)) {
+                    await url.launchUrl(uri, mode: url.LaunchMode.externalApplication);
+                  }
+                },
+                child: _buildInfoCard(
+                  context,
+                  icon: Icons.star_rate_rounded,
+                  title: context.tr('rate_app'),
+                  value: currentStoreUrl,
+                  isLink: true,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Share App — shares the store listing link with friends.
+              GestureDetector(
+                onTap: () {
+                  Share.share(
+                    '${context.tr('app_name')} — ${context.tr('tagline')}\n$currentStoreUrl',
+                  );
+                },
+                child: _buildInfoCard(
+                  context,
+                  icon: Icons.share_rounded,
+                  title: context.tr('share_app'),
+                  value: currentStoreUrl,
+                  isLink: true,
                 ),
               ),
 
