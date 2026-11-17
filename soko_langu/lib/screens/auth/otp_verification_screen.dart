@@ -19,7 +19,7 @@ import '../../widgets/soko_vibe_loading.dart';
 ///   no input cards.
 /// * Premium, minimal appearance with large readable digits, character
 ///   spacing, and a subtle continuous underline.
-/// * Soko Vibe brand colors (black/white canvas + #00C853 green accent).
+/// * Soko Vibe brand colors (soft-grey/black canvas + emerald green accent).
 /// * Swahili + English via [context.tr].
 ///
 /// The screen is driven by [OtpVerificationController] and an
@@ -86,8 +86,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   String _t(String key, String fallback) => context.tr(key, fallback);
-  String _tParams(String key, Map<String, String> params) =>
-      context.trParams(key, params);
+  String _tParams(String key, Map<String, String> params) => context.trParams(key, params);
 
   Future<void> _handleVerify() async {
     await _controller.verify(_otpValue);
@@ -118,12 +117,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           return PopScope(
             canPop: controller.phase != OtpVerificationPhase.verifying,
             child: _AuthSceneShell(
-              heading: request.headingOverride ??
-                  _t('verify_your_number', 'Thibitisha akaunti yako'),
-              subtitle: request.subtitleOverride ??
+              heading:
+                  request.headingOverride ?? _t('verify_your_number', 'Thibitisha akaunti yako'),
+              subtitle:
+                  request.subtitleOverride ??
                   _tParams('enter_code_sent', {'0': request.maskedDestination}),
-              leading: _BackButton(
-                  enabled: controller.phase != OtpVerificationPhase.verifying),
+              leading: _BackButton(enabled: controller.phase != OtpVerificationPhase.verifying),
               child: controller.phase == OtpVerificationPhase.verified
                   ? const _SuccessView()
                   : Column(
@@ -143,16 +142,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         OtpInputField(
                           length: request.otpLength,
                           value: _otpValue,
-                          enabled: controller.phase !=
-                                  OtpVerificationPhase.verified &&
-                              controller.phase !=
-                                  OtpVerificationPhase.expired,
-                          hasError: controller.phase ==
-                              OtpVerificationPhase.error,
+                          enabled:
+                              controller.phase != OtpVerificationPhase.verified &&
+                              controller.phase != OtpVerificationPhase.expired,
+                          hasError: controller.phase == OtpVerificationPhase.error,
                           onChanged: (v) => setState(() => _otpValue = v),
                           onSubmitted: () => _handleVerify(),
-                          digitPositionLabel:
-                              _t('otp_digit_position', 'Nafasi ya namba'),
+                          digitPositionLabel: _t('otp_digit_position', 'Nafasi ya namba'),
                         ),
                         const SizedBox(height: AppSpacing.s3),
                         if (controller.errorMessage != null) ...[
@@ -167,24 +163,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           ),
                           const SizedBox(height: AppSpacing.s2),
                         ],
-                        if (controller.phase != OtpVerificationPhase.expired)
-                          ...[
-                            const SizedBox(height: AppSpacing.s2),
-                            Center(
-                              child: Text(
-                                _t('otp_expires_in', 'IMETAISHA MDA: {0}')
-                                    .replaceAll('{0}',
-                                        _formatSeconds(controller.expiryLeft)),
-                                style: TextStyle(
-                                  color: controller.expiryLeft < 60
-                                      ? cs.error
-                                      : cs.onSurfaceVariant,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                        if (controller.phase != OtpVerificationPhase.expired) ...[
+                          const SizedBox(height: AppSpacing.s2),
+                          Center(
+                            child: Text(
+                              _t(
+                                'otp_expires_in',
+                                'IMETAISHA MDA: {0}',
+                              ).replaceAll('{0}', _formatSeconds(controller.expiryLeft)),
+                              style: TextStyle(
+                                color: controller.expiryLeft < 60 ? cs.error : cs.onSurfaceVariant,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ],
+                          ),
+                        ],
                         const SizedBox(height: AppSpacing.s5),
                         DsButton(
                           label: _t('verify', 'Thibitisha'),
@@ -201,21 +195,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                               ? const SizedBox(
                                   width: 22,
                                   height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                  ),
+                                  child: CircularProgressIndicator(strokeWidth: 2.5),
                                 )
                               : controller.canResend && request.allowResend
                               ? TextButton.icon(
                                   onPressed: _handleResend,
                                   icon: const Icon(Icons.refresh, size: 18),
-                                  label: Text(
-                                      _t('resend_code', 'Tuma Msimbo Tena')),
+                                  label: Text(_t('resend_code', 'Tuma Msimbo Tena')),
                                 )
                               : Text(
-                                  _t('resend_wait', 'Subiri sekunde {0}...')
-                                      .replaceAll(
-                                          '{0}', '${controller.resendLeft}s'),
+                                  _t(
+                                    'resend_wait',
+                                    'Subiri sekunde {0}...',
+                                  ).replaceAll('{0}', '${controller.resendLeft}s'),
                                   style: TextStyle(
                                     color: cs.onSurfaceVariant,
                                     fontWeight: FontWeight.w500,
@@ -231,9 +223,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                   ? null
                                   : () => Navigator.of(context).maybePop(),
                               child: Text(
-                                _t(
-                                    'change_destination',
-                                    'Badilisha namba/barua pepe'),
+                                _t('change_destination', 'Badilisha namba/barua pepe'),
                                 style: TextStyle(
                                   color: cs.onSurfaceVariant,
                                   decoration: TextDecoration.underline,
@@ -269,16 +259,11 @@ class _SuccessView extends StatelessWidget {
           Text(
             context.tr('verified', 'Umethibitishwa'),
             textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface),
           ),
           const SizedBox(height: AppSpacing.s2),
           const SizedBox(height: AppSpacing.s5),
-          const SizedBox(
-              width: 120,
-              child: SokoVibeThreeDotLoader(size: 26, dotSize: 6)),
+          const SizedBox(width: 120, child: SokoVibeThreeDotLoader(size: 26, dotSize: 6)),
         ],
       ),
     );
@@ -334,16 +319,18 @@ class _AuthSceneShell extends StatelessWidget {
                 children: [
                   leading,
                   const SizedBox(width: 12),
-                  const Icon(Icons.storefront_outlined, size: 24,
-                      color: Color(0xFF00C853)),
+                  Icon(Icons.storefront_outlined, size: 24, color: cs.primary),
                   const SizedBox(width: 8),
                   Flexible(
-                    child: Text('Soko Vibe',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface,
-                            fontFamily: 'Space Grotesk')),
+                    child: Text(
+                      'Soko Vibe',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                        fontFamily: 'Space Grotesk',
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -352,8 +339,7 @@ class _AuthSceneShell extends StatelessWidget {
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                      minHeight: MediaQuery.of(context).size.height - 64),
+                  constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height - 64),
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -365,20 +351,18 @@ class _AuthSceneShell extends StatelessWidget {
                           heading,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              fontFamily: 'Space Grotesk',
-                              fontSize: 26,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.6,
-                              color: cs.onSurface),
+                            fontFamily: 'Space Grotesk',
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.6,
+                            color: cs.onSurface,
+                          ),
                         ),
                         const SizedBox(height: AppInsets.md),
                         Text(
                           subtitle,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 15,
-                              height: 1.4),
+                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15, height: 1.4),
                         ),
                         const SizedBox(height: AppInsets.xxl),
                         child,

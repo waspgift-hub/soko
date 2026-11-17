@@ -461,7 +461,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Widget _brokenImage({double iconSize = 24}) => Container(
-    color: Colors.grey.shade300,
+    color: Theme.of(context).colorScheme.surfaceContainerHigh,
     child: Icon(Icons.broken_image, size: iconSize),
   );
 
@@ -723,12 +723,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
         // Followers hear about the new listing first.
         final me = FirebaseAuth.instance.currentUser?.uid;
         if (me != null) {
-          unawaited(FollowService().notifyFollowers(
-            ownerId: me,
-            title: tr('new_product_from_following', 'New product'),
-            body: _nameController.text,
-            data: {'type': 'new_product', 'productId': createdId},
-          ));
+          unawaited(
+            FollowService().notifyFollowers(
+              ownerId: me,
+              title: tr('new_product_from_following', 'New product'),
+              body: _nameController.text,
+              data: {'type': 'new_product', 'productId': createdId},
+            ),
+          );
         }
       }
       if (createdId != null) {
@@ -948,8 +950,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
             _isEditing ? context.tr('update_product') : context.tr('sell_product'),
             style: TextStyle(color: Theme.of(context).colorScheme.primary),
           ),
-        actions: [
-          TextButton(
+          actions: [
+            TextButton(
               onPressed: _saving ? null : _submit,
               child: _saving
                   ? GoogleLoading(size: 20, strokeWidth: 2)

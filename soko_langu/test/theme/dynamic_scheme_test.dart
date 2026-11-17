@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soko_vibe/theme/app_themes.dart';
 import 'package:soko_vibe/theme/dynamic_scheme.dart';
+import 'package:soko_vibe/theme/soko_palette.dart';
 import 'package:soko_vibe/theme/theme_manager.dart';
 
 /// Stand-in for an OS-provided dynamic scheme (Android 12+ wallpaper pulls
@@ -34,16 +36,15 @@ void main() {
   });
 
   group('buildDynamicLightTheme / buildDynamicDarkTheme', () {
-    test('light theme carries harmonized commerce with black text', () {
-      final theme =
-          buildDynamicLightTheme(fakeDynamic(Brightness.light));
+    test('light theme carries harmonized commerce with brand text', () {
+      final theme = buildDynamicLightTheme(fakeDynamic(Brightness.light));
       final brand = theme.extension<SokoColors>()!;
 
       expect(theme.brightness, Brightness.light);
-      expect(brand.commerce, isNot(const Color(0xFF00C853)));
-      expect(brand.onCommerce, const Color(0xFF000000));
+      expect(brand.commerce, isNot(SokoPalette.lightPrimary));
+      expect(brand.onCommerce, SokoPalette.onLightPrimary);
       // Surface-legible greens stay fixed for guaranteed contrast.
-      expect(brand.brandOnSurface, const Color(0xFF009624));
+      expect(brand.brandOnSurface, SokoPalette.lightPrimary);
     });
 
     test('dark theme keeps dynamic surfaces and fixed dark greens', () {
@@ -52,28 +53,30 @@ void main() {
       final brand = theme.extension<SokoColors>()!;
 
       expect(theme.colorScheme.surface, dynamic.surface);
-      expect(brand.brandOnSurface, const Color(0xFF00C853));
-      expect(brand.onCommerce, const Color(0xFF000000));
+      expect(brand.brandOnSurface, SokoPalette.darkPrimary);
+      expect(brand.onCommerce, SokoPalette.onDarkPrimary);
     });
   });
 
   group('ThemeManager dynamic resolution', () {
-    test('falls back to brand themes with no OS scheme', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('defaults to the fixed brand themes', () {
       final manager = ThemeManager();
 
-      expect(manager.useDynamicColor, isTrue);
-      expect(manager.lightTheme.colorScheme.primary,
-          const Color(0xFF1F8F4E));
+      expect(manager.useDynamicColor, isFalse);
+      expect(manager.lightTheme.colorScheme.primary, SokoPalette.lightPrimary);
+      expect(manager.darkTheme.colorScheme.primary, SokoPalette.darkPrimary);
     });
 
-    test('uses the OS scheme once provided', () {
+    test('uses the OS scheme once explicitly enabled', () async {
       final manager = ThemeManager();
       final dynamic = fakeDynamic(Brightness.light);
       manager.setDynamicSchemes(dynamic, null);
+      await manager.setUseDynamicColor(true);
 
       expect(manager.lightTheme.colorScheme.surface, dynamic.surface);
-      expect(manager.lightTheme.colorScheme.primary,
-          isNot(const Color(0xFF00C853)));
+      expect(manager.lightTheme.colorScheme.primary, isNot(SokoPalette.lightPrimary));
     });
   });
 }

@@ -392,8 +392,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             child: Text(context.tr('yes_cancel')),
           ),
@@ -443,8 +443,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             child: Text(context.tr('yes_delete')),
           ),
@@ -473,8 +473,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             child: Text(context.tr('yes_delete')),
           ),
@@ -868,7 +868,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _isDeletingSelected ? null : _deleteSelectedOrders,
                     icon: _isDeletingSelected
-                        ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.surface)
+                        ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.onError)
                         : const Icon(Icons.delete_outline, size: 20),
                     label: Text(
                       _isDeletingSelected
@@ -877,7 +877,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.error,
-                      foregroundColor: cs.surface,
+                      foregroundColor: cs.onError,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
@@ -1639,12 +1639,12 @@ class _OrderGlassCard extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: effectiveOnTap,
         icon: isLoading
-            ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: Colors.white)
+            ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: cs.onError)
             : Icon(icon, size: 16),
         label: Text(isLoading ? context.tr('processing_label') : label),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          foregroundColor: cs.surface,
+          foregroundColor: cs.onError,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 0,
         ),

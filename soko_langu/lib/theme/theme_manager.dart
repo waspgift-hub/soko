@@ -9,18 +9,19 @@ class ThemeManager extends ChangeNotifier {
   static const String _themeModeKey = 'app_theme_mode';
   static const String _seedKey = 'theme_seed_color';
   static const String _dynamicKey = 'theme_dynamic_color';
-  // Soko Vibe brand green #00C853; seed drives the Customize Shop swatch
-  // selection, not the primary ColorScheme (#00C853 is fixed in both themes).
-  static const int _defaultSeed = 0xFF00C853;
+  // Brand green #0B6B3A; the seed drives the Customize Shop swatch selection,
+  // not the primary ColorScheme (the brand palette is fixed in both themes).
+  static const int _defaultSeed = 0xFF0B6B3A;
 
   ThemeMode _themeMode = ThemeMode.system;
   bool _isDark = false;
   Color _seedColor = const Color(_defaultSeed);
 
   // M3 Expressive dynamic color (Android 12+ wallpaper / desktop accents).
-  // Enabled by default; the static brand themes are the fallback wherever
-  // the OS reports no dynamic scheme.
-  bool _useDynamicColor = true;
+  // Off by default: the brand rule fixes the emerald/green canvas, and a
+  // wallpaper-derived ramp would repaint every surface in a non-brand hue.
+  // Users who prefer it can still opt in; the setting persists.
+  bool _useDynamicColor = false;
   ColorScheme? _lightDynamic;
   ColorScheme? _darkDynamic;
 
@@ -84,7 +85,7 @@ class ThemeManager extends ChangeNotifier {
 
     final seed = prefs.getInt(_seedKey);
     if (seed != null) _seedColor = Color(seed);
-    _useDynamicColor = prefs.getBool(_dynamicKey) ?? true;
+    _useDynamicColor = prefs.getBool(_dynamicKey) ?? false;
     notifyListeners();
   }
 
@@ -114,7 +115,14 @@ class ThemeManager extends ChangeNotifier {
       _isDark = mode == ThemeMode.dark;
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeModeKey, mode == ThemeMode.dark ? 'dark' : mode == ThemeMode.light ? 'light' : 'system');
+    await prefs.setString(
+      _themeModeKey,
+      mode == ThemeMode.dark
+          ? 'dark'
+          : mode == ThemeMode.light
+          ? 'light'
+          : 'system',
+    );
     _updateStatusBar();
     notifyListeners();
   }

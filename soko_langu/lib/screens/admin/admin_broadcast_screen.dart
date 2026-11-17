@@ -178,7 +178,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                 height: 52,
                 child: ElevatedButton.icon(
                   icon: _sending
-                      ? const SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: Colors.white)
+                      ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.onError)
                       : const Icon(Icons.send_rounded, size: 20),
                   label: Text(_sending
                       ? context.tr('sending', 'Sending...')

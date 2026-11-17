@@ -63,7 +63,8 @@ class OrderCard extends StatelessWidget {
                       fit: BoxFit.cover,
                       memCacheWidth: 128,
                       memCacheHeight: 128,
-                      placeholder: (_, _) => Container(color: cs.surfaceContainerHighest, child: const DsSkeleton()),
+                      placeholder: (_, _) =>
+                          Container(color: cs.surfaceContainerHighest, child: const DsSkeleton()),
                       errorWidget: (_, _, _) => Container(
                         color: cs.surfaceContainerHighest,
                         child: Icon(Icons.receipt_outlined, size: 24, color: cs.onSurfaceVariant),
@@ -184,11 +185,7 @@ class OrderCard extends StatelessWidget {
       ),
       child: Text(
         status,
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
+        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }
@@ -196,9 +193,10 @@ class OrderCard extends StatelessWidget {
   Color _statusColor(String status, ColorScheme cs) {
     final lower = status.toLowerCase();
     if (lower.contains('delivered') || lower.contains('completed')) return cs.successGreen;
-    if (lower.contains('cancelled') || lower.contains('failed') || lower.contains('refunded')) return cs.error;
+    if (lower.contains('cancelled') || lower.contains('failed') || lower.contains('refunded'))
+      return cs.error;
     if (lower.contains('pending') || lower.contains('processing')) return cs.primary;
-    if (lower.contains('shipped') || lower.contains('transit')) return Colors.teal;
+    if (lower.contains('shipped') || lower.contains('transit')) return cs.brandInfo;
     return cs.onSurfaceVariant;
   }
 }

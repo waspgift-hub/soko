@@ -46,11 +46,13 @@ class DsButton extends StatelessWidget {
 
   bool get _enabled => onPressed != null && !loading;
 
-  double get _resolvedHeight => height ?? switch (size) {
-    DsButtonSize.sm => 40,
-    DsButtonSize.md => 52,
-    DsButtonSize.lg => 56,
-  };
+  double get _resolvedHeight =>
+      height ??
+      switch (size) {
+        DsButtonSize.sm => 40,
+        DsButtonSize.md => 52,
+        DsButtonSize.lg => 56,
+      };
 
   double get _fontSize => switch (size) {
     DsButtonSize.sm => 13,
@@ -75,19 +77,14 @@ class DsButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final disabled = !_enabled;
 
-    // Primary stays the #00C853 commerce CTA; secondary/tonal switch to the
-    // panel base so the neumorphic shadows share the canvas tone. Tonal reads
-    // as a pressed/recessed control, ghost keeps no chrome.
+    // Primary is the emerald commerce CTA. Secondary is the light-green /
+    // dark-green pairing from the brand system, which keeps it clearly
+    // subordinate to the filled CTA without falling back to neutral grey.
+    // Tonal reads as a pressed/recessed control, ghost keeps no chrome.
     final (Color fill, Color fg) = switch (variant) {
       DsButtonVariant.primary => (scheme.primary, scheme.onPrimary),
-      DsButtonVariant.secondary => (
-          Neu.base(scheme.brightness),
-          scheme.onSurface,
-        ),
-      DsButtonVariant.tonal => (
-          Neu.insetBase(scheme.brightness),
-          scheme.onSurface,
-        ),
+      DsButtonVariant.secondary => (scheme.primaryContainer, scheme.onPrimaryContainer),
+      DsButtonVariant.tonal => (Neu.insetBase(scheme.brightness), scheme.onSurface),
       DsButtonVariant.ghost => (Colors.transparent, scheme.onSurfaceVariant),
       DsButtonVariant.danger => (scheme.error, scheme.onError),
     };
@@ -107,14 +104,14 @@ class DsButton extends StatelessWidget {
     } else {
       // Raised. A tinted fill needs [Neu.raisedHue] so the highlight/shade pair
       // is derived from the green rather than the neutral canvas.
-      final isHue = variant == DsButtonVariant.primary ||
+      final isHue =
+          variant == DsButtonVariant.primary ||
+          variant == DsButtonVariant.secondary ||
           variant == DsButtonVariant.danger;
       decoration = BoxDecoration(
         color: fill,
         borderRadius: BorderRadius.circular(_radius),
-        boxShadow: isHue
-            ? Neu.raisedHue(3, fill)
-            : Neu.raised(3, scheme.brightness),
+        boxShadow: isHue ? Neu.raisedHue(3, fill) : Neu.raised(3, scheme.brightness),
       );
     }
 
@@ -137,22 +134,14 @@ class DsButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (loading)
-                SokoVibeThreeDotLoader(
-                  size: _iconSize,
-                  dotSize: _iconSize * 0.25,
-                  color: fg,
-                )
+                SokoVibeThreeDotLoader(size: _iconSize, dotSize: _iconSize * 0.25, color: fg)
               else ...[
                 if (icon != null) ...[
                   Icon(icon, size: _iconSize, color: labelStyle.color),
                   const SizedBox(width: 8),
                 ],
                 Flexible(
-                  child: Text(
-                    label,
-                    style: labelStyle,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(label, style: labelStyle, overflow: TextOverflow.ellipsis),
                 ),
               ],
             ],

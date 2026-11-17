@@ -1,46 +1,59 @@
 import 'package:flutter/material.dart';
+import '../../theme/soko_palette.dart';
 
 /// Samsung One UI-inspired design tokens aligned with Soko Vibe branding.
 /// Prefer [Theme.of(context).colorScheme] in widgets; these tokens are for
-/// shared constants and standalone theme builders.
+/// shared constants and standalone theme builders. Every value re-exports
+/// [SokoPalette], so this file can never drift onto a second green.
 class OneUiColors {
   OneUiColors._();
 
-  static const Color background = Color(0xFFF7F7F7);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceContainer = Color(0xFFF2F2F2);
-  static const Color surfaceVariant = Color(0xFFECECEC);
+  static const Color background = SokoPalette.lightBackground;
+  static const Color surface = SokoPalette.lightCard;
+  static const Color surfaceContainer = SokoPalette.lightSecondaryBackground;
+  static const Color surfaceVariant = SokoPalette.lightDivider;
 
-  static const Color textPrimary = Color(0xFF000000);
-  static const Color textSecondary = Color(0xFF505050);
-  static const Color textTertiary = Color(0xFF6B6B6B);
-  static const Color textOnAccent = Color(0xFFFFFFFF);
+  static const Color textPrimary = SokoPalette.lightTextPrimary;
+  static const Color textSecondary = SokoPalette.lightTextSecondary;
+  static const Color textTertiary = SokoPalette.lightTextDisabled;
+  static const Color textOnAccent = SokoPalette.onLightPrimary;
 
-  static const Color accent = Color(0xFF1F8F4E);
-  static const Color accentPressed = Color(0xFF197A42);
-  static const Color accentContainer = Color(0xFFE8F5EE);
-  static const Color commerce = Color(0xFF00C853);
-  static const Color onCommerce = Color(0xFF000000);
+  static const Color accent = SokoPalette.lightPrimary;
+  static const Color accentPressed = SokoPalette.lightPrimaryDark;
+  static const Color accentContainer = SokoPalette.lightPrimaryLight;
+  static const Color commerce = SokoPalette.lightPrimary;
+  static const Color onCommerce = SokoPalette.onLightPrimary;
 
-  static const Color border = Color(0xFFE5E5E5);
-  static const Color divider = Color(0xFFF0F0F0);
-  static const Color outline = Color(0xFFD0D0D0);
+  static const Color border = SokoPalette.lightBorder;
+  static const Color divider = SokoPalette.lightDivider;
+  // Control outlines must reach 3:1, so they use the secondary text tone
+  // rather than the decorative border, which is only a hairline separator.
+  static const Color outline = SokoPalette.lightTextSecondary;
 
-  static const Color success = Color(0xFF1F8F4E);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFFF3B30);
-  static const Color info = Color(0xFF007AFF);
-  static const Color disabled = Color(0xFFBDBDBD);
+  static const Color success = SokoPalette.lightSuccess;
+  static const Color warning = SokoPalette.lightWarning;
+  static const Color error = SokoPalette.lightError;
+  static const Color info = SokoPalette.lightInfo;
+  static const Color disabled = SokoPalette.lightTextDisabled;
 
-  static const Color darkBackground = Color(0xFF000000);
-  static const Color darkSurface = Color(0xFF1C1C1E);
-  static const Color darkSurfaceContainer = Color(0xFF2C2C2E);
-  static const Color darkSurfaceVariant = Color(0xFF232323);
-  static const Color darkTextPrimary = Color(0xFFFFFFFF);
-  static const Color darkTextSecondary = Color(0xFFA7A7A7);
-  static const Color darkTextTertiary = Color(0xFF8E8E93);
-  static const Color darkBorder = Color(0xFF38383A);
-  static const Color darkDivider = Color(0xFF292929);
+  static const Color darkBackground = SokoPalette.darkBackground;
+  static const Color darkSurface = SokoPalette.darkSurface;
+  static const Color darkSurfaceContainer = SokoPalette.darkSurfaceSecondary;
+  static const Color darkSurfaceVariant = SokoPalette.darkBorder;
+  static const Color darkTextPrimary = SokoPalette.darkTextPrimary;
+  static const Color darkTextSecondary = SokoPalette.darkTextSecondary;
+  static const Color darkTextTertiary = SokoPalette.darkTextDisabled;
+  static const Color darkBorder = SokoPalette.darkBorder;
+  static const Color darkDivider = SokoPalette.darkDivider;
+  static const Color darkAccent = SokoPalette.darkPrimary;
+  static const Color darkAccentContainer = SokoPalette.darkPrimaryLight;
+  static const Color darkOnAccent = SokoPalette.onDarkPrimary;
+  static const Color darkOnAccentContainer = Color(0xFFA7EBC2);
+  static const Color darkSuccess = SokoPalette.darkSuccess;
+  static const Color darkWarning = SokoPalette.darkWarning;
+  static const Color darkError = SokoPalette.darkError;
+  static const Color darkOnError = Color(0xFF2A0808);
+  static const Color darkInfo = SokoPalette.darkInfo;
 }
 
 class OneUiSpacing {

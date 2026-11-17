@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/soko_palette.dart';
 import '../staggered_fade_in.dart';
 
 /// Full-page shell for authentication screens.
@@ -99,21 +100,18 @@ class _GradientHero extends StatelessWidget {
   final String heading;
   final String? subtitle;
 
-  const _GradientHero({
-    this.leading,
-    this.logo,
-    required this.heading,
-    this.subtitle,
-  });
+  const _GradientHero({this.leading, this.logo, required this.heading, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
-    // #00C853 (light) / #009624 (deep) is the commerce CTA ramp — the hero
-    // switches to the deep end in dark mode so white text keeps ≥4.5:1.
+    // The hero is a solid green brand panel, so white copy needs a deep
+    // background in both themes: #0B6B3A/#084D2B in light (6.6:1+),
+    // #084D2B/#193C29 in dark (white stays above 10:1). The bright dark-mode
+    // accent #32B86C is a fill, never a large text backdrop.
     final isDark = Theme.of(context).colorScheme.brightness == Brightness.dark;
     final gradient = isDark
-        ? const [Color(0xFF00A340), Color(0xFF007A2F)]
-        : const [Color(0xFF00C853), Color(0xFF009624)];
+        ? const [SokoPalette.lightPrimaryDark, SokoPalette.darkPrimaryLight]
+        : const [SokoPalette.lightPrimary, SokoPalette.lightPrimaryDark];
 
     return Container(
       width: double.infinity,
@@ -123,9 +121,7 @@ class _GradientHero extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: gradient,
         ),
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(AppRadius2.xxl),
-        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(AppRadius2.xxl)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.22),
@@ -135,35 +131,22 @@ class _GradientHero extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(AppRadius2.xxl),
-        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(AppRadius2.xxl)),
         child: Stack(
           children: [
             // Soft decorative blobs — no repaint, static gradient only.
             Positioned(
               right: -60,
               top: -70,
-              child: _Blob(
-                size: 180,
-                color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.14),
-              ),
+              child: _Blob(size: 180, color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.14)),
             ),
             Positioned(
               left: -40,
               bottom: -80,
-              child: _Blob(
-                size: 160,
-                color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
-              ),
+              child: _Blob(size: 160, color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06)),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppInsets.xl,
-                AppInsets.sm,
-                AppInsets.xl,
-                44,
-              ),
+              padding: const EdgeInsets.fromLTRB(AppInsets.xl, AppInsets.sm, AppInsets.xl, 44),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -189,9 +172,9 @@ class _GradientHero extends StatelessWidget {
                     Text(
                       subtitle!,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.92),
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: Colors.white.withValues(alpha: 0.92)),
                     ),
                   ],
                 ],
@@ -234,16 +217,9 @@ class _Logo extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
       ),
-      child: const Icon(
-        Icons.shopping_bag_rounded,
-        size: 38,
-        color: Colors.white,
-      ),
+      child: const Icon(Icons.shopping_bag_rounded, size: 38, color: Colors.white),
     );
     return Center(
       child:
@@ -253,10 +229,7 @@ class _Logo extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadius.xl),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.4),
-                  width: 1.5,
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.18),
@@ -301,9 +274,7 @@ class AuthCard extends StatelessWidget {
         border: Border.all(color: cs.brandBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: cs.brightness == Brightness.dark ? 0.45 : 0.1,
-            ),
+            color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.45 : 0.1),
             blurRadius: 30,
             offset: const Offset(0, 16),
           ),

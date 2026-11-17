@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../theme/soko_palette.dart';
 
 /// Commercial + visual definition of a boost package.
 ///
@@ -45,8 +46,8 @@ class BoostTier {
       price: 3000,
       days: 7,
       icon: Icons.auto_awesome_rounded,
-      accent: Color(0xFF00C853),
-      gradient: [Color(0xFF00E676), Color(0xFF00A844)],
+      accent: SokoPalette.darkPrimary,
+      gradient: [SokoPalette.darkPrimary, SokoPalette.darkPrimaryDark],
       featureKeys: ['boost_why_1', 'boost_why_2', 'boost_why_3', 'boost_why_4'],
       popular: true,
     ),
@@ -55,8 +56,8 @@ class BoostTier {
       price: 10000,
       days: 30,
       icon: Icons.workspace_premium_rounded,
-      accent: Color(0xFFF59E0B),
-      gradient: [Color(0xFFFFC93C), Color(0xFFD98A00)],
+      accent: SokoPalette.lightWarning,
+      gradient: [SokoPalette.amber, SokoPalette.lightWarning],
       featureKeys: [
         'boost_why_1',
         'boost_why_2',

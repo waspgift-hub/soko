@@ -1633,8 +1633,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                         ? ProductCachedImage(url: r.image!, fit: BoxFit.cover)
                         : Container(
                             color: cs.surfaceContainerHighest,
-                            child: const Center(
-                              child: Icon(Icons.image_outlined, color: Colors.grey),
+                            child: Center(
+                              child: Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
                             ),
                           ),
                     if (r.isBoosted)

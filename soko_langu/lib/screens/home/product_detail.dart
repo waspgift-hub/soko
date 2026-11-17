@@ -20,6 +20,7 @@ import '../../services/share_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/soko_palette.dart';
 import '../../theme/app_typography.dart';
 import '../../services/notification_service.dart';
 import '../chat/chat_navigation.dart';
@@ -918,7 +919,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             height: 20,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
-            child: Text(n, style: const TextStyle(color: Colors.white, fontSize: 11)),
+            child: Text(n, style: TextStyle(color: cs.onPrimary, fontSize: 11)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1119,7 +1120,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.whatsappGreen,
-                foregroundColor: Colors.white,
+                // WhatsApp's #25D366 is a bright fixed brand green; white label
+                // text only reaches 1.9:1, so the near-black CTA ink is used.
+                foregroundColor: SokoPalette.onDarkPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 13),
               ),

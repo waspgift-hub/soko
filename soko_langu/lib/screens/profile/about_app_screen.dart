@@ -250,7 +250,7 @@ class AboutAppScreen extends StatelessWidget {
                     color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.red.shade400.withValues(alpha: 0.5),
+                      color: Theme.of(context).colorScheme.outlineVariant,
                       width: 1.5,
                     ),
                   ),
@@ -259,12 +259,12 @@ class AboutAppScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                          color: Theme.of(context).colorScheme.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
                           Icons.play_circle_fill,
-                          color: Colors.red.shade600,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           size: 28,
                         ),
                       ),
@@ -288,7 +288,7 @@ class AboutAppScreen extends StatelessWidget {
                               youTubeChannelLabel,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.red.shade600,
+                                color: Theme.of(context).colorScheme.onSurface,
                                 decoration: TextDecoration.underline,
                               ),
                             ),
@@ -297,7 +297,7 @@ class AboutAppScreen extends StatelessWidget {
                       ),
                       Icon(
                         Icons.open_in_new,
-                        color: Colors.red.shade400,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         size: 18,
                       ),
                     ],

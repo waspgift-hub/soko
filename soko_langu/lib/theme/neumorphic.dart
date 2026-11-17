@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'soko_palette.dart';
 
 /// Separation strength for a flat surface. Flat is not shadowless — it just
 /// uses one low-alpha shadow instead of the soft-UI light/shade pair.
@@ -23,8 +24,9 @@ enum NeuFlatDepth {
 /// and the single-direction [flat] shadow.
 ///
 /// Soft-UI needs its element base lifted off the canvas or the dual shadows
-/// disappear, which is why [base] is grey (#F0F1F5 light / #171920 dark) while
-/// the flat [canvas] is pure white / near-black. The two never share a fill.
+/// disappear, which is why [base] is the light-green secondary surface in
+/// light mode and the raised dark surface in dark mode, while the flat
+/// [canvas] stays soft grey / true black. The two never share a fill.
 class Neu {
   Neu._();
 
@@ -32,12 +34,12 @@ class Neu {
   /// flat 90% read as grey-on-grey and leave the soft 10% with nothing to
   /// contrast against.
   static Color canvas(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFF7F7F7);
+      b == Brightness.dark ? SokoPalette.darkBackground : SokoPalette.lightBackground;
 
-  /// Flat surface fill. One step off the canvas so a hairline edge reads in
-  /// light mode, and so dark-mode cards do not vanish into the canvas.
+  /// Flat surface fill — the card color, one step off the canvas so a hairline
+  /// edge reads in light mode and dark cards do not vanish into pure black.
   static Color flatFill(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF161616) : const Color(0xFFFFFFFF);
+      b == Brightness.dark ? SokoPalette.darkSurface : SokoPalette.lightCard;
 
   /// Single-direction flat shadow. A tinted flat shadow reads cleaner than pure
   /// black over a grey canvas, and the alpha steps are deliberately low so
@@ -62,21 +64,24 @@ class Neu {
     };
   }
 
-  /// Element base for raised (extruded) surfaces flush with the canvas.
-  static Color base(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF171920) : const Color(0xFFF0F1F5);
+  /// Element base for raised (extruded) surfaces flush with the canvas. This
+  /// is the light-green secondary surface in light mode, so neutral soft
+  /// controls (secondary buttons) pick up the brand tint.
+  static Color base(Brightness b) => b == Brightness.dark
+      ? SokoPalette.darkSurfaceSecondary
+      : SokoPalette.lightSecondaryBackground;
 
   /// Slightly darker base for recessed fields/pressed states.
   static Color insetBase(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF101218) : const Color(0xFFE9EAF0);
+      b == Brightness.dark ? const Color(0xFF0B100D) : const Color(0xFFF1F4F1);
 
   /// Top-left glow (light source).
   static Color highlight(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF2E313D) : const Color(0xFFFFFFFF);
+      b == Brightness.dark ? const Color(0xFF23342A) : SokoPalette.lightCard;
 
   /// Bottom-right ambient occlusion.
   static Color shade(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF000000) : const Color(0xFFD5D9E0);
+      b == Brightness.dark ? SokoPalette.darkBackground : const Color(0xFFDCE3DD);
 
   /// Extruded dual shadow scaled by [depth] (0 disables).
   static List<BoxShadow> raised(double depth, Brightness b) {

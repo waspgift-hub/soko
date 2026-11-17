@@ -182,8 +182,11 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
             Container(
               width: 72,
               height: 72,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.red.shade50),
-              child: Icon(Icons.cancel, size: 48, color: Colors.red.shade600),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: cs.error.withValues(alpha: 0.12),
+              ),
+              child: Icon(Icons.cancel, size: 48, color: cs.error),
             ),
             const SizedBox(height: 16),
             Text(
@@ -191,7 +194,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.red.shade700,
+                color: cs.error,
               ),
             ),
             if (widget.errorMessage != null) ...[

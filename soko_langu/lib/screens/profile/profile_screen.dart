@@ -621,9 +621,11 @@ class _ProfileSkeletonState extends State<_ProfileSkeleton> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base = isDark ? Colors.grey[850]! : Colors.grey[300]!;
-    final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+    // Skeleton shimmer stays on the palette: the deepest container is the
+    // base and the lighter container is the moving highlight.
+    final cs = Theme.of(context).colorScheme;
+    final base = cs.surfaceContainerHighest;
+    final highlight = cs.surfaceContainerHigh;
 
     Widget block(double w, double h, [double radius = 8]) {
       return Container(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/surface_policy.dart';
 import 'animated_press.dart';
@@ -9,9 +8,9 @@ enum DsChipSize { sm, md }
 /// Design-system filter chip.
 ///
 /// FLAT by default: an unselected chip is a `chip` role and rests on the canvas
-/// with a hairline edge. Only the *selected* chip takes the soft-UI treatment
-/// (`activeFilter`), where the brand-green fill is the "pressed in" active
-/// state. That is deliberate — a recessed well on every chip would put soft-UI
+/// with a neutral hairline edge and secondary label. Only the *selected* chip
+/// takes the soft-UI treatment (`activeFilter`), where the brand-green fill is
+/// the "pressed in" active state. That is deliberate — a recessed well on every chip would put soft-UI
 /// on the majority of chips and swamp the flat/soft ratio on filter-heavy
 /// screens such as search and category products.
 class DsChip extends StatelessWidget {
@@ -36,29 +35,29 @@ class DsChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final fg = filled
-        ? (selected ? scheme.onPrimary : scheme.brandTextSecondary)
-        : scheme.primary;
+        ? (selected ? scheme.onPrimary : scheme.onSurface)
+        : (selected ? scheme.primary : scheme.onSurfaceVariant);
 
     final decoration = filled
         ? (selected
-            // Soft-UI: the one accent on the chip.
-            ? SurfacePolicy.decorate(
-                SurfaceRole.activeFilter,
-                scheme.brightness,
-                radius: AppRadius2.xl,
-                fill: scheme.primary,
-              )
-            : SurfacePolicy.decorate(
-                SurfaceRole.chip,
-                scheme.brightness,
-                radius: AppRadius2.xl,
-                fill: scheme.surfaceContainer,
-              ))
+              // Soft-UI: the one accent on the chip.
+              ? SurfacePolicy.decorate(
+                  SurfaceRole.activeFilter,
+                  scheme.brightness,
+                  radius: AppRadius2.xl,
+                  fill: scheme.primary,
+                )
+              : SurfacePolicy.decorate(
+                  SurfaceRole.chip,
+                  scheme.brightness,
+                  radius: AppRadius2.xl,
+                  fill: scheme.surfaceContainerHigh,
+                ))
         : BoxDecoration(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius2.xl),
             border: Border.all(
-              color: selected ? scheme.primary : scheme.brandBorder,
+              color: selected ? scheme.primary : scheme.outlineVariant,
               width: selected ? 1.5 : 0.5,
             ),
           );
@@ -69,18 +68,12 @@ class DsChip extends StatelessWidget {
     final gap = chipSize == DsChipSize.sm ? 3.0 : 4.0;
 
     final chip = Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.s4,
-        vertical: verticalPad,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.s4, vertical: verticalPad),
       decoration: decoration,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: iconSize, color: fg),
-            SizedBox(width: gap),
-          ],
+          if (icon != null) ...[Icon(icon, size: iconSize, color: fg), SizedBox(width: gap)],
           Text(
             label,
             style: TextStyle(

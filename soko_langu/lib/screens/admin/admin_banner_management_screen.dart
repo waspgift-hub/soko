@@ -379,7 +379,10 @@ class _AdminBannerManagementScreenState extends State<AdminBannerManagementScree
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -894,13 +897,13 @@ class _CampaignTile extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: Colors.red)),
+                            Icon(Icons.delete, size: 18, color: cs.error),
+                            const SizedBox(width: 8),
+                            Text('Delete', style: TextStyle(color: cs.error)),
                           ],
                         ),
                       ),
@@ -962,24 +965,24 @@ class _StatusBadge extends StatelessWidget {
 
     switch (status) {
       case BannerStatus.active:
-        bgColor = Colors.green.withValues(alpha: 0.15);
-        textColor = Colors.green;
+        bgColor = cs.successGreen.withValues(alpha: 0.15);
+        textColor = cs.successGreen;
         break;
       case BannerStatus.scheduled:
-        bgColor = Colors.blue.withValues(alpha: 0.15);
-        textColor = Colors.blue;
+        bgColor = cs.brandInfo.withValues(alpha: 0.15);
+        textColor = cs.brandInfo;
         break;
       case BannerStatus.paused:
-        bgColor = Colors.orange.withValues(alpha: 0.15);
-        textColor = Colors.orange;
+        bgColor = cs.brandWarning.withValues(alpha: 0.15);
+        textColor = cs.brandWarning;
         break;
       case BannerStatus.expired:
-        bgColor = Colors.grey.withValues(alpha: 0.15);
-        textColor = Colors.grey;
+        bgColor = cs.onSurfaceVariant.withValues(alpha: 0.15);
+        textColor = cs.onSurfaceVariant;
         break;
       case BannerStatus.archived:
-        bgColor = Colors.grey.withValues(alpha: 0.1);
-        textColor = Colors.grey;
+        bgColor = cs.onSurfaceVariant.withValues(alpha: 0.1);
+        textColor = cs.onSurfaceVariant;
         break;
       case BannerStatus.draft:
         bgColor = cs.surfaceContainerHighest;

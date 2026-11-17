@@ -259,9 +259,7 @@ class _MainScreenState extends State<MainScreen> {
                     children: [
                       Icon(
                         isSelected ? activeIcon : icon,
-                        color: isSelected
-                            ? cs.primary
-                            : cs.onSurfaceVariant.withValues(alpha: 0.82),
+                        color: isSelected ? cs.primary : cs.onSurfaceVariant,
                         size: 23,
                       ),
                       if (badgeCount > 0)

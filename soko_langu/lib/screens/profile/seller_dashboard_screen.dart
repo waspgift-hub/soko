@@ -142,7 +142,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [isDark ? Colors.black : Colors.white, cs.surface],
+            colors: [Theme.of(context).scaffoldBackgroundColor, cs.surface],
           ),
         ),
         child: SafeArea(

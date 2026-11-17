@@ -14,7 +14,7 @@ ThemeData buildUiTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: UiColors.surface,
+    scaffoldBackgroundColor: UiColors.canvas,
     appBarTheme: const AppBarTheme(
       backgroundColor: UiColors.surface,
       foregroundColor: UiColors.ink,

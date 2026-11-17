@@ -1,49 +1,50 @@
 import 'package:flutter/material.dart';
 import 'app_typography.dart';
 import 'neumorphic.dart';
+import 'soko_palette.dart';
 
-// Brand rule (§brand system): BLACK + WHITE canvas with a single GREEN accent
-// #00C853 for emphasis (commerce CTAs, links, selection). Green-on-white text
-// #00C853 only reaches ~2.2:1, so surface text/icons use Deep Green #009624
-// (3.9:1) via SokoColors.brandOnSurface; #00C853 is reserved for fills paired
-// with black text (9.4:1). Grays carry only informational hierarchy. `seed`
-// stays for API compatibility with theme persistence but never influences the
-// rendered palette.
+// Brand rule: EMERALD GREEN + WHITE + BLACK + SOFT GREY, with amber reserved
+// for promotions. The canvas is #F7F8F7 / #000000 and cards are #FFFFFF /
+// #101713. Every value comes from SokoPalette so screens cannot drift onto
+// "another green". `seed` stays for API compatibility with theme persistence
+// but never influences the rendered palette.
 ThemeData buildLightTheme(Color seed) {
   final scheme = const ColorScheme.light(
-    primary: Color(0xFF1F8F4E),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryContainer: Color(0xFFE8F5EE),
-    onPrimaryContainer: Color(0xFF00210B),
-    inversePrimary: Color(0xFF1F8F4E),
-    secondary: Color(0xFF1A1A1A),
-    onSecondary: Color(0xFFFFFFFF),
-    secondaryContainer: Color(0xFFE8E8E8),
-    onSecondaryContainer: Color(0xFF1A1A1A),
-    tertiary: Color(0xFF6B6B6B),
-    onTertiary: Color(0xFFFFFFFF),
-    tertiaryContainer: Color(0xFFF0F0F0),
-    onTertiaryContainer: Color(0xFF1A1A1A),
-    error: Color(0xFFFF3B30),
-    onError: Color(0xFFFFFFFF),
-    errorContainer: Color(0xFFFFDAD6),
-    onErrorContainer: Color(0xFF410002),
-    surface: Color(0xFFFFFFFF),
-    onSurface: Color(0xFF000000),
-    surfaceDim: Color(0xFFF2F2F2),
-    surfaceBright: Color(0xFFFFFFFF),
-    surfaceContainerLowest: Color(0xFFFFFFFF),
-    surfaceContainerLow: Color(0xFFF7F7F7),
-    surfaceContainer: Color(0xFFF2F2F2),
-    surfaceContainerHigh: Color(0xFFECECEC),
-    surfaceContainerHighest: Color(0xFFE5E5E5),
-    onSurfaceVariant: Color(0xFF6B6B6B),
-    outline: Color(0xFFD0D0D0),
-    outlineVariant: Color(0xFFE5E5E5),
+    primary: SokoPalette.lightPrimary,
+    onPrimary: SokoPalette.onLightPrimary,
+    primaryContainer: SokoPalette.lightPrimaryLight,
+    onPrimaryContainer: SokoPalette.lightPrimaryDark,
+    inversePrimary: SokoPalette.darkPrimary,
+    secondary: SokoPalette.lightPrimaryDark,
+    onSecondary: SokoPalette.onLightPrimary,
+    secondaryContainer: SokoPalette.lightPrimaryLight,
+    onSecondaryContainer: SokoPalette.lightPrimaryDark,
+    tertiary: SokoPalette.lightTextSecondary,
+    onTertiary: SokoPalette.onLightPrimary,
+    tertiaryContainer: SokoPalette.lightDivider,
+    onTertiaryContainer: SokoPalette.lightTextPrimary,
+    error: SokoPalette.lightError,
+    onError: SokoPalette.onLightPrimary,
+    errorContainer: Color(0xFFFBE9E7),
+    onErrorContainer: Color(0xFF7A1710),
+    surface: SokoPalette.lightCard,
+    onSurface: SokoPalette.lightTextPrimary,
+    surfaceDim: Color(0xFFEDF0ED),
+    surfaceBright: SokoPalette.lightCard,
+    surfaceContainerLowest: SokoPalette.lightCard,
+    surfaceContainerLow: Color(0xFFFBFCFB),
+    surfaceContainer: SokoPalette.lightSecondaryBackground,
+    surfaceContainerHigh: SokoPalette.lightDivider,
+    surfaceContainerHighest: SokoPalette.lightBorder,
+    onSurfaceVariant: SokoPalette.lightTextSecondary,
+    // Control outlines must reach 3:1 against the card, so they use the
+    // secondary text tone — the decorative hairline stays in outlineVariant.
+    outline: SokoPalette.lightTextSecondary,
+    outlineVariant: SokoPalette.lightBorder,
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
-    inverseSurface: Color(0xFF000000),
-    onInverseSurface: Color(0xFFF7F7F7),
+    inverseSurface: SokoPalette.lightTextPrimary,
+    onInverseSurface: SokoPalette.lightBackground,
   );
 
   return _buildTheme(scheme);
@@ -51,39 +52,39 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFF1F8F4E),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryContainer: Color(0xFF1A3D2A),
-    onPrimaryContainer: Color(0xFFB7F7C9),
-    inversePrimary: Color(0xFF1F8F4E),
-    secondary: Color(0xFFE8E8E8),
-    onSecondary: Color(0xFF000000),
-    secondaryContainer: Color(0xFF2A2A2A),
-    onSecondaryContainer: Color(0xFFEBEBEB),
-    tertiary: Color(0xFFBEBEBE),
-    onTertiary: Color(0xFF000000),
-    tertiaryContainer: Color(0xFF333333),
-    onTertiaryContainer: Color(0xFFF0F0F0),
-    error: Color(0xFFFF3B30),
-    onError: Color(0xFFFFFFFF),
-    errorContainer: Color(0xFF8C1D18),
+    primary: SokoPalette.darkPrimary,
+    onPrimary: SokoPalette.onDarkPrimary,
+    primaryContainer: SokoPalette.darkPrimaryLight,
+    onPrimaryContainer: Color(0xFFA7EBC2),
+    inversePrimary: SokoPalette.lightPrimary,
+    secondary: SokoPalette.darkPrimaryDark,
+    onSecondary: SokoPalette.onDarkPrimary,
+    secondaryContainer: Color(0xFF16301F),
+    onSecondaryContainer: Color(0xFFC9F5D9),
+    tertiary: SokoPalette.darkTextSecondary,
+    onTertiary: SokoPalette.onDarkPrimary,
+    tertiaryContainer: SokoPalette.darkSurfaceSecondary,
+    onTertiaryContainer: SokoPalette.darkTextPrimary,
+    error: SokoPalette.darkError,
+    onError: Color(0xFF2A0808),
+    errorContainer: Color(0xFF4A1310),
     onErrorContainer: Color(0xFFFFDAD6),
-    surface: Color(0xFF000000),
-    onSurface: Color(0xFFFFFFFF),
-    surfaceDim: Color(0xFF000000),
-    surfaceBright: Color(0xFF2C2C2E),
-    surfaceContainerLowest: Color(0xFF070707),
-    surfaceContainerLow: Color(0xFF121212),
-    surfaceContainer: Color(0xFF161616),
-    surfaceContainerHigh: Color(0xFF000000),
-    surfaceContainerHighest: Color(0xFF232323),
-    onSurfaceVariant: Color(0xFFA7A7A7),
-    outline: Color(0xFF38383A),
-    outlineVariant: Color(0xFF292929),
+    surface: SokoPalette.darkSurface,
+    onSurface: SokoPalette.darkTextPrimary,
+    surfaceDim: SokoPalette.darkBackground,
+    surfaceBright: SokoPalette.darkSurfaceSecondary,
+    surfaceContainerLowest: SokoPalette.darkBackground,
+    surfaceContainerLow: Color(0xFF0B100D),
+    surfaceContainer: SokoPalette.darkSurfaceSecondary,
+    surfaceContainerHigh: SokoPalette.darkSurfaceSecondary,
+    surfaceContainerHighest: SokoPalette.darkBorder,
+    onSurfaceVariant: SokoPalette.darkTextSecondary,
+    outline: SokoPalette.darkTextDisabled,
+    outlineVariant: SokoPalette.darkDivider,
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
-    inverseSurface: Color(0xFFF7F7F7),
-    onInverseSurface: Color(0xFF000000),
+    inverseSurface: SokoPalette.darkTextPrimary,
+    onInverseSurface: SokoPalette.lightTextPrimary,
   );
 
   return _buildTheme(scheme);
@@ -113,14 +114,15 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
   // Recessed fill for the soft-UI input wells. The raised element base is
   // resolved by the widgets themselves (Neu.base) so a control can tint it.
   final neuInset = Neu.insetBase(scheme.brightness);
-  final brand = brandOverride ??
+  final brand =
+      brandOverride ??
       SokoColors(
-        commerce: const Color(0xFF00C853),
-        onCommerce: const Color(0xFF000000),
-        successText: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
-        warning: const Color(0xFFF59E0B),
-        brandOnSurface: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
-        deepGreen: const Color(0xFF009624),
+        commerce: isDark ? SokoPalette.darkPrimary : SokoPalette.lightPrimary,
+        onCommerce: isDark ? SokoPalette.onDarkPrimary : SokoPalette.onLightPrimary,
+        successText: isDark ? SokoPalette.darkSuccess : SokoPalette.lightSuccess,
+        warning: isDark ? SokoPalette.darkWarning : SokoPalette.lightWarning,
+        brandOnSurface: isDark ? SokoPalette.darkPrimary : SokoPalette.lightPrimary,
+        deepGreen: isDark ? SokoPalette.darkPrimaryDark : SokoPalette.lightPrimaryDark,
       );
 
   final base = ThemeData(
@@ -151,8 +153,8 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     iconTheme: IconThemeData(
       // Brand rule: every icon that doesn't opt into a semantic color
-      // (error/warning) inherits the surface-legible brand green — deep green
-      // #009624 in light mode, #00C853 in dark — instead of a neutral gray.
+      // (error/warning) inherits the surface-legible brand green — #0B6B3A in
+      // light mode, #32B86C in dark — instead of a neutral gray.
       color: brand.brandOnSurface,
     ),
 
@@ -176,30 +178,20 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: flatFill,
-      indicatorColor: scheme.primary.withValues(alpha: 0.15),
+      indicatorColor: scheme.primary.withValues(alpha: 0.12),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: scheme.primary,
-          );
+          return TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: scheme.primary);
         }
-        // Unselected tabs stay green, just de-emphasized.
-        return TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: scheme.primary.withValues(alpha: 0.55),
-        );
+        // Unselected tabs are secondary content, not a faded brand green — a
+        // green-on-green row made "selected" hard to pick out of the bar.
+        return TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant);
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return IconThemeData(color: scheme.primary, size: 24);
         }
-        return IconThemeData(
-          color: scheme.primary.withValues(alpha: 0.55),
-          size: 24,
-        );
+        return IconThemeData(color: scheme.onSurfaceVariant, size: 24);
       }),
       elevation: 0,
       shadowColor: Colors.transparent,
@@ -209,17 +201,14 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: flatFill,
       selectedItemColor: scheme.primary,
-      unselectedItemColor: scheme.primary.withValues(alpha: 0.55),
+      unselectedItemColor: scheme.onSurfaceVariant,
       type: BottomNavigationBarType.fixed,
       elevation: 0,
-      selectedLabelStyle: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-      ),
+      selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
       unselectedLabelStyle: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w500,
-        color: scheme.primary.withValues(alpha: 0.55),
+        color: scheme.onSurfaceVariant,
       ),
     ),
 
@@ -233,17 +222,14 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-          letterSpacing: 0.2,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: 0.2),
         elevation: 2,
-        shadowColor: Color.lerp(scheme.primary, Colors.black, 0.25)!
-            .withValues(alpha: isDark ? 0.45 : 0.2),
+        shadowColor: Color.lerp(
+          scheme.primary,
+          Colors.black,
+          0.25,
+        )!.withValues(alpha: isDark ? 0.45 : 0.2),
       ),
     ),
 
@@ -253,13 +239,8 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         elevation: 0,
         shadowColor: Colors.transparent,
       ),
@@ -267,30 +248,21 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        // SECONDARY BUTTON — flat. Solid fill on the flat canvas with a
-        // hairline edge; a secondary action is not one of the soft roles, so it
-        // must not compete with the primary CTA's glow.
-        foregroundColor: scheme.onSurface,
-        backgroundColor: flatFill,
-        side: BorderSide(color: neuGroove),
+        // SECONDARY BUTTON — transparent with a primary-green edge and label,
+        // exactly one visual step below the filled CTA.
+        foregroundColor: scheme.primary,
+        backgroundColor: Colors.transparent,
+        side: BorderSide(color: scheme.primary, width: 1.2),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
       ),
     ),
 
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: scheme.primary,
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-        ),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
       ),
     ),
 
@@ -324,46 +296,31 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: scheme.error, width: 1.5),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
-      labelStyle: TextStyle(
-        color: scheme.onSurfaceVariant,
-        fontWeight: FontWeight.w500,
-      ),
-      hintStyle: TextStyle(
-        color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
-      ),
-      prefixIconColor: scheme.primary.withValues(alpha: 0.7),
-      suffixIconColor: scheme.primary.withValues(alpha: 0.7),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+      hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+      prefixIconColor: scheme.primary,
+      suffixIconColor: scheme.primary,
     ),
 
     chipTheme: ChipThemeData(
-      // FLAT chips. Only the *selected* chip is a soft role (activeFilter), and
-      // that reads as a green fill rather than a recessed well — a recessed
-      // unselected chip would put soft-UI on the majority of chips and blow
-      // past the 10% budget on any filter-heavy screen.
-      backgroundColor: scheme.surfaceContainer,
-      selectedColor: scheme.primary,
-      labelStyle: TextStyle(color: scheme.onSurface),
-      secondaryLabelStyle: const TextStyle(
+      // FLAT chips. A selected filter uses the light-green container (not the
+      // primary fill) so the chip label keeps AA contrast in both themes.
+      backgroundColor: scheme.surfaceContainerHigh,
+      selectedColor: scheme.primaryContainer,
+      labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
+      secondaryLabelStyle: TextStyle(
+        color: scheme.onSurface,
         fontSize: 10,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.5,
       ),
-      side: BorderSide(color: neuGroove),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      side: BorderSide(color: scheme.outlineVariant),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     ),
 
-    dividerTheme: DividerThemeData(
-      color: neuGroove,
-      thickness: 0.5,
-      space: 1,
-    ),
+    dividerTheme: DividerThemeData(color: neuGroove, thickness: 0.5, space: 1),
 
     snackBarTheme: SnackBarThemeData(
       backgroundColor: flatFill,
@@ -413,18 +370,13 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
       backgroundColor: scheme.primary,
       foregroundColor: scheme.onPrimary,
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
 
     badgeTheme: BadgeThemeData(
       backgroundColor: scheme.primary,
       textColor: scheme.onPrimary,
-      textStyle: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-      ),
+      textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
     ),
 
     sliderTheme: SliderThemeData(
@@ -439,13 +391,15 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) return scheme.primary;
-        return scheme.onSurface.withValues(alpha: 0.25);
+        // A 25% tint made the off thumb nearly invisible; secondary text
+        // keeps the control boundary at 3:1.
+        return scheme.onSurfaceVariant;
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return scheme.primary.withValues(alpha: 0.3);
         }
-        return scheme.onSurface.withValues(alpha: 0.08);
+        return scheme.surfaceContainerHighest;
       }),
     ),
 
@@ -456,16 +410,12 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
 
     tabBarTheme: TabBarThemeData(
       labelColor: scheme.primary,
-      unselectedLabelColor: scheme.onSurface.withValues(alpha: 0.45),
+      // Unselected tabs are secondary content; a 45% onSurface tint fell
+      // below AA on the light canvas.
+      unselectedLabelColor: scheme.onSurfaceVariant,
       indicatorColor: scheme.primary,
-      labelStyle: const TextStyle(
-        fontWeight: FontWeight.w600,
-        fontSize: 14,
-      ),
-      unselectedLabelStyle: const TextStyle(
-        fontWeight: FontWeight.w500,
-        fontSize: 14,
-      ),
+      labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
     ),
 
     menuTheme: MenuThemeData(
@@ -485,18 +435,9 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
     listTileTheme: ListTileThemeData(
       tileColor: Colors.transparent,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      titleTextStyle: TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w500,
-        color: scheme.onSurface,
-      ),
-      subtitleTextStyle: TextStyle(
-        fontSize: 13,
-        color: scheme.onSurfaceVariant,
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      titleTextStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: scheme.onSurface),
+      subtitleTextStyle: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
       leadingAndTrailingTextStyle: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
@@ -568,38 +509,35 @@ ThemeData _buildTheme(ColorScheme scheme, {SokoColors? brandOverride}) {
         color: isDark ? scheme.inverseSurface : const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(8),
       ),
-      textStyle: TextStyle(
-        color: isDark ? scheme.onInverseSurface : Colors.white,
-        fontSize: 12,
-      ),
+      textStyle: TextStyle(color: isDark ? scheme.onInverseSurface : Colors.white, fontSize: 12),
     ),
   );
 }
 
 /// Brand tokens beyond the Material [ColorScheme].
 ///
-/// [commerce] is the single #00C853 fill for marketplace CTAs (buy/sell/pay)
-/// and always pairs with black [onCommerce] text (9.4:1). [successText] and
-/// [brandOnSurface] are the surface-legible green tones — light mode Deep
-/// Green #009624 (3.9:1) because #00C853 text on white only reaches ~2.2:1.
+/// [commerce] is the primary button/CTA fill — #0B6B3A in light (6.6:1 with
+/// white) and #32B86C in dark (8.2:1 with near-black). [successText] and
+/// [brandOnSurface] are the surface-legible green tones, so green text/icons
+/// never fall below AA on the canvas.
 @immutable
 class SokoColors extends ThemeExtension<SokoColors> {
-  /// #00C853 commerce fill (buy/sell/pay, selected states).
+  /// Primary green CTA fill (buy/sell/pay, selected states).
   final Color commerce;
 
-  /// Text/icons placed on [commerce] fills (black).
+  /// Text/icons placed on [commerce] fills.
   final Color onCommerce;
 
   /// Green for success text/icons sitting on a plain surface.
   final Color successText;
 
-  /// #F59E0B warning/pending accents.
+  /// Amber warning accent, darkened for text in light mode.
   final Color warning;
 
-  /// Green legible as text/icons on a plain surface (light: #009624, dark: #00C853).
+  /// Green legible as text/icons on a plain surface (light: #0B6B3A, dark: #32B86C).
   final Color brandOnSurface;
 
-  /// Deep green #009624 for tints, charts and separators.
+  /// Dark green #084D2B / #228B50 for tints, charts and separators.
   final Color deepGreen;
 
   const SokoColors({
@@ -616,12 +554,12 @@ class SokoColors extends ThemeExtension<SokoColors> {
   static SokoColors of(BuildContext context) =>
       Theme.of(context).extension<SokoColors>() ??
       const SokoColors(
-        commerce: Color(0xFF00C853),
-        onCommerce: Color(0xFF000000),
-        successText: Color(0xFF009624),
-        warning: Color(0xFFF59E0B),
-        brandOnSurface: Color(0xFF009624),
-        deepGreen: Color(0xFF009624),
+        commerce: SokoPalette.lightPrimary,
+        onCommerce: SokoPalette.onLightPrimary,
+        successText: SokoPalette.lightSuccess,
+        warning: SokoPalette.lightWarning,
+        brandOnSurface: SokoPalette.lightPrimary,
+        deepGreen: SokoPalette.lightPrimaryDark,
       );
 
   @override

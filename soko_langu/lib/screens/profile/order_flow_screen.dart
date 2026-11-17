@@ -555,7 +555,18 @@ class _FlowNodeCard extends StatelessWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Icon(node.icon, color: Colors.white, size: 24),
+                      Icon(
+                        node.icon,
+                        // Status fills range from bright green to red, so the
+                        // icon ink follows the fill luminance instead of a
+                        // fixed white that would fail on the bright tones.
+                        color:
+                            ThemeData.estimateBrightnessForColor(color) ==
+                                    Brightness.dark
+                                ? Colors.white
+                                : Colors.black,
+                        size: 24,
+                      ),
                       Positioned(
                         right: 2, bottom: 2,
                         child: Container(

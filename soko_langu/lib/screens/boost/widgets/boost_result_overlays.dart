@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes.dart';
 import '../../../extensions/context_tr.dart';
+import '../../../theme/app_colors.dart';
 import '../../../theme/app_dimens.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_typography.dart';
+import '../../../theme/soko_palette.dart';
 import '../../../widgets/ds/ds.dart';
 import '../boost_tiers.dart';
 
@@ -176,7 +178,9 @@ class _BoostProgressOverlayState extends State<BoostProgressOverlay>
     );
   }
 
-  Color get tierColor => const Color(0xFF00C853);
+  /// The progress overlay sits on an always-dark scrim, so it uses the
+  /// dark-mode brand green; the light-mode emerald would disappear here.
+  Color get tierColor => SokoPalette.darkPrimary;
 }
 
 /// BillPay hand-off: the seller gets a control number and pays it from their own
@@ -417,14 +421,15 @@ class _RingBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final pop = Motion.overshootSpring.transform((progress - 0.35).clamp(0.0, 1.0) / 0.65);
     return Container(
       width: 104,
       height: 104,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF00C853).withValues(alpha: 0.14),
-        border: Border.all(color: const Color(0xFF00C853).withValues(alpha: 0.55), width: 2),
+        color: scheme.successGreen.withValues(alpha: 0.14),
+        border: Border.all(color: scheme.successGreen.withValues(alpha: 0.55), width: 2),
       ),
       child: Center(
         child: Transform.scale(
@@ -432,8 +437,8 @@ class _RingBody extends StatelessWidget {
           child: Container(
             width: 66,
             height: 66,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF00C853)),
-            child: const Icon(Icons.check_rounded, size: 40, color: Colors.black),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: scheme.successGreen),
+            child: Icon(Icons.check_rounded, size: 40, color: scheme.onPrimary),
           ),
         ),
       ),

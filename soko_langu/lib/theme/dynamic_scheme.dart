@@ -1,10 +1,10 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'app_themes.dart';
+import 'soko_palette.dart';
 
-// Brand green fills; kept in sync with SokoColors in app_themes.dart.
-const _brandGreen = Color(0xFF00C853);
-const _deepGreen = Color(0xFF009624);
+// Brand green fill; kept in sync with SokoColors in app_themes.dart.
+const _brandGreen = SokoPalette.lightPrimary;
 
 /// M3 Expressive dynamic color: an OS-provided scheme (Android 12+ wallpaper,
 /// desktop accents) merged with the Soko Vibe brand.
@@ -60,16 +60,16 @@ ColorScheme _brandRamp(ColorScheme dynamic, {required bool isDark}) =>
 /// Brand extension for the dynamic theme.
 ///
 /// Only the commerce fill is harmonized toward the wallpaper hue (it always
-/// pairs with fixed black text, so contrast is unaffected). Surface-legible
-/// greens stay fixed: harmonizing them could erode the guaranteed 3.9:1
+/// pairs with fixed on-brand text, so contrast is unaffected). Surface-legible
+/// greens stay fixed: harmonizing them could erode the guaranteed 6.6:1
 /// ratio on white.
 SokoColors _dynamicBrand(ColorScheme dynamic, {required bool isDark}) {
   return SokoColors(
     commerce: _brandGreen.harmonizeWith(dynamic.primary),
-    onCommerce: const Color(0xFF000000),
-    successText: isDark ? _brandGreen : _deepGreen,
-    warning: const Color(0xFFF59E0B),
-    brandOnSurface: isDark ? _brandGreen : _deepGreen,
-    deepGreen: _deepGreen,
+    onCommerce: isDark ? SokoPalette.onDarkPrimary : SokoPalette.onLightPrimary,
+    successText: isDark ? SokoPalette.darkSuccess : SokoPalette.lightSuccess,
+    warning: isDark ? SokoPalette.darkWarning : SokoPalette.lightWarning,
+    brandOnSurface: isDark ? SokoPalette.darkPrimary : SokoPalette.lightPrimary,
+    deepGreen: isDark ? SokoPalette.darkPrimaryDark : SokoPalette.lightPrimaryDark,
   );
 }

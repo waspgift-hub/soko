@@ -5,6 +5,7 @@ import '../../../extensions/context_tr.dart';
 import '../../../models/product_model.dart';
 import '../../../theme/app_dimens.dart';
 import '../../../theme/app_typography.dart';
+import '../../../theme/soko_palette.dart';
 import '../../../widgets/ds/ds.dart';
 import '../../../widgets/product_cached_image.dart';
 
@@ -28,8 +29,6 @@ class BoostHeroPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius2.xxl),
       child: Container(
@@ -37,7 +36,7 @@ class BoostHeroPanel extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF111613), Color(0xFF050706)],
+            colors: [SokoPalette.darkSurface, SokoPalette.darkBackground],
           ),
         ),
         child: Stack(
@@ -45,12 +44,12 @@ class BoostHeroPanel extends StatelessWidget {
             const Positioned(
               right: -70,
               top: -60,
-              child: _Aurora(size: 220, color: Color(0xFF00C853)),
+              child: _Aurora(size: 220, color: SokoPalette.darkPrimary),
             ),
             const Positioned(
               left: -90,
               bottom: -110,
-              child: _Aurora(size: 240, color: Color(0xFF00E676)),
+              child: _Aurora(size: 240, color: SokoPalette.darkPrimary),
             ),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.s5),
@@ -61,7 +60,7 @@ class BoostHeroPanel extends StatelessWidget {
                     children: [
                       DsBadge(
                         label: context.tr('boost_hero_eyebrow'),
-                        color: const Color(0xFF00C853),
+                        color: SokoPalette.darkPrimary,
                         textColor: Colors.black,
                         icon: Icons.rocket_launch_rounded,
                       ),
@@ -99,7 +98,7 @@ class BoostHeroPanel extends StatelessWidget {
                   const SizedBox(height: AppSpacing.s5),
                   _ProductPreview(
                     product: product,
-                    accent: scheme.primary,
+                    accent: SokoPalette.darkPrimary,
                     onTap: onTapProduct,
                     canSwitch: canSwitchProduct,
                   ),
@@ -244,7 +243,7 @@ class _ProductPreview extends StatelessWidget {
               children: [
                 DsBadge(
                   label: context.tr('boost_hero_badge'),
-                  color: const Color(0xFF00C853),
+                  color: SokoPalette.darkPrimary,
                   textColor: Colors.black,
                   icon: Icons.rocket_launch_rounded,
                 ),
@@ -259,7 +258,7 @@ class _ProductPreview extends StatelessWidget {
                 ),
                 const DsBadge(
                   label: '#1',
-                  color: Color(0xFFF59E0B),
+                  color: SokoPalette.amber,
                   textColor: Colors.black,
                   icon: Icons.emoji_events_rounded,
                 ),
@@ -279,7 +278,7 @@ class _HeroReassuranceStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.flash_on_rounded, size: 14, color: Color(0xFF00C853)),
+        const Icon(Icons.flash_on_rounded, size: 14, color: SokoPalette.darkPrimary),
         const SizedBox(width: 5),
         Expanded(
           child: Text(

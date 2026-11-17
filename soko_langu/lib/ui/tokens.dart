@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
+import '../theme/soko_palette.dart';
 
 /// Plain design tokens for the v2 UI. No gradients, shadows or illustrations.
 class UiColors {
   UiColors._();
 
-  static const Color ink = Color(0xFF111111);
-  static const Color muted = Color(0xFF6B6B6B);
-  static const Color line = Color(0xFFE5E5E5);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color canvas = Color(0xFFF7F7F7);
-  static const Color accent = Color(0xFF0B7A3B);
-  static const Color danger = Color(0xFFB42318);
-  static const Color onAccent = Color(0xFFFFFFFF);
+  static const Color ink = SokoPalette.lightTextPrimary;
+  static const Color muted = SokoPalette.lightTextSecondary;
+  static const Color line = SokoPalette.lightBorder;
+  static const Color surface = SokoPalette.lightCard;
+  static const Color canvas = SokoPalette.lightBackground;
+  static const Color accent = SokoPalette.lightPrimary;
+  static const Color accentPressed = SokoPalette.lightPrimaryDark;
+  static const Color accentContainer = SokoPalette.lightPrimaryLight;
+  static const Color danger = SokoPalette.lightError;
+  static const Color onAccent = SokoPalette.onLightPrimary;
 }
 
 class UiSpace {
   UiSpace._();
-
   static const double xs = 4;
   static const double sm = 8;
   static const double md = 16;
@@ -25,6 +27,5 @@ class UiSpace {
 
 class UiRadius {
   UiRadius._();
-
   static const double control = 8;
 }

@@ -103,7 +103,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            child: Text(context.tr('delete_forever'), style: const TextStyle(color: Colors.white)),
+            child: Text(context.tr('delete_forever'), style: TextStyle(color: Theme.of(context).colorScheme.onError)),
           ),
         ],
       ),
@@ -224,7 +224,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      if (suspended) Chip(label: Text(context.tr('suspended'), style: const TextStyle(fontSize: 11, color: Colors.white)), backgroundColor: cs.error, padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      if (suspended) Chip(label: Text(context.tr('suspended'), style: TextStyle(fontSize: 11, color: cs.onError)), backgroundColor: cs.error, padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
                       if (admin) ...[
                         if (suspended) const SizedBox(width: 8),
                         Chip(label: Text(context.tr('admin'), style: const TextStyle(fontSize: 11)), backgroundColor: cs.primary.withValues(alpha: 0.2), padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
@@ -296,7 +296,12 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                     policyWarnings >= 3
                         ? context.tr('account_blocked')
                         : context.trParams('warnings_x_of_3', {'count': '$policyWarnings'}),
-                    style: const TextStyle(fontSize: 11, color: Colors.white),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: policyWarnings >= 3
+                          ? cs.onError
+                          : (policyWarnings > 0 ? cs.onTertiary : cs.onSurface),
+                    ),
                   ),
                   backgroundColor: policyWarnings >= 3 ? cs.error : (policyWarnings > 0 ? cs.tertiary : cs.outlineVariant),
                   padding: EdgeInsets.zero,
@@ -392,7 +397,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.tertiary),
             onPressed: () => _sendWarning(ctx, reasonCtrl.text),
-            child: Text(context.tr('send_warning'), style: const TextStyle(color: Colors.white)),
+            child: Text(context.tr('send_warning'), style: TextStyle(color: Theme.of(context).colorScheme.onTertiary)),
           ),
         ],
       ),
