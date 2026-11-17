@@ -13,6 +13,7 @@ import '../../models/product_model.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/banner_rotator.dart';
+import '../../widgets/promo_image_banner.dart';
 import '../../widgets/banners/campaign_banner_slot.dart';
 import '../../models/banner_model.dart';
 import '../../services/banner_service.dart';
@@ -453,12 +454,30 @@ class _HomeScreenState extends State<HomeScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
                 child: Image.asset(
-                  'assets/app_icon.png',
+                  'assets/brand/logos/app_icon.png',
                   height: 32,
                   width: 32,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      Icon(Icons.storefront_rounded, size: 22, color: cs.primary),
+                  errorBuilder: (_, error, _) {
+                    debugPrint('Home logo failed to load: $error');
+                    return Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'S',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -610,6 +629,9 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(height: AppInsets.sm),
                       // Banners
                       BannerRotator(flashSales: _flashSales.values.toList()),
+                      const SizedBox(height: AppInsets.sm),
+                      // Promotional banners (shop & sell, boost) — image-based, not text.
+                      const PromoImageBanner(),
                       const SizedBox(height: AppInsets.sm),
                        // Admin-configured campaign banners (home placement).
                        CampaignBannerSlot(
