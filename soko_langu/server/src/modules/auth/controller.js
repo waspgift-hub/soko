@@ -338,6 +338,20 @@ async function emailOtpLogin(req, res) {
       entityId: `email:${maskEmail(cleanEmail)}`,
       newState: created ? { createdViaOtp: true } : undefined,
     });
+
+    // Fire-and-forget "login detected" notification (email channel). Never
+    // block the login response on mail delivery; failures are logged only.
+    const loginHtml =
+      '<h2>Login detected / Kuingia kumeonekana</h2>' +
+      '<p>A new sign-in to your Soko Vibe account was completed using your email address.</p>' +
+      '<p>Kuingia kwenye akaunti yako ya Soko Vibe kumefanyika kwa kutumia barua pepe yako.</p>' +
+      '<p>If this was not you, secure your account immediately by changing your password and enabling MFA.</p>' +
+      '<p>Ikiwa si wewe, linda akaunti yako mara moja kwa kubadilisha nenosiri na kuwasha MFA.</p>';
+    sendMail(cleanEmail, 'Login detected - Soko Vibe', loginHtml, null, {
+      action: 'generic',
+      context: { lang: 'sw', recipientEmail: cleanEmail },
+    }).catch((e) => console.error('[AUTH] login-detected email failed:', e && e.message));
+
     res.json({ success: true, token, created });
   } catch (error) {
     console.error('[AUTH] Email OTP login error:', error.message);
