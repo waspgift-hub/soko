@@ -269,7 +269,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/app_icon.png', height: 32, errorBuilder: (_, _, _) =>
+              Image.asset('assets/brand/logos/app_icon.png', height: 32, errorBuilder: (_, _, _) =>
                 Icon(Icons.store, size: 28, color: cs.primary)),
               const SizedBox(width: 8),
               Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary)),

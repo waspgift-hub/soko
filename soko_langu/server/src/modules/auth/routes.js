@@ -5,7 +5,7 @@ const { authLimiter, otpRequestLimiter, otpVerifyLimiter, loginLimiter } = requi
 const { otpSendGuard } = require('../../middleware/otpGuard');
 const { verifyAppCheck } = require('../../middleware/appCheck');
 const { authenticate } = require('../../middleware/auth');
-const { sendOtp, verifyOtp, sendEmailOtp, verifyEmailOtp, checkPhone, checkEmail, phoneLogin, resetPasswordByPhone, emailOtpLogin, otpSignIn, logoutAll } = require('./controller');
+const { sendOtp, verifyOtp, sendEmailOtp, verifyEmailOtp, checkPhone, checkEmail, phoneLogin, resetPasswordByPhone, emailOtpLogin, otpSignIn, logoutAll, googleVerify, logout, session, loginEvents } = require('./controller');
 
 // Send routes are guarded by otpSendGuard (per-phone/email cooldown + quota +
 // per-IP ceiling) with the loose otpRequestLimiter as a global backstop. The
@@ -29,5 +29,14 @@ router.post('/reset-password-by-phone', otpVerifyLimiter, validate(schemas.reset
 // Revokes every session for the caller (logout from all devices). The client
 // signs out locally right after.
 router.post('/logout-all', authenticate, logoutAll);
+// Google sign-in completes on the client; the backend verifies the resulting
+// Firebase ID token, enforces suspension, and records the security trail.
+router.post('/google/verify', authLimiter, authenticate, googleVerify);
+// Self-service logout event (the client signs out locally right after).
+router.post('/logout', authLimiter, authenticate, logout);
+// Session restoration after a process restart / token refresh.
+router.get('/session', authLimiter, authenticate, session);
+// Self-scoped login history (uid taken from the verified token, never a query).
+router.get('/login-events', authLimiter, authenticate, loginEvents);
 
 module.exports = router;

@@ -59,6 +59,14 @@ class OtpVerificationController extends ChangeNotifier {
   Future<void> initialize() async {
     if (_disposed) return;
     _setPhase(OtpVerificationPhase.initial);
+    if (_request.autoSend == false) {
+      // The code was already sent by the caller; do not re-send (that would
+      // trip the server's 60s resend cooldown). Just start the countdowns.
+      _setPhase(OtpVerificationPhase.sent);
+      _startTimers();
+      notifyListeners();
+      return;
+    }
     _startTimers();
     await _sendOtp();
   }

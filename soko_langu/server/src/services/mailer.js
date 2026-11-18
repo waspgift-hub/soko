@@ -180,6 +180,18 @@ function wrapEmailHtml({ html, action = 'generic', context = {} }) {
         changedHeading: 'Password changed',
         changedIntro: `Your Soko Vibe password was changed${when ? ` on ${escapeHtml(when)}` : ''}. Other devices have been signed out.`,
         changedSecurity: 'If this was not you, contact Soko Vibe Support immediately at support@sokovibe.co.tz to secure your account.',
+        loginHeading: 'New sign-in detected',
+        loginIntro: `A sign-in to your Soko Vibe account was completed${when ? ` on ${escapeHtml(when)}` : ''}.`,
+        loginMethod: 'Method',
+        loginEmailMethod: 'Email verification code',
+        loginGoogleMethod: 'Google',
+        loginDevice: 'Device',
+        loginOs: 'Operating system',
+        loginBrowser: 'Browser',
+        loginLocation: 'Approximate location',
+        loginIp: 'IP address',
+        loginNewDevice: 'This device has not signed in to your account before.',
+        loginSecurity: 'If this was not you, change your password immediately, sign out of all devices, and contact Soko Vibe Support at support@sokovibe.co.tz.',
         rights: 'All rights reserved.',
         sentTo: 'This email was sent to',
       }
@@ -192,6 +204,18 @@ function wrapEmailHtml({ html, action = 'generic', context = {} }) {
         changedHeading: 'Nenosiri limebadilishwa',
         changedIntro: `Nenosiri lako la Soko Vibe limebadilishwa${when ? ` mnamo ${escapeHtml(when)}` : ''}. Vifaa vingine vimetolewa nje kiotomatiki.`,
         changedSecurity: 'Ikiwa si wewe, wasiliana na Msaada wa Soko Vibe mara moja kupitia support@sokovibe.co.tz ili kulinda akaunti yako.',
+        loginHeading: 'Kuingia mpya kumeonekana',
+        loginIntro: `Kuingia kwenye akaunti yako ya Soko Vibe kumekamilika${when ? ` mnamo ${escapeHtml(when)}` : ''}.`,
+        loginMethod: 'Njia',
+        loginEmailMethod: 'Msimbo wa uthibitisho kwa barua pepe',
+        loginGoogleMethod: 'Google',
+        loginDevice: 'Kifaa',
+        loginOs: 'Mfumo wa uendeshaji',
+        loginBrowser: 'Kivinjari',
+        loginLocation: 'Mahali (takriban)',
+        loginIp: 'Anwani ya IP',
+        loginNewDevice: 'Kifaa hiki hakijawahi kuingia kwenye akaunti yako.',
+        loginSecurity: 'Ikiwa si wewe, badilisha nenosiri mara moja, toka kwenye vifaa vyote, na wasiliana na Msaada wa Soko Vibe kupitia support@sokovibe.co.tz.',
         rights: 'Haki zote zimehifadhiwa.',
         sentTo: 'Barua pepe hii imetumwa kwa',
       };
@@ -220,6 +244,33 @@ function wrapEmailHtml({ html, action = 'generic', context = {} }) {
           <p class="security-text">${copy.changedSecurity}</p>
         </div>
         ${contentHtml ? `<div class="extra">${contentHtml}</div>` : ''}
+      </div>
+    `;
+  } else if (action === 'login-detected') {
+    const methodLabel = context.method === 'google' ? copy.loginGoogleMethod : copy.loginEmailMethod;
+    const rows = [
+      [copy.loginMethod, escapeHtml(methodLabel)],
+      context.device ? [copy.loginDevice, escapeHtml(String(context.device))] : null,
+      context.os ? [copy.loginOs, escapeHtml(String(context.os))] : null,
+      context.browser ? [copy.loginBrowser, escapeHtml(String(context.browser))] : null,
+      context.location ? [copy.loginLocation, escapeHtml(String(context.location))] : null,
+      context.ip ? [copy.loginIp, escapeHtml(String(context.ip))] : null,
+    ].filter(Boolean);
+    const rowHtml = rows.map(([k, v]) =>
+      `<tr><td style="padding:6px 12px 6px 0;color:#AFAFAF;font-size:13px;width:180px;">${k}</td><td style="padding:6px 0;color:#FFFFFF;font-size:13px;">${v}</td></tr>`
+    ).join('');
+    actionBlock = `
+      <div class="content">
+        <h2>${copy.loginHeading}</h2>
+        <p>${copy.loginIntro}</p>
+        ${context.newDevice ? `<p class="meta">${escapeHtml(copy.loginNewDevice)}</p>` : ''}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 6px;">
+          ${rowHtml}
+        </table>
+        <div class="security-box">
+          <p class="security-title">${copy.securityTitle}</p>
+          <p class="security-text">${copy.loginSecurity}</p>
+        </div>
       </div>
     `;
   } else {

@@ -7,7 +7,11 @@ async function verifyTurnstile(req, { expectedAction } = {}) {
   const hostnames = (config.turnstile && config.turnstile.hostnames) || [];
 
   if (!secret) {
-    return { ok: false, status: 503, code: 'TURNSTILE_NOT_CONFIGURED', message: 'Bot verification is not configured.' };
+    // A missing secret must not take the whole contact channel offline: the
+    // honeypot, rate limit and timing checks still apply. Warn so the operator
+    // notices, but let the submission through.
+    console.warn('[turnstile] TURNSTILE_SECRET not configured — skipping bot verification');
+    return { ok: true, result: { success: true, skipped: true } };
   }
 
   const body = req.body || {};

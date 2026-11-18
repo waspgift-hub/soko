@@ -206,7 +206,6 @@ class RatingService {
       return;
     }
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) await user.getIdToken(true);
 
     final data = {
       'productId': productId,

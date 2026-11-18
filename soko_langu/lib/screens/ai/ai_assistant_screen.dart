@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../services/persistent_ai_chat_service.dart';
+import '../../services/subscription_service.dart';
 import '../../models/ai_chat_models.dart';
 import '../../app/routes.dart';
 import '../../main.dart';
@@ -37,6 +38,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   bool _loadingConversations = true;
   final FocusNode _inputFocus = FocusNode();
   String? _loadError;
+  AiQuota? _quota;
+  final SubscriptionService _subs = SubscriptionService();
 
   @override
   void initState() {
@@ -67,6 +70,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       } else {
         await _newChat();
       }
+      _loadQuota();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -75,6 +79,41 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         });
       }
     }
+  }
+
+  Future<void> _loadQuota() async {
+    try {
+      final q = await _subs.fetchAiQuota();
+      if (mounted && q != null) setState(() => _quota = q);
+    } catch (_) {}
+  }
+
+  Future<void> _showQuotaDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Daily AI limit reached'),
+        content: const Text(
+          'You have used all your AI actions for today. Upgrade your plan for '
+          'more actions, or try again tomorrow.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push(AppRoutes.subscription);
+            },
+            child: const Text('Upgrade plan'),
+          ),
+        ],
+      ),
+    );
+    await _loadQuota();
   }
 
   Future<void> _newChat() async {
@@ -293,6 +332,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             _isLoading = false;
           });
           _scrollToBottom();
+          _loadQuota();
         } else if (type == "error") {
           final partial = data["partial"]?.toString() ?? buffer.toString();
           setState(() {
@@ -306,6 +346,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       }
     } catch (e) {
       setState(() => _isLoading = false);
+      final msg = e.toString();
+      if (mounted && (msg.contains('429') || msg.contains('AI_QUOTA'))) {
+        _showQuotaDialog();
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr("ai_generic_error"))),
@@ -382,6 +427,27 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           ],
         ),
         actions: [
+          if (_quota != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (_quota!.exhausted ? cs.error : cs.primary).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_quota!.used}/${_quota!.limit}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _quota!.exhausted ? cs.error : cs.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: context.tr("settings"),

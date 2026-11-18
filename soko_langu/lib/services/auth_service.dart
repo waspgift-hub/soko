@@ -79,7 +79,7 @@ class AuthService {
       }
 
       final GoogleSignInAccount googleUser = await GoogleSignIn.instance
-          .authenticate();
+          .authenticate(scopeHint: const ['email', 'profile']);
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       if (googleAuth.idToken == null) {
         throw NetworkError(

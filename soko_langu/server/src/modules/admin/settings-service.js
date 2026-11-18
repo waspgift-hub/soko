@@ -6,6 +6,7 @@
 // Postgres migration. When Firestore is unavailable (local/dev) the service
 // falls back to an in-memory copy so the panel stays fully usable.
 const commerceStore = require('../../services/commerce-store');
+const { DEFAULT_POLICY } = require('../buyer-requests/request-config');
 
 const SETTINGS_COLLECTION = 'app_settings';
 const SETTINGS_DOC = 'admin_settings';
@@ -114,9 +115,15 @@ const DEFAULTS = {
     iosDownloadUrl: '',
     published: false,
   },
+  buyerRequests: JSON.parse(JSON.stringify(DEFAULT_POLICY)),
 };
 
 let MEMORY = null;
+let MEMORY_AT = 0;
+// Settings are read on nearly every request. A bounded TTL keeps the hot path
+// to one Firestore read per minute per instance instead of one per request,
+// while still bounding staleness if the doc is edited outside the admin panel.
+const SETTINGS_TTL_MS = 60 * 1000;
 
 function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULTS)); }
 
@@ -175,9 +182,12 @@ async function getFromFirestore() {
 }
 
 async function getSettings(forceReload = false) {
-  if (MEMORY && !forceReload) return MEMORY;
+  const fresh = MEMORY && Date.now() - MEMORY_AT < SETTINGS_TTL_MS;
+  if (fresh && !forceReload) return MEMORY;
   const fromFs = await getFromFirestore();
-  return fromFs || (MEMORY = cloneDefaults());
+  MEMORY = fromFs || MEMORY || cloneDefaults();
+  MEMORY_AT = Date.now();
+  return MEMORY;
 }
 
 // The stored document only, without the defaults fallback. Money paths use this
@@ -210,6 +220,7 @@ async function saveSettings(patch) {
   const current = (await getSettings()) || cloneDefaults();
   const merged = safeMerge(current, patch);
   MEMORY = merged;
+  MEMORY_AT = Date.now();
   await writeToFirestore(merged);
   return merged;
 }

@@ -191,6 +191,13 @@ const commentLimiter = rateLimit({
   windowMs: 60000,
   keyGenerator: userKeyed,
 });
+// Likes are cheap but high-frequency: a reader may like a dozen comments while
+// scrolling one thread, so this bound is deliberately looser than posting.
+const commentLikeLimiter = rateLimit({
+  max: 60,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
 const messageLimiter = rateLimit({
   max: 30,
   windowMs: 60000,
@@ -213,6 +220,18 @@ const aiVoiceLimiter = rateLimit({
   keyGenerator: userKeyed,
 });
 
+const buyerRequestLimiter = rateLimit({
+  max: 30,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
+
+const buyerRequestWriteLimiter = rateLimit({
+  max: 10,
+  windowMs: 60000,
+  keyGenerator: userKeyed,
+});
+
 module.exports = {
   rateLimit,
   clientIp,
@@ -230,7 +249,10 @@ module.exports = {
   withdrawalLimiter,
   loginLimiter,
   commentLimiter,
+  commentLikeLimiter,
   messageLimiter,
   aiChatLimiter,
   aiVoiceLimiter,
+  buyerRequestLimiter,
+  buyerRequestWriteLimiter,
 };

@@ -7,7 +7,7 @@ import '../../services/product_service.dart';
 import '../../services/rating_service.dart';
 import '../../models/product_model.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/google_loading.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
 import '../../models/flash_sale_model.dart';
@@ -24,7 +24,7 @@ import '../../services/share_service.dart';
 import '../../services/shortcut_service.dart';
 import '../../widgets/social/follow_button.dart';
 import '../../services/follow_service.dart';
-import '../../utils/network_error.dart';
+import '../../widgets/rate_seller_sheet.dart';
 import 'package:provider/provider.dart';
 
 class PublicProfileScreen extends StatefulWidget {
@@ -40,6 +40,15 @@ class PublicProfileScreen extends StatefulWidget {
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   bool _isMyProfile = false;
   final FlashSaleService _flashSaleService = FlashSaleService();
+  final UserService _userService = UserService();
+  final ProductService _productService = ProductService();
+  final FollowService _followService = FollowService();
+  final RatingService _ratingService = RatingService.instance;
+  late final Stream<UserProfile?> _profileStream;
+  late final Stream<List<Product>> _productsStream;
+  late final Stream<int> _followerCountStream;
+  late final Stream<int> _followingCountStream;
+  late final Stream<SellerRating> _ratingStream;
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
 
@@ -54,6 +63,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     if (!_isMyProfile) {
       ProfileViewService().trackView(widget.userId, widget.userName);
     }
+    _profileStream = _userService.streamProfile(widget.userId);
+    _productsStream = _productService.getProductsBySeller(widget.userId);
+    _followerCountStream = _followService.followerCountStream(widget.userId);
+    _followingCountStream = _followService.followingCountStream(widget.userId);
+    _ratingStream = _ratingService.streamSellerRating(widget.userId);
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
@@ -101,15 +115,18 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.trError(e, feature: 'shortcut', screen: 'PublicProfile'),
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final productService = ProductService();
-    final userService = UserService();
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.userName),
@@ -181,9 +198,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       ),
       body: SafeArea(
         child: StreamBuilder<UserProfile?>(
-          stream: userService.streamProfile(widget.userId),
+          stream: _profileStream,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) return const GoogleLoadingPage();
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const _ProfileSkeleton();
+            }
             final profile = snap.data;
             return CustomScrollView(
               slivers: [
@@ -193,65 +212,110 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 SliverToBoxAdapter(child: _buildActionButtons(context)),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text(
-                      context.tr('products'),
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                    child: Row(
+                      children: [
+                        Text(
+                          context.tr('products'),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        StreamBuilder<List<Product>>(
+                          stream: _productsStream,
+                          builder: (context, s) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${s.data?.length ?? 0}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 StreamBuilder<List<Product>>(
-                  stream: productService.getProductsBySeller(widget.userId),
+                  stream: _productsStream,
                   builder: (context, snap) {
-                    if (!snap.hasData) return const SliverFillRemaining(child: GoogleLoadingPage());
-                    final products = snap.data!;
-                    if (products.isEmpty) {
-                      return SliverFillRemaining(
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.shopping_bag_outlined,
-                                size: 64,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                context.tr('no_products'),
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                    if (snap.connectionState == ConnectionState.waiting &&
+                        !snap.hasData) {
+                      return const SliverToBoxAdapter(
+                        child: _ProductsSkeleton(),
+                      );
+                    }
+                    if (snap.hasError) {
+                      return SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _InlineNotice(
+                            icon: Icons.cloud_off_rounded,
+                            title: context.trError(
+                              snap.error!,
+                              feature: 'seller_products',
+                              screen: 'PublicProfile',
+                            ),
                           ),
                         ),
                       );
                     }
-                    return SliverMainAxisGroup(
-                      slivers: [
-                        SliverGrid(
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: Responsive.gridColumns(context),
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: Responsive.cardAspectRatio(context),
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => ProductCard(
-                              product: products[index],
-                              flashSale: _flashSales[products[index].id],
-                              onTap: () => context.push(
-                                '${AppRoutes.productDetail}/${products[index].id}',
-                                extra: products[index],
-                              ),
+                    final products = snap.data ?? const <Product>[];
+                    if (products.isEmpty) {
+                      return SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _InlineNotice(
+                            icon: Icons.shopping_bag_outlined,
+                            title: context.tr('no_products'),
+                            subtitle: context.tr(
+                              'seller_no_products_hint',
+                              'This seller has not listed anything yet.',
                             ),
-                            childCount: products.length,
-                            addAutomaticKeepAlives: false,
                           ),
                         ),
-
-                      ],
+                      );
+                    }
+                    return SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        0,
+                        16,
+                        MediaQuery.paddingOf(context).bottom + 96,
+                      ),
+                      sliver: SliverGrid(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: Responsive.gridColumns(context),
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: Responsive.cardAspectRatio(context),
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => ProductCard(
+                            product: products[index],
+                            flashSale: _flashSales[products[index].id],
+                            onTap: () => context.push(
+                              '${AppRoutes.productDetail}/${products[index].id}',
+                              extra: products[index],
+                            ),
+                          ),
+                          childCount: products.length,
+                          addAutomaticKeepAlives: false,
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -265,30 +329,99 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
 
   Widget _buildHeader(BuildContext context, UserProfile? profile) {
     final cs = Theme.of(context).colorScheme;
-    final name = profile?.displayName.isNotEmpty == true ? profile!.displayName : widget.userName;
+    final name = profile?.displayName.isNotEmpty == true
+        ? profile!.displayName
+        : widget.userName;
+    final avatar = profile?.profileImage ?? '';
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            cs.primary.withValues(alpha: cs.brightness == Brightness.dark ? 0.18 : 0.10),
+            cs.surface,
+          ],
+        ),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+      ),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: cs.surfaceContainerHighest,
-            backgroundImage: profile?.profileImage.isNotEmpty == true
-                ? NetworkImage(profile!.profileImage)
-                : null,
-            child: profile?.profileImage.isEmpty != false
-                ? Icon(Icons.person_outline_rounded, size: 44, color: cs.onSurfaceVariant)
-                : null,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.35), width: 2),
+                ),
+                child: avatar.isEmpty
+                    ? Container(
+                        width: 92,
+                        height: 92,
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_outline_rounded,
+                          size: 42,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      )
+                    : ProductCachedImage(
+                        url: avatar,
+                        width: 92,
+                        height: 92,
+                        borderRadius: BorderRadius.circular(46),
+                        errorWidget: Container(
+                          width: 92,
+                          height: 92,
+                          color: cs.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.person_outline_rounded,
+                            size: 42,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+              ),
+              if (_verification?.isBlueTickActive == true)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.outlineVariant, width: 1),
+                    ),
+                    child: Icon(Icons.verified_rounded, size: 18, color: cs.primary),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Flexible(
                 child: Text(
                   name,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.4,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
@@ -298,18 +431,24 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             ],
           ),
           if (profile?.bio.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               profile!.bio,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: 13,
+                height: 1.4,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
           if (!_isMyProfile) ...[
-            const SizedBox(height: 12),
-            SizedBox(width: 180, child: FollowButton(targetUserId: widget.userId)),
+            const SizedBox(height: 14),
+            SizedBox(width: 200, child: FollowButton(targetUserId: widget.userId)),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildStats(context, profile),
         ],
       ),
@@ -330,7 +469,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           Expanded(
             child: _statTap(
               context,
-              stream: FollowService().followerCountStream(widget.userId),
+              stream: _followerCountStream,
               label: context.tr('followers'),
               onTap: () =>
                   context.push('${AppRoutes.followers}/${widget.userId}', extra: widget.userName),
@@ -339,7 +478,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           Expanded(
             child: _statTap(
               context,
-              stream: FollowService().followingCountStream(widget.userId),
+              stream: _followingCountStream,
               label: context.tr('following'),
               onTap: () =>
                   context.push('${AppRoutes.following}/${widget.userId}', extra: widget.userName),
@@ -347,7 +486,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<Product>>(
-              stream: ProductService().getProductsBySeller(widget.userId),
+              stream: _productsStream,
               builder: (context, snap) =>
                   _statValue(context, '${snap.data?.length ?? 0}', context.tr('products')),
             ),
@@ -379,9 +518,18 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       children: [
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: cs.onSurface),
         ),
-        Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+        ),
       ],
     );
   }
@@ -391,7 +539,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: StreamBuilder<SellerRating>(
-        stream: RatingService.instance.streamSellerRating(widget.userId),
+        stream: _ratingStream,
         builder: (context, snap) {
           final rating = snap.data;
           if (rating == null || rating.totalReviews == 0) {
@@ -513,7 +661,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: StreamBuilder<SellerRating>(
-        stream: RatingService.instance.streamSellerRating(widget.userId),
+        stream: _ratingStream,
         builder: (context, snap) {
           final rating = snap.data;
           if (rating == null || rating.totalReviews == 0) {
@@ -579,7 +727,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
-  void _showRateSellerDialog(BuildContext context) {
+  Future<void> _showRateSellerDialog(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(
@@ -593,51 +741,36 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       ).showSnackBar(SnackBar(content: Text(context.tr('cannot_rate_self'))));
       return;
     }
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('rate_seller')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+    final vote = await RateSellerSheet.show(
+      context,
+      sellerName: widget.userName,
+    );
+    if (vote == null || !mounted) return;
+    await _submitSellerRating(user.uid, vote.rating);
+  }
+
+  Future<void> _submitSellerRating(String raterId, int rating) async {
+    // Optimistic feedback: the sheet is already dismissed, so the snackbar is
+    // the only confirmation the user gets. Resolve the error through trError
+    // so a failure reads in the app language instead of leaking
+    // "Failed: {0}: error_generic".
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 10),
+        content: Row(
           children: [
-            Text(context.tr('rate_seller_trust_prompt')),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  icon: Icon(Icons.thumb_down_alt, color: Theme.of(ctx).colorScheme.onError),
-                  label: Text(context.tr('not_trustworthy')),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(ctx).colorScheme.error,
-                    foregroundColor: Theme.of(ctx).colorScheme.onError,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _submitSellerRating(user.uid, 1);
-                  },
-                ),
-                ElevatedButton.icon(
-                  icon: Icon(Icons.thumb_up_alt, color: Theme.of(ctx).colorScheme.onPrimary),
-                  label: Text(context.tr('trustworthy')),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(ctx).colorScheme.primary,
-                    foregroundColor: Theme.of(ctx).colorScheme.onPrimary,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _submitSellerRating(user.uid, 5);
-                  },
-                ),
-              ],
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
             ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(context.tr('submitting', 'Submitting…'))),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _submitSellerRating(String raterId, int rating) async {
     try {
       final userProfile = await UserService().getProfile(raterId);
       final userName = userProfile?.displayName ?? raterId;
@@ -649,17 +782,23 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         rating: rating.toDouble(),
         comment: '',
       );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('rating_submitted'))));
-      }
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(context.tr('rating_submitted'))));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${context.tr('imeshindwa')}: $e')));
-      }
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(context.trError(e, feature: 'rating', screen: 'PublicProfile')),
+            action: SnackBarAction(
+              label: context.tr('try_again'),
+              onPressed: () => _submitSellerRating(raterId, rating),
+            ),
+          ),
+        );
     }
   }
 
@@ -694,6 +833,140 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 : context.tr('no_ratings_yet'),
             style: TextStyle(fontSize: 12, color: trustColor, fontWeight: FontWeight.w500),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Header + grid placeholder shown while the profile stream resolves.
+///
+/// Matches the real layout closely enough that the page does not jump when data
+/// arrives. A centered spinner used to flash for a frame and then shift
+/// everything down.
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Column(
+            children: [
+              const CircleAvatar(radius: 46, child: SizedBox()),
+              const SizedBox(height: 14),
+              const DsSkeleton(width: 150, height: 18),
+              const SizedBox(height: 8),
+              const DsSkeleton(width: 220, height: 12),
+              const SizedBox(height: 16),
+              const DsSkeleton(height: 56),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        const DsSkeleton(height: 86),
+        const SizedBox(height: 20),
+        const _ProductsSkeleton(),
+      ],
+    );
+  }
+}
+
+/// 2×2 product grid placeholder.
+class _ProductsSkeleton extends StatelessWidget {
+  const _ProductsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: Responsive.gridColumns(context),
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: Responsive.cardAspectRatio(context),
+      ),
+      itemCount: 4,
+      itemBuilder: (_, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const DsSkeleton(width: 110, height: 11),
+          const SizedBox(height: 6),
+          const DsSkeleton(width: 70, height: 9),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact inline state used inside the profile scroll view.
+///
+/// `SliverFillRemaining` with a full-page spinner forced the empty state to
+/// fill the viewport and pushed the seller header out of view when the grid was
+/// inside a nested sliver list.
+class _InlineNotice extends StatelessWidget {
+  const _InlineNotice({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 30, color: cs.onSurfaceVariant),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ],
         ],
       ),
     );

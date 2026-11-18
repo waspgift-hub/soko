@@ -293,6 +293,20 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
         await outbox.markWebhookProcessed(event);
         return { received: true, webhookId };
       }
+      // Subscription payments use their own `billing_payments` rows and settle
+      // into the subscription store, not the ecommerce orders table.
+      if (legacyRef.startsWith('sub_')) {
+        const subscriptionBilling = require('../subscriptions/billing');
+        await subscriptionBilling.settlePayment({
+          orderReference: legacyRef,
+          status: normalized.status,
+          providerPaymentId: normalized.providerPaymentId,
+          amount: normalized.amount,
+          failureReason: normalized.raw?.message || normalized.raw?.reason || 'Payment failed',
+        });
+        await outbox.markWebhookProcessed(event);
+        return { received: true, webhookId };
+      }
 
       if (normalized.status === 'completed') {
         await confirmCollection({

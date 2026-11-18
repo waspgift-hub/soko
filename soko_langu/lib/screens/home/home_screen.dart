@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../main.dart';
-import '../../services/localization_service.dart';
 import '../../services/category_service.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
@@ -22,6 +21,7 @@ import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/recently_viewed_row.dart';
 import '../../widgets/trending_carousel.dart';
+import '../../widgets/currency_sheet.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_colors.dart';
 
@@ -74,54 +74,7 @@ class _HomeScreenState extends State<HomeScreen>
     'Others',
   ];
 
-  void _showCurrencyPicker(BuildContext context) {
-    final config = AppConfig.of(context);
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(top: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(ctx).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppInsets.lg),
-            child: Text(
-              context.tr('select_currency'),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(ctx).colorScheme.onSurface,
-              ),
-            ),
-          ),
-          ...LocalizationService.supportedCurrencies.entries.map(
-            (e) => ListTile(
-              title: Text("${e.value['name']} (${e.value['symbol']})"),
-              trailing: config.currencyCode == e.key
-                  ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
-                  : null,
-              onTap: () {
-                LocalizationService().setCurrency(e.key);
-                config.onSetCurrency(e.key);
-                Navigator.pop(ctx);
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
+  void _showCurrencyPicker(BuildContext context) => CurrencySheet.show(context);
 
   @override
   void initState() {
@@ -269,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _FilterSheet(
         initialSort: _sortBy,
@@ -1094,13 +1048,21 @@ class _FilterSheetState extends State<_FilterSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
+    // The sheet is a fixed-height Column, so the keyboard has to shrink it.
+    // Without this the price fields and the Apply button ended up behind the
+    // IME as soon as the user started typing.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final available = MediaQuery.sizeOf(context).height - keyboard;
+    final sheetHeight = (available * 0.7).clamp(320.0, available);
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: Container(
+        height: sheetHeight,
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
         children: [
           Container(
             width: 40,
@@ -1275,25 +1237,30 @@ class _FilterSheetState extends State<_FilterSheet> {
           ),
         ],
       ),
+      ),
     );
   }
 
   Widget _sortChip(ColorScheme cs, String value, String label) {
     final selected = _sort == value;
-    return GestureDetector(
-      onTap: () => setState(() => _sort = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? cs.primary : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: () => setState(() => _sort = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? cs.primary : cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+            ),
           ),
         ),
       ),
@@ -1302,20 +1269,24 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   Widget _condChip(ColorScheme cs, String value, String label) {
     final selected = _condition == value;
-    return GestureDetector(
-      onTap: () => setState(() => _condition = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? cs.primary : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: () => setState(() => _condition = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? cs.primary : cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+            ),
           ),
         ),
       ),

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models/flash_sale_model.dart';
 import '../models/product_model.dart';
 import 'api_config.dart';
+import 'auth_token.dart';
 import 'product_service.dart';
 
 class FlashSaleService {
@@ -127,7 +128,7 @@ class FlashSaleService {
 
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not logged in');
-    final token = await user.getIdToken(true);
+    final token = await AuthToken.current();
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/flash-sale/create'),
       headers: {
@@ -160,7 +161,7 @@ class FlashSaleService {
   Future<void> _deactivateExpiredForProduct(String productId) async {
     final user = _auth.currentUser;
     if (user == null) return;
-    final token = await user.getIdToken(true);
+    final token = await AuthToken.current();
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/flash-sales/deactivate-expired'),
       headers: {
@@ -191,7 +192,7 @@ class FlashSaleService {
   Future<void> deleteFlashSale(String flashSaleId) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not logged in');
-    final token = await user.getIdToken(true);
+    final token = await AuthToken.current();
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/flash-sales/delete'),
       headers: {

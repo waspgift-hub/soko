@@ -54,8 +54,8 @@ class ProductCachedImage extends StatelessWidget {
         child: CachedNetworkImage(
           imageUrl: url!,
           cacheManager: SokoCacheManager(),
-          memCacheWidth: width?.toInt(),
-          memCacheHeight: height?.toInt(),
+          memCacheWidth: _decodeDimension(context, width),
+          memCacheHeight: _decodeDimension(context, height),
           fit: fit,
           fadeInDuration: const Duration(milliseconds: 300),
           fadeOutDuration: const Duration(milliseconds: 100),
@@ -64,6 +64,20 @@ class ProductCachedImage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Physical decode target for [CachedNetworkImage].
+  ///
+  /// Calling `toInt()` on an infinite or NaN dimension throws
+  /// `Unsupported operation: Infinity or NaN toInt`, which is one of the red
+  /// screens reported from the product feed. Widgets legitimately receive
+  /// `double.infinity` from unbounded parents, so anything non-finite or
+  /// non-positive is dropped and the decoder keeps its native size.
+  int? _decodeDimension(BuildContext context, double? logical) {
+    if (logical == null || !logical.isFinite || logical <= 0) return null;
+    final dpr = (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0).clamp(1.0, 2.0);
+    final px = (logical * dpr).round();
+    return px > 0 ? px : null;
   }
 
   /// Blurred low-res preview while the full image loads (Facebook-style),

@@ -97,6 +97,7 @@ dependencies:
   safe_text: ^2.1.7
   dynamic_color: ^1.9.0
   local_auth: ^3.0.2
+  google_mobile_ads: ^5.3.1
 
 
 
@@ -143,6 +144,7 @@ flutter:
   # until that pack is downloaded.
   assets:
     - assets/
+    - assets/brand/logos/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

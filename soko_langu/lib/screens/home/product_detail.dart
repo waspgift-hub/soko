@@ -12,6 +12,7 @@ import '../../widgets/product_cached_image.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../widgets/live_countdown.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
@@ -67,7 +68,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   StreamSubscription<SellerVerification?>? _kycSubscription;
   bool _processing = false;
   FlashSale? _flashSale;
-  Timer? _flashTimer;
+
   StreamSubscription<FlashSale?>? _flashStreamSub;
   bool _viewIncremented = false;
   int _quantity = 1;
@@ -97,30 +98,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         });
   }
 
-  String _lastDisplay = '';
 
   void _loadFlashSale() {
     _flashStreamSub = _flashSaleService.streamFlashSaleByProductId(widget.product.id).listen((
       sale,
     ) {
       if (!mounted) return;
-      setState(() {
-        _flashSale = sale;
-        _lastDisplay = '';
-      });
-      if (sale != null) {
-        _flashTimer?.cancel();
-        _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-          if (!mounted) return;
-          final display = sale.remainingTime.isNegative ? '' : _fmtDuration(sale.remainingTime);
-          if (display != _lastDisplay) {
-            _lastDisplay = display;
-            setState(() {});
-          }
-        });
-      } else {
-        _flashTimer?.cancel();
-      }
+      setState(() => _flashSale = sale);
     });
   }
 
@@ -138,7 +122,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   void dispose() {
-    _flashTimer?.cancel();
     _flashStreamSub?.cancel();
     _kycSubscription?.cancel();
     _imageController.dispose();
@@ -504,16 +487,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _flashSale!.remainingTime.isNegative
-                            ? context.tr('expired')
-                            : context
-                                  .tr('flash_sale_ends_in')
-                                  .replaceAll('{0}', _fmtDuration(_flashSale!.remainingTime)),
-                        style: TextStyle(
-                          color: cs.error,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                      LiveCountdown(
+                        endTime: _flashSale!.endTime,
+                        builder: (context, remaining) => Text(
+                          remaining == Duration.zero
+                              ? context.tr('expired')
+                              : context
+                                    .tr('flash_sale_ends_in')
+                                    .replaceAll('{0}', _fmtDuration(remaining)),
+                          style: TextStyle(
+                            color: cs.error,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                       Text(

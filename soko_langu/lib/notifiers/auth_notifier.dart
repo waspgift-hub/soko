@@ -244,6 +244,14 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
     try {
       await _authRepo.signInWithGoogle();
+      // Server-side suspension enforcement + security trail. If the account is
+      // suspended (or the call fails), sign out locally so no session survives.
+      try {
+        await _authRepo.verifyGoogleSession();
+      } catch (e) {
+        await _authRepo.logout();
+        rethrow;
+      }
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();

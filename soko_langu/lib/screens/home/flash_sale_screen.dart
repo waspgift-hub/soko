@@ -6,6 +6,7 @@ import '../../services/flash_sale_service.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/live_countdown.dart';
 import '../../widgets/banners/campaign_banner_slot.dart';
 import '../../models/banner_model.dart';
 import '../../app/routes.dart';
@@ -23,19 +24,17 @@ class FlashSaleScreen extends StatefulWidget {
 
 class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingObserver {
   final FlashSaleService _service = FlashSaleService();
-  Timer? _timer;
 
   // The sale LIST is subscribed once and held in state.
   //
   // Previously `stream:` was built inline inside build() and keyed on
   // `_refreshKey`, while a 1 Hz timer drove setState. So the screen opened a
-  // fresh Firestore listener â€” a full re-read of the flash_sales collection â€”
+  // fresh Firestore listener — a full re-read of the flash_sales collection —
   // once every second, for as long as it was on screen. That is the single most
   // expensive realtime pattern in the app.
   //
-  // Now: one subscription for the list; the 1 Hz timer only repaints the
-  // countdown text. A resume re-subscribes deliberately, and the active-sale
-  // window is re-evaluated in place rather than by re-reading the collection.
+  // Now: one subscription for the list. Each card runs its own 1 Hz countdown
+  // widget, so a second tick repaints one label instead of the whole screen.
   StreamSubscription<List<FlashSale>>? _sub;
   List<FlashSale>? _sales;
   Object? _error;
@@ -48,11 +47,6 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     _now = DateTime.now();
     _subscribe();
-    // 1 Hz for the countdown only. No network, no subscription churn.
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _now = DateTime.now());
-    });
   }
 
   void _subscribe() {
@@ -80,7 +74,6 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
 
   @override
   void dispose() {
-    _timer?.cancel();
     _sub?.cancel();
     _sub = null;
     WidgetsBinding.instance.removeObserver(this);
@@ -352,12 +345,6 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
 
   Widget _buildSaleCard(FlashSale sale) {
     final cs = Theme.of(context).colorScheme;
-    // Reads the ticker's `_now` so the countdown repaints from the single 1 Hz
-    // setState rather than each card calling DateTime.now() independently.
-    final remaining = sale.endTime.difference(_now);
-    final hours = remaining.inHours;
-    final minutes = remaining.inMinutes.remainder(60);
-    final secs = remaining.inSeconds.remainder(60);
     final saved = sale.originalPrice - sale.salePrice;
 
     return Container(
@@ -391,13 +378,21 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
               children: [
                 Icon(Icons.timer, color: cs.surface, size: 16),
                 const SizedBox(width: 6),
-                Text(
-                  context
-                      .tr('duration_format')
-                      .replaceAll('{h}', '$hours')
-                      .replaceAll('{m}', '$minutes')
-                      .replaceAll('{s}', '$secs'),
-                  style: TextStyle(color: cs.surface, fontWeight: FontWeight.bold, fontSize: 14),
+                LiveCountdown(
+                  endTime: sale.endTime,
+                  onExpired: _subscribe,
+                  builder: (context, remaining) => Text(
+                    context
+                        .tr('duration_format')
+                        .replaceAll('{h}', '${remaining.inHours}')
+                        .replaceAll('{m}', '${remaining.inMinutes.remainder(60)}')
+                        .replaceAll('{s}', '${remaining.inSeconds.remainder(60)}'),
+                    style: TextStyle(
+                      color: cs.surface,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
                 const Spacer(),
                 Container(
@@ -485,6 +480,29 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
                             ),
                           ],
                         ),
+                      if (sale.stock > 0) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: (sale.soldCount / sale.stock).clamp(0.0, 1.0),
+                                  minHeight: 6,
+                                  backgroundColor: cs.outlineVariant.withValues(alpha: 0.3),
+                                  valueColor: AlwaysStoppedAnimation(cs.tertiary),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${sale.stock - sale.soldCount} left',
+                              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -543,3 +561,4 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
     );
   }
 }
+

@@ -63,6 +63,7 @@ class AppRoutes {
   static const String adminKyc = '/admin/kyc';
   static const String adminBroadcast = '/admin/broadcast';
   static const String adminReports = '/admin/reports';
+  static const String adminBuyerRequests = '/admin/buyer-requests';
   static const String flashSale = '/flash-sale';
   static const String createFlashSale = '/create-flash-sale';
   static const String sellerDispatch = '/seller-dispatch';
@@ -81,6 +82,8 @@ class AppRoutes {
   static const String adminUserDetail = '/admin/user';
   static const String boostProduct = '/boost-product';
   static const String buyerRequests = '/buyer-requests';
+  static const String myBuyerRequests = '/my-buyer-requests';
+  static const String buyerRequestDetail = '/buyer-requests/:id';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';
   static const String otpVerification = '/otp-verification';

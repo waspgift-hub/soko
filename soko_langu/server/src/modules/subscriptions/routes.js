@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { getFirebaseAuth } = require('../../config/firebase');
 const store = require('./subscription-store');
 const service = require('./subscription-service');
+const billing = require('./billing');
 const { PLANS, SUBSCRIPTION_STATUS } = require('./plans');
 const { jsonError } = require('../../utils/http');
 
@@ -63,6 +64,34 @@ router.get('/ai-quota', guard(async (req, res, userId) => {
   const dateKey = store.todayKey();
   const used = await store.getAiUsage({ userId, dateKey });
   res.json({ success: true, data: { used, limit: ent.aiActionsPerDay, planId: ent.planId, dateKey } });
+}));
+
+// Starts a paid subscription (or renews the current one) through AzamPay. The
+// plan price is read from plans.js on the server — the client never sends an
+// amount. Returns the order reference the app can show while the USSD prompt
+// is approved; activation happens on the verified webhook.
+router.post('/upgrade', guard(async (req, res, userId) => {
+  const planId = String(req.body?.planId || '');
+  const phone = String(req.body?.phone || '');
+  const result = await billing.initiateUpgrade({ userId, planId, phone });
+  res.status(201).json({ success: true, data: result });
+}));
+
+router.post('/cancel', guard(async (req, res, userId) => {
+  res.json({ success: true, data: await billing.cancelSubscription(userId) });
+}));
+
+router.post('/resume', guard(async (req, res, userId) => {
+  res.json({ success: true, data: await billing.resumeSubscription(userId) });
+}));
+
+router.post('/downgrade', guard(async (req, res, userId) => {
+  const planId = String(req.body?.planId || '');
+  res.json({ success: true, data: await billing.downgradeSubscription(userId, planId) });
+}));
+
+router.get('/invoices', guard(async (req, res, userId) => {
+  res.json({ success: true, data: await billing.listInvoices(userId, req.query?.limit) });
 }));
 
 module.exports = router;

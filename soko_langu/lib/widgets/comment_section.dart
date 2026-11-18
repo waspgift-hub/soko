@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
+import '../extensions/context_tr.dart';
 import '../models/comment_model.dart';
 import '../services/comment_service.dart';
-import '../services/profanity_filter.dart';
-import '../extensions/context_tr.dart';
-import '../theme/app_motion.dart';
-import 'google_loading.dart';
-import 'blue_tick_badge.dart';
-import 'ds/ds.dart';
 import '../theme/design_tokens.dart';
+import 'blue_tick_badge.dart';
+import 'comments/comment_sheet.dart';
 
+/// Compact comments preview embedded in Product Detail.
+///
+/// The full experience lives in [showCommentsSheet]; this widget deliberately
+/// stays shallow — two recent comments plus an entry row — so the product page
+/// keeps its scroll position and height, and the sheet owns all interaction
+/// state (likes, replies, moderation, pagination).
 class CommentSection extends StatefulWidget {
   final String productId;
 
-  /// uid of the product's seller. Enables the "Seller" tag on the seller's own
-  /// comments, so a buyer can tell an answer from the shop owner apart from
-  /// another buyer.
+  /// uid of the product's seller, used for the "Seller" tag on the preview.
   final String? sellerId;
 
   const CommentSection({
@@ -30,694 +30,191 @@ class CommentSection extends StatefulWidget {
 }
 
 class _CommentSectionState extends State<CommentSection> {
-  final _commentService = CommentService();
-  final _commentController = TextEditingController();
-  final _auth = FirebaseAuth.instance;
-  late final Stream<List<ProductComment>> _commentsStream;
-
-  String? get _sellerId => widget.sellerId;
+  final _service = CommentService();
+  late final Stream<CommentPage> _stream;
 
   @override
   void initState() {
     super.initState();
-    _commentsStream = _commentService.getComments(widget.productId);
+    _stream = _service.commentsStream(widget.productId);
   }
 
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _addComment() async {
-    final text = _commentController.text.trim();
-    if (text.isEmpty) return;
-    if (_auth.currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('login_required'))),
-      );
-      return;
-    }
-    final check = await ProfanityFilter().check(text);
-    if (!check.clean) {
-      if (mounted) {
-        if (check.banned) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
-          );
-          await _auth.signOut();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
-          );
-        }
-      }
-      return;
-    }
-    try {
-      await _commentService.addComment(productId: widget.productId, text: text);
-      _commentController.clear();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
-        );
-      }
-    }
-  }
-
-  void _showReplySheet(String commentId) {
-    final replyController = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        bool sending = false;
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 16,
-              right: 16,
-              top: 16,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: replyController,
-                        autofocus: true,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: context.tr('comment_hint'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    sending
-                        ? const GoogleLoading(size: 20, strokeWidth: 2)
-                        : IconButton(
-                            tooltip: context.tr('send'),
-                            icon: Icon(
-                              Icons.send,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            onPressed: () async {
-                              final text = replyController.text.trim();
-                              if (text.isEmpty) return;
-                              setSheetState(() => sending = true);
-                              final check = await ProfanityFilter().check(text);
-                              if (!check.clean) {
-                                setSheetState(() => sending = false);
-                                if (ctx.mounted) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(ctx).colorScheme.error),
-                                  );
-                                }
-                                return;
-                              }
-                              try {
-                                await _commentService.addReply(
-                                  productId: widget.productId,
-                                  commentId: commentId,
-                                  text: text,
-                                );
-                                replyController.clear();
-                                if (ctx.mounted) Navigator.pop(ctx);
-                              } catch (e) {
-                                setSheetState(() => sending = false);
-                                if (ctx.mounted) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
-                                  );
-                                }
-                              }
-                            },
-                          ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        );
-      },
+  void _open({bool focus = false}) {
+    showCommentsSheet(
+      context,
+      productId: widget.productId,
+      sellerId: widget.sellerId,
+      autofocus: focus,
     );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Text(
-                context.tr('comments'),
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _commentController,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    hintText: context.tr('comment_hint'),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _BurstSendButton(onPressed: _addComment),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        StreamBuilder<List<ProductComment>>(
-          stream: _commentsStream,
-          builder: (context, snap) {
-            final comments = snap.data ?? [];
-            if (comments.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: Text(
-                    context.tr('no_comments_yet'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 14),
-                  ),
-                ),
-              );
-            }
-            return Column(
-              children: [
-                for (int i = 0; i < comments.length; i++) ...[
-                  if (i > 0) const Divider(height: 1),
-                  _AnimatedCommentTile(
-                    key: ValueKey(comments[i].id),
-                    child: _CommentTile(
-                      comment: comments[i],
-                      productId: widget.productId,
-                      sellerId: _sellerId,
-                      onReply: () => _showReplySheet(comments[i].id),
-                    ),
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-}
-
-class _BurstSendButton extends StatefulWidget {
-  final VoidCallback onPressed;
-
-  const _BurstSendButton({required this.onPressed});
-
-  @override
-  State<_BurstSendButton> createState() => _BurstSendButtonState();
-}
-
-class _BurstSendButtonState extends State<_BurstSendButton> {
-  int _burstTick = 0;
-
-  void _handleTap() {
-    HapticFeedback.lightImpact();
-    setState(() => _burstTick++);
-    widget.onPressed();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        IconButton(
-          tooltip: context.tr('send'),
-          icon: Icon(Icons.send, color: cs.primary),
-          onPressed: _handleTap,
-        ),
-        Positioned.fill(
-          child: DsMicroBurst(
-            color: cs.primary,
-            trigger: _burstTick,
-            size: 56,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AnimatedCommentTile extends StatefulWidget {
-  final Widget child;
-
-  const _AnimatedCommentTile({super.key, required this.child});
-
-  @override
-  State<_AnimatedCommentTile> createState() => _AnimatedCommentTileState();
-}
-
-class _AnimatedCommentTileState extends State<_AnimatedCommentTile>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<Offset> _slide;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: Motion.cardEnter);
-    _slide = Tween(begin: const Offset(0, -0.25), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Motion.easeOutCubic));
-    _fade = CurvedAnimation(
-      parent: _controller,
-      curve: Motion.easeInOutCubic,
-    );
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(position: _slide, child: widget.child),
-    );
-  }
-}
-
-class _CommentTile extends StatelessWidget {
-  final ProductComment comment;
-  final String productId;
-
-  /// uid of the product's seller, so a seller's own comment can be labelled.
-  final String? sellerId;
-  final VoidCallback onReply;
-
-  const _CommentTile({
-    required this.comment,
-    required this.productId,
-    this.sellerId,
-    required this.onReply,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    final isMine = currentUid == comment.userId;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                backgroundImage:
-                    comment.userImage != null && comment.userImage!.isNotEmpty
-                        ? NetworkImage(comment.userImage!)
-                        : null,
-                child: comment.userImage == null || comment.userImage!.isEmpty
-                    ? Icon(
-                        Icons.person,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          comment.userName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        // Consistent Blue Tick beside the author's identity in
-                        // every comment, including replies. No comment text is
-                        // reordered or re-weighted — this is a disclosure
-                        // badge only.
-                        BlueTickBadge(sellerId: comment.userId, size: 13),
-                        if (sellerId != null && comment.userId == sellerId) ...[
-                          const SizedBox(width: 5),
-                          _SellerTag(),
-                        ],
-                        const Spacer(),
-                        Text(
-                          _formatTime(comment.createdAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(comment.text, style: const TextStyle(fontSize: 14)),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: onReply,
-                          child: Text(
-                            context.tr('reply'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.tertiary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (comment.replyCount > 0) ...[
-                          const SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () => _showRepliesSheet(context),
-                            child: Text(
-                              '${comment.replyCount} ${context.tr('replies')}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (isMine)
-                PopupMenuButton<String>(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onSelected: (v) {
-                    if (v == 'delete') {
-                      CommentService().deleteComment(
-                        productId: productId,
-                        commentId: comment.id,
-                      );
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Text(context.tr('delete')),
-                    ),
-                  ],
-                  icon: Icon(
-                    Icons.more_vert,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRepliesSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        final replyController = TextEditingController();
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.85,
-          minChildSize: 0.3,
-          expand: false,
-          builder: (ctx, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+    return StreamBuilder<CommentPage>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final page = snapshot.data ?? CommentPage.empty;
+        final preview = page.items.take(2).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Ds.sp4, Ds.sp4, Ds.sp4, Ds.sp1),
+              child: Row(
                 children: [
                   Text(
-                    '${context.tr('replies')} (${comment.replyCount})',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                    context.tr('comments'),
+                    style: Ds.sectionTitle(cs.onSurface).copyWith(fontSize: 17, fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: StreamBuilder<List<CommentReply>>(
-                      stream: CommentService().getReplies(
-                        productId,
-                        comment.id,
-                      ),
-                      builder: (ctx, snap) {
-                        final replies = snap.data ?? [];
-                        if (replies.isEmpty) {
-                          return Center(
-                            child: Text(
-                              context.tr('no_comments_yet'),
-                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
-                            ),
-                          );
-                        }
-                        return ListView.separated(
-                          controller: scrollController,
-                          itemCount: replies.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (_, i) {
-                            final r = replies[i];
-                            final isMyReply =
-                                FirebaseAuth.instance.currentUser?.uid ==
-                                r.userId;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                                    backgroundImage:
-                                        r.userImage != null && r.userImage!.isNotEmpty
-                                            ? NetworkImage(r.userImage!)
-                                            : null,
-                                    child: r.userImage == null || r.userImage!.isEmpty
-                                        ? Icon(
-                                            Icons.person,
-                                            size: 16,
-                                            color: Theme.of(context).colorScheme.primary,
-                                          )
-                                        : null,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Text(
-                                              r.userName,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 12,
-                                                color: Theme.of(context).colorScheme.primary,
-                                              ),
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              _formatTime(r.createdAt),
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          r.text,
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (isMyReply)
-                                    PopupMenuButton<String>(
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      onSelected: (v) {
-                                        if (v == 'delete') {
-                                          CommentService().deleteReply(
-                                            productId: productId,
-                                            commentId: comment.id,
-                                            replyId: r.id,
-                                          );
-                                        }
-                                      },
-                                      itemBuilder: (_) => [
-                                        PopupMenuItem(
-                                          value: 'delete',
-                                          child: Text(context.tr('delete')),
-                                        ),
-                                      ],
-                                      icon: Icon(
-                                        Icons.more_vert,
-                                        size: 14,
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                  if (page.total > 0) ...[
+                    const SizedBox(width: 6),
+                    Text('${page.total}', style: Ds.bodySm(cs.onSurface).copyWith(color: cs.onSurfaceVariant)),
+                  ],
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => _open(),
+                    child: Text(context.tr('see_all', 'Ona zote')),
                   ),
-                  const Divider(),
-                  Row(
+                ],
+              ),
+            ),
+            if (preview.isEmpty)
+              InkWell(
+                onTap: () => _open(focus: true),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Ds.sp4, vertical: Ds.sp3),
+                  child: Row(
                     children: [
-                      Expanded(
-                        child:                     TextField(
-                          controller: replyController,
-                          maxLines: 2,
-                          decoration: InputDecoration(
-                            hintText: context.tr('comment_hint'),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _BurstSendButton(
-                        onPressed: () async {
-                          final text = replyController.text.trim();
-                          if (text.isEmpty) return;
-                          final check = await ProfanityFilter().check(text);
-                          if (!check.clean) {
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(ctx).colorScheme.error),
-                              );
-                            }
-                            return;
-                          }
-                          try {
-                            await CommentService().addReply(
-                              productId: productId,
-                              commentId: comment.id,
-                              text: text,
-                            );
-                            replyController.clear();
-                          } catch (e) {
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
-                              );
-                            }
-                          }
-                        },
+                      Icon(Icons.chat_bubble_outline, size: 18, color: cs.onSurfaceVariant),
+                      const SizedBox(width: Ds.sp2),
+                      Text(
+                        context.tr('no_comments_yet'),
+                        style: Ds.bodySm(cs.onSurface).copyWith(color: cs.onSurfaceVariant),
                       ),
                     ],
                   ),
-                ],
+                ),
+              )
+            else ...[
+              for (final comment in preview)
+                _PreviewComment(comment: comment, sellerId: widget.sellerId),
+              if (page.items.length > preview.length || page.hasMore)
+                InkWell(
+                  onTap: () => _open(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Ds.sp4, vertical: Ds.sp2),
+                    child: Text(
+                      context.tr('view_all_comments', 'Ona maoni yote'),
+                      style: Ds.caption(cs.onSurface).copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Ds.sp4, Ds.sp2, Ds.sp4, Ds.sp3),
+              child: InkWell(
+                onTap: page.commentsEnabled ? () => _open(focus: true) : null,
+                borderRadius: BorderRadius.circular(Ds.rFull),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: Ds.sp4, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(Ds.rFull),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        page.commentsEnabled ? Icons.edit_outlined : Icons.comments_disabled,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: Ds.sp2),
+                      Text(
+                        page.commentsEnabled
+                            ? context.tr('add_comment', 'Ongeza maoni...')
+                            : context.tr('comments_are_off', 'Maoni yamezimwa kwa bidhaa hii.'),
+                        style: Ds.bodySm(cs.onSurface).copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            );
-          },
+            ),
+          ],
         );
       },
     );
   }
-
-  String _formatTime(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays < 7) return '${diff.inDays}d';
-    return '${dt.day}/${dt.month}/${dt.year}';
-  }
 }
 
-/// "Seller" tag for the product owner's own comment or reply.
-///
-/// This is a disclosure of identity, not a ranking signal. The Blue Tick beside
-/// it stays a separate, independent badge so a seller can be identified as the
-/// shop owner without being KYC-verified, and vice versa.
-class _SellerTag extends StatelessWidget {
+class _PreviewComment extends StatelessWidget {
+  final ProductComment comment;
+  final String? sellerId;
+
+  const _PreviewComment({required this.comment, this.sellerId});
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(Ds.rSm),
-      ),
-      child: Text(
-        context.tr('seller'),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: cs.primary,
-        ),
+    final isSeller = sellerId != null && sellerId == comment.userId;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Ds.sp4, Ds.sp2, Ds.sp4, Ds.sp2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: cs.primaryContainer,
+            backgroundImage: (comment.userImage != null && comment.userImage!.isNotEmpty)
+                ? NetworkImage(comment.userImage!)
+                : null,
+            child: (comment.userImage == null || comment.userImage!.isEmpty)
+                ? Icon(Icons.person, size: 15, color: cs.primary)
+                : null,
+          ),
+          const SizedBox(width: Ds.sp2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        comment.userName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Ds.caption(cs.onSurface).copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ),
+                    BlueTickBadge(sellerId: comment.userId, size: 11),
+                    if (isSeller) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        context.tr('seller'),
+                        style: Ds.caption(cs.onSurface).copyWith(fontSize: 9, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  comment.text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Ds.bodySm(cs.onSurface),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

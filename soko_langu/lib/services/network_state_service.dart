@@ -39,6 +39,7 @@ class NetworkStateService extends ChangeNotifier {
 
   NetworkStatus _status = NetworkStatus.online;
   bool _started = false;
+  bool _evaluating = false;
   int _consecutiveFailures = 0;
 
   NetworkStatus get status => _status;
@@ -79,6 +80,20 @@ class NetworkStateService extends ChangeNotifier {
     _evaluate();
   }
 
+  /// Probe again immediately (banner "retry" affordance).
+  ///
+  /// Manual retries bypass the backoff timer so a user who just reconnected
+  /// does not wait up to 20 seconds for the banner to clear.
+  Future<void> retry() async {
+    _probeTimer?.cancel();
+    // A scheduled probe may already be in flight; its result predates the
+    // user's fix, so wait it out and then take a fresh reading.
+    while (_evaluating) {
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+    await _evaluate();
+  }
+
   void _onTransportChanged(List<ConnectivityResult> results) {
     final hasTransport = results.any((r) => r != ConnectivityResult.none);
     if (!hasTransport) {
@@ -93,22 +108,32 @@ class NetworkStateService extends ChangeNotifier {
   }
 
   Future<void> _evaluate() async {
-    final results = await Connectivity().checkConnectivity();
-    if (!results.any((r) => r != ConnectivityResult.none)) {
-      _setStatus(NetworkStatus.offline);
-      _scheduleProbe();
-      return;
+    if (_evaluating) return;
+    _evaluating = true;
+    try {
+      final results = await Connectivity().checkConnectivity();
+      if (!results.any((r) => r != ConnectivityResult.none)) {
+        _setStatus(NetworkStatus.offline);
+        _scheduleProbe();
+        return;
+      }
+      final reachable = await _probeServer();
+      if (!reachable) {
+        _consecutiveFailures++;
+        // One slow probe is not proof of a bad network: the first request after
+        // launch often loses the race with radio warm-up, and a banner that
+        // flashed on every cold start read as an outage. Require a second
+        // failure before flagging degradation.
+        if (_consecutiveFailures >= 2) _setStatus(NetworkStatus.degraded);
+        _scheduleProbe();
+        return;
+      }
+      _consecutiveFailures = 0;
+      _probeTimer?.cancel();
+      _setStatus(NetworkStatus.online);
+    } finally {
+      _evaluating = false;
     }
-    final reachable = await _probeServer();
-    if (!reachable) {
-      _consecutiveFailures++;
-      _setStatus(NetworkStatus.degraded);
-      _scheduleProbe();
-      return;
-    }
-    _consecutiveFailures = 0;
-    _probeTimer?.cancel();
-    _setStatus(NetworkStatus.online);
   }
 
   // Single cheap HEAD/GET so offline detection never costs mobile data.

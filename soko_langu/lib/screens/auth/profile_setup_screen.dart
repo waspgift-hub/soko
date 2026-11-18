@@ -55,7 +55,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
+        ).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.trError(e, feature: 'profile', screen: 'ProfileSetup'),
+            ),
+          ),
+        );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

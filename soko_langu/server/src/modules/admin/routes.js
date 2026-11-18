@@ -11,6 +11,7 @@ const activity = require('../../services/activity');
 const { getStore } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
+const authEvents = require('../../services/auth-events');
 const { sendMail } = require('../../services/mailer');
 const { publicPayload, normalizeRelease } = require('../config/app-release');
 const { buildFacts, maybePolish } = require('./insights');
@@ -280,6 +281,25 @@ router.get(
   async (req, res) => {
     const data = await adminService.listAuditLogs(req.query);
     res.json({ success: true, data });
+  }
+);
+
+// Security monitoring: login activity, methods, devices, failed attempts,
+// OTP delivery failures, notification delivery status, suspicious patterns.
+router.get(
+  '/security/login-events',
+  requireAdminPermission('audit:read'),
+  validate({
+    query: z.object({
+      method: z.string().optional(),
+      outcome: z.string().optional(),
+      uid: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(100),
+    }),
+  }),
+  async (req, res) => {
+    const result = await authEvents.listAllEvents(req.query);
+    res.json({ success: true, ...result });
   }
 );
 

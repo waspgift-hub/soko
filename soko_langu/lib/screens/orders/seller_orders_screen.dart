@@ -22,6 +22,8 @@ class SellerOrdersScreen extends StatefulWidget {
 }
 
 class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
+  static final _money = NumberFormat('#,###');
+  static final _date = DateFormat('dd/MM/yyyy HH:mm');
   String _filter = 'all';
   int _refreshKey = 0;
   Timer? _autoRefreshTimer;
@@ -402,7 +404,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
     final createdAt = d['createdAt'] as Timestamp?;
     final dateStr = createdAt != null
-        ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
+        ? _date.format(createdAt.toDate())
         : '—';
     final statusInfo = orderStatusInfo(status, cs);
 
@@ -490,35 +492,35 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                         cs,
                         Icons.monetization_on_outlined,
                         context.tr('product_price'),
-                        'TZS ${NumberFormat('#,###').format(productPrice)}',
+                        'TZS ${_money.format(productPrice)}',
                       ),
                       if (shippingCost != null && shippingCost > 0)
                         _infoRow(
                           cs,
                           Icons.local_shipping_outlined,
                           context.tr('shipping_cost'),
-                          'TZS ${NumberFormat('#,###').format(shippingCost)}',
+                          'TZS ${_money.format(shippingCost)}',
                         ),
                       if (platformFee > 0)
                         _infoRow(
                           cs,
                           Icons.percent_outlined,
                           context.tr('soko_vibe_commission'),
-                          'TZS ${NumberFormat('#,###').format(platformFee)}',
+                          'TZS ${_money.format(platformFee)}',
                         ),
                       if (processingFee > 0)
                         _infoRow(
                           cs,
                           Icons.receipt_long_outlined,
                           context.tr('processing_fee'),
-                          'TZS ${NumberFormat('#,###').format(processingFee)}',
+                          'TZS ${_money.format(processingFee)}',
                         ),
                       if (totalAmount > 0)
                         _infoRow(
                           cs,
                           Icons.payments_outlined,
                           context.tr('total_payment'),
-                          'TZS ${NumberFormat('#,###').format(totalAmount)}',
+                          'TZS ${_money.format(totalAmount)}',
                           bold: true,
                         ),
                       _buildSellerTimers(cs, d),

@@ -209,7 +209,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              context.tr('imeshindwa').replaceAll('{0}', 'location'),
+              context.tr(
+                'location_unavailable',
+                'Imeshindwa kupata eneo lako. Hakikisha huduma ya eneo imewashwa.',
+              ),
             ),
           ),
         );

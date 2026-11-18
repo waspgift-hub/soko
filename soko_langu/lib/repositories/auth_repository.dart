@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
 import '../services/fraud_prevention_service.dart';
+import '../services/localization_service.dart';
 import '../services/mfa_service.dart';
 import '../utils/network_error.dart';
 import '../utils/phone_utils.dart';
@@ -69,10 +70,11 @@ class AuthRepository {
 
   Future<UserCredential> loginWithEmailOtp(String email, String otp) async {
     try {
+      final langCode = await LocalizationService().getLanguage();
       final res = await http.post(
         Uri.parse(ApiConfig.v1('/auth/email-otp-login')),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email.trim().toLowerCase(), 'otp': otp}),
+        body: jsonEncode({'email': email.trim().toLowerCase(), 'otp': otp, 'langCode': langCode}),
       );
 
       final body = jsonDecode(res.body);
@@ -160,7 +162,7 @@ class AuthRepository {
         return result;
       }
 
-      final googleUser = await GoogleSignIn.instance.authenticate();
+      final googleUser = await GoogleSignIn.instance.authenticate(scopeHint: const ['email', 'profile']);
       final googleAuth = googleUser.authentication;
       if (googleAuth.idToken == null) {
         throw NetworkError(message: 'Google idToken is null', userMessage: 'auth_google_failed');
@@ -186,6 +188,38 @@ class AuthRepository {
         message: 'Google Sign-In failed: $e',
         userMessage: 'auth_google_cancelled',
       );
+    }
+  }
+
+  /// Notifies the backend that a Google sign-in just completed, so the server
+  /// can enforce suspension and record the security trail + Login Detected mail.
+  /// Throws [NetworkError] on a non-success response (including ACCOUNT_SUSPENDED).
+  Future<void> verifyGoogleSession() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final token = await user.getIdToken();
+      final langCode = await LocalizationService().getLanguage();
+      final res = await http.post(
+        Uri.parse(ApiConfig.v1('/auth/google/verify')),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'langCode': langCode}),
+      ).timeout(const Duration(seconds: 15));
+      Map<String, dynamic> body = {};
+      try {
+        body = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {}
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw NetworkError(
+          message: 'Google verify failed: ${body['error']}',
+          userMessage: body['error']?.toString() ?? 'auth_google_failed',
+        );
+      }
+    } on NetworkError {
+      rethrow;
+    } catch (e) {
+      debugPrint('verifyGoogleSession error: $e');
+      throw NetworkError(message: 'Google verify failed: $e', userMessage: 'auth_google_failed');
     }
   }
 

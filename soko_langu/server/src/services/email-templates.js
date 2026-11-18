@@ -71,4 +71,34 @@ function buildPasswordChangedEmail({ lang = 'sw', when = null } = {}) {
     context: { lang, when },
   };
 }
-module.exports = { buildOtpEmail, buildPasswordChangedEmail };
+
+// Security notification: a sign-in was detected.
+//
+// Sent after EVERY successful login (new or known device) through the queued
+// notification worker, never inline on the login request. The widget-safe
+// context carries only coarse metadata — never the OTP, tokens, or full email
+// headers — so the mail can never leak a credential.
+function buildLoginDetectedEmail({
+  lang = 'sw',
+  when = null,
+  method = 'email_otp',
+  device = '',
+  os = '',
+  browser = '',
+  location = '',
+  ip = '',
+  newDevice = false,
+} = {}) {
+  const en = lang === 'en';
+  const subject = en
+    ? 'Soko Vibe — New sign-in to your account'
+    : 'Soko Vibe — Kuingia mpya kwenye akaunti yako';
+  return {
+    subject,
+    html: '',
+    action: 'login-detected',
+    context: { lang, when, method, device, os, browser, location, ip, newDevice },
+  };
+}
+
+module.exports = { buildOtpEmail, buildPasswordChangedEmail, buildLoginDetectedEmail };

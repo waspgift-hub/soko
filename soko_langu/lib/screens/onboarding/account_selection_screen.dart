@@ -28,7 +28,7 @@ class AccountSelectionScreen extends StatelessWidget {
               const Spacer(flex: 2),
               ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                child: Image.asset('assets/app_icon.png', width: 72, height: 72, fit: BoxFit.cover),
+                child: Image.asset('assets/brand/logos/app_icon.png', width: 72, height: 72, fit: BoxFit.cover),
               ),
               const SizedBox(height: 16),
               Text(

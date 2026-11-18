@@ -2,8 +2,11 @@ import 'package:flutter/foundation.dart';
 
 /// Money values arrive as int, double, or String (Prisma serializes
 /// Decimal/BigInt columns as strings), so parsing must stay type-tolerant.
+/// A non-finite double (NaN/Infinity) has no integer representation and used to
+/// throw `Unsupported operation: Infinity or NaN toInt`; collapse it to zero.
 int _moneyOf(Object? value) {
-  if (value is num) return value.toInt();
+  if (value is int) return value;
+  if (value is num) return value.isFinite ? value.round() : 0;
   if (value is String) return int.tryParse(value) ?? 0;
   return 0;
 }

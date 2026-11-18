@@ -7,7 +7,6 @@ import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/mfa_service.dart';
-import '../../utils/network_error.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/ds/ds_button.dart';
 
@@ -52,7 +51,9 @@ class _MfaChallengeScreenState extends State<MfaChallengeScreen> {
       setState(() => _error = e.userMessage);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = translateError(e));
+      // `translateError` returns a key, not text — rendering it directly is
+      // what put "error_generic" on screen. `trError` resolves it.
+      setState(() => _error = context.trError(e, feature: 'mfa', screen: 'MfaChallenge'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -19,6 +19,7 @@ import '../report/admin_reports_screen.dart';
 import 'admin_transactions_tab.dart';
 import 'admin_kyc_document_view_screen.dart';
 import 'admin_banner_management_screen.dart';
+import 'admin_security_screen.dart';
 import '../../widgets/product_cached_image.dart';
 import 'package:intl/intl.dart';
 
@@ -912,6 +913,12 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
           Theme.of(context).colorScheme.error,
           _toggleMaintenance,
         ),
+        _actionTile(
+          Icons.security,
+          context.tr('admin_security'),
+          Theme.of(context).colorScheme.primary,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminSecurityScreen())),
+        ),
       ],
     );
   }
@@ -1254,7 +1261,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
+        ).showSnackBar(SnackBar(content: Text(context.trError(e))));
       }
     }
   }
@@ -1325,7 +1332,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
+        ).showSnackBar(SnackBar(content: Text(context.trError(e))));
       }
     }
   }
@@ -1886,7 +1893,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
+        ).showSnackBar(SnackBar(content: Text(context.trError(e))));
       }
     }
   }
@@ -2147,7 +2154,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))),
+          SnackBar(content: Text(context.trError(e))),
         );
       }
     }
@@ -2225,7 +2232,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
+        ).showSnackBar(SnackBar(content: Text(context.trError(e))));
       }
     }
   }
@@ -2256,7 +2263,7 @@ List<Map<String, dynamic>> _pendingKycUsers = [];
           return const GoogleLoadingPage();
         }
         if (snap.hasError) {
-          return Center(child: Text(context.tr('imeshindwa').replaceAll('{0}', '${snap.error}')));
+          return Center(child: Text(context.trError(snap.error)));
         }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {

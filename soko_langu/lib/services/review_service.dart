@@ -73,9 +73,6 @@ class ReviewService {
           message: "User not logged in",
           userMessage: 'auth_login_required',
         );
-      await user.reload();
-      await user.getIdToken(true);
-
       // resolve sellerId from the product doc so the server can reject
       // self-reviews and notify the right seller, exactly like the
       // Firestore path below
@@ -121,9 +118,6 @@ class ReviewService {
           message: "User not logged in",
           userMessage: 'auth_login_required',
         );
-      await user.reload();
-      await user.getIdToken(true);
-
       final productDoc = await _db
           .collection('products')
           .doc(productId)

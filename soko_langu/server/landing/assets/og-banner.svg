@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Soko Vibe — Digital Marketplace Tanzania">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F6F7F6"/>
+    </linearGradient>
+    <pattern id="dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.5" fill="#00C853" opacity="0.18"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle dot pattern in the corner -->
+  <rect x="820" y="0" width="380" height="380" fill="url(#dots)"/>
+
+  <!-- Green accent bar -->
+  <rect x="80" y="96" width="72" height="6" rx="3" fill="#00C853"/>
+
+  <!-- Brand name -->
+  <text x="80" y="230" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="118" font-weight="800" letter-spacing="-3" fill="#0A0A0A">Soko Vibe</text>
+
+  <!-- Subtitle -->
+  <text x="80" y="300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="40" font-weight="500" fill="#009624">Digital Marketplace · Tanzania</text>
+
+  <!-- Description -->
+  <text x="80" y="390" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="400" fill="#4C514C">Soko la mtandaoni la Tanzania — linajengwa kwa wanunuzi na wauzaji.</text>
+  <text x="80" y="426" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="400" fill="#4C514C">A Tanzanian online marketplace being built for buyers and sellers.</text>
+
+  <!-- Shopping bag icon -->
+  <g transform="translate(930,150) scale(6)" fill="none" stroke="#00C853" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 8h14l1 13H4L5 8Z"/>
+    <path d="M9 8V6a3 3 0 0 1 6 0v2"/>
+  </g>
+
+  <!-- Footer line -->
+  <rect x="80" y="520" width="1040" height="1" fill="#DFE3DF"/>
+  <text x="80" y="560" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="20" font-weight="500" fill="#626762">sokovibe.co.tz  ·  Founded 2026 by Gift Henry Wapalila  ·  Under development</text>
+
+  <!-- Green dot accent -->
+  <circle cx="1120" cy="552" r="6" fill="#00C853"/>
+</svg>

@@ -8,6 +8,7 @@ import '../../models/category_model.dart';
 import '../../models/discovery_filters.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
+import '../../repositories/product_repository.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../utils/category_icons.dart';
@@ -42,6 +43,7 @@ class CategoryProductsScreen extends StatefulWidget {
 class _CategoryProductsScreenState extends State<CategoryProductsScreen>
     with WidgetsBindingObserver {
   final _productService = ProductService();
+  final _repo = ProductRepository();
   final _flashSaleService = FlashSaleService();
   String? _selectedSubcategory;
   late ProductFilter _filter;
@@ -134,15 +136,40 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
   /// as the permanent identifier. The [category.name] is display-only and
   /// may change; the query always uses the stable category ID.
   Stream<List<Product>> _stream() {
-    if (_selectedSubcategory == null) {
-      return _productService.getProductsByCategoryId(widget.category.id, aliases: _catAliases);
-    }
-    return _productService.getProductsByCategoryAndSubcategoryId(
-      widget.category.id,
-      subcategory: _selectedSubcategory!,
-      categoryAliases: _catAliases,
-      subcategoryAliases: _currentSubAliases(),
-    );
+    // Use the v2 repository so products stored in Postgres (the API source of
+    // truth when kUseProductsApi is on) actually appear here. The legacy
+    // Firestore-only query below is kept as a fallback when the API returns
+    // nothing (e.g. during migration or offline).
+    return Stream.fromFuture((() async {
+      try {
+        final result = await _repo.loadProductsByCategory(
+          widget.category.name,
+          subcategory: _selectedSubcategory,
+          startOver: true,
+        );
+        if (result.data != null && result.data!.isNotEmpty) {
+          return result.data!;
+        }
+      } catch (_) {}
+      // Fallback to the legacy Firestore query.
+      try {
+        if (_selectedSubcategory == null) {
+          final snap = await _productService.getProductsByCategoryId(widget.category.id, aliases: _catAliases).first;
+          return snap;
+        }
+        final snap = await _productService
+            .getProductsByCategoryAndSubcategoryId(
+              widget.category.id,
+              subcategory: _selectedSubcategory!,
+              categoryAliases: _catAliases,
+              subcategoryAliases: _currentSubAliases(),
+            )
+            .first;
+        return snap;
+      } catch (_) {
+        return <Product>[];
+      }
+    })());
   }
 
   @override

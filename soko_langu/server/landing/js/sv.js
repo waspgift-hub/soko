@@ -478,7 +478,9 @@
           consent.focus();
           return;
         }
-        if (!token) {
+        // Turnstile is best-effort: if the widget never produced a token, still
+        // submit so a real visitor message is not lost. Server applies checks.
+        if (!token && TURNSTILE_SITE_KEY) {
           setStatus(form, m('captcha'), 'error');
           return;
         }

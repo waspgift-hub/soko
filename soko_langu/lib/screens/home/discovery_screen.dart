@@ -3,19 +3,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../main.dart';
 import '../../services/product_service.dart';
-import '../../services/localization_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../widgets/feed/feed_tabs.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ds/ds_empty_state.dart';
+import '../../widgets/ds/ds_skeleton.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/dynamic_banner.dart';
+import '../../widgets/currency_sheet.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/google_loading.dart';
+import '../../utils/responsive.dart';
 import '../../app/routes.dart';
 
 /// Discovery marketplace: product cards in a 2-column grid, tabs filter the
@@ -76,43 +76,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
     } catch (_) {}
   }
 
-  void _showCurrencyPicker(BuildContext context) {
-    final config = AppConfig.of(context);
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                context.tr('select_currency'),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ...LocalizationService.supportedCurrencies.entries.map(
-              (e) => ListTile(
-                title: Text("${e.value['name']} (${e.value['symbol']})"),
-                trailing: config.currencyCode == e.key
-                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
-                    : null,
-                onTap: () {
-                  LocalizationService().setCurrency(e.key);
-                  config.onSetCurrency(e.key);
-                  Navigator.pop(ctx);
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
+  void _showCurrencyPicker(BuildContext context) => CurrencySheet.show(context);
 
   List<Product> _forTab(List<Product> all) {
     switch (_tab) {
@@ -167,10 +131,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
               stream: _productStream,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const GoogleLoadingPage();
+                  return _loadingGrid(context);
                 }
                 if (snap.hasError) {
-                  return _errorState(context, snap.error.toString());
+                  return _errorState(context, snap.error!);
                 }
                 final items = _forTab(snap.data ?? []);
                 if (items.isEmpty) return _emptyForTab(context);
@@ -181,13 +145,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
                     slivers: [
                       const SliverToBoxAdapter(child: DynamicBanner()),
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          8,
+                          12,
+                          MediaQuery.paddingOf(context).bottom + 96,
+                        ),
                         sliver: SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: Responsive.gridColumns(context),
                             mainAxisSpacing: 10,
                             crossAxisSpacing: 10,
-                            childAspectRatio: 0.62,
+                            childAspectRatio: Responsive.cardAspectRatio(context),
                           ),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
@@ -217,30 +186,82 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
     );
   }
 
-  Widget _errorState(BuildContext context, String err) {
+  Widget _loadingGrid(BuildContext context) {
+    // A skeleton grid keeps the layout stable between the first frame and the
+    // data — a full-screen spinner reset the scroll position and made the tab
+    // feel slower than it is.
+    final cs = Theme.of(context).colorScheme;
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: Responsive.gridColumns(context),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: Responsive.cardAspectRatio(context),
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (_, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const DsSkeleton(width: 120, height: 12),
+                  const SizedBox(height: 6),
+                  const DsSkeleton(width: 70, height: 10),
+                ],
+              ),
+              childCount: 6,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _errorState(BuildContext context, Object error) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(height: 16),
-          Text(
-            err.contains('permission-denied')
-                ? context.tr('permission_denied')
-                : err.contains('UNAVAILABLE')
-                ? context.tr('no_network')
-                : context.tr('please_try_again'),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            // Re-subscribing is what actually retries the query; a bare
-            // setState left the failed stream in place and the button did
-            // nothing visible.
-            onPressed: _reloadProducts,
-            child: Text(context.tr('try_again')),
-          ),
-        ],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 56,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              context.trError(error, feature: 'discovery', screen: 'Discovery'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              // Re-subscribing is what actually retries the query; a bare
+              // setState left the failed stream in place and the button did
+              // nothing visible.
+              onPressed: _reloadProducts,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(context.tr('try_again')),
+            ),
+          ],
+        ),
       ),
     );
   }

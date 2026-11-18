@@ -1,28 +1,27 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
+import '../../main.dart' show AppConfig;
 import '../../models/otp_verification_models.dart';
 import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/network_error.dart';
-import '../../utils/rate_limiter.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/ds/ds_button.dart';
 
-enum _LoginMethod { password, otp }
-
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool isRegister;
+  const LoginScreen({super.key, this.isRegister = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -31,21 +30,13 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
 
-  _LoginMethod _method = _LoginMethod.password;
   bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _otpSent = false;
   bool _sendingOtp = false;
-  Timer? _resendTimer;
-  int _resendLeft = 0;
 
   @override
   void dispose() {
-    _resendTimer?.cancel();
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -60,26 +51,6 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Text(msg),
       ),
     );
-  }
-
-  void _startResendCountdown() {
-    _resendTimer?.cancel();
-    // Matches the server's OTP guard cooldown (OTP_COOLDOWN_MS = 60s). At 45s the
-    // button unlocked while the server still held the cooldown, so every resend
-    // tap produced a 429.
-    setState(() => _resendLeft = kOtpResendCooldownSeconds);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      if (_resendLeft <= 1) {
-        t.cancel();
-        setState(() => _resendLeft = 0);
-      } else {
-        setState(() => _resendLeft = _resendLeft - 1);
-      }
-    });
   }
 
   Future<void> _saveAccount(String provider) async {
@@ -98,290 +69,56 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _onPasswordLogin() async {
-    if (_isLoading) return;
+  Future<void> _onContinueWithEmail() async {
+    if (_sendingOtp) return;
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    final email = _emailController.text.trim();
+    setState(() => _sendingOtp = true);
     try {
-      await context.read<AuthNotifier>().login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      await _saveAccount('email');
-      if (mounted) context.go(AppRoutes.home);
-    } on MfaSignInRequired catch (e) {
+      await context.read<AuthNotifier>().sendEmailOtp(email);
       if (!mounted) return;
-      context.push(
-        AppRoutes.mfaChallenge,
-        extra: {'resolver': e.resolver, 'email': e.email ?? _emailController.text.trim()},
+      HapticFeedback.mediumImpact();
+      context.pushNamed(
+        AppRoutes.otpVerification,
+        extra: OtpVerificationRequest(
+          purpose: OtpPurpose.emailLogin,
+          destination: email,
+          maskedDestination: _maskEmail(email),
+          channel: OtpChannel.email,
+          otpLength: 6,
+          langCode: AppConfig.of(context).langCode,
+          autoSend: false,
+          onVerify: (otp) async {
+            try {
+              await context.read<AuthNotifier>().loginWithEmailOtp(email, otp);
+              await _saveAccount('otp');
+              if (mounted) context.go(AppRoutes.home);
+              return const OtpVerificationResult.success();
+            } catch (e) {
+              return OtpVerificationResult.failure(
+                errorCode: 'auth_otp_invalid',
+                userMessage: context.trError(e),
+              );
+            }
+          },
+          onResend: () async {
+            await context.read<AuthNotifier>().sendEmailOtp(email);
+            return const OtpVerificationResult.success();
+          },
+          allowDestinationEdit: false,
+          allowResend: true,
+          headingOverride: context.tr('login_with_email'),
+          subtitleOverride: context.trParams('enter_code_sent', {'0': _maskEmail(email)}),
+        ),
       );
     } catch (e) {
       if (mounted) _showError(context.trError(e));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _sendingOtp = false);
     }
   }
 
-  Future<void> _onSendOtp() async {
-    if (_sendingOtp) return;
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      _showError(context.tr('enter_email_please'));
-      return;
-    }
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      _showError(context.tr('invalid_email'));
-      return;
-    }
-    setState(() {
-      _sendingOtp = true;
-      _otpSent = false;
-    });
-    try {
-      await context.read<AuthNotifier>().sendEmailOtp(email);
-      if (!mounted) return;
-      setState(() => _otpSent = true);
-      _startResendCountdown();
-      HapticFeedback.mediumImpact();
-      if (mounted) {
-        context.pushNamed(
-          AppRoutes.otpVerification,
-          extra: OtpVerificationRequest(
-            purpose: OtpPurpose.emailLogin,
-            destination: email,
-            maskedDestination: _maskEmail(email),
-            channel: OtpChannel.email,
-            otpLength: 6,
-            langCode: 'sw',
-            onVerify: (otp) async {
-              try {
-                await context.read<AuthNotifier>().loginWithEmailOtp(email, otp);
-                await _saveAccount('otp');
-                if (mounted) context.go(AppRoutes.home);
-                return const OtpVerificationResult.success();
-              } catch (e) {
-                return OtpVerificationResult.failure(
-                  errorCode: 'auth_otp_invalid',
-                  userMessage: context.trError(e, feature: 'auth', screen: 'login_otp_verify'),
-                );
-              }
-            },
-            onResend: () async {
-              await context.read<AuthNotifier>().sendEmailOtp(email);
-              return const OtpVerificationResult.success();
-            },
-            allowDestinationEdit: false,
-            allowResend: true,
-            headingOverride: context.tr('login_with_otp'),
-            subtitleOverride: _tParams('enter_code_sent', {'0': _maskEmail(email)}),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) _showError(context.trError(e, feature: 'auth', screen: 'login_otp'));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  String _maskEmail(String email) {
-    final at = email.indexOf('@');
-    if (at <= 1) return email;
-    return '${email[0]}***@${email.substring(at + 1)}';
-  }
-
-  String _tParams(String key, Map<String, String> params) => context.trParams(key, params);
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return AuthScene(
-      heading: context.tr('welcome_back'),
-      subtitle: context.tr('login_subtitle'),
-      leading: const _BackButton(),
-      footer: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            context.tr('no_account'),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
-          ),
-          TextButton(
-            onPressed: _isLoading ? null : () => context.push(AppRoutes.register),
-            child: Text(
-              context.tr('create_account'),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-      child: AuthCard(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _GoogleButton(onPressed: _isLoading ? null : _onGoogleLogin),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      context.tr('or'),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _MethodSwitcher(
-                method: _method,
-                onChange: (m) {
-                  setState(() {
-                    _method = m;
-                    _otpSent = false;
-                  });
-                  HapticFeedback.selectionClick();
-                },
-              ),
-              const SizedBox(height: 24),
-              Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AuthTextField(
-                      controller: _emailController,
-                      label: context.tr('email'),
-                      prefixIcon: Icons.alternate_email_rounded,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.email],
-                      onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return context.tr('enter_email_please');
-                        }
-                        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
-                          return context.tr('invalid_email');
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, animation) =>
-                          FadeScaleTransition(scale: animation, child: child),
-                      child: _buildMethodField(),
-                    ),
-                    const SizedBox(height: 24),
-                    DsButton(
-                      label: _method == _LoginMethod.password
-                          ? context.tr('login')
-                          : context.tr('verify'),
-                      loading: _isLoading,
-                      onPressed: _method == _LoginMethod.password ? _onPasswordLogin : _onSendOtp,
-                      height: 58, // match 58dp fields so button row aligns
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMethodField() {
-    final cs = Theme.of(context).colorScheme;
-    if (_method == _LoginMethod.password) {
-      return Column(
-        key: const ValueKey('password_field'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AuthTextField(
-            controller: _passwordController,
-            label: context.tr('password'),
-            prefixIcon: Icons.lock_outline_rounded,
-            obscureText: _obscurePassword,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.password],
-            validator: (v) => (v == null || v.isEmpty) ? context.tr('enter_password') : null,
-            suffix: IconButton(
-              tooltip: context.tr(_obscurePassword ? 'show_password' : 'hide_password'),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-              icon: Icon(
-                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                size: 20,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-            onFieldSubmitted: (_) => _onPasswordLogin(),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _isLoading ? null : () => context.push(AppRoutes.forgotPassword),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                minimumSize: const Size(48, 48),
-                tapTargetSize: MaterialTapTargetSize.padded,
-              ),
-              child: Text(
-                context.tr('forgot_password'),
-                style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-            ),
-          ),
-        ],
-      );
-    } else if (!_otpSent) {
-      return DsButton(
-        key: const ValueKey('send_otp_button'),
-        label: context.tr('send_otp'),
-        icon: Icons.sms_outlined,
-        loading: _sendingOtp,
-        onPressed: _onSendOtp,
-        height: 58,
-      );
-    } else {
-      // OTP was sent and we navigated to OtpVerificationScreen. This branch is
-      // only reached if the user returns to the login screen mid-flow; show a
-      // simple prompt to re-initiate.
-      return Column(
-        key: const ValueKey('otp_sent'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            context.tr('otp_sent_email'),
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, fontWeight: FontWeight.w400),
-          ),
-          const SizedBox(height: 12),
-          DsButton(
-            key: const ValueKey('send_otp_button'),
-            label: context.tr('send_otp'),
-            icon: Icons.sms_outlined,
-            loading: _sendingOtp,
-            onPressed: _onSendOtp,
-            height: 58,
-          ),
-        ],
-      );
-    }
-  }
-
-  Future<void> _onGoogleLogin() async {
+  Future<void> _onGoogle() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
@@ -397,64 +134,101 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-}
 
-class _MethodSwitcher extends StatelessWidget {
-  final _LoginMethod method;
-  final ValueChanged<_LoginMethod> onChange;
-
-  const _MethodSwitcher({required this.method, required this.onChange});
+  String _maskEmail(String email) {
+    final at = email.indexOf('@');
+    if (at <= 1) return email;
+    return '${email[0]}***@${email.substring(at + 1)}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    Widget option(_LoginMethod m, String label, IconData icon) {
-      final selected = method == m;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => onChange(m),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            decoration: BoxDecoration(
-              color: selected ? cs.primary.withValues(alpha: 0.12) : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: selected ? cs.primary : cs.brandBorder,
-                width: selected ? 1.5 : 1,
-              ),
+    return AuthScene(
+      heading: widget.isRegister ? context.tr('create_account') : context.tr('welcome_back'),
+      subtitle: widget.isRegister ? context.tr('register_subtitle') : context.tr('login_subtitle'),
+      leading: const _BackButton(),
+      footer: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            widget.isRegister ? context.tr('already_have_account') : context.tr('no_account'),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+          ),
+          TextButton(
+            onPressed: _isLoading ? null : () => context.push(widget.isRegister ? AppRoutes.login : AppRoutes.register),
+            child: Text(
+              widget.isRegister ? context.tr('login') : context.tr('create_account'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+          ),
+        ],
+      ),
+      child: AuthCard(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(icon, size: 18, color: selected ? cs.primary : cs.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? cs.primary : cs.onSurfaceVariant,
+                AuthTextField(
+                  controller: _emailController,
+                  label: context.tr('email'),
+                  prefixIcon: Icons.alternate_email_rounded,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.email],
+                  onFieldSubmitted: (_) => _onContinueWithEmail(),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return context.tr('enter_email_please');
+                    }
+                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
+                      return context.tr('invalid_email');
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                DsButton(
+                  label: context.tr('continue_email'),
+                  loading: _sendingOtp,
+                  onPressed: _onContinueWithEmail,
+                  height: 58,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        context.tr('or'),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _GoogleButton(onPressed: _isLoading ? null : _onGoogle),
+                const SizedBox(height: 16),
+                Text(
+                  context.tr('terms_privacy_notice'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ],
             ),
           ),
         ),
-      );
-    }
-
-    return Row(
-      children: [
-        option(_LoginMethod.password, context.tr('login_with_email'), Icons.lock_outline_rounded),
-        const SizedBox(width: 12),
-        option(_LoginMethod.otp, context.tr('login_with_otp'), Icons.verified_outlined),
-      ],
+      ),
     );
   }
 }
@@ -469,14 +243,13 @@ class _BackButton extends StatelessWidget {
     return IconButton(
       onPressed: () => Navigator.of(context).maybePop(),
       icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-      tooltip: 'Back',
+      tooltip: context.tr('back'),
     );
   }
 }
 
 class _GoogleButton extends StatelessWidget {
   final VoidCallback? onPressed;
-
   const _GoogleButton({this.onPressed});
 
   @override
@@ -513,26 +286,4 @@ class _GoogleButton extends StatelessWidget {
       ),
     );
   }
-}
-
-class FadeScaleTransition extends StatutoryAnimatedWidget {
-  final Widget child;
-  final Animation<double> scale;
-
-  const FadeScaleTransition({super.key, required this.child, required this.scale});
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: scale,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.95, end: 1.0).animate(scale),
-        child: child,
-      ),
-    );
-  }
-}
-
-abstract class StatutoryAnimatedWidget extends StatelessWidget {
-  const StatutoryAnimatedWidget({super.key});
 }

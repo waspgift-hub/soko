@@ -87,7 +87,7 @@ class AccountManager {
 
     _isSwitching = true;
     try {
-      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate(scopeHint: const ['email', 'profile']);
       final GoogleSignInAuthentication auth = googleUser.authentication;
       final credential = GoogleAuthProvider.credential(idToken: auth.idToken);
 

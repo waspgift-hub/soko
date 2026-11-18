@@ -452,6 +452,19 @@ service cloud.firestore {
     }
 
     // ─── NOTIFICATIONS ──────────────────────────────────────
+    match /buyer_requests/{requestId} {
+      allow read, write: if false;
+    }
+    match /buyer_request_offers/{offerId} {
+      allow read, write: if false;
+    }
+    match /buyer_request_views/{viewId} {
+      allow read, write: if false;
+    }
+    match /buyer_request_events/{eventId} {
+      allow read, write: if false;
+    }
+
     match /notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       // userId must be the caller's own — a client may never target another

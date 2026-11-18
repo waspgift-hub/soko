@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
+import '../../services/buyer_request_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/glass.dart';
 import '../../widgets/google_loading.dart';
@@ -28,6 +29,8 @@ class _NotificationPreferencesScreenState
   bool _personalized = false;
   bool _districtEnabled = true;
   List<String> _interestedDistricts = [];
+  bool _brViews = true;
+  bool _brOffers = true;
   String? _districtPicker;
 
   static const _masterKey = 'general';
@@ -47,13 +50,25 @@ class _NotificationPreferencesScreenState
 
   static const String _base = '${ApiConfig.baseUrl}/api/notification';
 
-  List<String> get _allDistricts =>
+  late final List<String> _allDistricts =
       kRegionDistricts.values.expand((d) => d).toSet().toList()..sort();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadBrPrefs();
+  }
+
+  Future<void> _loadBrPrefs() async {
+    try {
+      final p = await BuyerRequestService().getNotificationPrefs();
+      if (!mounted) return;
+      setState(() {
+        _brViews = p['buyerRequestViews'] as bool? ?? true;
+        _brOffers = p['buyerRequestOffers'] as bool? ?? true;
+      });
+    } catch (_) {}
   }
 
   Future<Map<String, String>> _authHeaders() async {
@@ -301,7 +316,36 @@ class _NotificationPreferencesScreenState
             ),
           ),
           const SizedBox(height: 12),
-          Opacity(
+          const SizedBox(height: 24),
+           _buildSectionHeader(context, 'buyer_request_notifications'),
+           const SizedBox(height: 8),
+           GlassCard(
+             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+             child: SwitchListTile(
+               title: const Text('Seller opened my request'),
+               value: _brViews,
+               onChanged: (v) async {
+                 setState(() => _brViews = v);
+                 await BuyerRequestService().updateNotificationPrefs(buyerRequestViews: v);
+               },
+               secondary: Icon(Icons.visibility_outlined, color: cs.primary),
+             ),
+           ),
+           const SizedBox(height: 8),
+           GlassCard(
+             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+             child: SwitchListTile(
+               title: const Text('New offers on my requests'),
+               value: _brOffers,
+               onChanged: (v) async {
+                 setState(() => _brOffers = v);
+                 await BuyerRequestService().updateNotificationPrefs(buyerRequestOffers: v);
+               },
+               secondary: Icon(Icons.local_offer_outlined, color: cs.primary),
+             ),
+           ),
+           const SizedBox(height: 12),
+           Opacity(
             opacity: _districtEnabled ? 1 : 0.5,
             child: IgnorePointer(
               ignoring: !_districtEnabled,

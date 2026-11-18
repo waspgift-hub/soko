@@ -4,8 +4,9 @@ const { getStore } = require('../../config/database');
 const config = require('../../config');
 const { saveOtp, getOtp, markUsed, bumpAttempts, clearOtp, createOtpHash, verifyOtpHash } = require('../../services/otp-store');
 const { sendMail } = require('../../services/mailer');
-const { buildOtpEmail, buildPasswordChangedEmail } = require('../../services/email-templates');
+const { buildOtpEmail, buildPasswordChangedEmail, buildLoginDetectedEmail } = require('../../services/email-templates');
 const { deliverPhoneOtp } = require('../../services/otp-delivery');
+const authEvents = require('../../services/auth-events');
 const { releaseOtpClaim, checkTarget } = require('../../middleware/otpGuard');
 const { clientIp } = require('../../middleware/rateLimiter');
 const { writeAudit, auditFromReq } = require('../../services/audit');
@@ -166,13 +167,16 @@ async function sendEmailOtp(req, res) {
 
     await saveOtp(`email:${cleanEmail}`, createOtpHash(otp), OTP_TTL_SECONDS);
 
-    const { subject, html } = buildOtpEmail({
+    const otpEmail = buildOtpEmail({
       otp,
       lang,
       expiresInMinutes: OTP_TTL_SECONDS / 60,
       recipientEmail: cleanEmail,
     });
-    const sent = await sendMail(cleanEmail, subject, html, null, { action: otpEmail.action, context: otpEmail.context });
+    const sent = await sendMail(cleanEmail, otpEmail.subject, otpEmail.html, null, {
+      action: otpEmail.action,
+      context: { ...otpEmail.context, recipientEmail: cleanEmail },
+    });
     authAudit(req, sent ? 'otp_requested' : 'otp_request_failed', { entityId: `email:${maskEmail(cleanEmail)}` });
     if (!sent) {
       // The code never arrived (every channel failed, or the address bounced /
@@ -181,6 +185,13 @@ async function sendEmailOtp(req, res) {
       // instead of waiting on a 60s cooldown for a message that was never sent.
       await clearOtp(`email:${cleanEmail}`);
       await releaseOtpClaim(req);
+      authEvents.recordEvent({
+        method: 'email_otp',
+        outcome: 'otp_send_failed',
+        emailMasked: maskEmail(cleanEmail),
+        req,
+        reason: 'delivery_failed',
+      }).catch(() => {});
       return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
@@ -271,6 +282,34 @@ async function verifyEmailOtp(req, res) {
   }
 }
 
+// Suspension/deletion gate shared by every login path: the Firestore users/{uid}
+// doc is authoritative (it is written by the server only), with the Postgres
+// seam row as a fallback for accounts that predate Firestore-primary.
+async function accountGate(uid) {
+  let status = null;
+  let suspended = false;
+  try {
+    const doc = await accountStore.getProfile(uid);
+    if (doc) {
+      status = doc.accountStatus || status;
+      suspended = doc.isSuspended === true || suspended;
+    }
+  } catch (_) {}
+  if (!status && !suspended) {
+    try {
+      const store = getStore();
+      const row = await store.user.findFirst({
+        where: { firebaseUid: uid },
+        select: { accountStatus: true },
+      });
+      if (row) status = row.accountStatus || status;
+    } catch (_) {}
+  }
+  if (status === 'deleted') return 'ACCOUNT_DELETED';
+  if (status === 'suspended' || suspended) return 'ACCOUNT_SUSPENDED';
+  return null;
+}
+
 // Email + OTP login for the app: verifies the emailed code, resolves the
 // Firebase user by email, returns a custom token the client signs in with.
 //
@@ -289,11 +328,20 @@ async function emailOtpLogin(req, res) {
       authAudit(req, check.locked ? 'otp_verify_locked' : 'otp_verify_failed', {
         entityId: `email:${maskEmail(cleanEmail)}`,
       });
+      authEvents.recordEvent({
+        method: 'email_otp',
+        outcome: check.locked ? 'locked' : 'invalid_code',
+        emailMasked: maskEmail(cleanEmail),
+        req,
+        reason: check.error,
+      }).catch(() => {});
       return res.status(400).json({ error: check.error });
     }
 
     const auth = getFirebaseAuth();
     if (!auth) return res.status(503).json({ error: 'Auth not configured' });
+
+    const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
 
     let uid;
     let created = false;
@@ -323,13 +371,42 @@ async function emailOtpLogin(req, res) {
         col: {
           email: cleanEmail,
           displayName: cleanEmail.split('@')[0],
-          preferredLanguage: 'sw',
+          preferredLanguage: lang,
           accountStatus: 'active',
           createdAt: new Date().toISOString(),
         },
         meta: { lastActive: new Date().toISOString(), profile: {} },
       });
     }
+
+    // Suspension gate BEFORE minting a session. A suspended user must never
+    // receive a custom token even though the OTP itself was valid.
+    const gate = await accountGate(uid);
+    if (gate) {
+      authAudit(req, gate === 'ACCOUNT_DELETED' ? 'login_denied_deleted' : 'login_denied_suspended', {
+        actorId: uid,
+        actorType: 'user',
+        entityId: `email:${maskEmail(cleanEmail)}`,
+      });
+      authEvents.recordEvent({
+        uid,
+        emailMasked: maskEmail(cleanEmail),
+        method: 'email_otp',
+        outcome: 'denied',
+        req,
+        reason: gate,
+      }).catch(() => {});
+      return res.status(403).json({ error: gate });
+    }
+
+    // Keep the seam row's lastLoginAt honest for legacy consumers.
+    try {
+      const store = getStore();
+      await store.user.updateMany({
+        where: { firebaseUid: uid },
+        data: { lastLoginAt: new Date(), emailVerified: true },
+      });
+    } catch (_) {}
 
     const token = await auth.createCustomToken(uid);
     authAudit(req, 'email_otp_login', {
@@ -339,22 +416,202 @@ async function emailOtpLogin(req, res) {
       newState: created ? { createdViaOtp: true } : undefined,
     });
 
-    // Fire-and-forget "login detected" notification (email channel). Never
-    // block the login response on mail delivery; failures are logged only.
-    const loginHtml =
-      '<h2>Login detected / Kuingia kumeonekana</h2>' +
-      '<p>A new sign-in to your Soko Vibe account was completed using your email address.</p>' +
-      '<p>Kuingia kwenye akaunti yako ya Soko Vibe kumefanyika kwa kutumia barua pepe yako.</p>' +
-      '<p>If this was not you, secure your account immediately by changing your password and enabling MFA.</p>' +
-      '<p>Ikiwa si wewe, linda akaunti yako mara moja kwa kubadilisha nenosiri na kuwasha MFA.</p>';
-    sendMail(cleanEmail, 'Login detected - Soko Vibe', loginHtml, null, {
-      action: 'generic',
-      context: { lang: 'sw', recipientEmail: cleanEmail },
-    }).catch((e) => console.error('[AUTH] login-detected email failed:', e && e.message));
+    // Security trail + Login Detected email (queued, non-blocking).
+    const meta = authEvents.describeRequest(req);
+    const newDevice = await authEvents.isNewDevice(uid, meta.deviceHash);
+    const eventId = await authEvents.recordEvent({
+      uid,
+      emailMasked: maskEmail(cleanEmail),
+      method: 'email_otp',
+      outcome: 'success',
+      req,
+      meta,
+      newDevice,
+      notificationStatus: 'queued',
+    });
+    (async () => {
+      try {
+        const { enqueueNotification } = require('../../services/notification-worker');
+        const loginEmail = buildLoginDetectedEmail({
+          lang,
+          when: new Date().toISOString(),
+          method: 'email_otp',
+          device: meta.device,
+          os: meta.os,
+          browser: meta.browser,
+          location: meta.location,
+          ip: meta.ip,
+          newDevice,
+        });
+        await enqueueNotification('email', {
+          to: cleanEmail,
+          subject: loginEmail.subject,
+          html: loginEmail.html,
+          action: loginEmail.action,
+          context: { ...loginEmail.context, recipientEmail: cleanEmail },
+        }, { idempotencyKey: `login-detected:${eventId || uid}:${Date.now()}` });
+        await authEvents.setNotificationStatus(eventId, 'queued');
+      } catch (e) {
+        console.error('[AUTH] login-detected email failed:', e && e.message);
+        await authEvents.setNotificationStatus(eventId, 'failed');
+      }
+    })();
 
-    res.json({ success: true, token, created });
+    res.json({ success: true, token, created, uid, newDevice });
   } catch (error) {
     console.error('[AUTH] Email OTP login error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Google Sign-In completes on the client with Firebase; the backend can't mint
+// the session, but it still has to enforce suspension and produce the same
+// security trail + Login Detected mail as the email flow.
+async function googleVerify(req, res) {
+  try {
+    const uid = req.firebaseUid;
+    const auth = getFirebaseAuth();
+    if (!auth) return res.status(503).json({ error: 'Auth not configured' });
+    if (!uid) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+
+    const gate = await accountGate(uid);
+    if (gate) {
+      authAudit(req, gate === 'ACCOUNT_DELETED' ? 'login_denied_deleted' : 'login_denied_suspended', {
+        actorId: uid,
+        actorType: 'user',
+      });
+      authEvents.recordEvent({
+        uid,
+        emailMasked: req.user && req.user.email ? maskEmail(req.user.email) : null,
+        method: 'google',
+        outcome: 'denied',
+        req,
+        reason: gate,
+      }).catch(() => {});
+      return res.status(403).json({ error: gate });
+    }
+
+    const email = req.user && req.user.email ? String(req.user.email).toLowerCase() : '';
+    const lang = ['sw', 'en'].includes(req.body?.langCode) ? req.body.langCode : 'sw';
+    const meta = authEvents.describeRequest(req);
+    const newDevice = await authEvents.isNewDevice(uid, meta.deviceHash);
+    const eventId = await authEvents.recordEvent({
+      uid,
+      emailMasked: email ? maskEmail(email) : null,
+      method: 'google',
+      outcome: 'success',
+      req,
+      meta,
+      newDevice,
+      notificationStatus: 'queued',
+    });
+
+    authAudit(req, 'google_login', { actorId: uid, actorType: 'user' });
+
+    if (email && !email.endsWith('@soko-vibe.com')) {
+      (async () => {
+        try {
+          const { enqueueNotification } = require('../../services/notification-worker');
+          const loginEmail = buildLoginDetectedEmail({
+            lang,
+            when: new Date().toISOString(),
+            method: 'google',
+            device: meta.device,
+            os: meta.os,
+            browser: meta.browser,
+            location: meta.location,
+            ip: meta.ip,
+            newDevice,
+          });
+          await enqueueNotification('email', {
+            to: email,
+            subject: loginEmail.subject,
+            html: loginEmail.html,
+            action: loginEmail.action,
+            context: { ...loginEmail.context, recipientEmail: email },
+          }, { idempotencyKey: `login-detected:${eventId || uid}:${Date.now()}` });
+          await authEvents.setNotificationStatus(eventId, 'queued');
+        } catch (e) {
+          console.error('[AUTH] google login-detected email failed:', e && e.message);
+          await authEvents.setNotificationStatus(eventId, 'failed');
+        }
+      })();
+    }
+
+    res.json({ success: true, uid, newDevice });
+  } catch (error) {
+    console.error('[AUTH] Google verify error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Server-side logout event. The session itself is a Firebase ID token, so
+// revocation is handled by the client signing out; the backend records the
+// event for the security trail (and the admin console).
+async function logout(req, res) {
+  try {
+    const uid = req.firebaseUid;
+    if (!uid) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    const email = req.user && req.user.email ? String(req.user.email) : '';
+    authEvents.recordEvent({
+      uid,
+      emailMasked: email ? maskEmail(email) : null,
+      method: (req.body && req.body.method) || 'session',
+      outcome: 'logout',
+      req,
+    }).catch(() => {});
+    authAudit(req, 'logout', { actorId: uid, actorType: 'user' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[AUTH] Logout error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Session restoration helper: returns the current account state without
+// minting anything new. The client uses it to rehydrate after a process
+// restart or a token refresh.
+async function session(req, res) {
+  try {
+    const uid = req.firebaseUid;
+    if (!uid) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    const auth = getFirebaseAuth();
+    if (!auth) return res.status(503).json({ error: 'Auth not configured' });
+    const record = await auth.getUser(uid).catch(() => null);
+    const profile = await accountStore.getProfile(uid).catch(() => null);
+    const last = await authEvents.lastSuccessfulEvent(uid).catch(() => null);
+    res.json({
+      success: true,
+      session: {
+        uid,
+        email: (record && record.email) || (req.user && req.user.email) || null,
+        emailVerified: Boolean(record && record.emailVerified),
+        displayName: (profile && profile.displayName) || (record && record.displayName) || null,
+        accountStatus: (profile && profile.accountStatus) || (req.user && req.user.accountStatus) || 'active',
+        isSuspended: Boolean(profile && (profile.isSuspended === true || profile.accountStatus === 'suspended')),
+        lastLoginAt: last ? last.createdAt : null,
+        lastLoginMethod: last ? last.method : null,
+        lastLoginNewDevice: last ? Boolean(last.newDevice) : null,
+        sessionRevokedAt: (profile && profile.sessionRevokedAt) || null,
+      },
+    });
+  } catch (error) {
+    console.error('[AUTH] Session error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Self-scoped: only ever returns events for the caller's own uid, taken from
+// the verified token — never from a query parameter.
+async function loginEvents(req, res) {
+  try {
+    const uid = req.firebaseUid;
+    if (!uid) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    const limit = Math.min(Number(req.query && req.query.limit) || 20, 100);
+    const events = await authEvents.listUserEvents(uid, limit);
+    res.json({ success: true, events });
+  } catch (error) {
+    console.error('[AUTH] Login events error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -758,4 +1015,8 @@ module.exports = {
   emailOtpLogin,
   otpSignIn,
   logoutAll,
+  googleVerify,
+  logout,
+  session,
+  loginEvents,
 };

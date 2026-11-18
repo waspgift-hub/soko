@@ -127,8 +127,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
   // _updateSubcategories() would throw on the empty list.
   List<Category> _categories = getDefaultCategories().where((c) => c.isActive).toList();
 
-  List<String> get _allDistricts =>
-      kRegionDistricts.values.expand((d) => d).toSet().toList()..sort();
+  late final List<String> _allDistricts =
+      (kRegionDistricts.values.expand((d) => d).toSet().toList()..sort());
 
   bool get _isEditing => widget.product != null;
 

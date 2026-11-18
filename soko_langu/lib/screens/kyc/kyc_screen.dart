@@ -609,7 +609,7 @@ class _KycScreenState extends State<KycScreen> {
         _showError(result?['error']?.toString() ?? context.tr('failed_to_submit_kyc'));
       }
     } catch (e) {
-      _showError(context.trParams('imeshindwa', {'0': e.toString()}));
+      _showError(context.trError(e, feature: 'kyc', screen: 'Kyc'));
     }
 
     if (mounted) setState(() => _submitting = false);
@@ -620,7 +620,18 @@ class _KycScreenState extends State<KycScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('kyc_title'))),
+      appBar: AppBar(
+        title: Text(context.tr('kyc_title')),
+        actions: [
+          // Admin review can flip the status while this screen is open; without
+          // this the applicant sits on a stale "pending" until they restart.
+          IconButton(
+            tooltip: context.tr('refresh', 'Refresh'),
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadStatus(),
+          ),
+        ],
+      ),
       body: _status == null ? const GoogleLoadingPage() : _buildBody(cs),
     );
   }
@@ -654,7 +665,16 @@ class _KycScreenState extends State<KycScreen> {
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(_idDocReadUrl!, height: 150, fit: BoxFit.cover),
+                  // The signed URL is minted separately from the stored key; a
+                  // failed read-url call leaves it null and the old `!` crashed.
+                  child: _idDocReadUrl == null
+                      ? const SizedBox.shrink()
+                      : Image.network(
+                          _idDocReadUrl!,
+                          height: 150,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
                 ),
               ],
             ],
@@ -682,13 +702,20 @@ class _KycScreenState extends State<KycScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15),
               ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () => _loadStatus(),
+                icon: const Icon(Icons.refresh),
+                label: Text(context.tr('check_status', 'Check status')),
+              ),
             ],
           ),
         ),
       );
     }
 
-    if (_status == 'rejected') {
+    if (_status == 'rejected' || _status == 'revoked') {
+      final revoked = _status == 'revoked';
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -699,16 +726,43 @@ class _KycScreenState extends State<KycScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: cs.error.withValues(alpha: 0.3)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.cancel, color: cs.error, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _reviewNotes ?? context.tr('kyc_rejected_default'),
+                Row(
+                  children: [
+                    Icon(revoked ? Icons.gpp_bad_outlined : Icons.cancel,
+                        color: cs.error, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        revoked
+                            ? context.tr('kyc_revoked', 'Verification revoked')
+                            : context.tr('kyc_rejected', 'Verification rejected'),
+                        style: TextStyle(
+                          color: cs.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_reviewNotes != null && _reviewNotes!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _reviewNotes!,
                     style: TextStyle(color: cs.error),
                   ),
-                ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    revoked
+                        ? context.tr('kyc_revoked_default',
+                            'Your verification was revoked. Re-submit your documents to restore it.')
+                        : context.tr('kyc_rejected_default'),
+                    style: TextStyle(color: cs.error),
+                  ),
+                ],
               ],
             ),
           ),

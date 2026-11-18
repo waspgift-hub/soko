@@ -74,6 +74,37 @@ if (process.env.DAILY_ENGAGEMENT_SCHEDULER !== 'false') {
   setTimeout(_tick, 60 * 1000).unref?.();
 }
 
+// Buyer Request maintenance: expire overdue requests and send expiry
+// reminders. Idempotent so duplicate instances / overlapping ticks are safe.
+if (process.env.BUYER_REQUEST_JOBS !== 'false') {
+  setTimeout(() => {
+    try {
+      const { runBuyerRequestJobs } = require('./modules/buyer-requests/buyer-request-jobs');
+      runBuyerRequestJobs().catch((e) => console.error('[BUYER-REQUESTS] job:', e?.message || e));
+    } catch (e) {
+      console.error('[BUYER-REQUESTS] job module load failed:', e?.message || e);
+    }
+  }, 120 * 1000).unref?.();
+  setInterval(() => {
+    try {
+      const { runBuyerRequestJobs } = require('./modules/buyer-requests/buyer-request-jobs');
+      runBuyerRequestJobs().catch((e) => console.error('[BUYER-REQUESTS] job:', e?.message || e));
+    } catch (e) {
+      console.error('[BUYER-REQUESTS] job module load failed:', e?.message || e);
+    }
+  }, 15 * 60 * 1000).unref?.();
+}
+
+// Subscription lifecycle: expire trials, apply scheduled downgrades, move
+// overdue paid plans to past_due/expired. In-process and idempotent.
+if (process.env.SUBSCRIPTION_JOBS !== 'false') {
+  try {
+    require('./modules/subscriptions/renewal').startScheduler();
+  } catch (e) {
+    console.error('[SUB-RENEWAL] scheduler failed to start:', e?.message || e);
+  }
+}
+
 const server = app.listen(PORT, () => {
   console.log(`[API] Soko Vibe API running on port ${PORT}`);
   console.log(`[API] Environment: ${config.nodeEnv}`);

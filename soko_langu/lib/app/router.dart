@@ -64,6 +64,7 @@ import '../screens/auth/mfa_enrollment_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_kyc_screen.dart';
+import '../screens/admin/admin_buyer_requests_screen.dart';
 import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
@@ -77,6 +78,8 @@ import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
 import '../screens/report/report_screen.dart';
 import '../screens/requests/buyer_requests_screen.dart';
+import '../screens/requests/my_buyer_requests_screen.dart';
+import '../screens/requests/buyer_request_detail_screen.dart';
 import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
@@ -285,18 +288,7 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.register,
-        pageBuilder: (context, state) {
-          final extra = state.extra is Map<String, dynamic>
-              ? state.extra as Map<String, dynamic>
-              : <String, dynamic>{};
-          return _premiumPage(
-            RegisterScreen(
-              initialPhone: extra['phone'] as String?,
-              displayPhone: extra['displayPhone'] as String?,
-              otpVerified: extra['otpVerified'] == true,
-            ),
-          );
-        },
+        pageBuilder: (context, state) => _premiumPage(const RegisterScreen()),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
@@ -647,6 +639,10 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const AdminKycScreen()),
       ),
       GoRoute(
+        path: AppRoutes.adminBuyerRequests,
+        pageBuilder: (context, state) => _premiumPage(const AdminBuyerRequestsScreen()),
+      ),
+      GoRoute(
         path: AppRoutes.adminBroadcast,
         pageBuilder: (context, state) => _premiumPage(const AdminBroadcastScreen()),
       ),
@@ -799,6 +795,17 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.buyerRequests,
         pageBuilder: (context, state) => _premiumPage(const BuyerRequestsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.myBuyerRequests,
+        pageBuilder: (context, state) => _premiumPage(const MyBuyerRequestsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.buyerRequestDetail,
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return _premiumPage(BuyerRequestDetailScreen(requestId: id));
+        },
       ),
       GoRoute(
         path: AppRoutes.postBuyerRequest,

@@ -95,6 +95,12 @@ class OtpVerificationRequest {
   /// Whether resend is supported for this flow.
   final bool allowResend;
 
+  /// Whether the screen should send the first code automatically on init.
+  ///
+  /// Set to false when the caller has already triggered the send (e.g. the
+  /// login entry screen sent it), so we do not double-send and trip the 60s
+  /// resend cooldown.
+  final bool autoSend;
   /// Optional override for the screen heading.
   final String? headingOverride;
 
@@ -112,6 +118,7 @@ class OtpVerificationRequest {
     this.onResend,
     this.allowDestinationEdit = false,
     this.allowResend = true,
+    this.autoSend = true,
     this.headingOverride,
     this.subtitleOverride,
   });

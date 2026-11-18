@@ -43,16 +43,21 @@ class Responsive {
   }
 
   /// Aspect ratio for product grids.
-///
-/// Lower means taller. ProductCard now renders four body rows (title, price,
-/// condition + district, rating + stock) instead of two, so the ratio dropped
-/// from 0.72/0.68/0.65 to 0.62/0.60/0.58. Without this the image would be
-/// squeezed by the extra text and the tile would read as cramped.
-static double cardAspectRatio(BuildContext context) {
+  ///
+  /// Lower means taller. ProductCard renders four body rows (title, price,
+  /// condition + district, rating + stock) instead of two, so the ratios are
+  /// 0.62/0.60/0.58. The ratio is also divided by the user's text scale: at
+  /// 1.3× those four rows need ~30% more vertical space, and without this the
+  /// tile body overflowed for anyone using a larger system font.
+  static double cardAspectRatio(BuildContext context) {
     final cols = gridColumns(context);
-    if (cols >= 4) return 0.58;
-    if (cols >= 3) return 0.60;
-    return 0.62;
+    final base = cols >= 4
+        ? 0.58
+        : cols >= 3
+        ? 0.60
+        : 0.62;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.35);
+    return base / textScale;
   }
 
   static double scaleFont(BuildContext context, double base) {

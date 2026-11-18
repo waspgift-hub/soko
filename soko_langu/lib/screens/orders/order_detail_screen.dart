@@ -292,7 +292,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final s = canonicalStatusOf(status);
     return s == OrderStatus.inTransit ||
         s == OrderStatus.outForDelivery ||
-        s == OrderStatus.deliveryAttempted;
+        s == OrderStatus.deliveryAttempted ||
+        // `dispatched` is a real in-flight state for the OTP/dispute flows
+        // even though it is not modelled as `in_transit` in the state machine.
+        s == OrderStatus.dispatched;
   }
 
   /// True once goods arrived and the inspection window is (or was) running.
@@ -504,7 +507,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }.contains(s);
   }
 
-  String _nf(num n) => n.isFinite ? NumberFormat('#,###', 'en').format(n) : '0';
+  static final _numberFormat = NumberFormat('#,###', 'en');
+  String _nf(num n) => n.isFinite ? _numberFormat.format(n) : '0';
 
   /// Money fields can arrive as NaN/Infinity from the server; `toInt()` and
   /// `round()` throw on those, so collapse them to zero instead of crashing.
@@ -626,32 +630,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildSkeleton(BuildContext context, ColorScheme cs) {
+    // Static blocks only: the previous version put a spinner inside every
+    // placeholder, so five `AnimationController`s fought the first layout pass.
+    // A skeleton should cost one paint, not five continuous animations.
+    Widget block({double height = 110, double radius = 20, double width = double.infinity}) {
+      return Container(
+        height: height,
+        width: width,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Column(
         children: [
-          Container(
-            height: 300,
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-          ),
+          block(height: 220, radius: 0),
           Expanded(
             child: ListView(
+              physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: List.generate(
-                4,
-                (_) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Center(
-                      child: GoogleLoading(size: 24, strokeWidth: 2.5),
-                    ),
-                  ),
-                ),
-              ),
+              children: [
+                block(height: 64),
+                const SizedBox(height: 16),
+                block(height: 120),
+                const SizedBox(height: 16),
+                block(height: 168),
+                const SizedBox(height: 16),
+                block(height: 88),
+              ],
             ),
           ),
         ],
@@ -1839,7 +1848,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final isSeller = user != null && d['sellerId'] == user.uid;
     final canConfirm = _inTransitState || _inInspectionState || status == 'delivered';
     final canDispute = !_isCodOrder && (_isEscrowStatus || _inTransitState || _inInspectionState);
-    final canCancel = !_isCodOrder && _isEscrowStatus;
+    final canCancel = isBuyer &&
+        !_isCodOrder &&
+        (_isEscrowStatus ||
+            const {
+              OrderStatus.draft,
+              OrderStatus.pending,
+              OrderStatus.awaitingShippingQuote,
+              OrderStatus.pendingShippingFee,
+              OrderStatus.shippingFeeSubmitted,
+              OrderStatus.shippingFeeReview,
+              OrderStatus.awaitingPayment,
+              OrderStatus.paymentPending,
+              OrderStatus.paymentProcessing,
+              OrderStatus.awaitingEscrowPayment,
+              OrderStatus.quoted,
+              OrderStatus.addressRequired,
+              OrderStatus.published,
+            }.contains(canonicalStatusOf(status)));
 
     if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
       return Container(
@@ -2109,7 +2135,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           ],
           if (canConfirm && status == 'dispatched' && isBuyer)
             _buildBuyerOtpCard(cs),
-          if (canConfirm && status == 'dispatched' && isSeller)
+          if (canConfirm && status == 'dispatched' && isSeller && !ApiConfig.kUseOrdersApi)
             _buildSellerOtpForm(cs),
           if (canConfirm && !_inTransitState)
             SizedBox(
@@ -2688,7 +2714,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _otpError = context.tr('network_error').replaceAll('{error}', e.toString()));
+      if (mounted) {
+        setState(
+          () => _otpError = context.trError(
+            e,
+            feature: 'order_otp',
+            screen: 'OrderDetail',
+          ),
+        );
+      }
     }
     if (mounted) setState(() => _verifyingOtp = false);
   }
@@ -2725,7 +2759,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       ),
       child: SafeArea(
         top: false,
-        child: Row(
+        // The bar is a fixed 48 dp row: an unclamped 2× system font overflows
+        // the buttons, so cap the scale here (labels are short and repeated by
+        // the surrounding order content).
+        child: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.1,
+          child: Row(
           children: [
             CallSellerButton(
               phone: d['sellerPhone'] as String? ?? '',
@@ -2812,6 +2851,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ),
             ],
           ],
+        ),
         ),
       ),
     );

@@ -51,6 +51,7 @@ import 'services/security_service.dart';
 import 'services/server_keep_alive.dart';
 import 'services/category_artwork/category_artwork_service.dart';
 import 'services/banner_service.dart';
+import 'services/rewarded_ad_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
@@ -59,7 +60,9 @@ import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
+import 'screens/splash/launch_splash_screen.dart';
 import 'widgets/premium_background.dart';
+import 'widgets/soko_error_view.dart';
 
 // SharedPreferences keys for the optional Category Artwork Pack. The pack is
 // never required; these only throttle the remote version check.
@@ -85,6 +88,11 @@ typedef CurrencyCallback = void Function(String);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Errors that escape a build/layout pass render this card instead of the
+  // framework's red screen. Registering it before runApp covers startup too.
+  ErrorWidget.builder = (details) =>
+      SokoErrorView(details: details.exceptionAsString());
 
   // Cap image cache at 200 MB to prevent OOM on low-RAM devices
   // while keeping enough headroom for the product feed + chat images.
@@ -132,30 +140,26 @@ void main() async {
   }
 
   // --- Google Sign-In: initialize before any sign in calls ---
+  // v7 requires initialize() before any other call. One call with the server
+  // client id: the old code initialized twice (first without the id), doubling
+  // the startup cost and racing the second call against the first.
   if (!kIsWeb) {
+    unawaited(RewardedAdService.initialize());
     try {
-      await GoogleSignIn.instance.initialize().timeout(const Duration(seconds: 10));
+      await GoogleSignIn.instance
+          .initialize(
+            serverClientId:
+                '344682929526-ik4onilm1bj7lug9ev13u3e63f0ka28h.apps.googleusercontent.com',
+          )
+          .timeout(const Duration(seconds: 10));
     } catch (e) {
-      debugPrint('GoogleSignIn: init failed — $e');
+      debugPrint('GoogleSignIn: init failed - $e');
     }
   }
 
-  // --- Local notifications for heads-up display ---
-  if (!kIsWeb) {
-    try {
-      await LocalNotificationService().initialize().timeout(const Duration(seconds: 10));
-    } catch (e) {
-      debugPrint('LocalNotification: init failed — $e');
-    }
-  }
-
-  // --- Media session (background audio + notification controls) ---
-  // Must be registered before the first queue is built: the audio engine is
-  // chosen at play time and never used if the service failed to start.
-  // Web has no audio_service platform implementation, so skip it there.
-  if (!kIsWeb) {
-    await initSokoMediaAudio();
-  }
+  // Audio-session and heads-up notifications are not needed for first paint.
+  // They used to be awaited here, adding seconds of black screen on cold start;
+  // `_initBackgroundServices` now starts them once the app is interactive.
 
   runApp(const SokoVibeApp());
 }
@@ -242,6 +246,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   String _langCode = 'en';
   String _currencyCode = 'TZS';
   String _smsLangCode = 'sw';
+  bool _splashVisible = true;
   late final ProductFeedProvider _productFeedProvider;
   late final AuthRepository _authRepository;
   late final OnboardingService _onboardingService;
@@ -276,6 +281,12 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     _setupNavigateChannel();
     _setupDeepLinks();
     _setupShareReceive();
+    // Brief branded splash on cold start; the mark colour follows the theme.
+    // Shorter than before — the router now builds behind the overlay, so a long
+    // hold only delays the first tap.
+    Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _splashVisible = false);
+    });
   }
 
   @override
@@ -671,7 +682,36 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   // Phase 2 — Background service initialization
   // -----------------------------------------------------------------------
 
+  Future<void> _startLocalNotifications() async {
+    try {
+      await LocalNotificationService()
+          .initialize()
+          .timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('LocalNotification: init failed - $e');
+    }
+  }
+
+  /// Registers the background audio handler.
+  ///
+  /// Must complete before the first queue is played (the engine is chosen at
+  /// play time), which is why the media screens themselves still wait on the
+  /// service — only app startup no longer blocks on it.
+  Future<void> _startAudioSession() async {
+    try {
+      await initSokoMediaAudio().timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('MediaAudio: init failed - $e');
+    }
+  }
+
   Future<void> _initBackgroundServices(SharedPreferences prefs) async {
+    if (!kIsWeb) {
+      // Deferred from main(): these two are slow platform-channel handshakes
+      // and nothing on the first screen depends on them.
+      unawaited(_startLocalNotifications());
+      unawaited(_startAudioSession());
+    }
     if (!kIsWeb) {
       // Crashlytics
       try {
@@ -854,8 +894,17 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       onSetCurrency: _setCurrency,
       onSetSmsLanguage: _setSmsLanguage,
       child: Stack(
+        fit: StackFit.expand,
         children: [
-          Column(children: [Expanded(child: content)]),
+          content,
+          // Splash is an overlay on the live router, not a separate app.
+          // Swapping the root MaterialApp when the timer fired unmounted the
+          // Navigator (and any open dialog) mid-flight, which is what produced
+          // the `_dependents.isEmpty` / `child._parent == this` assertions.
+          // Keeping one app tree also means the first route is already built
+          // by the time the splash lifts.
+          if (_splashVisible)
+            const Positioned.fill(child: LaunchSplashScreen()),
         ],
       ),
     );
@@ -875,7 +924,12 @@ class _AgeGateOverlayState extends State<_AgeGateOverlay> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+    // Wait for the splash overlay to lift: opening a dialog behind it made the
+    // first-launch dialog appear to "pop in" late and, in the old two-MaterialApp
+    // root, could race the swap and drop the route.
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) _check();
+    });
   }
 
   Future<void> _check() async {

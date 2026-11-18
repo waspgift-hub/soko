@@ -11,6 +11,7 @@ import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../services/mfa_service.dart';
+import '../../widgets/currency_sheet.dart';
 import '../../main.dart' show themeManager, AppConfig;
 
 class SettingsScreen extends StatefulWidget {
@@ -319,7 +320,15 @@ trailing: Switch(
                 },
               ),
               const Divider(),
-              _buildSectionTitle(context.tr('account')),
+              _buildSectionTitle(context.tr('subscription', 'Subscription & Billing')),
+               _buildTile(
+                 icon: Icons.workspace_premium,
+                 title: context.tr('subscription', 'Subscription & Billing'),
+                 subtitle: context.tr('manage_plan', 'Manage your plan, usage and billing'),
+                 onTap: () => context.push(AppRoutes.subscription),
+               ),
+               const Divider(),
+               _buildSectionTitle(context.tr('account')),
               _buildTile(
                 icon: Icons.devices_other,
                 title: context.tr('logout_all_devices'),
@@ -516,45 +525,8 @@ trailing: Switch(
   }
 
 
-  void _showCurrencyPicker(BuildContext context, AppConfig config) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                context.tr('select_currency'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ...LocalizationService.supportedCurrencies.entries.map(
-              (e) => ListTile(
-                title: Text("${e.value['name']} (${e.value['symbol']})"),
-                trailing: config.currencyCode == e.key
-                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
-                    : null,
-                onTap: () {
-                  LocalizationService().setCurrency(e.key);
-                  config.onSetCurrency(e.key);
-                  Navigator.pop(ctx);
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
+  void _showCurrencyPicker(BuildContext context, AppConfig config) =>
+      CurrencySheet.show(context);
 
   Widget _buildSectionTitle(String title) {
     return Padding(

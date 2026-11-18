@@ -303,7 +303,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _detecting = false);
-      _showError(context.tr('imeshindwa').replaceAll('{0}', 'location'));
+      _showError(
+        context.tr(
+          'location_unavailable',
+          'Imeshindwa kupata eneo lako. Hakikisha huduma ya eneo imewashwa.',
+        ),
+      );
     }
   }
 

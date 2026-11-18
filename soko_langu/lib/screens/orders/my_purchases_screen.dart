@@ -1770,7 +1770,8 @@ class _OrderGlassCard extends StatelessWidget {
     );
   }
 
-  String _nf(num n) => NumberFormat('#,###', 'en').format(n);
+  static final _numberFormat = NumberFormat('#,###', 'en');
+  String _nf(num n) => _numberFormat.format(n);
 }
 
 class _CompactTimeline extends StatelessWidget {

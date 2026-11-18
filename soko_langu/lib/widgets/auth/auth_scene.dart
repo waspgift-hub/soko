@@ -239,7 +239,7 @@ class _Logo extends StatelessWidget {
                 ],
               ),
               child: Image.asset(
-                'assets/app_icon.png',
+                'assets/brand/logos/app_icon.png',
                 width: 78,
                 height: 78,
                 fit: BoxFit.cover,

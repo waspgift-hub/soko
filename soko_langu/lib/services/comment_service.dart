@@ -1,356 +1,218 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import '../models/comment_model.dart';
 import '../utils/network_error.dart';
 import 'api_config.dart';
-import 'notification_service.dart';
+import 'auth_token.dart';
 
+/// A page of top-level comments plus the cursor for the next one.
+class CommentPage {
+  final List<ProductComment> items;
+  final String? nextCursor;
+  final bool hasMore;
+  final int total;
+  final String sort;
+
+  /// False when the seller has switched comments off for this listing. The
+  /// server enforces it on write; the client uses it to hide the composer.
+  final bool commentsEnabled;
+
+  const CommentPage({
+    required this.items,
+    this.nextCursor,
+    this.hasMore = false,
+    this.total = 0,
+    this.sort = 'newest',
+    this.commentsEnabled = true,
+  });
+
+  static const empty = CommentPage(items: [], total: 0);
+
+  CommentPage copyWith({
+    List<ProductComment>? items,
+    String? nextCursor,
+    bool? hasMore,
+    int? total,
+    bool? commentsEnabled,
+  }) {
+    return CommentPage(
+      items: items ?? this.items,
+      nextCursor: nextCursor ?? this.nextCursor,
+      hasMore: hasMore ?? this.hasMore,
+      total: total ?? this.total,
+      sort: sort,
+      commentsEnabled: commentsEnabled ?? this.commentsEnabled,
+    );
+  }
+}
+
+/// Product comment client.
+///
+/// The server (`/api/v1/products/:id/comments`) is the source of truth. The
+/// Firestore `products/{id}/comments` sub-collection is a degraded fallback used
+/// only when the API is unreachable, so an older app build and a flaky network
+/// both keep working without becoming a second write path in normal operation.
 class CommentService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final NotificationService _notif = NotificationService();
 
-  static const Duration _pollInterval = Duration(seconds: 2);
-  static const Duration _maxPollInterval = Duration(seconds: 10);
+  static const Duration _pollInterval = Duration(seconds: 3);
+  static const Duration _maxPollInterval = Duration(seconds: 15);
 
-  // Registry of active poll streams, keyed by productId. Lets addComment /
-  // addReply trigger an immediate fetch so the new comment shows without
-  // waiting for the next poll tick.
   static final Map<String, List<void Function()>> _activePolls = {};
 
   CollectionReference _commentsRef(String productId) =>
       _db.collection('products').doc(productId).collection('comments');
 
-  CollectionReference _repliesRef(String productId, String commentId) =>
-      _commentsRef(productId).doc(commentId).collection('replies');
+  Future<String?> _token() => AuthToken.current();
 
-  Future<String?> _token() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
+  Map<String, String> _headers(String? token) => {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+  // -------------------------------------------------------------------------
+  // Reads
+  // -------------------------------------------------------------------------
+
+  /// One page of top-level comments. Never throws: an API failure falls back to
+  /// the Firestore mirror, and a total failure returns [CommentPage.empty].
+  Future<CommentPage> fetchComments(
+    String productId, {
+    String sort = 'newest',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final token = await _token();
     try {
-      await user.reload();
-      return await user.getIdToken(true);
+      final query = <String, String>{
+        'sort': sort,
+        'limit': '$limit',
+        'cursor': ?cursor,
+      };
+      final uri = Uri.parse(ApiConfig.v1('/products/$productId/comments'))
+          .replace(queryParameters: query);
+      final res = await http
+          .get(uri, headers: _headers(token))
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final data = body is Map<String, dynamic> ? body['data'] : null;
+        if (data is Map<String, dynamic>) {
+          final items = (data['items'] as List?)
+                  ?.whereType<Map<String, dynamic>>()
+                  .map(ProductComment.fromJson)
+                  .toList() ??
+              const <ProductComment>[];
+          return CommentPage(
+            items: items,
+            nextCursor: data['nextCursor'] as String?,
+            hasMore: data['hasMore'] == true,
+            total: (data['total'] as num?)?.toInt() ?? items.length,
+            sort: (data['sort'] ?? sort).toString(),
+            commentsEnabled: data['commentsEnabled'] != false,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[CommentService] fetchComments fallback: $e');
+    }
+
+    final items = await _fetchFirestoreFallback(productId);
+    return CommentPage(items: items, total: items.length);
+  }
+
+  Future<List<ProductComment>> _fetchFirestoreFallback(String productId) async {
+    try {
+      final snap = await _commentsRef(productId)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .get();
+      return snap.docs
+          .map((d) => ProductComment.fromFirestore(d.id, d.data() as Map<String, dynamic>))
+          .toList();
     } catch (_) {
-      return null;
+      return const [];
     }
   }
 
-  Future<void> addComment({required String productId, required String text}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
-      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
-    final token = await _token();
-    if (token != null) {
-      try {
-        final res = await http.post(
-          Uri.parse(ApiConfig.v1('/products/$productId/comments')),
-          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-          body: jsonEncode({'text': text}),
-        );
-        if (res.statusCode == 201) {
-          await _mirrorToFirestore(productId, user, text);
-          _notifySeller(productId, user);
-          _triggerPoll(productId);
-          return;
-        }
-      } catch (_) {}
-    }
-    await user.reload();
-    await user.getIdToken(true);
-    await _commentsRef(productId).add({
-      'userId': user.uid,
-      'userName': user.displayName ?? user.email ?? 'Unknown',
-      'userImage': user.photoURL,
-      'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
-      'replyCount': 0,
-    });
-
-    _notifySeller(productId, user);
-    _triggerPoll(productId);
-  }
-
-  // Postgres row is the source; write the Firestore sub-collection copy so the
-  // existing snapshot stream keeps showing live comments during the transition.
-  Future<void> _mirrorToFirestore(String productId, User user, String text) async {
-    try {
-      await _commentsRef(productId).add({
-        'userId': user.uid,
-        'userName': user.displayName ?? user.email ?? 'Unknown',
-        'userImage': user.photoURL,
-        'text': text,
-        'createdAt': FieldValue.serverTimestamp(),
-        'replyCount': 0,
-      });
-    } catch (_) {}
-  }
-
-  Future<void> addReply({
-    required String productId,
-    required String commentId,
-    required String text,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
-      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
-    final token = await _token();
-    if (token != null) {
-      try {
-        final res = await http.post(
-          Uri.parse(ApiConfig.v1('/comments/$commentId/replies')),
-          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-          body: jsonEncode({'text': text}),
-        );
-        if (res.statusCode == 201) {
-          await _mirrorReplyToFirestore(productId, commentId, user, text);
-          _notifyCommentAuthor(productId, commentId, user, text);
-          _triggerPoll(productId);
-          return;
-        }
-      } catch (_) {}
-    }
-    await user.reload();
-    await user.getIdToken(true);
-    await _repliesRef(productId, commentId).add({
-      'userId': user.uid,
-      'userName': user.displayName ?? user.email ?? 'Unknown',
-      'userImage': user.photoURL,
-      'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(1)});
-
-    _notifyCommentAuthor(productId, commentId, user, text);
-    _triggerPoll(productId);
-  }
-
-  Future<void> _mirrorReplyToFirestore(
+  /// Replies for one root comment, oldest first.
+  Future<List<ProductComment>> fetchReplies(
     String productId,
-    String commentId,
-    User user,
-    String text,
-  ) async {
-    try {
-      await _repliesRef(productId, commentId).add({
-        'userId': user.uid,
-        'userName': user.displayName ?? user.email ?? 'Unknown',
-        'userImage': user.photoURL,
-        'text': text,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(1)});
-    } catch (_) {}
-  }
-
-  Future<void> _notifySeller(String productId, User user) async {
-    try {
-      final productDoc = await _db.collection('products').doc(productId).get();
-      if (!productDoc.exists) return;
-      final sellerId = productDoc.data()?['sellerId'] as String?;
-      if (sellerId == null || sellerId == user.uid) return;
-      final name = user.displayName ?? user.email ?? 'Someone';
-      _notif.sendNotification(
-        userId: sellerId,
-        title: 'New Comment on your listing!',
-        body: '$name commented on your product',
-        data: {'type': 'comment', 'productId': productId},
-      );
-    } catch (e) {
-      debugPrint('CommentService _notifySeller: $e');
-    }
-  }
-
-  Future<void> _notifyCommentAuthor(
-    String productId,
-    String commentId,
-    User user,
-    String replyText,
-  ) async {
-    try {
-      final commentSnap = await _commentsRef(productId).doc(commentId).get();
-      if (!commentSnap.exists) return;
-      final commentData = commentSnap.data() as Map<String, dynamic>?;
-      final authorId = commentData?['userId'] as String?;
-      if (authorId == null || authorId == user.uid) return;
-      final name = user.displayName ?? user.email ?? 'Someone';
-      final truncated = replyText.length > 80 ? '${replyText.substring(0, 80)}…' : replyText;
-      _notif.sendNotification(
-        userId: authorId,
-        title: 'New reply to your comment!',
-        body: '$name replied: "$truncated"',
-        data: {'type': 'comment_reply', 'productId': productId, 'commentId': commentId},
-      );
-    } catch (e) {
-      debugPrint('CommentService _notifyCommentAuthor: $e');
-    }
-  }
-
-  Future<void> deleteComment({required String productId, required String commentId}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
-      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
-    final token = await _token();
-    if (token != null) {
-      try {
-        final res = await http.delete(
-          Uri.parse(ApiConfig.v1('/comments/$commentId')),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        if (res.statusCode == 200) {
-          // Postgres row soft-deleted; remove the mirrored Firestore copy so
-          // the snapshot stream stops showing it during the transition.
-          try {
-            await _commentsRef(productId).doc(commentId).delete();
-          } catch (_) {}
-          return;
-        }
-        if (res.statusCode == 403) {
-          throw NetworkError(
-            message: 'Cannot delete another user\'s comment',
-            userMessage: 'comment_edit_own_only',
-          );
-        }
-      } catch (e) {
-        if (e is NetworkError) rethrow;
-      }
-    }
-    final commentSnap = await _commentsRef(productId).doc(commentId).get();
-    final commentData = commentSnap.data() as Map<String, dynamic>?;
-    if (commentData == null || commentData['userId'] != user.uid) {
-      throw NetworkError(
-        message: 'Cannot delete another user\'s comment',
-        userMessage: 'comment_edit_own_only',
-      );
-    }
-    final replies = await _repliesRef(productId, commentId).get();
-    final batch = _db.batch();
-    for (var reply in replies.docs) {
-      batch.delete(reply.reference);
-    }
-    batch.delete(_commentsRef(productId).doc(commentId));
-    await batch.commit();
-  }
-
-  Future<void> deleteReply({
-    required String productId,
-    required String commentId,
-    required String replyId,
+    String commentId, {
+    String? cursor,
+    int limit = 30,
   }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
-      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
     final token = await _token();
-    if (token != null) {
-      try {
-        final res = await http.delete(
-          Uri.parse(ApiConfig.v1('/comments/$commentId/replies/$replyId')),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        if (res.statusCode == 200) {
-          // Postgres row soft-deleted; remove the mirrored Firestore copy.
-          try {
-            final replySnap = await _repliesRef(productId, commentId).doc(replyId).get();
-            final replyData = replySnap.data() as Map<String, dynamic>?;
-            if (replySnap.exists && replyData?['userId'] == user.uid) {
-              await _repliesRef(productId, commentId).doc(replyId).delete();
-              await _commentsRef(
-                productId,
-              ).doc(commentId).update({'replyCount': FieldValue.increment(-1)});
-            }
-          } catch (_) {}
-          return;
+    try {
+      final query = <String, String>{
+        'limit': '$limit',
+        'cursor': ?cursor,
+      };
+      final uri = Uri.parse(ApiConfig.v1('/comments/$commentId/replies'))
+          .replace(queryParameters: query);
+      final res = await http
+          .get(uri, headers: _headers(token))
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final items = body is Map<String, dynamic> ? body['data'] : null;
+        if (items is List) {
+          return items
+              .whereType<Map<String, dynamic>>()
+              .map(ProductComment.fromJson)
+              .toList();
         }
-        if (res.statusCode == 403) {
-          throw NetworkError(
-            message: 'Cannot delete another user\'s reply',
-            userMessage: 'comment_edit_own_only',
-          );
-        }
-      } catch (e) {
-        if (e is NetworkError) rethrow;
       }
+    } catch (e) {
+      debugPrint('[CommentService] fetchReplies fallback: $e');
     }
-    final replySnap = await _repliesRef(productId, commentId).doc(replyId).get();
-    final replyData = replySnap.data() as Map<String, dynamic>?;
-    if (replyData == null || replyData['userId'] != user.uid) {
-      throw NetworkError(
-        message: 'Cannot delete another user\'s reply',
-        userMessage: 'comment_edit_own_only',
-      );
+
+    try {
+      final snap = await _db
+          .collection('products')
+          .doc(productId)
+          .collection('comments')
+          .doc(commentId)
+          .collection('replies')
+          .orderBy('createdAt')
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => ProductComment.fromFirestore(d.id, {
+                ...d.data(),
+                'parentId': commentId,
+              }))
+          .toList();
+    } catch (_) {
+      return const [];
     }
-    await _repliesRef(productId, commentId).doc(replyId).delete();
-    await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(-1)});
   }
 
-  Stream<List<ProductComment>> getComments(String productId) {
-    if (ApiConfig.kUseCommentsApi) {
-      return _pollStream<List<ProductComment>>(
-        () => _fetchCommentsApi(productId),
-        pollKey: productId,
-        fingerprint: (items) => items
-            .map(
-              (c) =>
-                  '${c.id}:${c.createdAt.microsecondsSinceEpoch}:${c.replyCount}:${c.text.hashCode}',
-            )
-            .join('|'),
-      );
-    }
-    return _commentsRef(productId)
-        .orderBy('createdAt', descending: true)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map(
-                (doc) => ProductComment.fromFirestore(doc.id, doc.data() as Map<String, dynamic>),
-              )
-              .toList(),
-        );
+  /// Live top-level stream used by the product-detail preview. Polling is
+  /// backed off while nothing changes so an idle product page is cheap, and
+  /// [refresh] makes a freshly posted comment appear immediately.
+  Stream<CommentPage> commentsStream(String productId, {String sort = 'newest'}) {
+    return _pollStream<CommentPage>(
+      () => fetchComments(productId, sort: sort),
+      pollKey: productId,
+      fingerprint: (page) => page.items
+          .map((c) =>
+              '${c.id}:${c.likeCount}:${c.replyCount}:${c.pinned}:${c.deleted}:${c.text.hashCode}:${c.likedByMe}')
+          .join('|'),
+    );
   }
 
-  Stream<List<CommentReply>> getReplies(String productId, String commentId) {
-    if (ApiConfig.kUseCommentsApi) {
-      return _pollStream<List<CommentReply>>(
-        () => _fetchRepliesApi(commentId),
-        pollKey: productId,
-        fingerprint: (items) => items
-            .map((r) => '${r.id}:${r.createdAt.microsecondsSinceEpoch}:${r.text.hashCode}')
-            .join('|'),
-      );
-    }
-    return _repliesRef(productId, commentId)
-        .orderBy('createdAt')
-        .limit(50)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map(
-                (doc) => CommentReply.fromFirestore(
-                  doc.id,
-                  commentId,
-                  doc.data() as Map<String, dynamic>,
-                ),
-              )
-              .toList(),
-        );
-  }
+  Stream<List<ProductComment>> getComments(String productId) =>
+      commentsStream(productId).map((page) => page.items);
 
-  // The Firestore reads live stream; the Postgres reads poll until the widget
-  // cancels. The Stream contract the widget sees is unchanged: `T` here is
-  // the full list type (`List<ProductComment>` etc), so the widget still
-  // receives whole snapshots just like the Firestore `snapshots()`. The delay
-  // backs off while responses are unchanged, so an idle product page costs one
-  // request per minute instead of one every eight seconds.
-  //
-  // `pollKey` registers the stream so addComment/addReply can fire an
-  // immediate fetch — the new comment shows without waiting for the next
-  // tick, which is what made comments look delayed before.
   Stream<T> _pollStream<T>(
-    Future<T?> Function() fetch, {
+    Future<T> Function() fetch, {
     String Function(T value)? fingerprint,
     String? pollKey,
   }) {
@@ -362,20 +224,19 @@ class CommentService {
     void schedule() {
       timer?.cancel();
       timer = Timer(delay, () async {
+        if (!controller.hasListener) return;
         final data = await fetch();
         if (!controller.hasListener) return;
-        if (data != null) {
-          final key = fingerprint?.call(data);
-          if (key == null || key != lastFingerprint) {
-            controller.add(data);
-            lastFingerprint = key;
-            delay = _pollInterval;
-          } else {
-            final doubled = delay.inSeconds * 2;
-            delay = Duration(
-              seconds: doubled.clamp(_pollInterval.inSeconds, _maxPollInterval.inSeconds),
-            );
-          }
+        final key = fingerprint?.call(data);
+        if (key == null || key != lastFingerprint) {
+          controller.add(data);
+          lastFingerprint = key;
+          delay = _pollInterval;
+        } else {
+          final doubled = delay.inSeconds * 2;
+          delay = Duration(
+            seconds: doubled.clamp(_pollInterval.inSeconds, _maxPollInterval.inSeconds),
+          );
         }
         schedule();
       });
@@ -392,7 +253,7 @@ class CommentService {
           _activePolls.putIfAbsent(pollKey, () => []).add(triggerImmediate);
         }
         final initial = await fetch();
-        if (initial != null && controller.hasListener) {
+        if (controller.hasListener) {
           controller.add(initial);
           lastFingerprint = fingerprint?.call(initial);
         }
@@ -414,9 +275,8 @@ class CommentService {
     return controller.stream;
   }
 
-  /// Fire every active poll for `productId` so a freshly posted comment or
-  /// reply appears immediately instead of after the next tick.
-  void _triggerPoll(String productId) {
+  /// Fires every active poll for [productId] so a new comment shows at once.
+  void refresh(String productId) {
     final list = _activePolls[productId];
     if (list == null) return;
     for (final trigger in list) {
@@ -426,61 +286,363 @@ class CommentService {
     }
   }
 
-  Future<List<ProductComment>?> _fetchCommentsApi(String productId) async {
+  // -------------------------------------------------------------------------
+  // Writes
+  // -------------------------------------------------------------------------
+
+  Future<ProductComment> addComment({required String productId, required String text}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final token = await _token();
+    if (token != null) {
+      try {
+        final res = await http
+            .post(
+              Uri.parse(ApiConfig.v1('/products/$productId/comments')),
+              headers: _headers(token),
+              body: jsonEncode({'text': text}),
+            )
+            .timeout(const Duration(seconds: 15));
+        if (res.statusCode == 201) {
+          final body = jsonDecode(res.body);
+          final data = body is Map<String, dynamic> ? body['data'] : null;
+          if (data is Map<String, dynamic>) {
+            refresh(productId);
+            return ProductComment.fromJson(data);
+          }
+        }
+        if (res.statusCode == 422) {
+          throw NetworkError(message: 'Profanity detected', userMessage: 'profanity_detected');
+        }
+        if (res.statusCode == 429) {
+          throw NetworkError(message: 'Duplicate comment', userMessage: 'comment_duplicate');
+        }
+      } catch (e) {
+        if (e is NetworkError) rethrow;
+        debugPrint('[CommentService] addComment API failed: $e');
+      }
+    }
+
+    final ref = await _commentsRef(productId).add({
+      'userId': user.uid,
+      'userName': user.displayName ?? user.email ?? 'Unknown',
+      'userImage': user.photoURL,
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+      'replyCount': 0,
+      'likeCount': 0,
+    });
+    refresh(productId);
+    return ProductComment(
+      id: ref.id,
+      userId: user.uid,
+      userName: user.displayName ?? user.email ?? 'Unknown',
+      userImage: user.photoURL,
+      text: text,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  Future<ProductComment> addReply({
+    required String productId,
+    required String commentId,
+    required String text,
+    String? replyToId,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final token = await _token();
+    if (token != null) {
+      try {
+        final res = await http
+            .post(
+              Uri.parse(ApiConfig.v1('/comments/$commentId/replies')),
+              headers: _headers(token),
+              body: jsonEncode({
+                'text': text,
+                'replyToId': ?replyToId,
+              }),
+            )
+            .timeout(const Duration(seconds: 15));
+        if (res.statusCode == 201) {
+          final body = jsonDecode(res.body);
+          final data = body is Map<String, dynamic> ? body['data'] : null;
+          if (data is Map<String, dynamic>) {
+            refresh(productId);
+            return ProductComment.fromJson(data);
+          }
+        }
+        if (res.statusCode == 422) {
+          throw NetworkError(message: 'Profanity detected', userMessage: 'profanity_detected');
+        }
+        if (res.statusCode == 429) {
+          throw NetworkError(message: 'Duplicate comment', userMessage: 'comment_duplicate');
+        }
+      } catch (e) {
+        if (e is NetworkError) rethrow;
+        debugPrint('[CommentService] addReply API failed: $e');
+      }
+    }
+
+    final ref = await _repliesRef(productId, commentId).add({
+      'userId': user.uid,
+      'userName': user.displayName ?? user.email ?? 'Unknown',
+      'userImage': user.photoURL,
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
     try {
-      final token = await _token();
-      final res = await http.get(
-        Uri.parse(ApiConfig.v1('/products/$productId/comments?limit=100')),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (res.statusCode != 200) return null;
+      await _commentsRef(productId).doc(commentId).update({'replyCount': FieldValue.increment(1)});
+    } catch (_) {}
+    refresh(productId);
+    return ProductComment(
+      id: ref.id,
+      userId: user.uid,
+      userName: user.displayName ?? user.email ?? 'Unknown',
+      userImage: user.photoURL,
+      text: text,
+      createdAt: DateTime.now(),
+      parentId: commentId,
+    );
+  }
+
+  CollectionReference _repliesRef(String productId, String commentId) =>
+      _commentsRef(productId).doc(commentId).collection('replies');
+
+  Future<ProductComment?> editComment({
+    required String productId,
+    required String commentId,
+    required String text,
+  }) async {
+    final token = await _token();
+    if (token == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final res = await http
+        .patch(
+          Uri.parse(ApiConfig.v1('/comments/$commentId')),
+          headers: _headers(token),
+          body: jsonEncode({'text': text}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
       final body = jsonDecode(res.body);
-      final data = body['data'];
-      if (data is! Map) return null;
-      final items = data['items'];
-      if (items is! List) return null;
-      return items.map((raw) {
-        final d = raw as Map<String, dynamic>;
-        return ProductComment(
-          id: d['id'] as String,
-          userId: d['userId'] as String? ?? '',
-          userName: d['userName'] as String? ?? 'Unknown',
-          userImage: d['userImage'] as String?,
-          text: d['text'] as String? ?? '',
-          createdAt: DateTime.tryParse(d['createdAt'] as String? ?? '') ?? DateTime.now(),
-          replyCount: (d['replyCount'] as num?)?.toInt() ?? 0,
+      final data = body is Map<String, dynamic> ? body['data'] : null;
+      refresh(productId);
+      return data is Map<String, dynamic> ? ProductComment.fromJson(data) : null;
+    }
+    if (res.statusCode == 403) {
+      throw NetworkError(
+        message: 'Cannot edit another user\'s comment',
+        userMessage: 'comment_edit_own_only',
+      );
+    }
+    throw NetworkError(message: 'Failed to edit comment', userMessage: 'something_wrong');
+  }
+
+  /// Locks/unlocks one comment's like. Returns the authoritative
+  /// `(liked, likeCount)` pair so the caller can reconcile an optimistic tap.
+  Future<({bool liked, int likeCount})> toggleLike(String commentId) async {
+    final token = await _token();
+    if (token == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final res = await http
+        .post(
+          Uri.parse(ApiConfig.v1('/comments/$commentId/like')),
+          headers: _headers(token),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) {
+      throw NetworkError(message: 'Failed to update like', userMessage: 'something_wrong');
+    }
+    final body = jsonDecode(res.body);
+    final data = body is Map<String, dynamic> ? body['data'] : null;
+    final map = data is Map<String, dynamic> ? data : const <String, dynamic>{};
+    return (
+      liked: map['liked'] == true,
+      likeCount: (map['likeCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Switches comments on/off for a listing. Seller-only on the server.
+  Future<void> setCommentsEnabled({
+    required String productId,
+    required bool enabled,
+  }) async {
+    final token = await _token();
+    if (token == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final res = await http
+        .patch(
+          Uri.parse(ApiConfig.v1('/products/$productId/comments/settings')),
+          headers: _headers(token),
+          body: jsonEncode({'enabled': enabled}),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) {
+      throw NetworkError(
+        message: 'Failed to update comment settings',
+        userMessage: 'something_wrong',
+      );
+    }
+  }
+
+  Future<void> setPinned({required String commentId, required bool pinned}) async {
+    final token = await _token();
+    if (token == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final uri = Uri.parse(ApiConfig.v1('/comments/$commentId/pin'));
+    final res = pinned
+        ? await http.post(uri, headers: _headers(token)).timeout(const Duration(seconds: 12))
+        : await http.delete(uri, headers: _headers(token)).timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) {
+      throw NetworkError(message: 'Failed to pin comment', userMessage: 'something_wrong');
+    }
+  }
+
+  Future<void> reportComment({required String commentId, String reason = 'other'}) async {
+    final token = await _token();
+    if (token == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final res = await http
+        .post(
+          Uri.parse(ApiConfig.v1('/comments/$commentId/report')),
+          headers: _headers(token),
+          body: jsonEncode({'reason': reason}),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode != 201 && res.statusCode != 200) {
+      throw NetworkError(message: 'Failed to report comment', userMessage: 'something_wrong');
+    }
+  }
+
+  Future<void> deleteComment({required String productId, required String commentId}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final token = await _token();
+    if (token != null) {
+      final res = await http
+          .delete(
+            Uri.parse(ApiConfig.v1('/comments/$commentId')),
+            headers: _headers(token),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        refresh(productId);
+        return;
+      }
+      if (res.statusCode == 403) {
+        throw NetworkError(
+          message: 'Cannot delete another user\'s comment',
+          userMessage: 'comment_edit_own_only',
         );
-      }).toList();
-    } catch (_) {
+      }
+      throw NetworkError(message: 'Failed to delete comment', userMessage: 'something_wrong');
+    }
+
+    final commentSnap = await _commentsRef(productId).doc(commentId).get();
+    final commentData = commentSnap.data() as Map<String, dynamic>?;
+    if (commentData == null || commentData['userId'] != user.uid) {
+      throw NetworkError(
+        message: 'Cannot delete another user\'s comment',
+        userMessage: 'comment_edit_own_only',
+      );
+    }
+    final replies = await _repliesRef(productId, commentId).get();
+    final batch = _db.batch();
+    for (final reply in replies.docs) {
+      batch.delete(reply.reference);
+    }
+    batch.delete(_commentsRef(productId).doc(commentId));
+    await batch.commit();
+    refresh(productId);
+  }
+
+  Future<void> deleteReply({
+    required String productId,
+    required String commentId,
+    required String replyId,
+  }) async {
+    final token = await _token();
+    if (token == null) {
+      throw NetworkError(message: 'Not logged in', userMessage: 'auth_login_required');
+    }
+    final res = await http
+        .delete(
+          Uri.parse(ApiConfig.v1('/comments/$commentId/replies/$replyId')),
+          headers: _headers(token),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode == 200) {
+      refresh(productId);
+      return;
+    }
+    if (res.statusCode == 403) {
+      throw NetworkError(
+        message: 'Cannot delete another user\'s reply',
+        userMessage: 'comment_edit_own_only',
+      );
+    }
+    throw NetworkError(message: 'Failed to delete reply', userMessage: 'something_wrong');
+  }
+
+  /// Resolves an `@handle` to a profile so a tapped mention can navigate.
+  Future<Map<String, dynamic>?> findUserByUsername(String username) async {
+    final handle = username.trim().toLowerCase();
+    if (handle.isEmpty) return null;
+    try {
+      final snap = await _db
+          .collection('userPublic')
+          .where('usernameLower', isEqualTo: handle)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) return null;
+      final doc = snap.docs.first;
+      final data = doc.data();
+      return <String, dynamic>{
+        'userId': doc.id,
+        'username': data['username'] ?? handle,
+        'displayName': data['displayName'] ?? data['username'] ?? '',
+      };
+    } catch (e) {
+      debugPrint('[CommentService] findUserByUsername failed: $e');
       return null;
     }
   }
 
-  Future<List<CommentReply>?> _fetchRepliesApi(String commentId) async {
+  /// Username suggestions for the composer's `@mention` picker.
+  Future<List<Map<String, dynamic>>> searchMentionUsers(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.length < 2) return const [];
     try {
-      final token = await _token();
-      final res = await http.get(
-        Uri.parse(ApiConfig.v1('/comments/$commentId/replies')),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (res.statusCode != 200) return null;
-      final body = jsonDecode(res.body);
-      final items = body['data'];
-      if (items is! List) return null;
-      return items.map((raw) {
-        final d = raw as Map<String, dynamic>;
-        return CommentReply(
-          id: d['id'] as String,
-          commentId: commentId,
-          userId: d['userId'] as String? ?? '',
-          userName: d['userName'] as String? ?? 'Unknown',
-          userImage: d['userImage'] as String?,
-          text: d['text'] as String? ?? '',
-          createdAt: DateTime.tryParse(d['createdAt'] as String? ?? '') ?? DateTime.now(),
-        );
-      }).toList();
-    } catch (_) {
-      return null;
+      final snap = await _db
+          .collection('userPublic')
+          .where('usernameLower', isGreaterThanOrEqualTo: q)
+          .where('usernameLower', isLessThan: '$q\uf8ff')
+          .limit(6)
+          .get();
+      return snap.docs.map((d) {
+        final data = d.data();
+        return <String, dynamic>{
+          'userId': d.id,
+          'username': data['username'] ?? '',
+          'displayName': data['displayName'] ?? data['username'] ?? '',
+          'avatarUrl': data['avatarUrl'] ?? '',
+        };
+      }).where((u) => (u['username'] as String).isNotEmpty).toList();
+    } catch (e) {
+      debugPrint('[CommentService] mention search failed: $e');
+      return const [];
     }
   }
 }

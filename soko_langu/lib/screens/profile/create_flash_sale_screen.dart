@@ -10,6 +10,7 @@ import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/rewarded_ad_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 
@@ -299,15 +300,58 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
       );
       return;
     }
-    if (_endTime.isBefore(DateTime.now())) {
+    if (_startTime.isBefore(DateTime.now().subtract(const Duration(minutes: 5)))) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('muda_kuisha_baadaye'))),
+        const SnackBar(content: Text('Start time cannot be in the past')),
+      );
+      return;
+    }
+    if (_endTime.isBefore(_startTime.add(const Duration(minutes: 30)))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End time must be at least 30 minutes after start')),
+      );
+      return;
+    }
+    if (_endTime.isAfter(_startTime.add(const Duration(days: 30)))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum flash sale duration is 30 days')),
       );
       return;
     }
 
-    setState(() => _isCreating = true);
+    final watch = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('unda_flash_sale')),
+        content: Text(context.tr('flash_sale_ad_msg')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.tr('watch_ad')),
+          ),
+        ],
+      ),
+    );
+    if (watch != true || !mounted) return;
 
+    setState(() => _isCreating = true);
+    final rewarded = await RewardedAdService.showRewarded();
+    if (!mounted) return;
+    if (!rewarded) {
+      setState(() => _isCreating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('watch_ad_to_continue'))),
+      );
+      return;
+    }
+    await _submitFlashSale();
+  }
+
+  Future<void> _submitFlashSale() async {
     try {
       final user = FirebaseAuth.instance.currentUser!;
       final salePrice =
@@ -389,6 +433,6 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
         raw.contains('Product already has an active flash sale')) {
       return context.tr('bidhaa_ina_flash_sale');
     }
-    return context.tr('imeshindwa').replaceAll('{0}', raw);
+    return context.trError(e, feature: 'flash_sale', screen: 'CreateFlashSale');
   }
 }

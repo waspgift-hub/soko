@@ -83,7 +83,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+          SnackBar(content: Text(context.trError(e))),
         );
       }
     }
@@ -130,7 +130,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+          SnackBar(content: Text(context.trError(e))),
         );
       }
     }
@@ -439,7 +439,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+          SnackBar(content: Text(context.trError(e))),
         );
       }
     }
@@ -518,7 +518,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+          SnackBar(content: Text(context.trError(e))),
         );
       }
     }

@@ -1836,12 +1836,12 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       }
 
       const {
-        productId, productName, productImage, originalPrice, salePrice,
-        discountPercent, sellerId, sellerName, sellerPhone, location,
+        productId, salePrice,
+        sellerId, sellerName, sellerPhone, location,
         stock, startTime, endTime,
       } = req.body;
 
-      if (!productId || !sellerId || !productName) {
+      if (!productId || !sellerId) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
       if (decoded.uid !== sellerId) {
@@ -1854,6 +1854,37 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
       const seller = await commerceStore.getDocument("users", sellerId);
       if (seller && seller.isSuspended === true) {
         return res.status(403).json({ error: 'Account suspended' });
+      }
+
+      // Server is the source of truth for product identity and price: the client
+      // may only propose a sale price and window. Trusting originalPrice /
+      // discountPercent / productName from the client let a seller advertise a
+      // 99%-off "sale" on a product they do not own.
+      const product = await commerceStore.getDocument("products", productId);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      if (product.sellerId && product.sellerId !== sellerId) {
+        return res.status(403).json({ error: 'You do not own this product' });
+      }
+      const originalPrice = Number(product.price || req.body.originalPrice || 0);
+      if (!Number.isFinite(originalPrice) || originalPrice <= 0) {
+        return res.status(400).json({ error: 'Product has no valid price' });
+      }
+      const proposedSale = Number(salePrice);
+      if (!Number.isFinite(proposedSale) || proposedSale <= 0 || proposedSale >= originalPrice) {
+        return res.status(400).json({ error: 'Sale price must be between 0 and the original price' });
+      }
+      const discountPercent = Math.round((1 - proposedSale / originalPrice) * 100);
+      const stockNum = Math.max(0, Math.floor(Number(stock) || 0));
+
+      const start = startTime ? new Date(startTime) : new Date();
+      const end = endTime ? new Date(endTime) : new Date(Date.now() + 24 * 3600000);
+      if (isNaN(start.getTime()) || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+        return res.status(400).json({ error: 'Invalid sale window' });
+      }
+      if (end.getTime() - start.getTime() > 30 * 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: 'Sale window cannot exceed 30 days' });
       }
 
       // Prevent duplicate active flash sales for the same product.
@@ -1881,20 +1912,20 @@ function createFeatureCompatRouter({ admin: fbAdmin, db }) {
 
       const ref = await commerceStore.addDocument("flash_sales", {
         productId,
-        productName: productName || '',
-        productImage: productImage || '',
-        originalPrice: originalPrice || 0,
-        salePrice: salePrice || 0,
-        discountPercent: discountPercent || 0,
+        productName: product.name || productName || '',
+        productImage: (Array.isArray(product.images) && product.images.length) ? product.images[0] : (productImage || ''),
+        originalPrice,
+        salePrice: proposedSale,
+        discountPercent,
         sellerId,
-        sellerName: sellerName || '',
-        sellerPhone: sellerPhone || '',
-        location: location || '',
-        stock: stock || 0,
+        sellerName: sellerName || seller?.displayName || '',
+        sellerPhone: sellerPhone || seller?.phone || '',
+        location: location || product.location || '',
+        stock: stockNum,
         soldCount: 0,
         isActive: true,
-        startTime: startTime ? new Date(startTime) : commerceStore.serverTimestamp(),
-        endTime: endTime ? new Date(endTime) : new Date(Date.now() + 24 * 3600000),
+        startTime: start,
+        endTime: end,
         createdAt: commerceStore.serverTimestamp(),
       });
 

@@ -14,6 +14,7 @@ import '../extensions/context_tr.dart';
 import '../utils/responsive.dart';
 import 'auth_wall.dart';
 import 'profile_mini_player.dart';
+import 'product_cached_image.dart';
 import 'package:go_router/go_router.dart';
 
 class MainScreen extends StatefulWidget {
@@ -174,10 +175,16 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           child: SizedBox(
-            height: 66,
+            height: 64,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Row(
+              // The bar has a fixed height, so an unclamped system font at 2×
+              // pushed the label past the bottom edge (overflow stripes). Nav
+              // labels are supplementary — the full label is still announced by
+              // the `Semantics` wrapper above.
+              child: MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.15,
+                child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildTab(
@@ -208,6 +215,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   _buildProfileTab(cs, reduceMotion),
                 ],
+              ),
               ),
             ),
           ),
@@ -341,20 +349,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                   padding: const EdgeInsets.all(1.5),
-                  child: CircleAvatar(
-                    radius: 10,
-                    backgroundColor: cs.primary.withValues(alpha: 0.12),
-                    backgroundImage: _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty
-                        ? NetworkImage(_profilePhotoUrl!)
-                        : null,
-                    child: _profilePhotoUrl == null || _profilePhotoUrl!.isEmpty
-                        ? Icon(
-                            isSelected ? Icons.person_rounded : Icons.person_outline_rounded,
-                            color: isSelected ? cs.primary : cs.onSurfaceVariant,
-                            size: 14,
-                          )
-                        : null,
-                  ),
+                  child: _navAvatar(cs, isSelected),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -376,8 +371,38 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildSellTab(ColorScheme cs) {
-    return Expanded(
+  /// Profile avatar for the nav bar.
+  ///
+  /// Goes through the shared image cache instead of `NetworkImage`: this widget
+  /// rebuilds on every unread-count change, and an uncached provider re-ran the
+  /// image resolution (and any failed fetch) on each tick.
+  Widget _navAvatar(ColorScheme cs, bool isSelected) {
+    final placeholder = Container(
+      width: 21,
+      height: 21,
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        isSelected ? Icons.person_rounded : Icons.person_outline_rounded,
+        color: isSelected ? cs.primary : cs.onSurfaceVariant,
+        size: 13,
+      ),
+    );
+    final url = _profilePhotoUrl;
+    if (url == null || url.isEmpty) return placeholder;
+    return ProductCachedImage(
+      url: url,
+      width: 21,
+      height: 21,
+      fit: BoxFit.cover,
+      borderRadius: BorderRadius.circular(11),
+      errorWidget: placeholder,
+    );
+  }
+
+  Widget _buildSellTab(ColorScheme cs) {    return Expanded(
       child: Semantics(
         button: true,
         label: context.tr('sell'),

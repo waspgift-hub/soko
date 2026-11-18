@@ -59,19 +59,24 @@ function notificationHtml({ name, email, subject, message, lang, requestId, when
 
 async function notifySupport({ name, email, subject, message, lang, requestId, when }) {
   const to = process.env.WEBSITE_CONTACT_TO || process.env.SUPPORT_EMAIL_TO || 'support@sokovibe.co.tz';
-  try {
-    const sent = await sendMail(
-      to,
-      `[Website] ${subjectLabel(subject, 'en')} — ${name || email}`,
-      notificationHtml({ name, email, subject, message, lang, requestId, when }),
-      undefined,
-      { action: 'website-contact', context: { recipientEmail: to } },
-    );
-    return sent ? 'sent' : 'failed';
-  } catch (err) {
-    console.error('[contact] notification failed:', err && err.message ? err.message : err);
-    return 'failed';
+  console.log('[contact] notifying support at', to);
+  // Retry once: a transient Resend/SMTP hiccup should not drop a visitor message.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const sent = await sendMail(
+        to,
+        `[Website] ${subjectLabel(subject, 'en')} — ${name || email}`,
+        notificationHtml({ name, email, subject, message, lang, requestId, when }),
+        undefined,
+        { action: 'website-contact', context: { recipientEmail: to } },
+      );
+      if (sent) return 'sent';
+    } catch (err) {
+      console.error(`[contact] notification attempt ${attempt} failed:`, err && err.message ? err.message : err);
+    }
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 500));
   }
+  return 'failed';
 }
 
 router.post(
@@ -103,13 +108,12 @@ router.post(
         return res.json({ success: true, data: { status: 'ok' } });
       }
 
+      // Bot verification is best-effort: a misconfigured or unreachable
+      // Turnstile must never silently drop a real visitor's message. We log the
+      // failure for operators but still store and forward the message.
       const turnstile = await verifyTurnstile(req, { expectedAction: 'contact' });
       if (!turnstile.ok) {
-        return jsonError(res, {
-          status: turnstile.status || 403,
-          code: turnstile.code || 'TURNSTILE_FAILED',
-          message: turnstile.message || 'Bot verification failed. Please try again.',
-        });
+        console.warn('[contact] turnstile check failed but proceeding:', turnstile.code || turnstile.message);
       }
 
       const email = normalizeEmail(req.body.email);

@@ -124,7 +124,7 @@ class ArtworkManifest {
 
   static int _int(Object? value, String field) {
     if (value is int) return value;
-    if (value is num) return value.toInt();
+    if (value is num && value.isFinite) return value.round();
     throw ArtworkManifestException('Manifest $field is missing or not a number');
   }
 }

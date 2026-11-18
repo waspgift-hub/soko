@@ -3,38 +3,20 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
-/// Premium single-field OTP input.
+/// Six separate boxes OTP input.
 ///
-/// Replaces the traditional six separate bordered boxes with one continuous
-/// underline-style field that shows large, readable digits with character
-/// spacing. Supports numeric keyboard, paste, backspace, autofill hints, and
-/// focus state — no individual boxes, no square containers, no input cards.
-///
-/// The widget does not auto-submit: the caller decides when to verify (e.g.
-/// when the required [length] is reached or on explicit submit).
+/// Renders one bordered box per digit. A single underlying [TextField] owns
+/// all keyboard, paste and autofill handling so a paste of the full code fills
+/// every box at once; the boxes are visual only and reflect the current value.
+/// Auto-advance is implicit (typing keeps appending) and auto-submit fires via
+/// [onSubmitted] once [length] digits are entered.
 class OtpInputField extends StatefulWidget {
-  /// Required number of digits. Defaults to 6 but is configurable per the
-  /// backend's OTP length.
   final int length;
-
-  /// Current code value (controlled). The caller updates this from [onChanged].
   final String value;
-
-  /// Called whenever the value changes (including paste, backspace, and
-  /// autofill).
   final ValueChanged<String>? onChanged;
-
-  /// Called when the user taps return / done on the keyboard.
   final VoidCallback? onSubmitted;
-
-  /// Whether the field is enabled.
   final bool enabled;
-
-  /// Whether the field has an error state (renders the underline in error
-  /// color and shakes slightly).
   final bool hasError;
-
-  /// Accessibility label prefix for each digit position announcement.
   final String digitPositionLabel;
 
   const OtpInputField({
@@ -68,19 +50,17 @@ class _OtpInputFieldState extends State<OtpInputField>
       duration: const Duration(milliseconds: 450),
     );
     if (widget.enabled) {
-      // Defer focus until the route transition settles so the keyboard
-      // present animation does not fight the page slide.
       Future.delayed(const Duration(milliseconds: 380), () {
         if (mounted) _focusNode.requestFocus();
       });
     }
+    _focusNode.addListener(() => setState(() {}));
   }
 
   @override
   void didUpdateWidget(OtpInputField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value &&
-        _controller.text != widget.value) {
+    if (oldWidget.value != widget.value && _controller.text != widget.value) {
       _controller.value = TextEditingValue(
         text: widget.value,
         selection: TextSelection.collapsed(offset: widget.value.length),
@@ -102,25 +82,21 @@ class _OtpInputFieldState extends State<OtpInputField>
     super.dispose();
   }
 
-  /// Returns only the numeric digits from the current value.
   String get _digits => _controller.text.replaceAll(RegExp(r'\D'), '');
-
-  bool get _isComplete => _digits.length >= widget.length;
 
   void _onChanged(String raw) {
     final cleaned = raw.replaceAll(RegExp(r'\D'), '');
-    // Truncate to the configured length so paste/autofill never exceeds it.
     final truncated = cleaned.length > widget.length
         ? cleaned.substring(0, widget.length)
         : cleaned;
-    if (truncated != _digits) {
+    if (truncated != _controller.text) {
       _controller.value = TextEditingValue(
         text: truncated,
         selection: TextSelection.collapsed(offset: truncated.length),
       );
-      widget.onChanged?.call(truncated);
     }
-    if (_isComplete) {
+    widget.onChanged?.call(truncated);
+    if (truncated.length == widget.length) {
       widget.onSubmitted?.call();
     }
   }
@@ -128,11 +104,7 @@ class _OtpInputFieldState extends State<OtpInputField>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final underlineColor = widget.hasError
-        ? cs.error
-        : _focusNode.hasFocus
-            ? cs.primary
-            : cs.onSurfaceVariant.withValues(alpha: 0.35);
+    final focusIndex = _focusNode.hasFocus ? _digits.length.clamp(0, widget.length - 1) : -1;
 
     return AnimatedBuilder(
       animation: _shake,
@@ -140,71 +112,68 @@ class _OtpInputFieldState extends State<OtpInputField>
         final dx = math.sin(_shake.value * 3 * math.pi) * 6 * (1 - _shake.value);
         return Transform.translate(
           offset: Offset(dx, 0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              Semantics(
-                button: true,
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  enabled: widget.enabled,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    signed: false,
-                    decimal: false,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(widget.length, (i) {
+                  final filled = i < _digits.length;
+                  final isFocus = i == focusIndex;
+                  final borderColor = widget.hasError
+                      ? cs.error
+                      : isFocus
+                          ? cs.primary
+                          : cs.onSurfaceVariant.withValues(alpha: 0.35);
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: cs.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: borderColor, width: isFocus ? 2 : 1.5),
+                          ),
+                          child: Text(
+                            filled ? _digits[i] : '',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: widget.hasError ? cs.error : cs.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              // Invisible input layer owns keyboard, paste and autofill.
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0,
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    enabled: widget.enabled,
+                    keyboardType: const TextInputType.numberWithOptions(signed: false, decimal: false),
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.oneTimeCode],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(widget.length),
+                    ],
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(border: InputBorder.none),
+                    onChanged: _onChanged,
+                    onSubmitted: (_) => widget.onSubmitted?.call(),
                   ),
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const [AutofillHints.oneTimeCode],
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(widget.length),
-                  ],
-                  maxLines: 1,
-                  expands: false,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.transparent, // hide native caret; we render digits above
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 14.0,
-                  ),
-                  decoration: InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                  ),
-                  onChanged: _onChanged,
-                  onSubmitted: (_) => widget.onSubmitted?.call(),
                 ),
               ),
-              const SizedBox(height: 10),
-              // Continuous underline (single-line input treatment).
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                height: 2,
-                decoration: BoxDecoration(
-                  color: underlineColor,
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-              if (_focusNode.hasFocus && !widget.hasError)
-                // Subtle focus indicator beneath the underline.
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 2),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
             ],
           ),
         );
