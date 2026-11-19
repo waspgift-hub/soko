@@ -413,8 +413,13 @@ router.post('/set-shipping-cost', async function (req, res) {
       try { var d = await admin.auth().verifyIdToken(token); auth = { uid: d.uid }; } catch (e) { return res.status(401).json({ error: 'Unauthorized' }); }
     }
     var orderId = req.body.orderId;
-    var shippingCost = Number(req.body.shippingCost);
-    if (!orderId || !shippingCost || shippingCost <= 0) return res.status(400).json({ error: 'Valid shippingCost required' });
+    // A confirmed free delivery is a valid quote: rejecting zero left orders
+    // stuck waiting for a price the seller had already declared free.
+    var freeDelivery = req.body.freeDelivery === true || req.body.shippingCost === 0;
+    var shippingCost = Number(req.body.shippingCost) || 0;
+    if (!orderId || !Number.isFinite(shippingCost) || shippingCost < 0 || (!freeDelivery && shippingCost === 0)) {
+      return res.status(400).json({ error: 'Valid shippingCost required' });
+    }
     var txRef = db.collection('transactions').doc(orderId);
     var orderRef = db.collection('orders').doc(orderId);
     var txSnap = await txRef.get();
@@ -422,31 +427,63 @@ router.post('/set-shipping-cost', async function (req, res) {
     if (!docSnap.exists) return res.status(404).json({ error: 'Order not found' });
     var data = docSnap.data();
     if (data.sellerId !== auth.uid) return res.status(403).json({ error: 'Only seller can set shipping cost' });
-    var escrowStates = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
-    if (escrowStates.indexOf(data.status) === -1) return res.status(400).json({ error: 'Order not in escrow. Current: ' + data.status });
-    if (data.shippingCost && data.shippingCost > 0) return res.status(400).json({ error: 'Shipping cost already set' });
+    var quotableStates = [
+      'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow',
+      'ready_to_dispatch', 'awaiting_shipping_quote', 'pending_shipping_fee',
+      'shipping_fee_submitted', 'shipping_fee_review', 'quoted',
+    ];
+    if (quotableStates.indexOf(String(data.status).toLowerCase()) === -1) {
+      return res.status(400).json({ error: 'Order not awaiting a shipping quote. Current: ' + data.status });
+    }
+    var alreadySet = data.shippingQuote && data.shippingQuote.amount !== undefined;
+    if (alreadySet || (data.shippingCost && data.shippingCost > 0)) {
+      return res.status(400).json({ error: 'Shipping cost already set' });
+    }
     var productPrice = Number(data.productPrice || 0);
-    var totalAmount = productPrice + shippingCost;
+    var commission = Number(data.platformFee ?? data.sokoLanguCommission ?? data.platformCommission ?? 0);
+    // Commission is buyer-pays-top and was frozen at creation; dropping it here
+    // under-charged the buyer at the payment step.
+    var totalAmount = productPrice + shippingCost + commission;
     var batch = db.batch();
     var shippingValidation = require('../src/modules/shipping/shipping-validation');
     var buyerAddrMap = (data.deliveryAddress && typeof data.deliveryAddress === 'object') ? data.deliveryAddress : {};
-    var validation = shippingValidation.validateShippingQuote({
-      amount: shippingCost,
-      shippingAddress: { region: data.region || buyerAddrMap.region || '', city: data.district || buyerAddrMap.district || '' },
-      sellerRegion: data.sellerRegion || '',
-    });
+    var validation = freeDelivery
+      ? { verdict: 'NORMAL', distanceTier: 'free', reason: null, baseline: 0 }
+      : shippingValidation.validateShippingQuote({
+          amount: shippingCost,
+          shippingAddress: { region: data.region || buyerAddrMap.region || '', city: data.district || buyerAddrMap.district || '' },
+          sellerRegion: data.sellerRegion || '',
+        });
     var shippingQuote = {
       amount: shippingCost,
       setAt: commerceStore.serverTimestamp(),
       setBy: auth.uid,
-      verdict: validation.verdict,
+      verdict: freeDelivery ? 'FREE' : validation.verdict,
       distanceTier: validation.distanceTier,
       reason: validation.reason || null,
       baseline: validation.baseline,
+      deliveryFree: freeDelivery,
     };
-    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: commerceStore.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: commerceStore.serverTimestamp() });
+    var patch = {
+      shippingCost: shippingCost,
+      deliveryFree: freeDelivery,
+      totalAmount: totalAmount,
+      shippingQuote: shippingQuote,
+      shippingCostSetAt: commerceStore.serverTimestamp(),
+      shippingCostSetBy: auth.uid,
+    };
+    if (freeDelivery) {
+      // No price is pending any more: move out of the quote-wait states so the
+      // buyer can fund the order instead of reading a stale "awaiting" message.
+      patch.status = 'awaiting_escrow_payment';
+      patch.fulfillmentStatus = 'awaiting_payment';
+    }
+    batch.set(txRef, patch, { merge: true });
+    batch.set(orderRef, patch, { merge: true });
+    var shippingMessage = freeDelivery
+      ? 'Muuzaji amethibitisha usafirishaji wa bure. Tayarisha kulipa agizo lako.'
+      : 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.';
+    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: shippingMessage, type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: commerceStore.serverTimestamp() });
     await batch.commit();
     if (locals.sendOneSignalNotification && data.buyerId) {
       try { await locals.sendOneSignalNotification(data.buyerId, 'Gharama ya usafirishaji: TZS ' + shippingCost, 'Muuzaji ameweka gharama ya usafirishaji'); } catch (e) {}

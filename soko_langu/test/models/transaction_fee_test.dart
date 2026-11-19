@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soko_vibe/models/money_breakdown.dart';
 import 'package:soko_vibe/models/transaction_model.dart';
 
 void main() {
@@ -69,6 +70,60 @@ void main() {
       final b = TransactionFeeBreakdown(productPrice: 20000);
       expect(b.totalAmount, 20700);
       expect(b.totalAmount, lessThan(b.totalAmount + b.processingFee));
+    });
+
+    test('invalid amounts never inherit the top processing band', () {
+      expect(getMnoCheckoutFee(double.nan), 0);
+      expect(getMnoCheckoutFee(double.infinity), 0);
+      expect(getMnoCheckoutFee(double.negativeInfinity), 0);
+      expect(getMnoCheckoutFee(-500), 0);
+    });
+
+    test('zero commission promotion keeps seller whole and buyer pays fee', () {
+      final previous = TransactionFeeBreakdown.platformCommissionPercent;
+      TransactionFeeBreakdown.platformCommissionPercent = 0;
+      addTearDown(() {
+        TransactionFeeBreakdown.platformCommissionPercent = previous;
+      });
+
+      final b = TransactionFeeBreakdown(productPrice: 500);
+      expect(b.platformFee, 0);
+      expect(b.totalAmount, 500);
+      expect(b.processingFee, 54);
+      expect(b.buyerTotal, 554);
+      expect(b.sellerReceives, 500);
+      expect(b.sellerNet, 500);
+    });
+
+    test('seller-borne fee reduces seller net, not the buyer total', () {
+      final b = TransactionFeeBreakdown(
+        productPrice: 500,
+        quotedProcessingFee: 54,
+        processingFeePayer: ProcessingFeePayer.seller,
+      );
+      expect(b.buyerTotal, 518);
+      expect(b.sellerReceives, 500);
+      expect(b.sellerNet, 446);
+    });
+
+    test('discount lowers both the buyer charge and seller proceeds', () {
+      final b = TransactionFeeBreakdown(
+        productPrice: 100000,
+        discount: 10000,
+      );
+      expect(b.totalAmount, 103500);
+      expect(b.buyerTotal, b.totalAmount - 10000 + b.processingFee);
+      expect(b.sellerReceives, 90000);
+    });
+
+    test('free delivery is a valid zero shipping quote', () {
+      final b = TransactionFeeBreakdown(
+        productPrice: 50000,
+        shippingCost: 0,
+      );
+      expect(b.shippingCost, 0);
+      expect(b.totalAmount, 51750);
+      expect(b.sellerReceives, 50000);
     });
   });
 }

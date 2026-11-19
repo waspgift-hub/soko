@@ -23,6 +23,7 @@ class TrustPassportCard extends StatefulWidget {
 }
 
 class _TrustPassportCardState extends State<TrustPassportCard> {
+  final TrustApiClient _trustApi = TrustApiClient();
   Map<String, dynamic>? _data;
   bool _loading = true;
 
@@ -51,7 +52,7 @@ class _TrustPassportCardState extends State<TrustPassportCard> {
     try {
       Map<String, dynamic>? data;
       if (ApiConfig.kUseTrustApi) {
-        data = await TrustApiClient().fetchPassport(widget.sellerId);
+        data = await _trustApi.fetchPassport(widget.sellerId);
       } else {
         final resp = await http.get(
           Uri.parse('${ApiConfig.baseUrl}/api/trust/passport/${widget.sellerId}'),
@@ -114,8 +115,84 @@ class _TrustPassportCardState extends State<TrustPassportCard> {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
-    final score = (seller['reliabilityScore'] as num?)?.toInt() ?? 0;
+    final rawScore = seller['reliabilityScore'];
+    final score = (rawScore is num && rawScore.isFinite)
+        ? (ApiConfig.kUseTrustApi ? rawScore.toDouble() * 100 : rawScore.toDouble())
+            .round()
+            .clamp(0, 100)
+        : 0;
     final verified = seller['verificationStatus'] == 'verified';
+    final metrics = data['metrics'] is Map
+        ? Map<String, dynamic>.from(data['metrics'])
+        : const <String, dynamic>{};
+    final totalOrders = (metrics['totalOrders'] as num?)?.toInt() ?? 0;
+    // The legacy passport has no metrics envelope; only hide the score when a
+    // v1 response explicitly reports zero completed history.
+    final hasHistory = metrics.isEmpty || totalOrders > 0;
+
+    if (!hasHistory) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cs.surface.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(Icons.verified_user_outlined, color: cs.primary, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    context.tr('tp_title', 'Trust ya Muuzaji'),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: cs.onSurface),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: verified
+                        ? cs.successGreen.withValues(alpha: 0.12)
+                        : cs.brandWarning.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: verified
+                      ? Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.verified, color: cs.successGreen, size: 13),
+                          const SizedBox(width: 4),
+                          Text(context.tr('tp_verified', 'Imethibitishwa'),
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: cs.successGreen)),
+                        ])
+                      : Text(context.tr('tp_unverified', 'Haijathibitishwa'),
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: cs.brandWarning)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.tr('tp_not_enough_history', 'Hakuna historia ya kutosha ya mauzo'),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              context.tr('tp_not_enough_history_desc', 'Alama ya kuaminiwa itaonekana baada ya mauzo kukamilika.'),
+              style: TextStyle(fontSize: 11.5, color: cs.outline),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       width: double.infinity,

@@ -26,7 +26,11 @@ const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
 const { computeSellerParity, resolvePlatformRate } = require('../../utils/commission-parity');
 const { evaluateOrderRisk, raiseFraudAlerts } = require('../trust/order-risk');
-const { resolveEffectivePrice } = require('../../../money');
+const {
+  resolveEffectivePrice,
+  calcMnoCheckoutFee,
+  buildPricingBreakdown,
+} = require('../../../money');
 const { normalizePaymentMethod, assertCanonicalPaymentMethod } = require('../../utils/payment-method');
 const { LEGACY_STATUS } = require('../legacy-compat/legacy-status');
 
@@ -44,7 +48,23 @@ function buildLegacyMirror(order, body) {
   // same fee the escrow actually charged, otherwise the invoice screen invents
   // a different total from the server's.
   const platformFee = Number(order.platformCommission ?? 0);
-  const clickpesaFee = 0;
+  // Backend-stored breakdown wins: the fee quote agreed at checkout must stay
+  // accurate even after an admin changes the commission rate.
+  const stored = order.pricingBreakdown && typeof order.pricingBreakdown === 'object'
+    ? order.pricingBreakdown
+    : null;
+  const clickpesaFee = stored
+    ? Number(stored.processingFee ?? 0)
+    : Number(order.processingFee ?? 0);
+  const processingFeePayer = stored?.processingFeePayer || 'buyer';
+  const gatewayAmount = Number(order.totalAmount);
+  const buyerTotal = stored
+    ? Number(stored.buyerTotal)
+    : gatewayAmount + clickpesaFee;
+  const pricingBreakdown = stored || buildPricingBreakdown({
+    productPrice,
+    commission: platformFee,
+  });
   const paymentMethod = normalizePaymentMethod(body.preferredPaymentMethod || body.paymentMethod || 'escrow') || 'escrow';
   return {
     orderId: order.id,
@@ -67,8 +87,13 @@ function buildLegacyMirror(order, body) {
     quantity: Math.max(1, Math.round(Number(body.quantity) || 1)),
     shippingCost: 0,
     platformFee,
+    processingFee: clickpesaFee,
     clickpesaFee,
+    processingFeePayer,
     totalAmount: Number(order.totalAmount),
+    buyerTotal,
+    sellerNet: Number(pricingBreakdown.sellerNet ?? productPrice),
+    pricingBreakdown,
     region: body.region || null,
     district: body.district || null,
     ward: body.ward || null,
@@ -224,11 +249,20 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
   const sellerId = await ensureSellerProfile(body.sellerId, body.sellerName, body.sellerPhone);
   if (!sellerId) throw httpError(404, 'SELLER_NOT_FOUND');
 
+  const commissionRate = await resolvePlatformRate();
   const { commission, totalAmount } = computeSellerParity(
     BigInt(productPrice),
     0n,
-    await resolvePlatformRate(),
+    commissionRate,
   );
+  // Freeze the pricing record with the order: later admin fee changes must not
+  // rewrite what this buyer agreed to pay or what the seller will be paid.
+  const pricingBreakdown = buildPricingBreakdown({
+    productPrice,
+    shippingFee: 0,
+    commission: Number(commission),
+    rate: commissionRate,
+  });
 
   // Same creation-time gate as the app checkout: a fake self-purchase must not
   // become an order, and velocity is recorded for the admin fraud panel.
@@ -269,6 +303,8 @@ router.post('/orders/create', optionalAuth, resolveShopBuyer, async (req, res) =
       shippingFee: 0n,
       platformCommission: commission,
       totalAmount,
+      pricingBreakdown,
+      processingFee: BigInt(pricingBreakdown.processingFee),
       currency: 'TZS',
       shippingMethod: body.deliveryType || 'local',
       placedAt: now,
@@ -431,6 +467,58 @@ router.post('/orders/:id/accept-quote', optionalAuth, resolveShopBuyer, async (r
   await commerceStore.upsertDocument('transactions', orderId, patch);
 
   return res.json({ success: true, orderId, paymentMethod: pm, totalAmount });
+});
+
+// Provider fee preview. The app used to call this endpoint when it did not
+// exist, silently falling back to zero and under-quoting the buyer. All money
+// here is recomputed server-side from the product price and the live admin
+// commission rate; client-submitted totals are never accepted.
+router.post('/azampay/preview-mno-checkout', async (req, res) => {
+  const body = req.body || {};
+  const price = Math.round(Number(body.productPrice));
+  const shipping = Math.max(0, Math.round(Number(body.shippingCost) || 0));
+  if (!Number.isFinite(price) || price <= 0) {
+    return res.status(400).json({ error: 'INVALID_PRICE' });
+  }
+  const { commission } = computeSellerParity(
+    BigInt(price),
+    BigInt(shipping),
+    await resolvePlatformRate(),
+  );
+  const breakdown = buildPricingBreakdown({
+    productPrice: price,
+    shippingFee: shipping,
+    commission: Number(commission),
+  });
+  const methods = ['M-PESA', 'AIRTEL', 'TIGO', 'HALOPESA'].map((name) => ({
+    name,
+    status: 'AVAILABLE',
+    fee: breakdown.processingFee,
+  }));
+  return res.json({
+    success: true,
+    totalAmount: breakdown.gatewayAmount,
+    platformFee: breakdown.commission,
+    gatewayFee: breakdown.processingFee,
+    buyerTotal: breakdown.buyerTotal,
+    processingFeePayer: breakdown.processingFeePayer,
+    pricingBreakdown: breakdown,
+    methods,
+  });
+});
+
+// Legacy quote-card fee lookup. Kept at the original /api path so older app
+// builds keep working; the amount is always recomputed, never client-trusted.
+router.post('/gateway-fee', (req, res) => {
+  const amount = Math.round(Number(req.body?.amount));
+  if (!Number.isFinite(amount) || amount < 0) {
+    return res.status(400).json({ error: 'INVALID_AMOUNT' });
+  }
+  return res.json({
+    success: true,
+    fee: calcMnoCheckoutFee(amount),
+    method: String(req.body?.method || 'ussd_push'),
+  });
 });
 
 module.exports = router;

@@ -51,6 +51,7 @@ class ProductFeedProvider extends ChangeNotifier {
       _products = result.data ?? [];
       _fromCache = result.isCache;
       _loadedIds = _products.map((p) => p.id).toSet();
+      _hasMore = result.hasMore;
     }
 
     _isLoading = false;
@@ -112,6 +113,9 @@ class ProductFeedProvider extends ChangeNotifier {
 
   Future<void> loadByBrand(String brand) async {
     if (_isLoading) return;
+    // Filtered views must not receive inserts from the unfiltered stream.
+    _realtimeSub?.cancel();
+    _realtimeSub = null;
     _isLoading = true;
     _error = null;
     _errorKind = null;
@@ -139,6 +143,9 @@ class ProductFeedProvider extends ChangeNotifier {
 
   Future<void> loadByCategory(String category, {String? subcategory}) async {
     if (_isLoading) return;
+    // Filtered views must not receive inserts from the unfiltered stream.
+    _realtimeSub?.cancel();
+    _realtimeSub = null;
     _isLoading = true;
     _error = null;
     _errorKind = null;

@@ -10,8 +10,7 @@ import '../../widgets/live_countdown.dart';
 import '../../widgets/banners/campaign_banner_slot.dart';
 import '../../models/banner_model.dart';
 import '../../app/routes.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/chat_utils.dart';
+import '../../screens/chat/chat_navigation.dart';
 import '../../widgets/product_cached_image.dart';
 import '../../services/product_service.dart';
 
@@ -536,18 +535,17 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> with WidgetsBindingOb
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => showChatOptions(
-                      context: context,
-                      sellerId: sale.sellerId,
-                      sellerName: sale.sellerName,
-                      phone: sale.sellerPhone,
+                    onPressed: () => ChatNavigation.openSellerChat(
+                      context,
+                      sale.sellerId,
+                      sale.sellerName,
+                      productId: sale.productId,
                       productName: sale.productName,
-                      productPrice: sale.originalPrice,
                     ),
                     icon: const Icon(Icons.chat_outlined, size: 18),
                     label: Text(context.tr('chat')),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: cs.whatsappGreen,
+                      backgroundColor: cs.primary,
                       foregroundColor: cs.surface,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),

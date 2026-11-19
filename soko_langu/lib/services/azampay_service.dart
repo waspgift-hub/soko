@@ -33,6 +33,9 @@ class MnoCheckoutFeeQuote {
     required this.platformFee,
     required this.gatewayFee,
     required this.methods,
+    this.buyerTotal,
+    this.pricingBreakdown,
+    this.processingFeePayer = 'buyer',
   });
 
   /// The amount that will actually be pushed, computed server-side.
@@ -41,6 +44,13 @@ class MnoCheckoutFeeQuote {
   final double platformFee;
   final double gatewayFee;
   final List<MnoCheckoutFeeMethod> methods;
+
+  /// Total including the buyer-borne provider fee, when the server supplied it.
+  final double? buyerTotal;
+
+  /// Frozen pricing record returned by the server for this quote.
+  final Map<String, dynamic>? pricingBreakdown;
+  final String processingFeePayer;
 
   double? get cheapestAvailableFee {
     double? best;
@@ -177,10 +187,20 @@ class AzamPayService {
           );
         }
       }
+      final rawBreakdown = body['pricingBreakdown'];
       return MnoCheckoutFeeQuote(
         totalAmount: double.tryParse('${body['totalAmount']}') ?? 0,
         platformFee: double.tryParse('${body['platformFee']}') ?? 0,
         gatewayFee: double.tryParse('${body['gatewayFee']}') ?? 0,
+        buyerTotal: body['buyerTotal'] == null
+            ? null
+            : double.tryParse('${body['buyerTotal']}'),
+        processingFeePayer: body['processingFeePayer']?.toString() ?? 'buyer',
+        pricingBreakdown: rawBreakdown is Map<String, dynamic>
+            ? rawBreakdown
+            : rawBreakdown is Map
+                ? Map<String, dynamic>.from(rawBreakdown)
+                : null,
         methods: methods,
       );
     } catch (e) {

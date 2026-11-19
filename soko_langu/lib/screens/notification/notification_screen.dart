@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import '../../screens/chat/chat_navigation.dart';
 import '../../services/notification_service.dart';
 import '../../services/notification_lang.dart';
 import '../../services/notification_api.dart';
@@ -262,7 +263,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
     switch (type) {
       case 'chat':
         if (senderId != null) {
-          context.push('/chat/$senderId', extra: {'name': rawData?['senderName'] ?? ''});
+          ChatNavigation.openSellerChat(
+            context,
+            senderId,
+            rawData?['senderName'] as String? ?? '',
+            productId: rawData?['productId'] as String?,
+            productName: rawData?['productName'] as String?,
+          );
         } else {
           context.push(AppRoutes.chats);
         }

@@ -68,16 +68,26 @@ class SellerEarningsService {
     if (_earningsLast != null) return;
     final uid = _uid;
     if (uid == null) return;
-    _earningsLast = await _walletEarnings(uid);
-    if (!_earningsCtrl.isClosed) _earningsCtrl.add(_earningsLast!);
+    try {
+      _earningsLast = await _walletEarnings(uid);
+      if (!_earningsCtrl.isClosed) _earningsCtrl.add(_earningsLast!);
+    } catch (error, stack) {
+      // Without forwarding the failure, subscribers wait forever and the UI
+      // falls back to zero balances, which reads as real money data.
+      if (!_earningsCtrl.isClosed) _earningsCtrl.addError(error, stack);
+    }
   }
 
   Future<void> _loadWithdrawals() async {
     if (_withdrawalsLast != null) return;
     final uid = _uid;
     if (uid == null) return;
-    _withdrawalsLast = await _walletWithdrawals(uid);
-    if (!_withdrawalsCtrl.isClosed) _withdrawalsCtrl.add(_withdrawalsLast!);
+    try {
+      _withdrawalsLast = await _walletWithdrawals(uid);
+      if (!_withdrawalsCtrl.isClosed) _withdrawalsCtrl.add(_withdrawalsLast!);
+    } catch (error, stack) {
+      if (!_withdrawalsCtrl.isClosed) _withdrawalsCtrl.addError(error, stack);
+    }
   }
 
   /// Drops cached data for a different (or signed-out) user. Without this, a
@@ -168,11 +178,19 @@ class SellerEarningsService {
     final uid = _uid;
     if (uid == null) return;
 
-    _earningsLast = await _walletEarnings(uid);
-    if (!_earningsCtrl.isClosed) _earningsCtrl.add(_earningsLast!);
+    try {
+      _earningsLast = await _walletEarnings(uid);
+      if (!_earningsCtrl.isClosed) _earningsCtrl.add(_earningsLast!);
+    } catch (error, stack) {
+      if (!_earningsCtrl.isClosed) _earningsCtrl.addError(error, stack);
+    }
 
-    _withdrawalsLast = await _walletWithdrawals(uid);
-    if (!_withdrawalsCtrl.isClosed) _withdrawalsCtrl.add(_withdrawalsLast!);
+    try {
+      _withdrawalsLast = await _walletWithdrawals(uid);
+      if (!_withdrawalsCtrl.isClosed) _withdrawalsCtrl.add(_withdrawalsLast!);
+    } catch (error, stack) {
+      if (!_withdrawalsCtrl.isClosed) _withdrawalsCtrl.addError(error, stack);
+    }
   }
 
   /// Releases the Firestore listener. The service is a per-screen instance, so

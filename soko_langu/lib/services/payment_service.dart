@@ -3,13 +3,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
-import '../models/order_statuses.dart';
+import 'admin_dashboard_api.dart';
 import 'api_config.dart';
 import 'fraud_prevention_service.dart';
 
 class PaymentService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AdminDashboardApi _dashboardApi;
+
+  PaymentService({AdminDashboardApi? dashboardApi})
+      : _dashboardApi = dashboardApi ?? AdminDashboardApi();
 
   TransactionFeeBreakdown calculateFees(double productPrice) {
     return TransactionFeeBreakdown(productPrice: productPrice);
@@ -96,74 +100,10 @@ class PaymentService {
   }
 
   Future<double> getTotalPlatformEarnings() async {
-    final snap = await _db
-        .collection('transactions')
-        .get();
-    return snap.docs.fold<double>(
-      0,
-      (total, doc) {
-        final d = doc.data();
-        if (!_isPaidStatus(d['status'] as String? ?? '')) return total;
-        return total + ((d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble());
-      },
-    );
+    final stats = await _dashboardApi.fetchCommissionStats();
+    return stats['totalEarnings']!;
   }
 
-  Future<Map<String, double>> getRevenueStats() async {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final monthStart = DateTime(now.year, now.month, 1);
-    final all = await _db
-        .collection('transactions')
-        .get();
-    double total = 0, today = 0, monthly = 0;
-    int count = 0;
-    for (var doc in all.docs) {
-      final d = doc.data();
-      if (!_isPaidStatus(d['status'] as String? ?? '')) continue;
-      final pf = (d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble();
-      total += pf;
-      final ts = d['createdAt'] as Timestamp?;
-      if (ts != null) {
-        final date = ts.toDate();
-        if (date.isAfter(todayStart)) today += pf;
-        if (date.isAfter(monthStart)) monthly += pf;
-      }
-      count++;
-    }
-    return {
-      'totalEarnings': total,
-      'todayEarnings': today,
-      'monthlyEarnings': monthly,
-      'totalTransactions': count.toDouble(),
-    };
-  }
-
-  bool _isPaidStatus(String status) {
-    return const {
-          OrderStatus.escrowHold,
-          OrderStatus.paidEscrowHold,
-          OrderStatus.paidEscrowHeld,
-          OrderStatus.dispatched,
-          OrderStatus.delivered,
-          OrderStatus.deliveryConfirmed,
-          OrderStatus.confirmed,
-          OrderStatus.completed,
-          OrderStatus.refunded,
-          OrderStatus.paid,
-          OrderStatus.inEscrow,
-          OrderStatus.readyToDispatch,
-          OrderStatus.inTransit,
-          OrderStatus.outForDelivery,
-          OrderStatus.deliveryAttempted,
-          OrderStatus.inspectionPeriod,
-          OrderStatus.otpPending,
-          OrderStatus.walletCredited,
-          OrderStatus.payoutPending,
-          OrderStatus.payoutComplete,
-          OrderStatus.disputed,
-          OrderStatus.refundPending,
-        }
-        .contains(status);
-  }
+  Future<Map<String, double>> getRevenueStats() =>
+      _dashboardApi.fetchCommissionStats();
 }

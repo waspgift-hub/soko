@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/chat_service.dart';
+import '../../screens/chat/chat_navigation.dart';
 import '../../services/user_service.dart';
 import '../../services/local_cache_service.dart';
 import '../../services/shortcut_service.dart';
@@ -483,18 +484,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     });
   }
 
-  Future<void> _openChat(String otherId, ChatRoom room) async {
-    await _chatService.getOrCreateRoom(otherUserId: otherId);
-    if (context.mounted) {
-      context.push(
-        '/chat/$otherId',
-        extra: {
-          'name': _userNames[otherId] ?? '',
-          'productId': room.productId ?? '',
-          'productTitle': room.productTitle ?? '',
-        },
-      );
-    }
+  void _openChat(String otherId, ChatRoom room) {
+    // Navigation must not wait on room creation: a slow Firestore write used to
+    // make the inbox feel frozen before the keyboard could even open.
+    ChatNavigation.openSellerChat(
+      context,
+      otherId,
+      _userNames[otherId] ?? '',
+      productId: room.productId,
+      productName: room.productTitle,
+    );
   }
 
   void _handleMenuAction(String action, ChatRoom room, String otherId, String name) async {

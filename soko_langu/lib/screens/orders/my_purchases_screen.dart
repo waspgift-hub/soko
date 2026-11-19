@@ -38,6 +38,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   String? _disputingTxId;
   String? _payingTxId;
   String? _cancellingTxId;
+  String? _deletingTxId;
   String _selectedFilter = 'all';
   bool _isInitialLoad = true;
   bool _isSelectionMode = false;
@@ -46,6 +47,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   List<QueryDocumentSnapshot> _currentDocs = [];
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
+  QuerySnapshot? _lastSnapshot;
 
   // Memoised per buyer. Inline `stream:` in build() meant every rebuild opened a
   // fresh listener on the buyer's `transactions` — and this screen rebuilds on
@@ -68,9 +70,46 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
 
   static const _filters = ['all', 'pending', 'active', 'completed', 'failed'];
 
+  static bool _isDeleted(QueryDocumentSnapshot doc) =>
+      (doc.data() as Map)['deletedForBuyer'] == true;
+
+  static String _statusOf(QueryDocumentSnapshot doc) =>
+      (doc.data() as Map)['status'] as String? ?? '';
+
+  static PurchaseBucket? _bucketForFilter(String filter) => switch (filter) {
+        'pending' => PurchaseBucket.pending,
+        'active' => PurchaseBucket.active,
+        'completed' => PurchaseBucket.completed,
+        'failed' => PurchaseBucket.failed,
+        _ => null,
+      };
+
+  static bool _canDeleteStatus(String status) =>
+      canHidePurchaseFromBuyer(status);
+
+  static List<QueryDocumentSnapshot> _visibleDocs(
+    List<QueryDocumentSnapshot> docs,
+  ) =>
+      docs.where((doc) => !_isDeleted(doc)).toList();
+
+  static List<QueryDocumentSnapshot> _docsForFilter(
+    List<QueryDocumentSnapshot> docs,
+    String filter,
+  ) {
+    final bucket = _bucketForFilter(filter);
+    if (bucket == null) return docs;
+    return docs
+        .where((doc) => purchaseBucketOf(_statusOf(doc)) == bucket)
+        .toList();
+  }
+
   @override
   void initState() {
     super.initState();
+    // The stream is live; the timer only refreshes the relative "updated" label.
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -79,61 +118,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     super.dispose();
   }
 
-  List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
-    docs = docs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
-    if (_selectedFilter == 'all') return docs;
-    return docs.where((d) {
-      final s = (d.data() as Map)['status'] as String? ?? '';
-      switch (_selectedFilter) {
-        case 'pending':
-          return const {
-            OrderStatus.pending,
-            OrderStatus.awaitingShippingQuote,
-            OrderStatus.awaitingPayment,
-            OrderStatus.addressRequired,
-            OrderStatus.pendingShippingFee,
-            OrderStatus.shippingFeeSubmitted,
-            OrderStatus.shippingFeeReview,
-            OrderStatus.quoted,
-            OrderStatus.awaitingEscrowPayment,
-            OrderStatus.paymentPending,
-          }.contains(s);
-        case 'active':
-          return const {
-            OrderStatus.paid,
-            OrderStatus.paidEscrowHeld,
-            OrderStatus.escrowHold,
-            OrderStatus.inEscrow,
-            OrderStatus.readyToDispatch,
-            OrderStatus.dispatched,
-            OrderStatus.inTransit,
-            OrderStatus.outForDelivery,
-            OrderStatus.deliveryAttempted,
-            OrderStatus.delivered,
-            OrderStatus.inspectionPeriod,
-            OrderStatus.otpPending,
-            OrderStatus.disputed,
-            OrderStatus.refundPending,
-          }.contains(s);
-        case 'completed':
-          return const {
-            OrderStatus.completed,
-            OrderStatus.walletCredited,
-            OrderStatus.payoutPending,
-            OrderStatus.payoutComplete,
-          }.contains(s);
-        case 'failed':
-          return const {
-            OrderStatus.failed,
-            OrderStatus.cancelled,
-            OrderStatus.refunded,
-            OrderStatus.expired,
-          }.contains(s);
-        default:
-          return true;
-      }
-    }).toList();
-  }
+  List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) =>
+      _docsForFilter(_visibleDocs(docs), _selectedFilter);
 
   Future<void> _payForOrder(String txId, Map<String, dynamic> d) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -432,14 +418,20 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     setState(() => _cancellingTxId = null);
   }
 
-  Future<void> _deleteOrder(String txId) async {
+  Future<bool> _confirmDelete({
+    required String title,
+    required String message,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.tr('delete_order_title')),
-        content: Text(context.tr('delete_order_confirm')),
+        title: Text(title),
+        content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
@@ -451,55 +443,87 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    return confirmed == true;
+  }
+
+  Future<void> _deleteOrder(String txId) async {
+    QueryDocumentSnapshot? doc;
+    for (final candidate in _currentDocs) {
+      if (candidate.id == txId) {
+        doc = candidate;
+        break;
+      }
+    }
+    if (doc == null || !_canDeleteStatus(_statusOf(doc))) {
+      _showError(context.tr('order_not_deletable', 'Oda hii haiwezi kufutwa.'));
+      return;
+    }
+    if (!await _confirmDelete(
+      title: context.tr('delete_order_title'),
+      message: context.tr('delete_order_confirm'),
+    )) {
+      return;
+    }
+
+    setState(() => _deletingTxId = txId);
     try {
       await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
         'deletedForBuyer': true,
       });
-      if (mounted) _showSuccess(context.tr('order_deleted'));
+      if (!mounted) return;
+      setState(() {
+        _selectedIds.remove(txId);
+        if (_selectedIds.isEmpty) _isSelectionMode = false;
+      });
+      _showSuccess(context.tr('order_deleted'));
     } catch (e) {
       if (mounted) _showError(context.trError(e));
+    } finally {
+      if (mounted) setState(() => _deletingTxId = null);
     }
   }
 
   Future<void> _deleteSelectedOrders() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('delete_orders_title')),
-        content: Text('${context.tr('delete_orders_confirm')} ${_selectedIds.length}'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            child: Text(context.tr('yes_delete')),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+    final eligible = _currentDocs
+        .where((d) => _canDeleteStatus(_statusOf(d)))
+        .map((d) => d.id)
+        .where((id) => _selectedIds.contains(id))
+        .toList();
+    if (eligible.isEmpty) {
+      _showError(
+        context.tr('no_deletable_orders_selected', 'Hakuna oda zinazoweza kufutwa.'),
+      );
+      return;
+    }
+    final message = context
+        .tr('delete_orders_confirm_count', 'Futa oda {0} zilizochaguliwa?')
+        .replaceAll('{0}', '${eligible.length}');
+    if (!await _confirmDelete(
+      title: context.tr('delete_orders_title'),
+      message: message,
+    )) {
+      return;
+    }
+
     setState(() => _isDeletingSelected = true);
     try {
       final batch = FirebaseFirestore.instance.batch();
-      for (final id in _selectedIds) {
+      for (final id in eligible) {
         batch.update(FirebaseFirestore.instance.collection('transactions').doc(id), {
           'deletedForBuyer': true,
         });
       }
       await batch.commit();
+      if (!mounted) return;
       setState(() {
         _selectedIds.clear();
         _isSelectionMode = false;
-        _isDeletingSelected = false;
       });
-      if (mounted) _showSuccess(context.tr('orders_deleted'));
+      _showSuccess(context.tr('orders_deleted'));
     } catch (e) {
-      setState(() => _isDeletingSelected = false);
       if (mounted) _showError(context.trError(e));
+    } finally {
+      if (mounted) setState(() => _isDeletingSelected = false);
     }
   }
 
@@ -517,8 +541,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     );
   }
 
-  Widget _buildFilterChips(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
-    final visible = allDocs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
+  Widget _buildFilterChips(ColorScheme cs, List<QueryDocumentSnapshot> visible) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       // Horizontal scroll keeps the row from overflowing on narrow screens —
@@ -556,47 +579,13 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     );
   }
 
-  Widget _buildStatsHeader(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
-    final visible = allDocs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
-    final active = visible.where((d) {
-      final s = (d.data() as Map)['status'] as String? ?? '';
-      return const {
-        OrderStatus.pending,
-        OrderStatus.awaitingShippingQuote,
-        OrderStatus.awaitingPayment,
-        OrderStatus.quoted,
-        OrderStatus.addressRequired,
-        OrderStatus.pendingShippingFee,
-        OrderStatus.shippingFeeSubmitted,
-        OrderStatus.shippingFeeReview,
-        OrderStatus.awaitingEscrowPayment,
-        OrderStatus.paymentPending,
-        OrderStatus.paid,
-        OrderStatus.paidEscrowHeld,
-        OrderStatus.escrowHold,
-        OrderStatus.inEscrow,
-        OrderStatus.readyToDispatch,
-        OrderStatus.dispatched,
-        OrderStatus.inTransit,
-        OrderStatus.outForDelivery,
-        OrderStatus.deliveryAttempted,
-        OrderStatus.delivered,
-        OrderStatus.inspectionPeriod,
-        OrderStatus.otpPending,
-        OrderStatus.disputed,
-        OrderStatus.refundPending,
-      }.contains(s);
-    }).length;
-    final completed = visible.where((d) {
-      final s = (d.data() as Map)['status'] as String? ?? '';
-      return const {
-        OrderStatus.completed,
-        OrderStatus.deliveryConfirmed,
-        OrderStatus.walletCredited,
-        OrderStatus.payoutPending,
-        OrderStatus.payoutComplete,
-      }.contains(s);
-    }).length;
+  Widget _buildStatsHeader(ColorScheme cs, List<QueryDocumentSnapshot> visible) {
+    final active = visible
+        .where((d) => purchaseBucketOf(_statusOf(d)) == PurchaseBucket.active)
+        .length;
+    final completed = visible
+        .where((d) => purchaseBucketOf(_statusOf(d)) == PurchaseBucket.completed)
+        .length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -717,29 +706,11 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     return '${d.inMinutes}m';
   }
 
-  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) {
-    return docs.where((d) {
-      final s = (d.data() as Map)['status'] as String? ?? '';
-      switch (filter) {
-        case 'pending':
-          return s == 'pending' || s == 'awaiting_shipping_quote' || s == 'awaiting_payment';
-        case 'active':
-          return s == 'paid_escrow_held' ||
-              s == 'escrow_hold' ||
-              s == 'dispatched' ||
-              s == 'delivered';
-        case 'completed':
-          return s == 'completed' || s == 'delivery_confirmed';
-        case 'failed':
-          return s == 'failed' || s == 'cancelled' || s == 'refunded' || s == 'expired';
-        default:
-          return true;
-      }
-    }).length;
-  }
+  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) =>
+      _docsForFilter(docs, filter).length;
 
-  Widget _buildEmptyState(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
-    final hasOrders = allDocs.isNotEmpty;
+  Widget _buildEmptyState(ColorScheme cs, List<QueryDocumentSnapshot> visible) {
+    final hasOrders = visible.isNotEmpty;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1009,7 +980,13 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             );
           }
 
-          final allDocs = snap.data?.docs ?? [];
+          final snapshot = snap.data!;
+          if (!identical(snapshot, _lastSnapshot)) {
+            _lastSnapshot = snapshot;
+            _lastAutoRefresh = DateTime.now();
+          }
+
+          final allDocs = snapshot.docs.toList();
           allDocs.sort((a, b) {
             final ta = (a.data() as Map)['createdAt'];
             final tb = (b.data() as Map)['createdAt'];
@@ -1018,20 +995,21 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           });
 
           final docs = _filterDocs(allDocs);
+          final visibleDocs = _visibleDocs(allDocs);
           _currentDocs = docs;
 
           return RefreshIndicator(
             onRefresh: () async {
-              setState(() => _isInitialLoad = true);
-              await Future.delayed(const Duration(milliseconds: 300));
-              if (mounted) setState(() => _isInitialLoad = false);
+              _txStreamKey = null;
+              _txStream = null;
+              setState(() => _lastAutoRefresh = DateTime.now());
             },
             child: CustomScrollView(
               slivers: [
-                SliverToBoxAdapter(child: _buildStatsHeader(cs, allDocs)),
-                SliverToBoxAdapter(child: _buildFilterChips(cs, allDocs)),
+                SliverToBoxAdapter(child: _buildStatsHeader(cs, visibleDocs)),
+                SliverToBoxAdapter(child: _buildFilterChips(cs, visibleDocs)),
                 if (docs.isEmpty)
-                  SliverFillRemaining(child: _buildEmptyState(cs, allDocs))
+                  SliverFillRemaining(child: _buildEmptyState(cs, visibleDocs))
                 else
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
@@ -1043,6 +1021,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         disputingTxId: _disputingTxId,
                         payingTxId: _payingTxId,
                         cancellingTxId: _cancellingTxId,
+                        deletingTxId: _deletingTxId,
                         onPay: _payForOrder,
                         onConfirm: _confirmDelivery,
                         onDispute: _raiseDispute,
@@ -1051,13 +1030,16 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         escrowLabel: _escrowLabel,
                         isSelectionMode: _isSelectionMode,
                         isSelected: _selectedIds.contains(docs[i].id),
-                        onToggleSelect: () => setState(() {
-                          if (_selectedIds.contains(docs[i].id)) {
-                            _selectedIds.remove(docs[i].id);
-                          } else {
-                            _selectedIds.add(docs[i].id);
-                          }
-                        }),
+                        onToggleSelect: () {
+                          if (!_canDeleteStatus(_statusOf(docs[i]))) return;
+                          setState(() {
+                            if (_selectedIds.contains(docs[i].id)) {
+                              _selectedIds.remove(docs[i].id);
+                            } else {
+                              _selectedIds.add(docs[i].id);
+                            }
+                          });
+                        },
                       ),
                       childCount: docs.length,
                     ),
@@ -1082,6 +1064,7 @@ class _OrderGlassCard extends StatelessWidget {
   final String? disputingTxId;
   final String? payingTxId;
   final String? cancellingTxId;
+  final String? deletingTxId;
   final Function(String, Map<String, dynamic>) onPay;
   final Function(String) onConfirm;
   final Function(String) onDispute;
@@ -1100,6 +1083,7 @@ class _OrderGlassCard extends StatelessWidget {
     this.disputingTxId,
     this.payingTxId,
     this.cancellingTxId,
+    this.deletingTxId,
     required this.onPay,
     required this.onConfirm,
     required this.onDispute,
@@ -1208,6 +1192,7 @@ class _OrderGlassCard extends StatelessWidget {
                       paymentMethod,
                       status,
                       productId,
+                      productName,
                     ),
                     Divider(
                       height: 1,
@@ -1224,6 +1209,7 @@ class _OrderGlassCard extends StatelessWidget {
                       totalAmount,
                       platformFee: platformFee,
                       processingFee: processingFee,
+                      deletingTxId: deletingTxId,
                     ),
                     if (status == 'delivered' ||
                         status == 'delivery_confirmed' ||
@@ -1333,6 +1319,7 @@ class _OrderGlassCard extends StatelessWidget {
     String method,
     String status,
     String productId,
+    String productName,
   ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
@@ -1351,7 +1338,13 @@ class _OrderGlassCard extends StatelessWidget {
             children: [
               if (sellerId.isNotEmpty)
                 GestureDetector(
-                  onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
+                  onTap: () => ChatNavigation.openSellerChat(
+                    context,
+                    sellerId,
+                    sellerName,
+                    productId: productId,
+                    productName: productName,
+                  ),
                   child: _infoChip(cs, Icons.chat_outlined, sellerName, cs.primary),
                 ),
               const SizedBox(width: 8),
@@ -1487,17 +1480,13 @@ class _OrderGlassCard extends StatelessWidget {
     double total, {
     double platformFee = 0,
     double processingFee = 0,
+    String? deletingTxId,
   }) {
     final canPay = canPayForOrderStatus(status);
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute = canDisputeForOrderStatus(status);
     final canCancel = status == 'paid_escrow_held' || status == 'escrow_hold';
-    final canDelete =
-        status == 'pending' ||
-        status == 'failed' ||
-        status == 'expired' ||
-        status == 'awaiting_payment' ||
-        status == 'awaiting_shipping_quote';
+    final canDelete = canHidePurchaseFromBuyer(status);
 
     final actions = <Widget>[];
     if (canPay)
@@ -1570,9 +1559,9 @@ class _OrderGlassCard extends StatelessWidget {
           cs,
           Icons.delete_outline,
           context.tr('delete_order'),
-          () => onDelete(docId),
+          deletingTxId == docId ? null : () => onDelete(docId),
           cs.error,
-          false,
+          deletingTxId == docId,
           outlined: true,
         ),
       );

@@ -31,6 +31,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   final UserService _userService = UserService();
   final WishlistService _wishlistService = WishlistService();
   UserProfile? _profile;
+  String? _loadedUid;
   String? _localImagePath;
   bool _avatarError = false;
   int _wishlistCount = 0;
@@ -43,6 +44,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      // Claim the UID before the first async gap so the auth listener below
+      // does not fire a duplicate load for the same cold-start sign-in.
+      _loadedUid = user.uid;
       _loadProfile();
     }
     // Reactive auth: covers the cold-start race where currentUser is still
@@ -50,18 +54,19 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     // subscriptions that can miss the emission
     _authSub = FirebaseAuth.instance.authStateChanges().listen((u) {
       if (!mounted) return;
-      if (u != null) {
-        if (!_isLoading && _profile == null) {
-          _loadProfile();
-        }
-      } else {
+      final uid = u?.uid;
+      if (uid == null) {
+        if (_profile == null && _loadedUid == null) return;
         setState(() {
           _profile = null;
+          _loadedUid = null;
           _localImagePath = null;
           _wishlistCount = 0;
           _isLoading = false;
         });
+        return;
       }
+      if (uid != _loadedUid) _loadProfile();
     });
   }
 
@@ -79,7 +84,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadStats(String uid) async {
+  Future<void> _loadStats() async {
     try {
       final wishlist = await _wishlistService.getWishlist();
       if (mounted) {
@@ -92,22 +97,26 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
 
   Future<void> _loadProfile() async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _avatarError = false;
-    });
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-    var profile = await _userService.getProfile(user.uid);
-    if (mounted)
-      setState(() {
-        _profile = profile;
-        _isLoading = false;
-      });
-    _loadStats(user.uid);
+    final uid = user.uid;
+    setState(() {
+      _isLoading = true;
+      _avatarError = false;
+    });
+    final profile = await _userService.getProfile(uid);
+    if (!mounted) return;
+    // A slower earlier fetch must not overwrite the newly signed-in account.
+    if (FirebaseAuth.instance.currentUser?.uid != uid) return;
+    setState(() {
+      _profile = profile;
+      _loadedUid = uid;
+      _isLoading = false;
+    });
+    _loadStats();
   }
 
   Future<void> _pickImage() async {
@@ -154,8 +163,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final user = FirebaseAuth.instance.currentUser;
-    final imageUrl = _localImagePath ?? _profile?.profileImage;
+    final profile = _profile;
+    final imageUrl = _localImagePath ?? profile?.profileImage;
 
     if (_profile == null) {
       return Scaffold(
@@ -273,9 +282,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                           children: [
                             Flexible(
                               child: Text(
-                                _profile?.displayName.isNotEmpty == true
-                                    ? _profile!.displayName
-                                    : user?.displayName ?? context.tr('no_name'),
+                                profile?.displayName.isNotEmpty == true
+                                    ? profile!.displayName
+                                    : context.tr('no_name'),
                                 style: TextStyle(
                                   fontSize: AppFontSize.xxl,
                                   fontWeight: FontWeight.w700,
@@ -314,7 +323,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                           const SizedBox(height: 4),
                         const SizedBox(height: 6),
                         Text(
-                          user?.email ?? context.tr('no_email'),
+                          profile?.email.isNotEmpty == true
+                              ? profile!.email
+                              : context.tr('no_email'),
                           style: TextStyle(
                             color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                             fontSize: AppFontSize.sm,
@@ -348,20 +359,20 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                                 Expanded(
                                   child: _SocialStat(
                                     label: context.tr('followers'),
-                                    stream: FollowService().followerCountStream(user!.uid),
+                                    stream: FollowService().followerCountStream(profile!.uid),
                                     onTap: () => context.push(
-                                      '${AppRoutes.followers}/${user.uid}',
-                                      extra: _profile?.displayName ?? '',
+                                      '${AppRoutes.followers}/${profile.uid}',
+                                      extra: profile.displayName,
                                     ),
                                   ),
                                 ),
                                 Expanded(
                                   child: _SocialStat(
                                     label: context.tr('following'),
-                                    stream: FollowService().followingCountStream(user.uid),
+                                    stream: FollowService().followingCountStream(profile.uid),
                                     onTap: () => context.push(
-                                      '${AppRoutes.following}/${user.uid}',
-                                      extra: _profile?.displayName ?? '',
+                                      '${AppRoutes.following}/${profile.uid}',
+                                      extra: profile.displayName,
                                     ),
                                   ),
                                 ),

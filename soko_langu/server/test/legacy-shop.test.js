@@ -64,6 +64,36 @@ test('mirror fee math matches the parity commission invariant', () => {
   }
 });
 
+test('buildLegacyMirror preserves the frozen server pricing breakdown', () => {
+  const breakdown = {
+    productPrice: 50000,
+    shippingCost: 0,
+    commission: 1750,
+    processingFee: 2136,
+    processingFeePayer: 'buyer',
+    gatewayAmount: 51750,
+    buyerTotal: 53886,
+    sellerNet: 50000,
+  };
+  const order = {
+    id: 'or-frozen',
+    status: 'awaiting_escrow_payment',
+    productPrice: 50000n,
+    platformCommission: 1750n,
+    totalAmount: 51750n,
+    shippingFee: 0n,
+    pricingBreakdown: breakdown,
+  };
+
+  const m = buildLegacyMirror(order, { productPrice: 50000 });
+
+  assert.strictEqual(m.processingFee, 2136);
+  assert.strictEqual(m.processingFeePayer, 'buyer');
+  assert.strictEqual(m.buyerTotal, 53886);
+  assert.strictEqual(m.sellerNet, 50000);
+  assert.strictEqual(m.pricingBreakdown, breakdown);
+});
+
 test('LEGACY_STATUS covers every money-relevant v2 state', () => {
   const states = [
     'payment_pending', 'pending_shipping_fee', 'awaiting_escrow_payment', 'in_escrow',

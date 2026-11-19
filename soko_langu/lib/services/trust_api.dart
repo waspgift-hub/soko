@@ -24,6 +24,16 @@ class TrustApiClient {
   static Future<String?> _defaultToken() async =>
       FirebaseAuth.instance.currentUser?.getIdToken();
 
+  /// Converts a stored reliability value into the 0-100 scale rendered by the UI.
+  ///
+  /// The v1 API persists scores as a 0..1 decimal; the legacy endpoint returns
+  /// 0..100. Normalising at the boundary keeps both contracts displayable.
+  int trustScorePercent(Object? raw, {required bool storedAsFraction}) {
+    if (raw is! num || !raw.isFinite) return 0;
+    final percent = storedAsFraction ? raw.toDouble() * 100 : raw.toDouble();
+    return percent.round().clamp(0, 100);
+  }
+
   /// Fetches the trust passport for a seller. Returns the raw data envelope
   /// (`{ seller, metrics, indicators }`) or null on 404 / best-effort failure.
   Future<Map<String, dynamic>?> fetchPassport(String sellerId) async {

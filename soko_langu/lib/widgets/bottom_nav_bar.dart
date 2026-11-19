@@ -9,6 +9,7 @@ import '../screens/chat/chat_inbox_screen.dart';
 import '../services/user_service.dart';
 import '../services/chat_service.dart';
 import '../models/chat_room.dart';
+import '../app/app_state.dart';
 import '../app/routes.dart';
 import '../extensions/context_tr.dart';
 import '../utils/responsive.dart';
@@ -25,8 +26,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
-  int _maxVisitedIndex = 0;
+  late int _currentIndex;
+  late int _maxVisitedIndex;
   final UserService _userService = UserService();
   String? _profilePhotoUrl;
   int _unreadTotal = 0;
@@ -66,6 +67,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (index == _currentIndex) return;
     HapticFeedback.selectionClick();
+    appStateNotifier.setMainTabIndex(index);
     setState(() {
       _currentIndex = index;
       if (index > _maxVisitedIndex) _maxVisitedIndex = index;
@@ -75,6 +77,11 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    final stored = appStateNotifier.mainTabIndex;
+    // A stored protected tab is invalid once the user signs out.
+    _currentIndex = FirebaseAuth.instance.currentUser == null && stored >= 3 ? 0 : stored;
+    _maxVisitedIndex = _currentIndex;
+    appStateNotifier.setMainTabIndex(_currentIndex);
     _loadProfilePhoto();
     _subscribeUnread();
   }
@@ -106,11 +113,6 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  static Duration _motion(BuildContext context, int ms) =>
-      (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
-      ? Duration.zero
-      : Duration(milliseconds: ms);
-
   @override
   Widget build(BuildContext context) {
     final isDesktop = Responsive.isDesktop;
@@ -122,20 +124,15 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           if (isDesktop) _buildSidebar(cs),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: _motion(context, 180),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeOutCubic,
-              child: KeyedSubtree(
-                key: ValueKey<int>(_currentIndex),
-                child: IndexedStack(
-                  index: _currentIndex,
-                  children: [
-                    for (var i = 0; i <= _maxVisitedIndex; i++)
-                      RepaintBoundary(key: ValueKey('tab_$i'), child: _buildTabScreen(i)),
-                  ],
-                ),
-              ),
+            // No AnimatedSwitcher here: keying the stack by index to animate a
+            // crossfade replaced the whole subtree and discarded live tab state
+            // (scroll offsets, in-flight filters, form input) on every tap.
+            child: IndexedStack(
+              index: _currentIndex,
+              children: [
+                for (var i = 0; i <= _maxVisitedIndex; i++)
+                  RepaintBoundary(key: ValueKey('tab_$i'), child: _buildTabScreen(i)),
+              ],
             ),
           ),
         ],
@@ -402,7 +399,8 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildSellTab(ColorScheme cs) {    return Expanded(
+  Widget _buildSellTab(ColorScheme cs) {
+    return Expanded(
       child: Semantics(
         button: true,
         label: context.tr('sell'),

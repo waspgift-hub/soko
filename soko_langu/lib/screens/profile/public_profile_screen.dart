@@ -44,11 +44,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   final ProductService _productService = ProductService();
   final FollowService _followService = FollowService();
   final RatingService _ratingService = RatingService.instance;
-  late final Stream<UserProfile?> _profileStream;
-  late final Stream<List<Product>> _productsStream;
-  late final Stream<int> _followerCountStream;
-  late final Stream<int> _followingCountStream;
-  late final Stream<SellerRating> _ratingStream;
+  late Stream<UserProfile?> _profileStream;
+  late Stream<List<Product>> _productsStream;
+  late Stream<int> _followerCountStream;
+  late Stream<int> _followingCountStream;
+  late Stream<SellerRating> _ratingStream;
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
 
@@ -63,15 +63,25 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     if (!_isMyProfile) {
       ProfileViewService().trackView(widget.userId, widget.userName);
     }
+    _initStreams();
+    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
+      if (mounted) setState(() => _flashSales = map);
+    });
+    _loadVerification();
+  }
+
+  void _initStreams() {
     _profileStream = _userService.streamProfile(widget.userId);
     _productsStream = _productService.getProductsBySeller(widget.userId);
     _followerCountStream = _followService.followerCountStream(widget.userId);
     _followingCountStream = _followService.followingCountStream(widget.userId);
     _ratingStream = _ratingService.streamSellerRating(widget.userId);
-    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
-      if (mounted) setState(() => _flashSales = map);
-    });
-    _loadVerification();
+  }
+
+  void _retry() {
+    // A failed stream is terminal: a fresh subscription is the only way to
+    // recover without leaving this screen.
+    setState(_initStreams);
   }
 
   Future<void> _loadVerification() async {
@@ -200,10 +210,32 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         child: StreamBuilder<UserProfile?>(
           stream: _profileStream,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
+            if (snap.connectionState == ConnectionState.waiting && !snap.hasError) {
               return const _ProfileSkeleton();
             }
+            if (snap.hasError) {
+              return _ProfileMessage(
+                icon: Icons.cloud_off_rounded,
+                title: context.tr('public_profile_load_error'),
+                subtitle: context.trError(
+                  snap.error!,
+                  feature: 'public_profile',
+                  screen: 'PublicProfile',
+                ),
+                onRetry: _retry,
+              );
+            }
             final profile = snap.data;
+            if (profile == null) {
+              return _ProfileMessage(
+                icon: Icons.person_off_outlined,
+                title: context.tr('profile_not_found'),
+                subtitle: context.tr(
+                  'public_profile_not_found_hint',
+                  'This account may have been removed.',
+                ),
+              );
+            }
             return CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, profile)),
@@ -968,6 +1000,69 @@ class _InlineNotice extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Full-page fallback for a profile that cannot be shown at all. Rendering the
+/// normal header with an empty name read as a broken seller page, so failures
+/// stop here instead of leaking into ratings, follow counts and product grids.
+class _ProfileMessage extends StatelessWidget {
+  const _ProfileMessage({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onRetry,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 40, color: cs.primary),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: cs.onSurface),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.4, color: cs.onSurfaceVariant),
+              ),
+            ],
+            if (onRetry != null) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(context.tr('retry')),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

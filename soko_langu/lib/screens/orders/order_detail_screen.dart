@@ -9,7 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../../widgets/product_cached_image.dart';
 import '../../extensions/context_tr.dart';
-import '../../models/transaction_model.dart';
+import '../../models/money_breakdown.dart';
 import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
 import '../../services/order_api.dart';
@@ -135,7 +135,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     });
   }
 
-  /// Fetches the ClickPesa gateway fee when the order becomes 'quoted' while
+  /// Fetches the AzamPay gateway fee when the order becomes 'quoted' while
   /// this screen is already open (e.g. the seller quotes while the buyer
   /// watches the order). Debounced + guarded so two live streams can't fire
   /// duplicate requests.
@@ -313,6 +313,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (q is Map<String, dynamic>) return q;
     if (q is Map) return Map<String, dynamic>.from(q);
     return null;
+  }
+
+  /// Shipping is still unknown only while the seller has not submitted a
+  /// quote. A confirmed zero-cost quote is "Free Delivery", never "awaiting".
+  bool get _shippingPending {
+    final s = canonicalStatusOf(status);
+    if (!const {
+      OrderStatus.awaitingShippingQuote,
+      OrderStatus.pendingShippingFee,
+    }.contains(s)) return false;
+    if (d['deliveryFree'] == true || d['freeDelivery'] == true) return false;
+    final q = _shippingQuote;
+    return q == null || !q.containsKey('amount');
   }
 
   Map<String, dynamic>? get _disputeInfo {
@@ -517,13 +530,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (v is num && v.isFinite) return v.toDouble();
     return fallback;
   }
-  double? _safeDoubleN(dynamic v) {
-    if (v is num && v.isFinite) return v.toDouble();
-    return null;
-  }
-
-  /// Position on the seven-stage Trust-Commerce journey (see TrustStage).
-  int _currentStep() => trustStageOf(status).index;
 
   String _formatCountdown(Duration d) {
     if (d.isNegative || d == Duration.zero) return '\u2014';
@@ -995,7 +1001,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       TrustStage.settlement => cs.successGreen,
       TrustStage.terminal => cs.error,
     };
-    final steps = TrustStage.values
+    // Terminal outcomes are rendered as a separate banner, not as an eighth
+    // "settlement" row — the old timeline showed SETTLEMENT twice.
+    final journeyStages =
+        TrustStage.values.where((s) => s != TrustStage.terminal).toList();
+    final steps = journeyStages
         .map(
           (s) => _StepData(
             context.tr(s.labelKey),
@@ -1004,7 +1014,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           ),
         )
         .toList();
-    final current = _currentStep();
+    final stage = trustStageOf(status);
+    final isTerminal = stage == TrustStage.terminal;
+    final current = isTerminal
+        ? -1
+        : journeyStages.indexOf(stage).clamp(0, journeyStages.length - 1);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1077,6 +1091,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 ),
             ],
           ),
+          if (isTerminal) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: cs.errorContainer.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.error.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.block_outlined, size: 16, color: cs.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.tr(
+                        TrustStage.terminal.labelKey,
+                        'Order closed: ${status.replaceAll('_', ' ').toUpperCase()}',
+                      ),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           for (var i = 0; i < steps.length; i++)
             _verticalStep(cs, steps[i], i, current, steps.length),
@@ -1221,14 +1266,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildOrderTable(BuildContext context, ColorScheme cs) {
-    final price = _safeDouble(d['productPrice']);
-    final shippingCost = _safeDoubleN(d['shippingCost']);
-    final totalAmount = _safeDouble(d['totalAmount'], price);
-    final breakdown = TransactionFeeBreakdown(productPrice: price);
-    final platformFee =
-        _safeDouble(d['platformFee'], _safeDouble(d['sokoLanguCommission'], breakdown.platformFee));
-    final processingFee = _safeDouble(d['processingFee'], breakdown.processingFee);
-    final discount = _safeDoubleN(d['discount']);
+    // Server-stored pricing wins; local tiers are a legacy-row fallback only.
+    final pricing = PricingBreakdown.fromOrder(d);
+    final shippingCost = pricing.shippingCost;
+    final processingFee = pricing.processingFee;
+    final discount = pricing.discount;
     final txId =
         d['transactionId'] as String? ??
         d['mpesaTransactionId'] as String? ??
@@ -1339,6 +1381,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     context,
                     sellerId,
                     sellerName,
+                    productId: d['productId'] as String? ?? '',
+                    productName: d['productName'] as String? ?? '',
                   )
                 : null,
           ),
@@ -1392,42 +1436,49 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   _tableRow(
                     cs,
                     context.tr('product_price'),
-                    'TZS ${_nf(_safeInt(price))}',
+                    'TZS ${_nf(pricing.productPrice)}',
                   ),
-                  if (shippingCost != null && shippingCost > 0) ...[
+                  if (shippingCost > 0) ...[
                     _tableRow(
                       cs,
                       context.tr('shipping_cost'),
-                      'TZS ${_nf(_safeInt(shippingCost))}',
+                      'TZS ${_nf(pricing.shippingCost)}',
                     ),
                     if (_shippingQuote?.containsKey('verdict') ?? false) ...[
                       const SizedBox(height: 8),
                       _buildVerdictChip(cs),
                     ],
-                  ],
-                  if (shippingCost != null && shippingCost == 0) ...[
+                  ] else ...[
                     _tableRow(
                       cs,
                       context.tr('shipping_cost'),
-                      context.tr('free_delivery'),
+                      _shippingPending
+                          ? context.tr(
+                              'awaiting_seller_shipping_cost',
+                              'Inasubiri gharama ya usafirishaji kutoka kwa muuzaji',
+                            )
+                          : context.tr('free_delivery'),
                     ),
                   ],
-                  if (discount != null && discount > 0)
+                  if (discount > 0)
                     _tableRow(
                       cs,
                       context.tr('discount'),
-                      '-TZS ${_nf(_safeInt(discount))}',
+                      '-TZS ${_nf(pricing.discount)}',
                     ),
                   _tableRow(
                     cs,
                     context.tr('soko_vibe_commission'),
-                    'TZS ${_nf(_safeInt(platformFee))}',
+                    'TZS ${_nf(pricing.commission)}',
                   ),
-                  _tableRow(
-                    cs,
-                    context.tr('processing_fee'),
-                    'TZS ${_nf(_safeInt(processingFee))}',
-                  ),
+                  if (processingFee > 0)
+                    _tableRow(
+                      cs,
+                      pricing.processingFeePayer == ProcessingFeePayer.seller
+                          ? context.tr('seller_processing_fee', 'Seller processing fee')
+                          : context.tr('processing_fee'),
+                      'TZS ${_nf(pricing.processingFee)}',
+                    ),
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -1446,7 +1497,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     child: Row(
                       children: [
                         Text(
-                          context.tr('total'),
+                          context.tr('buyer_total', 'Jumla anayolipa mnunuzi'),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -1455,7 +1506,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                         ),
                         const Spacer(),
                         Text(
-                          'TZS ${_nf(_safeInt(totalAmount))}',
+                          'TZS ${_nf(pricing.buyerTotal)}',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w900,
@@ -1867,7 +1918,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               OrderStatus.published,
             }.contains(canonicalStatusOf(status)));
 
-    if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
+    if (_shippingPending && isBuyer) {
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
@@ -2789,6 +2840,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                           context,
                           sellerId,
                           sellerName,
+                          productId: d['productId'] as String? ?? '',
+                          productName: d['productName'] as String? ?? '',
                         )
                       : null,
                   label: Text(
@@ -3101,7 +3154,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/orders/set-shipping-cost'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'orderId': widget.docId, 'shippingCost': cost}),
+        body: jsonEncode({
+          'orderId': widget.docId,
+          'shippingCost': cost,
+          'freeDelivery': cost == 0,
+        }),
       );
       if (resp.statusCode == 200) {
         _shipCostCtrl.clear();

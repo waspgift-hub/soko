@@ -23,6 +23,25 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   final _phoneController = TextEditingController();
   bool _withdrawing = false;
 
+  Future<void> _refresh() async {
+    try {
+      await _service.refresh();
+    } catch (_) {
+      // The stream carries the error to the inline retry UI.
+    }
+    if (mounted) setState(() {});
+  }
+
+  Widget? _guard<T>(AsyncSnapshot<T> snap) {
+    if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+      return const _EarningsInlineLoading();
+    }
+    if (snap.hasError) {
+      return _EarningsInlineError(error: snap.error!, onRetry: _refresh);
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _phoneController.dispose();
@@ -47,7 +66,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
       body: uid.isEmpty
           ? Center(child: Text(context.tr('not_logged_in')))
           : RefreshIndicator(
-              onRefresh: () async => setState(() {}),
+              onRefresh: _refresh,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 children: [
@@ -76,6 +95,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     return StreamBuilder<SellerEarningsData>(
       stream: _service.streamEarnings(),
       builder: (context, snap) {
+        final guard = _guard(snap);
+        if (guard != null) return guard;
         final data = snap.data ?? const SellerEarningsData();
         final balance = data.balance;
         final withdrawn = data.totalWithdrawn;
@@ -218,6 +239,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     return StreamBuilder<SellerEarningsData>(
       stream: _service.streamEarnings(),
       builder: (context, snap) {
+        final guard = _guard(snap);
+        if (guard != null) return guard;
         final data = snap.data ?? const SellerEarningsData();
         return Row(
           children: [
@@ -400,7 +423,9 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     return StreamBuilder<SellerEarningsData>(
       stream: _service.streamEarnings(),
       builder: (context, snap) {
-        final balance = snap.data?.balance ?? 0;
+        final guard = _guard(snap);
+        if (guard != null) return guard;
+        final balance = snap.data!.balance;
         final canWithdraw = balance > 0;
 
         return DsCard(
@@ -552,9 +577,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     return StreamBuilder<List<MarketplaceTransaction>>(
       stream: _service.streamTransactions(),
       builder: (context, snap) {
-        if (snap.hasError) {
-          return _emptyCard(context.tr('error_loading_transactions'), cs);
-        }
+        final guard = _guard(snap);
+        if (guard != null) return guard;
         final txns = snap.data ?? [];
         final completedTxns = txns.where((t) => t.status == TransactionStatus.completed).toList();
         if (completedTxns.isEmpty) {
@@ -622,9 +646,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     return StreamBuilder<List<WithdrawalRequest>>(
       stream: _service.streamWithdrawals(),
 builder: (context, snap) {
-        if (snap.hasError) {
-          return _emptyCard(context.tr('error_loading_withdrawals'), cs);
-        }
+        final guard = _guard(snap);
+        if (guard != null) return guard;
         final withdrawals = snap.data ?? [];
         if (withdrawals.isEmpty) {
           return _emptyCard(context.tr('no_withdrawals'), cs);
@@ -724,6 +747,65 @@ builder: (context, snap) {
           message,
           style: TextStyle(color: cs.onSurface.withValues(alpha: 0.47)),
         ),
+      ),
+    );
+  }
+}
+
+class _EarningsInlineLoading extends StatelessWidget {
+  const _EarningsInlineLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return DsCard(
+      radius: 16,
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          const SizedBox(width: 12),
+          Text(context.tr('loading')),
+        ],
+      ),
+    );
+  }
+}
+
+class _EarningsInlineError extends StatelessWidget {
+  const _EarningsInlineError({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DsCard(
+      radius: 16,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.tr('seller_earnings_load_error'),
+            style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.trError(error),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: Text(context.tr('retry')),
+          ),
+        ],
       ),
     );
   }

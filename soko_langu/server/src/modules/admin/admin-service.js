@@ -47,24 +47,48 @@ async function getDashboard() {
   const store = getStore();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const commissionWhere = {
+    status: { in: ['completed', 'wallet_credited'] },
+  };
 
-  const [users, newUsers, orders, completedOrders, revenue, activeDisputes, escrowHeld, products] =
-    await Promise.all([
-      store.user.count(),
-      store.user.count({ where: { createdAt: { gte: today } } }),
-      store.order.count(),
-      store.order.count({ where: { status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
-      store.order.aggregate({
-        _sum: { platformCommission: true },
-        where: { status: { in: ['completed', 'wallet_credited'] } },
-      }),
-      store.dispute.count({ where: { status: 'open' } }),
-      store.escrowHold.aggregate({
-        _sum: { amount: true },
-        where: { status: 'holding' },
-      }),
-      store.product.count(),
-    ]);
+  const [
+    users,
+    newUsers,
+    orders,
+    completedOrders,
+    revenue,
+    revenueToday,
+    revenueThisMonth,
+    commissionOrders,
+    activeDisputes,
+    escrowHeld,
+    products,
+  ] = await Promise.all([
+    store.user.count(),
+    store.user.count({ where: { createdAt: { gte: today } } }),
+    store.order.count(),
+    store.order.count({ where: { status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
+    store.order.aggregate({
+      _sum: { platformCommission: true },
+      where: commissionWhere,
+    }),
+    store.order.aggregate({
+      _sum: { platformCommission: true },
+      where: { ...commissionWhere, createdAt: { gte: today } },
+    }),
+    store.order.aggregate({
+      _sum: { platformCommission: true },
+      where: { ...commissionWhere, createdAt: { gte: monthStart } },
+    }),
+    store.order.count({ where: commissionWhere }),
+    store.dispute.count({ where: { status: 'open' } }),
+    store.escrowHold.aggregate({
+      _sum: { amount: true },
+      where: { status: 'holding' },
+    }),
+    store.product.count(),
+  ]);
 
   const fs = await getFirestoreOverlay();
 
@@ -75,6 +99,9 @@ async function getDashboard() {
       orders: Math.max(orders, fs?.orders ?? 0),
       completedOrders,
       commissionRevenue: revenue._sum.platformCommission?.toString() || '0',
+      commissionRevenueToday: revenueToday._sum.platformCommission?.toString() || '0',
+      commissionRevenueThisMonth: revenueThisMonth._sum.platformCommission?.toString() || '0',
+      commissionOrders,
       activeDisputes,
       escrowHeld: escrowHeld._sum.amount?.toString() || '0',
       products: Math.max(products, fs?.products ?? 0),

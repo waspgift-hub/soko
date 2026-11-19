@@ -60,7 +60,7 @@ class RewardedAdService {
             },
           );
           try {
-            ad.show(onUserEarnedReward: (_, __) {
+            ad.show(onUserEarnedReward: (_, _) {
               rewarded = true;
             });
           } catch (e) {

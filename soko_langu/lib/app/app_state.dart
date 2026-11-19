@@ -7,6 +7,14 @@ class AppStateNotifier extends ChangeNotifier {
   bool onboardingChecked = false;
   bool hasCompletedOnboarding = true;
 
+  /// Selected shell tab. Kept outside [MainScreen] because account switches
+  /// rebuild the shell, and losing the tab mid-flow strands the user on Home.
+  int mainTabIndex = 0;
+
+  /// No notifyListeners: GoRouter observes this notifier for auth routing, and
+  /// refreshing it on every tap would rebuild the whole shell.
+  void setMainTabIndex(int index) => mainTabIndex = index;
+
   void setAppInitialized() {
     appInitialized = true;
     notifyListeners();

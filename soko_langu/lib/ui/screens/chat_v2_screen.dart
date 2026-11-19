@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../app/routes.dart';
 import '../../models/chat_room.dart';
+import '../../screens/chat/chat_navigation.dart';
 import '../../services/chat_service.dart';
 
 class ChatV2Screen extends StatelessWidget {
@@ -56,7 +55,21 @@ class _RoomRow extends StatelessWidget {
       title: Text(room.productTitle ?? 'Mazungumzo', maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(room.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: unread > 0 ? Text('$unread') : null,
-      onTap: () => context.push(AppRoutes.chat, extra: room),
+      onTap: () {
+        // The canonical helper resolves the other participant and keeps every
+        // chat entry on the same `/chat/:receiverId` route with product context.
+        final otherId = room.participants.firstWhere(
+          (id) => id != uid,
+          orElse: () => room.sellerId ?? room.buyerId ?? '',
+        );
+        ChatNavigation.openSellerChat(
+          context,
+          otherId,
+          '',
+          productId: room.productId,
+          productName: room.productTitle,
+        );
+      },
     );
   }
 }

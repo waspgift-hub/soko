@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { isFlashSaleStillActive, resolveEffectivePrice } = require('../money');
+const {
+  isFlashSaleStillActive,
+  resolveEffectivePrice,
+  calcMnoCheckoutFee,
+  buildPricingBreakdown,
+  MNO_CHECKOUT_FEE_TIERS,
+} = require('../money');
 const { calcGatewayFee } = require('../azampay');
 
 // ---------------------------------------------------------------------------
@@ -161,4 +167,67 @@ test('calcGatewayFee: unknown provider falls back to standard 1%', () => {
 
 test('calcGatewayFee: unknown method falls back to USSD fee', () => {
   assert.equal(calcGatewayFee('weird_method', 500), 54);
+});
+
+// ---------------------------------------------------------------------------
+// MNO checkout fee + authoritative pricing breakdown
+// ---------------------------------------------------------------------------
+
+test('calcMnoCheckoutFee rejects non-finite and sub-tier amounts', () => {
+  assert.equal(calcMnoCheckoutFee(NaN), 0);
+  assert.equal(calcMnoCheckoutFee(Infinity), 0);
+  assert.equal(calcMnoCheckoutFee(-100), 0);
+  assert.equal(calcMnoCheckoutFee(499), 0);
+});
+
+test('calcMnoCheckoutFee covers every published tier and the ceiling', () => {
+  for (const [min, max, fee] of MNO_CHECKOUT_FEE_TIERS) {
+    assert.equal(calcMnoCheckoutFee(min), fee, `min ${min}`);
+    assert.equal(calcMnoCheckoutFee(max), fee, `max ${max}`);
+  }
+  assert.equal(calcMnoCheckoutFee(3000001), 7960);
+});
+
+test('buildPricingBreakdown keeps the provider fee out of escrow', () => {
+  const p = buildPricingBreakdown({
+    productPrice: 500,
+    commission: 0,
+    at: new Date('2026-01-01T00:00:00Z'),
+  });
+
+  assert.equal(p.gatewayAmount, 500);
+  assert.equal(p.processingFee, 54);
+  assert.equal(p.buyerTotal, 554);
+  assert.equal(p.sellerNet, 500);
+  assert.equal(p.processingFeePayer, 'buyer');
+  assert.equal(p.currency, 'TZS');
+});
+
+test('buildPricingBreakdown treats free delivery as zero shipping', () => {
+  const p = buildPricingBreakdown({
+    productPrice: 50000,
+    shippingFee: 0,
+    commission: 1750,
+  });
+
+  assert.equal(p.shippingCost, 0);
+  assert.equal(p.gatewayAmount, 51750);
+  assert.equal(p.processingFee, 2136);
+  assert.equal(p.buyerTotal, 53886);
+  assert.equal(p.sellerNet, 50000);
+});
+
+test('buildPricingBreakdown never emits negative money', () => {
+  const p = buildPricingBreakdown({
+    productPrice: -500,
+    shippingFee: -100,
+    commission: -50,
+  });
+
+  assert.equal(p.productPrice, 0);
+  assert.equal(p.shippingCost, 0);
+  assert.equal(p.commission, 0);
+  assert.equal(p.gatewayAmount, 0);
+  assert.equal(p.buyerTotal, 0);
+  assert.equal(p.sellerNet, 0);
 });

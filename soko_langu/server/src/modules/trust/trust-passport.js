@@ -25,13 +25,15 @@ async function getTrustPassport({ sellerId }) {
   const userDoc = firebaseUid ? await readUserDoc(firebaseUid) : null;
   const blueTick = deriveBlueTick(userDoc, seller);
 
-  // Aggregate order metrics
+  // Orders are keyed by the Postgres seller id, while the path parameter may
+  // be a Firebase UID; aggregating on the raw parameter silently drops history.
+  const orderSellerId = seller.id;
   const [totalOrders, completedOrders, onTimeDispatches, activeDisputes, reviews] = await Promise.all([
-    store.order.count({ where: { sellerId } }),
-    store.order.count({ where: { sellerId, status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
-    store.order.count({ where: { sellerId, dispatchedAt: { not: null } } }),
-    store.dispute.count({ where: { order: { sellerId }, status: 'open' } }),
-    store.order.count({ where: { sellerId, status: 'completed' } }), // completed orders (proxy for reviews; no reviews table join here)
+    store.order.count({ where: { sellerId: orderSellerId } }),
+    store.order.count({ where: { sellerId: orderSellerId, status: { in: ['completed', 'wallet_credited', 'payout_pending', 'payout_complete'] } } }),
+    store.order.count({ where: { sellerId: orderSellerId, dispatchedAt: { not: null } } }),
+    store.dispute.count({ where: { order: { sellerId: orderSellerId }, status: 'open' } }),
+    store.order.count({ where: { sellerId: orderSellerId, status: 'completed' } }), // completed orders (proxy for reviews; no reviews table join here)
   ]);
 
   const fulfillmentRate = totalOrders > 0 ? completedOrders / totalOrders : 0;

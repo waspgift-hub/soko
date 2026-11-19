@@ -340,6 +340,280 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildCategoriesStrip(ColorScheme cs) {
+    return SizedBox(
+      height: 132,
+      child: StreamBuilder<List<Category>>(
+        stream: _categoryStream,
+        builder: (context, snapshot) {
+          final cats = snapshot.data ?? [];
+          if (snapshot.hasError) {
+            // Stream timeout (see _initCategoryStream) surfaces here;
+            // offer a retry instead of an endless skeleton.
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+              decoration: BoxDecoration(
+                color: cs.surfaceSubtle,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: cs.brandBorder),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.cloud_off_outlined, color: cs.primary, size: 22),
+                    const SizedBox(height: 6),
+                    Text(
+                      context.tr('something_wrong'),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _reloadCategories,
+                      child: Text(context.tr('try_again')),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+              itemCount: 6,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (_, _) => Container(
+                width: 92,
+                decoration: BoxDecoration(
+                  color: cs.surfaceVariant.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: cs.brandBorder),
+                ),
+                child: const DsSkeleton(),
+              ),
+            );
+          }
+          if (cats.isEmpty) {
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+              decoration: BoxDecoration(
+                color: cs.surfaceSubtle,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: cs.brandBorder),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.category_outlined,
+                        color: cs.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr('no_categories'),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.tr('categories_coming_soon'),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+            itemCount: cats.length,
+            itemBuilder: (context, index) {
+              final cat = cats[index];
+              final config = AppConfig.of(context);
+              return Container(
+                width: 92,
+                margin: const EdgeInsets.only(right: 12),
+                child: CategoryCard(
+                  name: config.langCode == 'en' ? cat.name : cat.nameSw,
+                  categoryId: cat.id,
+                  imageUrl: cat.displayImage,
+                  icon: categoryIconFor(
+                    icon: cat.icon,
+                    slug: cat.id,
+                    name: cat.name,
+                  ),
+                  onTap: () => context.push(
+                    '${AppRoutes.categoryProducts}'
+                    '/${Uri.encodeComponent(cat.name)}',
+                    extra: cat,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFlashDealsSection(ColorScheme cs) {
+    final sales = _flashSales.values.toList()
+      ..sort((a, b) => a.endTime.compareTo(b.endTime));
+    if (sales.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: context.tr('flash_deals'),
+          actionLabel: context.tr('see_all'),
+          onAction: () => context.push(AppRoutes.flashSale),
+        ),
+        SizedBox(
+          height: 178,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+            itemCount: sales.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (context, index) => _flashDealCard(sales[index], cs),
+          ),
+        ),
+        const SizedBox(height: AppInsets.md),
+      ],
+    );
+  }
+
+  Widget _flashDealCard(FlashSale sale, ColorScheme cs) {
+    void openDeal() {
+      if (sale.productId.isEmpty) return;
+      context.push('${AppRoutes.productDetail}/${sale.productId}');
+    }
+
+    return Semantics(
+      button: true,
+      label: '${sale.productName}, ${context.formatPrice(sale.salePrice)}',
+      onTap: openDeal,
+      child: AnimatedPress(
+        onTap: openDeal,
+        child: Container(
+          width: 168,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: cs.brandBorder),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                children: [
+                  SizedBox(
+                    height: 96,
+                    width: double.infinity,
+                    child: sale.productImage.isNotEmpty
+                        ? Image.network(
+                            sale.productImage,
+                            fit: BoxFit.cover,
+                            cacheWidth: 336,
+                            errorBuilder: (_, _, _) => _flashDealPlaceholder(cs),
+                          )
+                        : _flashDealPlaceholder(cs),
+                  ),
+                  if (sale.discountPercent > 0)
+                    Positioned(
+                      left: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: cs.tertiary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '-${sale.discountPercent.round()}%',
+                          style: TextStyle(
+                            color: cs.onTertiary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      sale.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.formatPrice(sale.salePrice),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: cs.primary,
+                      ),
+                    ),
+                    if (sale.originalPrice > sale.salePrice)
+                      Text(
+                        context.formatPrice(sale.originalPrice),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _flashDealPlaceholder(ColorScheme cs) {
+    return Container(
+      color: cs.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(Icons.local_fire_department, color: cs.primary, size: 30),
+    );
+  }
+
   Widget _buildActiveFilters(ColorScheme cs) {
     final labels = <String>[
       if (_sortBy == 'price_asc') context.tr('price_low_to_high'),
@@ -555,11 +829,25 @@ class _HomeScreenState extends State<HomeScreen>
                           onFilterTap: _showFilterSheet,
                         ),
                       ),
+                      if (_hasActiveFilters) _buildActiveFilters(cs),
+                      const SizedBox(height: AppInsets.sm),
+                      // Promos used to push categories below the fold.
+                      SectionHeader(
+                        title: context.tr('categories'),
+                        actionLabel: context.tr('see_all'),
+                        onAction: () => context.push(AppRoutes.category),
+                      ),
+                      const SizedBox(height: AppInsets.xs),
+                      _buildCategoriesStrip(cs),
+                      const SizedBox(height: AppInsets.md),
+                      _buildFlashDealsSection(cs),
+                      SectionHeader(title: context.tr('brands')),
+                      const SizedBox(height: AppInsets.xs),
                       SizedBox(
-                        height: 42,
+                        height: 46,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                           itemCount: 1 + _brands.length,
                           separatorBuilder: (_, _) => const SizedBox(width: 8),
                           itemBuilder: (context, index) {
@@ -568,9 +856,8 @@ class _HomeScreenState extends State<HomeScreen>
                           },
                         ),
                       ),
-                      if (_hasActiveFilters) _buildActiveFilters(cs),
                       const SizedBox(height: AppInsets.sm),
-                      // Buyer requests quick action — browsing lives on the seller dashboard
+                      // Keep buyer requests out of the browse-filter row.
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                         child: _quickActionChip(
@@ -581,163 +868,14 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                       const SizedBox(height: AppInsets.sm),
-                      // Banners
                       BannerRotator(flashSales: _flashSales.values.toList()),
                       const SizedBox(height: AppInsets.sm),
-                      // Promotional banners (shop & sell, boost) — image-based, not text.
                       const PromoImageBanner(),
                       const SizedBox(height: AppInsets.sm),
-                       // Admin-configured campaign banners (home placement).
-                       CampaignBannerSlot(
-                         placement: BannerPlacement.homeFeed,
-                         bannerService: context.read<BannerService>(),
-                         margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                       ),
-                       const SizedBox(height: AppInsets.sm),
-                      // Categories
-                      SectionHeader(
-                        title: context.tr('categories'),
-                        actionLabel: context.tr('see_all'),
-                        onAction: () => context.push(AppRoutes.category),
-                      ),
-                      const SizedBox(height: AppInsets.xs),
-                      SizedBox(
-                        height: 130,
-                        child: StreamBuilder<List<Category>>(
-                          stream: _categoryStream,
-                          builder: (context, snapshot) {
-                            final cats = snapshot.data ?? [];
-                            if (snapshot.hasError) {
-                              // Stream timeout (see _initCategoryStream) surfaces here;
-                              // offer a retry instead of an endless skeleton.
-                              return Container(
-                                height: 130,
-                                margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                                decoration: BoxDecoration(
-                                  color: cs.surfaceSubtle,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: cs.brandBorder),
-                                ),
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.cloud_off_outlined, color: cs.primary, size: 22),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        context.tr('something_wrong'),
-                                        style: TextStyle(
-                                          color: cs.onSurface,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: _reloadCategories,
-                                        child: Text(context.tr('try_again')),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return SizedBox(
-                                height: 130,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                                  itemCount: 6,
-                                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                                  itemBuilder: (_, _) => Container(
-                                    width: 92,
-                                    decoration: BoxDecoration(
-                                      color: cs.surfaceVariant.withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: cs.brandBorder),
-                                    ),
-                                    child: const DsSkeleton(),
-                                  ),
-                                ),
-                              );
-                            }
-                            if (cats.isEmpty) {
-                              return Container(
-                                height: 130,
-                                margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                                decoration: BoxDecoration(
-                                  color: cs.surfaceSubtle,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: cs.brandBorder),
-                                ),
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: cs.primary.withValues(alpha: 0.12),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          Icons.category_outlined,
-                                          color: cs.primary,
-                                          size: 22,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        context.tr('no_categories'),
-                                        style: TextStyle(
-                                          color: cs.onSurface,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        context.tr('categories_coming_soon'),
-                                        style: TextStyle(
-                                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-                            return ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                              itemCount: cats.length,
-                              itemBuilder: (context, index) {
-                                final cat = cats[index];
-                                final config = AppConfig.of(context);
-                                return Container(
-                                  width: 80,
-                                  margin: const EdgeInsets.only(right: 14),
-                                  child: CategoryCard(
-                                    name: config.langCode == 'en' ? cat.name : cat.nameSw,
-                                    categoryId: cat.id,
-                                    imageUrl: cat.displayImage,
-                                    icon: categoryIconFor(
-                                      icon: cat.icon,
-                                      slug: cat.id,
-                                      name: cat.name,
-                                    ),
-                                    onTap: () => context.push(
-                                      '${AppRoutes.categoryProducts}'
-                                      '/${Uri.encodeComponent(cat.name)}',
-                                      extra: cat,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
+                      CampaignBannerSlot(
+                        placement: BannerPlacement.homeFeed,
+                        bannerService: context.read<BannerService>(),
+                        margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                       ),
                       const SizedBox(height: AppInsets.sm),
                       const RecentlyViewedRow(),
@@ -810,7 +948,7 @@ class _HomeScreenState extends State<HomeScreen>
       SliverToBoxAdapter(child: SizedBox(height: 16)),
       SliverToBoxAdapter(
         child: SectionHeader(
-          title: context.tr('latest_products'),
+          title: context.tr('recommended_for_you'),
           actionLabel: context.tr('see_all'),
           onAction: () => context.push(AppRoutes.search),
         ),

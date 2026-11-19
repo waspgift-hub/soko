@@ -69,10 +69,16 @@ class OrderStatus {
 }
 
 /// Maps any incoming status (server `ORDER_STATES` uppercase or legacy
-/// Firestore spelling) onto the client vocabulary above. Unknown values pass
-/// through unchanged instead of falling back to `pending`.
+/// Firestore snake_case/CamelCase spelling) onto the client vocabulary above.
+/// Unknown values pass through unchanged instead of falling back to `pending`.
 String canonicalStatusOf(String status) {
-  switch (status.toUpperCase()) {
+  // Legacy rows mix snake_case, lowerCamelCase and UpperCamelCase; folding
+  // them first keeps every display path on one vocabulary.
+  final normalized = status.replaceAllMapped(
+    RegExp(r'([a-z0-9])([A-Z])'),
+    (match) => '${match.group(1)}_${match.group(2)}',
+  );
+  switch (normalized.toUpperCase()) {
     case 'DRAFT':
       return OrderStatus.draft;
     case 'PENDING':
@@ -164,6 +170,74 @@ String canonicalStatusOf(String status) {
   }
 }
 
+/// Buyer-facing filter buckets. A raw status always lands in exactly one
+/// bucket after canonicalisation, so list counts and displayed rows agree.
+enum PurchaseBucket { pending, active, completed, failed }
+
+const Set<String> _pendingPurchaseStatuses = {
+  OrderStatus.pending,
+  OrderStatus.awaitingShippingQuote,
+  OrderStatus.awaitingPayment,
+  OrderStatus.addressRequired,
+  OrderStatus.pendingShippingFee,
+  OrderStatus.shippingFeeSubmitted,
+  OrderStatus.shippingFeeReview,
+  OrderStatus.quoted,
+  OrderStatus.awaitingEscrowPayment,
+  OrderStatus.paymentPending,
+};
+
+const Set<String> _activePurchaseStatuses = {
+  OrderStatus.paid,
+  OrderStatus.inEscrow,
+  OrderStatus.escrowHeld,
+  OrderStatus.readyToDispatch,
+  OrderStatus.sellerAccepted,
+  OrderStatus.dispatchReady,
+  OrderStatus.dispatched,
+  OrderStatus.inTransit,
+  OrderStatus.outForDelivery,
+  OrderStatus.deliveryAttempted,
+  OrderStatus.arrived,
+  OrderStatus.delivered,
+  OrderStatus.inspectionPeriod,
+  OrderStatus.otpPending,
+  OrderStatus.disputed,
+  OrderStatus.refundPending,
+};
+
+const Set<String> _completedPurchaseStatuses = {
+  OrderStatus.completed,
+  OrderStatus.walletCredited,
+  OrderStatus.payoutPending,
+  OrderStatus.payoutComplete,
+};
+
+const Set<String> _failedPurchaseStatuses = {
+  OrderStatus.failed,
+  OrderStatus.paymentFailed,
+  OrderStatus.cancelled,
+  OrderStatus.refunded,
+  OrderStatus.expired,
+};
+
+/// Classifies a raw order status into one buyer-facing purchase filter bucket.
+PurchaseBucket? purchaseBucketOf(String rawStatus) {
+  final status = canonicalStatusOf(rawStatus);
+  if (_pendingPurchaseStatuses.contains(status)) return PurchaseBucket.pending;
+  if (_activePurchaseStatuses.contains(status)) return PurchaseBucket.active;
+  if (_completedPurchaseStatuses.contains(status)) return PurchaseBucket.completed;
+  if (_failedPurchaseStatuses.contains(status)) return PurchaseBucket.failed;
+  return null;
+}
+
+/// Only pre-payment and terminal failed orders may be hidden by the buyer.
+/// Hiding an escrow-held order would detach the buyer from live money flow.
+bool canHidePurchaseFromBuyer(String rawStatus) {
+  final bucket = purchaseBucketOf(rawStatus);
+  return bucket == PurchaseBucket.pending || bucket == PurchaseBucket.failed;
+}
+
 enum TrustStage {
   initiation,
   pricing,
@@ -183,8 +257,8 @@ enum TrustStage {
     TrustStage.logistics => 'phase_label_logistics',
     TrustStage.verification => 'phase_label_verification',
     TrustStage.settlement => 'phase_label_settlement',
-    // Reuses settlement label: terminal has no dedicated copy yet.
-    TrustStage.terminal => 'phase_label_settlement',
+    // Terminal is a distinct outcome banner, never a second settlement row.
+    TrustStage.terminal => 'phase_label_closed',
   };
 }
 

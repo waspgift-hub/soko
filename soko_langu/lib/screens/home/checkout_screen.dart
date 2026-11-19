@@ -61,7 +61,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   StreamSubscription<FlashSale?>? _flashSub;
   FlashSale? _flashSale;
 
-  /// Authoritative ClickPesa quote for this order: the commission and the
+  /// Authoritative AzamPay quote for this order: the commission and the
   /// mobile-money fee the buyer will actually be charged.
   ///
   /// Null while the quote is in flight or if it failed — [_localCommission] and
@@ -78,10 +78,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       (_lineTotal * TransactionFeeBreakdown.platformCommissionPercent)
           .roundToDouble();
 
-  /// Fallback fee from the local ClickPesa tier table. Tiered on the full
-  /// charge (item + commission), which is what actually gets pushed.
-  double get _localPaymentFee =>
-      0.0;
+  /// Fallback fee from the local AzamPay tier table, used only while the
+  /// server quote is pending or unavailable. Tiered on the full charge
+  /// (item + commission), which is what actually gets pushed.
+  double get _localPaymentFee => _paymentMethod == 'escrow'
+      ? getMnoCheckoutFee(_lineTotal + _localCommission)
+      : 0.0;
 
   double get _commission => _quote?.platformFee ?? _localCommission;
   double get _paymentFee => _quote?.cheapestAvailableFee ?? _localPaymentFee;
@@ -123,14 +125,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _refreshQuote();
   }
 
-  /// Fetches ClickPesa's real fee for this order.
+  /// Fetches AzamPay's real fee for this order.
   ///
   /// Re-runs when the flash-sale price changes or the buyer finishes typing a
   /// phone number, since both feed the amount being quoted. [_quoteSeq] drops
   /// replies that arrive out of order, so a slow earlier quote cannot overwrite
   /// a newer one.
   Future<void> _refreshQuote() async {
-    // Cash on delivery moves no money through ClickPesa, so there is no
+    // Cash on delivery moves no money through AzamPay, so there is no
     // mobile-money fee to quote — asking would invent one.
     if (_paymentMethod != 'escrow') {
       if (mounted) setState(() { _quote = null; _quotePending = false; });
@@ -168,7 +170,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _onFormChanged() {
     // Rebuild bottom CTA so it enables only when address + phone are valid.
     if (mounted) setState(() {});
-    // The phone number is part of what ClickPesa quotes (it identifies the
+    // The phone number is part of what AzamPay quotes (it identifies the
     // payer), so a finished number needs a fresh quote.
     if (_lastQuotedPhone != _phoneCtrl.text.trim()) {
       _lastQuotedPhone = _phoneCtrl.text.trim();

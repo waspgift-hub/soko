@@ -60,6 +60,7 @@ import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
+import 'screens/chat/chat_navigation.dart';
 import 'screens/splash/launch_splash_screen.dart';
 import 'widgets/premium_background.dart';
 import 'widgets/soko_error_view.dart';
@@ -649,7 +650,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         final receiverId =
             data?['senderId'] as String? ?? data?['receiverId'] as String?;
         if (receiverId != null) {
-          _pushIfNotCurrent('/chat/$receiverId', ctx);
+          ChatNavigation.openSellerChat(
+            ctx,
+            receiverId,
+            data?['senderName'] as String? ?? '',
+            productId: data?['productId'] as String?,
+            productName: data?['productName'] as String?,
+          );
         } else {
           _pushIfNotCurrent('/chats', ctx);
         }

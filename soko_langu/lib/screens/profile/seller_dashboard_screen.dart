@@ -61,13 +61,28 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Future<SellerEarningsData> _earningsFor() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    if (_earningsUid != uid) {
+    if (_earningsUid != uid || _earningsService == null) {
       _earningsService?.dispose();
       _earningsUid = uid;
       _earningsService = SellerEarningsService();
-      _earningsFuture = _earningsService!.getEarnings();
+      _earningsFuture = null;
     }
-    return _earningsFuture ??= SellerEarningsService().getEarnings();
+    return _earningsFuture ??= _earningsService!.getEarnings();
+  }
+
+  Future<void> _reloadEarnings() async {
+    _earningsService?.dispose();
+    _earningsService = null;
+    _earningsFuture = null;
+    _earningsUid = null;
+    if (mounted) setState(() {});
+    try {
+      await _earningsFor();
+    } catch (_) {
+      // FutureBuilder owns the error UI; swallowing here avoids an unhandled
+      // rejection from pull-to-refresh or the inline retry button.
+    }
+    if (mounted) setState(() {});
   }
 
   Stream<DocumentSnapshot> _userDocStreamFor(String uid) {
@@ -149,21 +164,20 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           child: StreamBuilder<List<MarketplaceTransaction>>(
             stream: _paymentService.getSellerTransactions(),
             builder: (context, txSnap) {
-              if (txSnap.hasError) {
-                debugPrint('SellerDashboard tx error: ${txSnap.error}');
-              }
-              final transactions = txSnap.data ?? [];
-
               return StreamBuilder<List<Product>>(
                 stream: _productService.getMyProducts(),
                 builder: (context, productSnap) {
-                  if (productSnap.hasError) {
-                    debugPrint('SellerDashboard products error: ${productSnap.error}');
+                  if (txSnap.hasError || productSnap.hasError) {
+                    return _DashboardError(
+                      error: txSnap.error ?? productSnap.error,
+                      onRetry: () => setState(() {}),
+                    );
                   }
                   if (txSnap.connectionState == ConnectionState.waiting ||
                       productSnap.connectionState == ConnectionState.waiting) {
                     return const GoogleLoadingPage();
                   }
+                  final transactions = txSnap.data ?? [];
                   final productCount = productSnap.data?.length ?? 0;
                   final completedTx = transactions.where(
                     (t) => t.status == TransactionStatus.completed,
@@ -171,7 +185,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   final txCount = completedTx.length;
                   _updateWidget(transactions);
                   return RefreshIndicator(
-                    onRefresh: () async => setState(() {}),
+                    onRefresh: () async {
+                      // setState alone rebuilt with the same memoised earnings
+                      // future, so pull-to-refresh never re-queried the wallet.
+                      await _reloadEarnings();
+                      if (mounted) setState(() {});
+                    },
                     child: ListView(
                       padding: EdgeInsets.fromLTRB(
                         16,
@@ -532,7 +551,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         if (snap.connectionState == ConnectionState.waiting) {
           return const GoogleLoadingPage();
         }
-        final stats = snap.data ?? {};
+        if (snap.hasError || snap.data == null) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              context.tr('loading_error'),
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          );
+        }
+        final stats = snap.data!;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -601,7 +629,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       return FutureBuilder<SellerEarningsData>(
         future: _earningsFor(),
         builder: (context, snap) {
-          final data = snap.data ?? const SellerEarningsData();
+          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+            return const _EarningsPlaceholder(loading: true);
+          }
+          if (snap.hasError || snap.data == null) {
+            return _EarningsPlaceholder(
+              loading: false,
+              error: snap.error,
+              onRetry: _reloadEarnings,
+            );
+          }
+          final data = snap.data!;
           return _earningsCardBody(
             cs: cs,
             nf: nf,
@@ -708,6 +746,125 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Dashboard data comes from two live streams. A failed stream used to be
+/// printed and then rendered as zero sales, which looked like a real result.
+class _DashboardError extends StatelessWidget {
+  const _DashboardError({required this.error, required this.onRetry});
+
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 48, color: cs.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(
+              context.tr('dashboard_load_error'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.trError(error!),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+              ),
+            ],
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(context.tr('retry')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EarningsPlaceholder extends StatelessWidget {
+  const _EarningsPlaceholder({
+    required this.loading,
+    this.error,
+    this.onRetry,
+  });
+
+  final bool loading;
+  final Object? error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: loading
+          ? Row(
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                const SizedBox(width: 12),
+                Text(context.tr('loading')),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet_outlined, color: cs.primary, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        context.tr('seller_earnings_load_error'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    context.trError(error!),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
+                ],
+                if (onRetry != null) ...[
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: Text(context.tr('retry')),
+                  ),
+                ],
+              ],
+            ),
     );
   }
 }

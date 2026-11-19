@@ -102,4 +102,30 @@ void main() {
       expect(result, isNotNull);
     });
   });
+
+  group('trustScorePercent', () {
+    final api = TrustApiClient(
+      httpClient: http_testing.MockClient((_) async => http.Response('{}', 200)),
+      tokenProvider: () async => null,
+    );
+
+    test('scales the v1 stored decimal before rendering', () {
+      expect(
+        api.trustScorePercent(0.92, storedAsFraction: true),
+        92,
+      );
+      expect(api.trustScorePercent(1, storedAsFraction: true), 100);
+    });
+
+    test('keeps the legacy 0-100 value unchanged', () {
+      expect(api.trustScorePercent(92, storedAsFraction: false), 92);
+    });
+
+    test('clamps invalid and out-of-range values', () {
+      expect(api.trustScorePercent(-1, storedAsFraction: true), 0);
+      expect(api.trustScorePercent(2, storedAsFraction: true), 100);
+      expect(api.trustScorePercent(null, storedAsFraction: false), 0);
+      expect(api.trustScorePercent(double.nan, storedAsFraction: false), 0);
+    });
+  });
 }

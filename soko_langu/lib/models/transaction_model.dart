@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'money_breakdown.dart';
 
 // AzamPay MNO checkout fee tiers (source: azampay.co.tz pricing)
 const List<(int, int, int)> mnoCheckoutFeeTiers = [
@@ -16,7 +17,7 @@ const List<(int, int, int)> mnoCheckoutFeeTiers = [
 /// plus the Soko Vibe commission — because the tiers are banded on the charge,
 /// not on the item price.
 double getMnoCheckoutFee(double amount) {
-  if (amount < mnoCheckoutFeeTiers.first.$1) return 0;
+  if (!amount.isFinite || amount < mnoCheckoutFeeTiers.first.$1) return 0;
   for (final tier in mnoCheckoutFeeTiers) {
     if (amount >= tier.$1 && amount <= tier.$2) return tier.$3.toDouble();
   }
@@ -37,8 +38,24 @@ class TransactionFeeBreakdown {
   final double platformFee;
   final double payoutFee;
   final double totalFees;
+
+  /// Amount pushed to the gateway and held in escrow. The provider adds its
+  /// processing fee on top, so this intentionally excludes [processingFee].
   final double totalAmount;
   final double sellerReceives;
+  final double shippingCost;
+  final double discount;
+  final ProcessingFeePayer processingFeePayer;
+
+  /// Total the buyer parts with, including a buyer-borne processing fee.
+  double get buyerTotal => processingFeePayer == ProcessingFeePayer.seller
+      ? totalAmount - discount
+      : totalAmount - discount + processingFee;
+
+  /// Seller payout after a seller-borne processing fee, if applicable.
+  double get sellerNet => processingFeePayer == ProcessingFeePayer.seller
+      ? (sellerReceives - processingFee).clamp(0, double.infinity).toDouble()
+      : sellerReceives;
 
   /// [quotedProcessingFee] is the fee AzamPay actually quoted for this charge
   /// via the preview endpoint. It wins over the local tier table because the
@@ -47,6 +64,9 @@ class TransactionFeeBreakdown {
   factory TransactionFeeBreakdown({
     required double productPrice,
     double? quotedProcessingFee,
+    double shippingCost = 0,
+    double discount = 0,
+    ProcessingFeePayer processingFeePayer = ProcessingFeePayer.buyer,
   }) {
     // Round to whole TZS. The server computes commission as
     // `Math.round(price * percent)`, so leaving this as a raw double makes the
@@ -57,12 +77,15 @@ class TransactionFeeBreakdown {
     // Tier the processing fee on the full charge, not the item price: a 95,000
     // item is pushed as 98,325 (commission included), which crosses into a
     // higher band, so pricing off productPrice under-quoted the buyer.
-    final totalAmount = productPrice + platformFee;
+    final totalAmount = productPrice + platformFee + shippingCost;
     return TransactionFeeBreakdown._(
       productPrice: productPrice,
       platformFee: platformFee,
       totalAmount: totalAmount,
       processingFee: quotedProcessingFee ?? getMnoCheckoutFee(totalAmount),
+      shippingCost: shippingCost,
+      discount: discount,
+      processingFeePayer: processingFeePayer,
     );
   }
 
@@ -71,11 +94,16 @@ class TransactionFeeBreakdown {
     required this.platformFee,
     required this.totalAmount,
     required this.processingFee,
+    required this.shippingCost,
+    required this.discount,
+    required this.processingFeePayer,
   })  : payoutFee = 0,
         // processingFee is what AzamPay charges the customer ON TOP of the
         // amount (not pre-added to what we send), so totalAmount excludes it.
         totalFees = platformFee,
-        sellerReceives = productPrice;
+        sellerReceives = (productPrice + shippingCost - discount)
+            .clamp(0, double.infinity)
+            .toDouble();
 
   Map<String, dynamic> toMap() => {
     'productPrice': productPrice,
@@ -86,6 +114,13 @@ class TransactionFeeBreakdown {
     'totalFees': totalFees,
     'totalAmount': totalAmount,
     'sellerReceives': sellerReceives,
+    'buyerTotal': buyerTotal,
+    'sellerNet': sellerNet,
+    'processingFeePayer': processingFeePayer == ProcessingFeePayer.seller
+        ? 'seller'
+        : 'buyer',
+    'shippingCost': shippingCost,
+    'discount': discount,
   };
 }
 
