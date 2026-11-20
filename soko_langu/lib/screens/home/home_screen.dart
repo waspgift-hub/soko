@@ -19,8 +19,6 @@ import '../../services/banner_service.dart';
 import '../../widgets/marketplace/category_card.dart';
 import '../../widgets/animations/soko_animated_illustration.dart';
 import '../../widgets/premium_widgets.dart';
-import '../../widgets/recently_viewed_row.dart';
-import '../../widgets/trending_carousel.dart';
 import '../../widgets/currency_sheet.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_colors.dart';
@@ -47,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen>
   final FlashSaleService _flashSaleService = FlashSaleService();
   final CategoryService _categoryService = CategoryService();
   String? _selectedBrand;
-  final _searchCtrl = TextEditingController();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
   StreamSubscription? _notifSub;
@@ -156,7 +153,6 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _searchCtrl.dispose();
     _flashSub?.cancel();
     _notifSub?.cancel();
     super.dispose();
@@ -190,9 +186,8 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   List<Product> _getFilteredProducts(List<Product> products) {
-    // grid + carousel (TrendingCarousel/RecentlyViewed) huchora kutoka streams tofauti,
-    // hivyo bidhaa ile ile (by id) inaweza kuvuja mara mbili kwenye merge ya realtime/cache.
-    // Dedup hapa (render boundary) inahakikisha kila bidhaa inaonekana mara moja kwenye grid.
+    // Realtime and paged fetches can merge the same product id twice; dedupe
+    // at the render boundary so the latest grid never shows duplicate cards.
     final seen = <String>{};
     var result = <Product>[];
     for (final p in products) {
@@ -243,29 +238,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  bool get _hasActiveFilters =>
-      _sortBy != 'newest' ||
-      _minPrice != null ||
-      _maxPrice != null ||
-      _condition != 'all' ||
-      _locationFilter.isNotEmpty;
-
   int get _activeFilterCount => [
     _sortBy != 'newest',
     _minPrice != null || _maxPrice != null,
     _condition != 'all',
     _locationFilter.isNotEmpty,
   ].where((isActive) => isActive).length;
-
-  void _clearFilters() {
-    setState(() {
-      _sortBy = 'newest';
-      _minPrice = null;
-      _maxPrice = null;
-      _condition = 'all';
-      _locationFilter = '';
-    });
-  }
 
   Widget _quickActionChip(ColorScheme cs, IconData icon, String label, VoidCallback onTap) {
     return Semantics(
@@ -476,46 +454,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildActiveFilters(ColorScheme cs) {
-    final labels = <String>[
-      if (_sortBy == 'price_asc') context.tr('price_low_to_high'),
-      if (_sortBy == 'price_desc') context.tr('price_high_to_low'),
-      if (_sortBy == 'popular') context.tr('popular'),
-      if (_minPrice != null || _maxPrice != null)
-        '${_minPrice == null ? '–' : context.formatPrice(_minPrice!)} – '
-            '${_maxPrice == null ? '–' : context.formatPrice(_maxPrice!)}',
-      if (_condition != 'all') context.tr(_condition),
-      if (_locationFilter.isNotEmpty) _locationFilter,
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppInsets.lg, AppInsets.xs, AppInsets.lg, AppInsets.sm),
-      child: Container(
-        padding: const EdgeInsets.only(left: 12, right: 4, top: 4, bottom: 4),
-        decoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.tune_rounded, size: 16, color: cs.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                labels.join('  ·  '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: cs.onSurface, fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-            ),
-            TextButton(onPressed: _clearFilters, child: Text(context.tr('clear'))),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -606,6 +544,21 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.search_rounded, color: cs.onSurface, size: 25),
+            tooltip: context.tr('search'),
+            onPressed: () => context.push(AppRoutes.search),
+          ),
+          IconButton(
+            icon: Badge(
+              isLabelVisible: _activeFilterCount > 0,
+              label: Text('$_activeFilterCount'),
+              child: Icon(Icons.tune_rounded, color: cs.onSurface, size: 23),
+            ),
+            tooltip: context.tr('filters'),
+            onPressed: _showFilterSheet,
+          ),
+          const SizedBox(width: 2),
           Semantics(
             button: true,
             label: context.tr('select_currency'),
@@ -675,33 +628,7 @@ class _HomeScreenState extends State<HomeScreen>
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      const SizedBox(height: 8),
-                      // Samsung One UI Inspired Search Bar
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                        child: OneUISearchBar(
-                          hintText: context.tr(
-                            'search_products_users_hint',
-                            'Tafuta bidhaa, maduka, au huduma...',
-                          ),
-                          controller: _searchCtrl,
-                          readOnly: true,
-                          onTap: () => context.push(AppRoutes.search),
-                          filterCount: _activeFilterCount,
-                          onFilterTap: _showFilterSheet,
-                        ),
-                      ),
-                      if (_hasActiveFilters) _buildActiveFilters(cs),
                       const SizedBox(height: AppInsets.sm),
-                      // Promos used to push categories below the fold.
-                      SectionHeader(
-                        title: context.tr('categories'),
-                        actionLabel: context.tr('see_all'),
-                        onAction: () => context.push(AppRoutes.category),
-                      ),
-                      const SizedBox(height: AppInsets.xs),
-                      _buildCategoriesStrip(cs),
-                      const SizedBox(height: AppInsets.md),
                       SectionHeader(title: context.tr('brands')),
                       const SizedBox(height: AppInsets.xs),
                       SizedBox(
@@ -739,9 +666,13 @@ class _HomeScreenState extends State<HomeScreen>
                         margin: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                       ),
                       const SizedBox(height: AppInsets.sm),
-                      const RecentlyViewedRow(),
-                      const SizedBox(height: AppInsets.sm),
-                      const TrendingCarousel(),
+                      SectionHeader(
+                        title: context.tr('categories'),
+                        actionLabel: context.tr('see_all'),
+                        onAction: () => context.push(AppRoutes.category),
+                      ),
+                      const SizedBox(height: AppInsets.xs),
+                      _buildCategoriesStrip(cs),
                       const SizedBox(height: AppInsets.md),
                     ],
                   ),
@@ -809,7 +740,7 @@ class _HomeScreenState extends State<HomeScreen>
       SliverToBoxAdapter(child: SizedBox(height: 16)),
       SliverToBoxAdapter(
         child: SectionHeader(
-          title: context.tr('recommended_for_you'),
+          title: context.tr('latest_products'),
           actionLabel: context.tr('see_all'),
           onAction: () => context.push(AppRoutes.search),
         ),
