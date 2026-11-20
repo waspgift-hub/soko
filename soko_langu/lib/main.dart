@@ -587,6 +587,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   // -----------------------------------------------------------------------
 
   void _setupNotificationCallbacks() {
+    LocalNotificationService.setTapHandler(NotificationService.handleLocalTap);
     NotificationService.onNotificationTap = (Map<String, dynamic> data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final type = data['type'] as String?;
@@ -615,20 +616,21 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     Map<String, dynamic>? data,
     BuildContext ctx,
   ) {
+    final orderId =
+        data?['orderId']?.toString() ?? data?['transactionId']?.toString();
     switch (type) {
       case 'order':
-        final orderId =
-            data?['orderId'] as String? ?? data?['transactionId'] as String?;
+      case 'order_update':
+      case 'dispatched':
+      case 'delivery_confirmed':
         if (orderId != null) {
           // Order notifications carry the OTHER party's id: to-buyer ones
           // include sellerId, to-seller ones include buyerId. A seller who
           // just got "set the shipping cost for this new order" goes to the
-          // quote screen; other seller order notices (quote sent, paid, …)
-          // keep the order detail so they can act where the order lives.
-          // New-order requests are the only to-seller order notifications
-          // that carry productId, so that discriminates them uniquely.
+          // quote screen; other order notices keep the order detail.
           final myUid = FirebaseAuth.instance.currentUser?.uid;
           final isNewOrderForSeller =
+              type == 'order' &&
               myUid != null &&
               data?['sellerId'] == null &&
               data?['buyerId'] != null &&
@@ -641,14 +643,30 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         } else {
           _pushIfNotCurrent('/notifications', ctx);
         }
+        break;
       case 'payment':
-        final orderId = (data?['orderId'] ?? data?['transactionId']) as String?;
+      case 'payment_failed':
+      case 'refund':
+      case 'cancelled':
+      case 'withdrawal':
+      case 'auto_withdrawal':
+      case 'escrow_release':
+      case 'escrow_auto_release':
+      case 'dispute_resolved':
+      case 'auto_payout':
+      case 'payout':
+      case 'deposit':
+      case 'deposit_failed':
         if (orderId != null) {
           _pushIfNotCurrent('/receipt/$orderId', ctx);
+        } else {
+          _pushIfNotCurrent('/notifications', ctx);
         }
+        break;
       case 'chat':
+      case 'group_chat':
         final receiverId =
-            data?['senderId'] as String? ?? data?['receiverId'] as String?;
+            data?['senderId']?.toString() ?? data?['receiverId']?.toString();
         if (receiverId != null) {
           ChatNavigation.openSellerChat(
             ctx,
@@ -660,8 +678,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         } else {
           _pushIfNotCurrent('/chats', ctx);
         }
+        break;
       case 'flash_sale':
         _pushIfNotCurrent('/flash-sale', ctx);
+        break;
       case 'product':
         final productId = data?['productId'] as String?;
         if (productId != null) {
@@ -669,6 +689,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         } else {
           _pushIfNotCurrent('/notifications', ctx);
         }
+        break;
+      default:
+        _pushIfNotCurrent('/notifications', ctx);
+        break;
     }
     unawaited(notificationService.markRelatedAsRead(type, data));
   }

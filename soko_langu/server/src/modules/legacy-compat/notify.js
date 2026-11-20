@@ -6,6 +6,7 @@ const { randomUUID } = require('crypto');
 const config = require('../../config');
 const commerceStore = require('../../services/commerce-store');
 const { createBreaker } = require('../../utils/circuit-breaker');
+const { oneSignalHeadsUpOptions } = require('../../utils/notification-channels');
 
 // OneSignal outages are common enough that we should not hammer them: after 3
 // consecutive failures the breaker opens and push notifications are skipped
@@ -16,6 +17,7 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
   if (!userId) return null;
   const appId = config.onesignal.appId;
   const apiKey = config.onesignal.apiKey;
+  const notifType = (data && data.type) || 'general';
   if (!appId || !apiKey) {
     console.error('[OS-COMPAT] missing OneSignal config');
     return null;
@@ -29,7 +31,8 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
         channel_for_external_user_ids: 'push',
         headings: { en: title || '', sw: title || '' },
         contents: { en: body || '', sw: body || '' },
-        data: { ...(data || {}), type: (data && data.type) || 'general' },
+        data: { ...(data || {}), type: notifType },
+        ...oneSignalHeadsUpOptions(notifType),
       }, {
         headers: { Authorization: `Basic ${apiKey}`, 'Content-Type': 'application/json' },
         timeout: 15000,

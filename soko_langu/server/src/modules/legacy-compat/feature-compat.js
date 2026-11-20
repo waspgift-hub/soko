@@ -32,6 +32,7 @@ const { parseFlashSaleEndTime, isFlashSaleStillActive } = require('../../../mone
 const cache = require('../../../cache');
 const config = require('../../config');
 const commerceStore = require('../../services/commerce-store');
+const { oneSignalHeadsUpOptions } = require('../../utils/notification-channels');
 
 // ─── Legacy constants (server/index.js) ─────────────────────────────────
 const BOOST_TIERS = {
@@ -219,19 +220,6 @@ async function notifyBoostPaymentFailed(db, tx, reason = '') {
   }
 }
 
-function notifTypeToChannel(type) {
-  switch (type) {
-    case 'chat': return 'soko_chat';
-    case 'order': return 'soko_orders';
-    case 'payment': return 'soko_orders';
-    case 'boost': return 'soko_boost';
-    case 'flash_sale': return 'soko_general';
-    case 'escrow_auto_release': return 'soko_orders';
-    case 'kyc': return 'soko_general';
-    default: return 'soko_general';
-  }
-}
-
 async function sendOneSignalBulk(db, userIds, title, body, data = {}) {
   if (!userIds || userIds.length === 0) return { successCount: 0 };
   const appId = config.onesignal.appId;
@@ -253,10 +241,7 @@ async function sendOneSignalBulk(db, userIds, title, body, data = {}) {
         headings: { en: title || '', sw: title || '' },
         contents: { en: body || '', sw: body || '' },
         data: { ...(data || {}), type: notifType },
-        priority: 10, android_priority: 'high', android_visibility: 1,
-        existing_android_channel_id: notifTypeToChannel(notifType),
-        android_sound: 'soko_notification',
-        android_icon: 'ic_notification',
+        ...oneSignalHeadsUpOptions(notifType),
       }, {
         headers: { Authorization: `Basic ${apiKey}`, 'Content-Type': 'application/json' },
         timeout: 20000,

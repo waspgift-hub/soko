@@ -1,18 +1,36 @@
 ╔══════════════════════════════════════════════════════════════╗
-║       SOKO VIBE — NOTIFICATION FLOW COMPLETE               ║
-║       Kutoka Trigger hadi Delivery (FCM + In-App + SMS)    ║
+║  SOKO VIBE — NOTIFICATION FLOW (CURRENT STACK)             ║
+║  OneSignal push + local heads-up + in-app + SMS            ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ═══════════════════════════════════════════════════════════════
-FCM CHANNEL MAP (Android Awesome Notifications)
+CURRENT PUSH/HEADS-UP MAP (Android v6 channels)
 ═══════════════════════════════════════════════════════════════
 
-  data.type        →  FCM Channel ID
-  ─────────────────────────────────────────────────────
-  chat, group_chat →  chat_messages_v4
-  payment, order,
-  withdrawal       →  payments_notifications_v4
-  default (other)  →  general_notifications_v4
+  Delivery : OneSignal REST, include_external_user_ids = Firebase UID
+  Alias    : OneSignal.login(uid) in lib/services/notification_service.dart
+  Sound    : android.resource://<pkg>/raw/soko_notification
+  Priority : max importance, max priority, public visibility
+
+  data.type                         →  channel id
+  ──────────────────────────────────────────────────────────
+  chat, group_chat                  →  chat_messages_v6
+  payment, order, escrow, refund,
+  withdrawal, payout, dispute,
+  delivery, kyc, deposit            →  payments_notifications_v6
+  system, admin, alert              →  system_alerts_v6
+  ride, ride_request, trip_update   →  ride_notifications_v6
+  default (marketing, flash sale…)  →  general_notifications_v6
+
+  Foreground push : prevented by OneSignal, re-posted as a local heads-up.
+  Firestore fallback : same local heads-up path, short-window dedupe.
+  Tap actions     : reply / pay / confirm routed in lib/main.dart.
+  Source of truth : lib/services/notification_channels.dart and
+                    server/src/utils/notification-channels.js
+
+  NOTE: the numbered sections below are historical FCM/v4 event documentation
+  kept for trigger/reference only. Their channel IDs and client display stack
+  are obsolete; use the map above for the shipping implementation.
 
 ═══════════════════════════════════════════════════════════════
 SEHEMU YA 1: NOTIFICATIONS KUTOKA SERVER (index.js)

@@ -19,6 +19,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { randomUUID } = require('node:crypto');
 const admin = require('firebase-admin');
+const { oneSignalHeadsUpOptions } = require('./src/utils/notification-channels');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -37,19 +38,6 @@ try {
 } catch (e) {
   console.error('[FIREBASE] Init failed:', e.message);
   process.exit(1);
-}
-
-// Same heads-up channel mapping as server notifTypeToChannel() — a marketing
-// push goes to the max-importance general channel so Android shows it head-up.
-function notifTypeToChannel(type) {
-  if (!type) return 'general_notifications_v6';
-  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v6';
-  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v6';
-  if (['payment','order','payout','dispute','refund','withdrawal',
-       'escrow_release','auto_payout','escrow_auto_release',
-       'dispute_resolved','cancelled','auto_withdrawal',
-       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v6';
-  return 'general_notifications_v6';
 }
 
 // Filter a user list down to those whose prefs allow marketing pushes.
@@ -79,10 +67,7 @@ async function sendPushOne(userId) {
       headings: { en: TITLE, sw: TITLE },
       contents: { en: BODY, sw: BODY },
       data: { type: 'marketing', promo: 'promo_push_2026' },
-      priority: 10, android_priority: 'high', android_visibility: 1,
-      existing_android_channel_id: notifTypeToChannel('marketing'),
-      android_sound: 'soko_notification',
-      android_icon: 'ic_notification',
+      ...oneSignalHeadsUpOptions('marketing'),
     }, {
       headers: { 'Content-Type': 'application/json', Authorization: `Key ${ONE_SIGNAL_REST_API_KEY}` },
       timeout: 30000,

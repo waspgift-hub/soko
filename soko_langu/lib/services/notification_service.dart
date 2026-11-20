@@ -7,11 +7,11 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_config.dart';
 import 'notification_api.dart';
 import 'localization_service.dart';
 import 'local_notification_service.dart';
+import 'notification_heads_up.dart';
 import 'notification_lang.dart';
 
 class NotificationService {
@@ -24,6 +24,7 @@ class NotificationService {
   bool _pushDenied = false;
   StreamSubscription<QuerySnapshot>? _fallbackSub;
   final Set<String> _seenFallbackIds = {};
+  static final _headsUpDeduplicator = HeadsUpDeduplicator();
 
   final StreamController<int> _unreadController =
       StreamController<int>.broadcast();
@@ -80,9 +81,10 @@ class NotificationService {
         return;
       }
 
-      // Initialize local notifications first for heads-up display
+      // Install the tap handler before init so a cold-start local tap is
+      // replayed after the router callbacks are in place.
+      LocalNotificationService.setTapHandler(handleLocalTap);
       await LocalNotificationService().initialize();
-      LocalNotificationService.onTap = _handleLocalTap;
 
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
@@ -180,106 +182,34 @@ final perm = await OneSignal.Notifications.requestPermission(true);
     String type,
     Map<String, dynamic> data,
   ) {
-    final String channelId;
-    final String headsUpTitle;
-    final List<AndroidNotificationAction> actions = [];
-
-    switch (type) {
-      case 'chat':
-      case 'group_chat':
-        channelId = 'chat_messages_v6';
-        headsUpTitle = data['senderName'] as String? ?? title;
-        actions.add(
-          const AndroidNotificationAction(
-            'reply',
-            'Jibu',
-            showsUserInterface: true,
-          ),
-        );
-        break;
-      case 'payment':
-      case 'payment_failed':
-      case 'refund':
-      case 'cancelled':
-      case 'withdrawal':
-      case 'escrow_auto_release':
-      case 'auto_payout':
-      case 'order':
-      case 'dispatched':
-      case 'delivery_confirmed':
-      case 'kyc':
-      case 'kyc_approved':
-      case 'kyc_rejected':
-      case 'kyc_revoked':
-      case 'deposit':
-      case 'deposit_failed':
-        channelId = 'payments_notifications_v6';
-        headsUpTitle = title;
-        final hasOrder =
-            data['orderId'] != null || data['transactionId'] != null;
-        // sellerId marks the shipping-quote push to the buyer — pay button
-        if (type == 'payment' ||
-            (type == 'order' && data['sellerId'] != null)) {
-          if (hasOrder) {
-            actions.add(
-              const AndroidNotificationAction(
-                'pay',
-                'Lipa Sasa',
-                showsUserInterface: true,
-              ),
-            );
-          }
-        }
-        if (type == 'dispatched' || type == 'delivery_confirmed') {
-          if (hasOrder) {
-            actions.add(
-              const AndroidNotificationAction(
-                'confirm',
-                'Thibitisha Upokeaji',
-                showsUserInterface: true,
-              ),
-            );
-          }
-        }
-        break;
-      case 'promotion':
-        channelId = 'general_notifications_v6';
-        headsUpTitle = title;
-        break;
-      case 'flash_sale':
-      case 'new_product':
-        channelId = 'general_notifications_v6';
-        headsUpTitle = title;
-        break;
-      case 'system':
-      case 'admin':
-      case 'alert':
-        channelId = 'system_alerts_v6';
-        headsUpTitle = title;
-        break;
-      default:
-        channelId = 'general_notifications_v6';
-        headsUpTitle = title;
+    final headsUp = NotificationHeadsUp.fromPush(
+      title: title,
+      body: body,
+      type: type,
+      data: data,
+    );
+    if (!_headsUpDeduplicator.shouldShow(headsUp.deduplicationKey)) {
+      debugPrint('[OS] duplicate heads-up suppressed: type=$type');
+      return;
     }
-
-    // payload carries type + data so a local tap routes like a OneSignal tap
-    final payload = jsonEncode({'type': type, ...data});
 
     final id = LocalNotificationService.nextNotificationId();
     debugPrint(
-      '[OS] local heads-up → id=$id channel=$channelId title=$headsUpTitle',
+      '[OS] local heads-up → id=$id channel=${headsUp.channelId} '
+      'title=${headsUp.title}',
     );
     LocalNotificationService().showHeadsUp(
       id: id,
-      title: headsUpTitle,
-      body: body,
-      channelId: channelId,
-      payload: payload,
-      actions: actions,
+      title: headsUp.title,
+      body: headsUp.body,
+      channelId: headsUp.channelId,
+      payload: headsUp.payload,
+      actions: headsUp.actions,
     );
   }
 
-  static void _handleLocalTap(Map<String, dynamic> data) {
+  /// Routes a local heads-up tap to the payment or generic callback.
+  static void handleLocalTap(Map<String, dynamic> data) {
     final type = data['type'] as String?;
     final action = data['action'] as String?;
     debugPrint('[OS] local notification tapped: type=$type action=$action');

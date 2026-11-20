@@ -22,22 +22,12 @@ const db = admin.firestore();
 const notifPrefs = require('./notificationPrefs');
 const notifLangCache = require('./cache');
 const { localizeNotif, smsSafeForGateway } = require('./notif_lang');
+const { oneSignalHeadsUpOptions } = require('./src/utils/notification-channels');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
 
 // ─── OneSignal helpers (adapted from index.js) ──────────────────
 const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
 const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
-
-function getChannelId(data = {}) {
-  const type = (data && data.type) || 'general';
-  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v6';
-  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v6';
-  if (['payment','order','payout','dispute','refund','withdrawal',
-       'escrow_release','auto_payout','escrow_auto_release',
-       'dispute_resolved','cancelled','auto_withdrawal',
-       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v6';
-  return 'general_notifications_v6';
-}
 
 async function getUserNotifLang(userId) {
   if (!db) return 'sw';
@@ -91,12 +81,7 @@ async function sendOsNotification(userId, title, body, data = {}) {
       headings: { en: localizedTitle, sw: localizedTitle },
       contents: { en: localizedBody, sw: localizedBody },
       data: { ...(data || {}), type: (data && data.type) || 'general' },
-      existing_android_channel_id: getChannelId(data),
-      android_sound: 'soko_notification',
-      android_icon: 'ic_notification',
-      priority: 10,
-      android_priority: 'high',
-      android_visibility: 1,
+      ...oneSignalHeadsUpOptions(notifType),
       small_icon: 'ic_notification',
       large_icon: 'ic_notification',
       android_accent_color: 'FF40916C',

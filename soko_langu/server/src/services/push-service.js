@@ -1,5 +1,6 @@
 const axios = require('axios');
 const config = require('../config');
+const { oneSignalHeadsUpOptions } = require('../utils/notification-channels');
 
 /**
  * OneSignal Push Notification Service
@@ -23,14 +24,17 @@ class PushService {
     }
 
     try {
+      const notifType = (data && data.type) || 'general';
       const response = await axios.post(
         `${this.baseUrl}/notifications`,
         {
           app_id: this.appId,
           include_external_user_ids: [userId],
+          channel_for_external_user_ids: 'push',
           headings: { 'en': title, 'sw': title },
           contents: { 'en': body, 'sw': body },
-          data: data,
+          data: { ...data, type: notifType },
+          ...oneSignalHeadsUpOptions(notifType),
         },
         {
           headers: {
@@ -54,6 +58,7 @@ class PushService {
    */
   async sendSegmentPush(segmentId, title, body, data = {}) {
     try {
+      const notifType = (data && data.type) || 'general';
       const response = await axios.post(
         `${this.baseUrl}/notifications`,
         {
@@ -61,7 +66,8 @@ class PushService {
           included_segments: [segmentId],
           headings: { 'en': title, 'sw': title },
           contents: { 'en': body, 'sw': body },
-          data: data,
+          data: { ...data, type: notifType },
+          ...oneSignalHeadsUpOptions(notifType),
         },
         {
           headers: {

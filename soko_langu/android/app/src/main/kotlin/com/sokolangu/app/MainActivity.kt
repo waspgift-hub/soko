@@ -406,7 +406,7 @@ class MainActivity : AudioServiceActivity() {
                     "Payments",
                     NotificationManager.IMPORTANCE_MAX
                 ).apply {
-                    description = "Malipo, escrow, payout, refund notifications"
+                    description = "Malipo, escrow, payout, refund, KYC updates"
                     enableVibration(true)
                     enableLights(true)
                     setShowBadge(true)
